@@ -1,7 +1,9 @@
 # Evals of the development profile (spec "CI/CD e operatività" and "Eval strutturate"): apply
 # profiles/development to the development workspace, run the five reference requests with
 # evals/run.py, compare the run with evals/baseline.json, post the summary on the PR and fail
-# when the comparison blocks.
+# when the comparison blocks. When the development environment has the variable
+# EVALS_INGEST_URL and the secret EVALS_INGEST_TOKEN, the run and its comparison are also sent
+# to Atlas's eval history (evals/upload.py); a failed upload is a warning, never a failure.
 #
 # This SPENDS REAL MONEY in the development workspace: up to five sessions at the 60-cent
 # budget plus at most $1 of judge, so about $4 per run at worst. Drafts are skipped; it runs
@@ -252,11 +254,37 @@ jobs:
             exit 0
           fi
           echo "results=$RESULTS" >> "$GITHUB_OUTPUT"
+          echo "comparison=$RUNNER_TEMP/comparison.json" >> "$GITHUB_OUTPUT"
           set +e
-          uv run python ../evals/compare.py "$RESULTS" --markdown "$RUNNER_TEMP/compare.md"
+          uv run python ../evals/compare.py "$RESULTS" --markdown "$RUNNER_TEMP/compare.md" \
+            --json "$RUNNER_TEMP/comparison.json"
           status=$?
           set -e
           echo "status=$status" >> "$GITHUB_OUTPUT"
+
+      # The eval history in Atlas (docs/deploy.md, "Eval history"). Needs the environment's
+      # variable EVALS_INGEST_URL and secret EVALS_INGEST_TOKEN; without both it only logs a
+      # notice. The token is passed to this one step through env (GitHub masks it in the log;
+      # upload.py never prints it) and a failure here never fails the job: evals/upload.py exits
+      # 0 with a warning, and continue-on-error covers anything unexpected. A compare.py that
+      # blocks still uploads (its JSON is written before the exit status); one that could not
+      # run (usage error) leaves no JSON, and the run is sent without a comparison.
+      - name: Upload to the eval history
+        if: ${{ !cancelled() && steps.compare.outputs.results != '' }}
+        continue-on-error: true
+        env:
+          EVALS_INGEST_URL: ${{ vars.EVALS_INGEST_URL }}
+          EVALS_INGEST_TOKEN: ${{ secrets.EVALS_INGEST_TOKEN }}
+          RESULTS: ${{ steps.compare.outputs.results }}
+          COMPARISON: ${{ steps.compare.outputs.comparison }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$EVALS_INGEST_URL" ] || [ -z "$EVALS_INGEST_TOKEN" ]; then
+            echo "::notice::eval history upload skipped: set the variable EVALS_INGEST_URL and the secret EVALS_INGEST_TOKEN on the development environment to enable it"
+            exit 0
+          fi
+          uv run python ../evals/upload.py "$RESULTS" --comparison "$COMPARISON" \
+            --workflow-run-url "$RUN_URL"
 
       - name: Write the summary
         if: ${{ !cancelled() }}

@@ -156,6 +156,10 @@ def test_plan_errors_carry_status_code_and_italian_message() -> None:
         PlanErrorCode.AGENTS_UNAVAILABLE: 502,
         PlanErrorCode.REQUEST_TOO_LARGE: 413,
         PlanErrorCode.DEMO_UNAVAILABLE: 404,
+        PlanErrorCode.EVAL_RUN_NOT_FOUND: 404,
+        PlanErrorCode.EVALS_INGEST_DISABLED: 404,
+        PlanErrorCode.INVALID_INGEST_TOKEN: 401,
+        PlanErrorCode.INVALID_EVAL_RESULTS: 422,
     }
     assert set(expected) == set(PlanErrorCode)
     for code, status in expected.items():
@@ -931,7 +935,10 @@ async def test_development_documents_every_route(api: Api) -> None:
         "/plans/{plan_id}/cover",
         "/plans/{plan_id}/interrupt",
         "/plans/{plan_id}/continue",
+        "/evals/runs",
+        "/evals/runs/{run_id}",
     }
+    assert set(paths["/evals/runs"]) == {"get", "post"}
     assert set(paths["/plans"]) == {"get", "post"}
 
 

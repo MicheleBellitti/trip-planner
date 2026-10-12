@@ -29,6 +29,7 @@ ALL_VARIABLES = (
     "TRIP_SCHEMA_URL",
     "LOG_LEVEL",
     "GIT_SHA",
+    "EVALS_INGEST_TOKEN",
     "RAILWAY_GIT_COMMIT_SHA",
 )
 
@@ -352,3 +353,35 @@ def test_test_settings_match_the_test_environment(settings: Settings) -> None:
     assert settings.frontend_origin == "https://pianifica.bellittim.com"
     assert settings.triptracker_origin == "https://viaggi.bellittim.com"
     assert settings.anthropic_api_key is None
+
+
+# --- EVALS_INGEST_TOKEN -----------------------------------------------------------------------
+
+
+def test_the_eval_upload_is_disabled_by_default(make_settings: MakeSettings) -> None:
+    for settings in (
+        make_settings(),
+        make_settings(evals_ingest_token=""),
+        make_settings(evals_ingest_token="  "),
+    ):
+        assert settings.evals_ingest_enabled is False
+        assert settings.evals_ingest_token.get_secret_value() == ""
+
+
+def test_the_eval_upload_token_is_trimmed_and_never_shown(make_settings: MakeSettings) -> None:
+    settings = make_settings(evals_ingest_token="  s3cret-token \n")
+
+    assert settings.evals_ingest_enabled is True
+    assert settings.evals_ingest_token.get_secret_value() == "s3cret-token"
+    assert "s3cret-token" not in repr(settings)
+    assert "s3cret-token" not in str(settings.model_dump())
+
+
+def test_the_eval_upload_token_is_read_from_the_environment(
+    bare_env: pytest.MonkeyPatch,
+) -> None:
+    bare_env.setenv("DATABASE_URL", "postgresql://localhost/x")
+    bare_env.setenv("ENVIRONMENT", "development")
+    bare_env.setenv("EVALS_INGEST_TOKEN", "from-env")
+
+    assert Settings(_env_file=None).evals_ingest_token.get_secret_value() == "from-env"  # pyright: ignore[reportCallIssue]

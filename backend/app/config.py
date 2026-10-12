@@ -2,12 +2,12 @@
 
 Every variable of the Railway table in the implementation doc lives here, plus ENVIRONMENT,
 AUTH_MODE, LOCKFILE_PATH, TRIP_SCHEMA_URL, LOG_LEVEL, the backend's git sha (GIT_SHA or
-Railway's RAILWAY_GIT_COMMIT_SHA) and the local demo's DEMO_MODE and DEMO_PACE (development
-only: Settings refuses them in production). Defaults are the production-safe choice
-(ENVIRONMENT=production, AUTH_MODE=triptracker). AGENT_PROFILE defaults to the cheap development
-roster, but production refuses to start unless it is set explicitly; SESSION_BUDGET_CENTS and
-LOCKFILE_PATH default per profile. Secrets are `SecretStr`, so they never show up in reprs,
-logs or tracebacks.
+Railway's RAILWAY_GIT_COMMIT_SHA), EVALS_INGEST_TOKEN (the eval upload endpoint) and the local
+demo's DEMO_MODE and DEMO_PACE (development only: Settings refuses them in production).
+Defaults are the production-safe choice (ENVIRONMENT=production, AUTH_MODE=triptracker).
+AGENT_PROFILE defaults to the cheap development roster, but production refuses to start unless
+it is set explicitly; SESSION_BUDGET_CENTS and LOCKFILE_PATH default per profile. Secrets are
+`SecretStr`, so they never show up in reprs, logs or tracebacks.
 
 Everything the backend reads at runtime lives inside backend/: Railway deploys the service from
 the root directory `backend/` and pulls only that directory, so the lockfiles are
@@ -190,6 +190,10 @@ class Settings(BaseSettings):
 
     log_level: LogLevel = "INFO"
 
+    # Bearer token of the machine endpoint POST /evals/runs (the CI eval job uploads its results
+    # there, app/evals_store.py). Empty (the default) disables the endpoint: 404. Never logged.
+    evals_ingest_token: SecretStr = SecretStr("")
+
     # Contact for Wikimedia's User-Agent policy (destination cover photos, app/covers.py): an
     # https:// page or a mailto: address where Wikimedia can reach whoever runs Atlas. Empty =
     # FRONTEND_ORIGIN, which is a page of this deployment.
@@ -267,6 +271,13 @@ class Settings(BaseSettings):
     @classmethod
     def _normalize_origin(cls, value: object) -> object:
         return normalize_origin(value) if isinstance(value, str) else value
+
+    @field_validator("evals_ingest_token", mode="before")
+    @classmethod
+    def _strip_ingest_token(cls, value: object) -> object:
+        if isinstance(value, SecretStr):
+            value = value.get_secret_value()
+        return value.strip() if isinstance(value, str) else value
 
     @field_validator("git_sha", mode="before")
     @classmethod
@@ -361,6 +372,11 @@ class Settings(BaseSettings):
     @property
     def anthropic_credentials_available(self) -> bool:
         return self.anthropic_auth_mode is not None
+
+    @property
+    def evals_ingest_enabled(self) -> bool:
+        """POST /evals/runs answers only when EVALS_INGEST_TOKEN is set."""
+        return bool(self.evals_ingest_token.get_secret_value())
 
     @property
     def is_production(self) -> bool:

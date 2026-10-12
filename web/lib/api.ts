@@ -13,6 +13,8 @@
  * - 503 `planner_unavailable`: the planner can't start plans (nothing was spent).
  * - 404 `demo_unavailable`: `createPlan`'s development-only `demoScenario` reached a backend
  *   without DEMO_MODE.
+ * - 404 `eval_run_not_found`: `getEvalRun` asked for a run the history does not have (the eval
+ *   history is read with the same cookie as the plans; CI uploads it with its own token).
  * - 404 `cover_unavailable`: the destination has no free photo; `getCover` answers null.
  */
 
@@ -24,6 +26,8 @@ import {
   CoverSchema,
   CreatePlanResponseSchema,
   ErrorResponseSchema,
+  EvalRunDetailSchema,
+  EvalRunListResponseSchema,
   HealthResponseSchema,
   MonthlyLimitDataSchema,
   PlanDetailSchema,
@@ -33,6 +37,8 @@ import {
   type ContinueResponse,
   type Cover,
   type CreatePlanResponse,
+  type EvalRunDetail,
+  type EvalRunSummary,
   type HealthResponse,
   type PlanDetail,
   type PlanSummary,
@@ -86,6 +92,22 @@ export const API_ERROR_MESSAGES: Record<ApiErrorKind, string> = {
   server: "Il planner ha avuto un problema. Riprova più tardi.",
   unknown: "Qualcosa è andato storto. Riprova.",
 };
+
+/** A 404 of the eval history that is not the backend's own `eval_run_not_found` would otherwise
+ * read "Questo piano non c'è": either the route does not exist (an older backend) or the answer
+ * had no envelope. */
+function evalNotFound(error: unknown): unknown {
+  if (!(error instanceof ApiError) || error.kind !== "not_found" || error.code === "eval_run_not_found") return error;
+  return new ApiError({
+    kind: "not_found",
+    status: error.status,
+    code: error.code,
+    message:
+      error.code === "not_found"
+        ? "La cronologia delle valutazioni non è disponibile su questo planner."
+        : "Questa valutazione non c'è.",
+  });
+}
 
 interface ApiErrorInit {
   kind: ApiErrorKind;
@@ -203,6 +225,10 @@ export interface ApiClient {
   interruptPlan(planId: string, options?: RequestOptions): Promise<StatusResponse>;
   /** POST /plans/{id}/continue ("Continua con 2 $ in più"). */
   continuePlan(planId: string, options?: RequestOptions): Promise<ContinueResponse>;
+  /** GET /evals/runs: the eval history, newest first (at most `limit`, default 50). */
+  listEvalRuns(options?: RequestOptions & { limit?: number }): Promise<EvalRunSummary[]>;
+  /** GET /evals/runs/{id}: one run with its stored results and comparison. */
+  getEvalRun(runId: string, options?: RequestOptions): Promise<EvalRunDetail>;
   /** GET /health (no authentication). */
   health(options?: RequestOptions): Promise<HealthResponse>;
   /** URL of GET /plans/{id}/events (SSE) for `new EventSource(url, {withCredentials: true})`;
@@ -327,6 +353,23 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
       send("POST", `${planPath(planId)}/interrupt`, StatusResponseSchema, { signal: opts?.signal }),
     continuePlan: (planId, opts) =>
       send("POST", `${planPath(planId)}/continue`, ContinueResponseSchema, { signal: opts?.signal }),
+    listEvalRuns: async (opts) => {
+      const limit = opts?.limit === undefined ? "" : `?limit=${Math.max(1, Math.floor(opts.limit))}`;
+      try {
+        return (await send("GET", `/evals/runs${limit}`, EvalRunListResponseSchema, { signal: opts?.signal })).runs;
+      } catch (error) {
+        throw evalNotFound(error);
+      }
+    },
+    getEvalRun: async (runId, opts) => {
+      try {
+        return await send("GET", `/evals/runs/${encodeURIComponent(runId)}`, EvalRunDetailSchema, {
+          signal: opts?.signal,
+        });
+      } catch (error) {
+        throw evalNotFound(error);
+      }
+    },
     health: (opts) => send("GET", "/health", HealthResponseSchema, { signal: opts?.signal }),
     eventsUrl: (planId, after) => {
       const url = `${baseUrl()}${planPath(planId)}/events`;

@@ -127,6 +127,20 @@ an empty run still blocks (exit 1). Rules 2 and 3 have nothing to compare with a
 report-only: the report says "not compared" and, when every check passed (exit 0), prints the
 commands that create the baseline.
 
+`--json <file>` also writes the verdict for machines: `status` (`passed`, `blocked`, or
+`report_only` when there is no baseline and nothing blocks), one entry per rule in `rules`
+(`checks`, `judge`, `cost`; each `ok`, `blocking` or `not_compared`), every finding, the judge
+means, the cost change and the per-request rows. It is written for exit 0 and 1, not for a usage
+error.
+
+## Eval history (`upload.py`)
+
+`upload.py` sends a results file, its `--json` comparison and the CI run URL to Atlas's eval
+history (`POST <EVALS_INGEST_URL>/evals/runs`, bearer `EVALS_INGEST_TOKEN`; both come from the
+environment). CI calls it after `compare.py`. It retries three times, never prints the token and
+exits 0 with a `::warning::` on failure (`--strict` exits 1). Setup, rotation and the local
+import: docs/deploy.md, "Eval history".
+
 ## Updating the baseline (explicit commits only)
 
 The baseline never changes by itself: neither `run.py` nor `compare.py` without the flag
@@ -196,7 +210,7 @@ a developer machine: run steps 1 and 3 in the GitHub `production` environment.
 
 ```sh
 cd backend
-uv run pytest ../evals/tests -q                     # checks, compare, judge (fake client), dataset, run
+uv run pytest ../evals/tests -q                     # checks, compare, upload, judge (fake client), dataset, run
 uv run ruff check ../evals && uv run ruff format --check ../evals
 uv run pyright -p ../evals
 ```

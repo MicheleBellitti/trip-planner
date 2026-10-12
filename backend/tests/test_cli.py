@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app import cli
 from app.config import Settings
-from app.db import EventRecord, PlanRecord, PlanStatus
+from app.db import EvalRunRecord, EventRecord, PlanRecord, PlanStatus
 from app.events import AgentName, EventKind, UIEvent
 from app.request import PlanRequest
 from tests.test_jobs import uncached_structlog  # noqa: F401 (fixture)
@@ -349,3 +349,88 @@ async def test_replay_of_a_missing_scenario(
 @pytest.mark.usefixtures("uncached_structlog")
 def test_main_replay_usage_error(settings: Settings, tmp_path: Path) -> None:
     assert cli.main(["replay", str(tmp_path / "nope.jsonl"), "--no-color"]) == cli.EXIT_USAGE
+
+
+# --- import-evals -------------------------------------------------------------------------------
+
+EVAL_RESULTS = MA_FIXTURES.parent / "evals" / "2026-10-12-5d22125b0352.json"
+
+
+def test_parser_import_evals() -> None:
+    parser = cli.build_parser()
+    minimal = parser.parse_args(["import-evals", "r.json"])
+    assert (minimal.command, minimal.results, minimal.comparison, minimal.workflow_run_url) == (
+        "import-evals",
+        Path("r.json"),
+        None,
+        None,
+    )
+    full = parser.parse_args(
+        ["import-evals", "r.json", "--comparison", "c.json", "--workflow-run-url", "https://x/1"]
+    )
+    assert (full.comparison, full.workflow_run_url) == (Path("c.json"), "https://x/1")
+
+
+async def test_import_evals_stores_the_run_and_a_repeat_is_harmless(
+    settings: Settings,
+    db_session_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    comparison_path = tmp_path / "comparison.json"
+    comparison_path.write_text(json.dumps({"status": "report_only"}), encoding="utf-8")
+
+    async def run() -> int:
+        return await cli.import_evals_command(
+            EVAL_RESULTS,
+            settings=settings,
+            comparison_path=comparison_path,
+            workflow_run_url="https://github.com/o/r/actions/runs/1",
+        )
+
+    assert await run() == cli.EXIT_READY
+    assert "Importata: esecuzione " in capsys.readouterr().out
+    assert await run() == cli.EXIT_READY
+    assert "Già presente: esecuzione " in capsys.readouterr().out
+
+    async with db_session_factory() as db:
+        [record] = (await db.scalars(select(EvalRunRecord))).all()
+    assert record.summary["compare_status"] == "report_only"
+    assert record.summary["requests_total"] == 5
+    assert record.workflow_run_url == "https://github.com/o/r/actions/runs/1"
+
+
+@pytest.mark.parametrize(
+    ("content", "message"),
+    [
+        (None, "Impossibile leggere"),
+        ("{", "non è JSON valido"),
+        ("[1]", "deve essere un oggetto JSON"),
+        ('{"kind": "other"}', "non validi"),
+    ],
+)
+async def test_import_evals_usage_errors(
+    settings: Settings,
+    db_session_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    content: str | None,
+    message: str,
+) -> None:
+    path = tmp_path / "results.json"
+    if content is not None:
+        path.write_text(content, encoding="utf-8")
+
+    code = await cli.import_evals_command(
+        path, settings=settings, comparison_path=None, workflow_run_url=None
+    )
+
+    assert code == cli.EXIT_USAGE
+    assert message in capsys.readouterr().err
+    async with db_session_factory() as db:
+        assert await db.scalar(select(func.count()).select_from(EvalRunRecord)) == 0
+
+
+@pytest.mark.usefixtures("uncached_structlog")
+def test_main_import_evals_usage_error(settings: Settings, tmp_path: Path) -> None:
+    assert cli.main(["import-evals", str(tmp_path / "nope.json")]) == cli.EXIT_USAGE

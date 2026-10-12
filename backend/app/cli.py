@@ -6,6 +6,7 @@ and "Backend FastAPI" (`cli.py  # python -m app.cli run: terminal timeline`).
 
     uv run python -m app.cli run --request request.json [--yes]
     uv run python -m app.cli replay tests/fixtures/ma/<scenario>.jsonl [--request request.json]
+    uv run python -m app.cli import-evals RESULTS.json [--comparison FILE] [--workflow-run-url URL]
 
 `run` drives a REAL Managed Agents session (it costs money; CLAUDE.md: only when Michele asks).
 It uses the same path as POST /plans: `sessions.start_planner` with the SDK client, then
@@ -19,9 +20,14 @@ loaded from a JSONL script (backend/tests/fakes/README.md), FX in offline mode a
 fallback trip.json. It still needs a Postgres DATABASE_URL (the consumer persists events).
 The fake is imported lazily from tests/, which ships with the backend directory.
 
-Both print the timeline as the hub publishes it, one line per UI event (`render_event`), and
-finally the plan's status, cost, and the path of the stored Trip when ready. Exit codes: 0
-ready, 1 any other final status, 2 usage or configuration errors.
+`import-evals` stores an eval results file (evals/run.py) in the eval history, through the same
+function as POST /evals/runs (`evals_store.store_eval_run`), in DATABASE_URL: offline and free.
+It prints the run's id and whether it was new (importing it again is harmless). Exit 0 stored,
+2 for an unreadable or invalid file.
+
+`run` and `replay` print the timeline as the hub publishes it, one line per UI event
+(`render_event`), and finally the plan's status, cost, and the path of the stored Trip when
+ready. Exit codes: 0 ready, 1 any other final status, 2 usage or configuration errors.
 """
 
 from __future__ import annotations
@@ -43,7 +49,7 @@ import httpx
 import structlog
 from pydantic import ValidationError
 
-from app import clock, sessions
+from app import clock, evals_store, sessions
 from app.auth import CurrentUser
 from app.config import BACKEND_DIR, Settings, add_plan_log_keys, get_settings
 from app.consumer import StatusChange, load_events_after, set_plan_status
@@ -141,6 +147,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     replay.add_argument("--no-color", action="store_true", help="plain text, no ANSI colors")
     replay.add_argument("--out", type=Path, default=None, help="directory for the Trip JSON")
+
+    import_evals = commands.add_parser(
+        "import-evals", help="offline: store an eval results file in the eval history"
+    )
+    import_evals.add_argument("results", type=Path, help="evals/results/<date>-<sha>.json")
+    import_evals.add_argument(
+        "--comparison", type=Path, default=None, help="evals/compare.py --json output"
+    )
+    import_evals.add_argument(
+        "--workflow-run-url", default=None, help="link to the CI run that produced the results"
+    )
     return parser
 
 
@@ -166,6 +183,62 @@ def load_request(path: Path, *, allow_past_dates: bool = False) -> PlanRequest:
             location = ".".join(str(part) for part in error["loc"]) or "(richiesta)"
             print(f"  {location}: {error['msg']}", file=sys.stderr)
         raise SystemExit(EXIT_USAGE) from exc
+
+
+def _read_eval_document(path: Path) -> dict[str, Any] | None:
+    """A JSON object file of at most `evals_store.MAX_INGEST_BYTES`, or None with the reason
+    printed."""
+    try:
+        if path.stat().st_size > evals_store.MAX_INGEST_BYTES:
+            limit = evals_store.MAX_INGEST_BYTES
+            print(f"{path} supera i {limit} byte consentiti.", file=sys.stderr)
+            return None
+        raw = path.read_bytes()
+    except OSError as exc:
+        print(f"Impossibile leggere {path}: {exc.strerror or exc}", file=sys.stderr)
+        return None
+    try:
+        document = evals_store.parse_json(raw)
+    except evals_store.InvalidEvalResultsError as exc:
+        print(f"{path} non è JSON valido: {exc}", file=sys.stderr)
+        return None
+    if not isinstance(document, dict):
+        print(f"{path}: deve essere un oggetto JSON.", file=sys.stderr)
+        return None
+    return cast(dict[str, Any], document)
+
+
+async def import_evals_command(
+    results_path: Path,
+    *,
+    settings: Settings,
+    comparison_path: Path | None,
+    workflow_run_url: str | None,
+) -> int:
+    """`import-evals`: validate and store the run (`evals_store.store_eval_run`)."""
+    results = _read_eval_document(results_path)
+    comparison = _read_eval_document(comparison_path) if comparison_path is not None else None
+    if results is None or (comparison_path is not None and comparison is None):
+        return EXIT_USAGE  # the reason was printed
+    engine = create_engine(settings)
+    try:
+        async with create_session_factory(engine)() as db:
+            try:
+                stored = await evals_store.store_eval_run(
+                    db,
+                    results=results,
+                    comparison=comparison,
+                    workflow_run_url=workflow_run_url,
+                )
+            except evals_store.InvalidEvalResultsError as exc:
+                print("Risultati delle eval non validi:", file=sys.stderr)
+                for error in exc.errors:
+                    print(f"  {error['field']}: {error['reason']}", file=sys.stderr)
+                return EXIT_USAGE
+    finally:
+        await engine.dispose()
+    print(f"{'Importata' if stored.created else 'Già presente'}: esecuzione {stored.id}")
+    return EXIT_READY
 
 
 def render_event(event: UIEvent, *, color: bool) -> str:
@@ -593,6 +666,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"Configurazione non valida: {exc}", file=sys.stderr)
         return EXIT_USAGE
     _configure_logging()
+    if args.command == "import-evals":
+        return asyncio.run(
+            import_evals_command(
+                args.results,
+                settings=settings,
+                comparison_path=args.comparison,
+                workflow_run_url=args.workflow_run_url,
+            )
+        )
     color = not args.no_color and sys.stdout.isatty()
     if args.command == "run":
         return asyncio.run(

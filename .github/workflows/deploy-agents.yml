@@ -300,6 +300,29 @@ jobs:
           uv run python ../evals/run.py --profile production --yes \
             --concurrency "$EVAL_CONCURRENCY" --output "$results"
 
+      # The eval history in Atlas (docs/deploy.md, "Eval history"), without a comparison: this
+      # run is reported, not compared. Needs the production environment's variable
+      # EVALS_INGEST_URL and secret EVALS_INGEST_TOKEN; without both it only logs a notice. A
+      # failed upload is a warning (evals/upload.py exits 0), never a failure of this job.
+      - name: Upload to the eval history
+        if: ${{ !cancelled() && steps.run.outputs.results != '' }}
+        continue-on-error: true
+        env:
+          EVALS_INGEST_URL: ${{ vars.EVALS_INGEST_URL }}
+          EVALS_INGEST_TOKEN: ${{ secrets.EVALS_INGEST_TOKEN }}
+          RESULTS: ${{ steps.run.outputs.results }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ ! -s "$RESULTS" ]; then
+            echo "::notice::eval history upload skipped: evals/run.py wrote no results file"
+            exit 0
+          fi
+          if [ -z "$EVALS_INGEST_URL" ] || [ -z "$EVALS_INGEST_TOKEN" ]; then
+            echo "::notice::eval history upload skipped: set the variable EVALS_INGEST_URL and the secret EVALS_INGEST_TOKEN on the production environment to enable it"
+            exit 0
+          fi
+          uv run python ../evals/upload.py "$RESULTS" --workflow-run-url "$RUN_URL"
+
       - name: Summary
         if: ${{ !cancelled() }}
         env:

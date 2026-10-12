@@ -52,7 +52,8 @@ Contents:
 | `app/sessions.py` | Start, interrupt, continue, resume; the `PlannerServices` container; `PlanLocks`; the local demo's wiring (decision 32) | Backend FastAPI; Costi (budget, monthly limit) | G, R |
 | `app/lockfile.py` | Read `backend/claude-lock.<profile>.json` and resolve the profile's roster | Agenti; Eval e versioning | G |
 | `app/jobs.py` | Nightly cleanup (Railway cron); hourly stuck-plan check (in the web process) | Lavori pianificati; Log e resilienza | G |
-| `app/cli.py` | `python -m app.cli run` / `replay` | Piano di lavoro, giorno 1 | G |
+| `app/cli.py` | `python -m app.cli run` / `replay` / `import-evals` | Piano di lavoro, giorno 1 | G |
+| `app/evals_store.py` | The eval history: validate, summarize and store the JSON of `evals/run.py` (`eval_runs`); the list and detail readers (decision 35) | Eval sui piani | S |
 
 The contract models (`plan.py`, `request.py`, `results.py`, `events.UIEvent`), `db.py`,
 `config.py`, `clock.py` and `schemas.py` predate this split. R is the later runtime pass: the
@@ -70,6 +71,7 @@ only) and time-machine, and never a real key.
 | E | `test_fx.py` (respx with `tests/fixtures/fx/*`, the test vectors in integrations.md §2.3, the cache on Postgres) |
 | F | `test_auth.py`, `test_hub.py`, `test_routes.py`, `test_sse.py` (the route's protocol, with `stub_planner` and the reference replay reader; the settle-before-end cases) |
 | G | `test_lockfile.py`, `test_sessions.py`, `test_jobs.py`, `test_cli.py` (replay through the fake) |
+| S | `test_evals_store.py` (validation, the list fields, idempotency, concurrent uploads), `test_evals_routes.py` (bearer token, size caps, the read side) |
 | R | `test_demo.py` (the settings guard, the paced scenarios, `?demo_scenario=`, whole demo runs through `create_app`), `test_plan_lease.py` (one consumer per plan across two registries on one database; no Managed Agents call without the lease), `test_logging_context.py` (the plan keys on every line, those of other modules included) |
 | Integration | `test_e2e_offline.py`: the whole spec flow through the real app (§3, "End to end") |
 
@@ -84,6 +86,7 @@ graph acyclic. The parentheses list what each module actually imports.
  1  config  clock
  2  db (config)
  3  plan ; request (clock, plan) ; results (plan) ; events      contracts
+ 3  evals_store (db)                                            eval history: models, service
  4  links                                                       pure, stdlib only
  5  ma_client (config)                                          the only importer of `anthropic`
  6  lockfile (config, events, ma_client)
@@ -96,11 +99,11 @@ graph acyclic. The parentheses list what each module actually imports.
               triptracker_schema)
  9  sessions (auth, clock, config, consumer, db, events, fx, hub, lockfile, ma_client, request,
               triptracker_schema; tests.fakes.demo imported lazily in DEMO_MODE)
-10  routes (auth, config, consumer, db, events, hub, links, ma_client, request, sessions,
-            triptracker_schema)
+10  routes (auth, config, consumer, db, evals_store, events, hub, links, ma_client, request,
+            sessions, triptracker_schema)
     jobs (clock, config, consumer, db, ma_client, sessions)
-    cli (auth, clock, config, consumer, db, events, hub, ma_client, request, sessions,
-         triptracker_schema; tests.fakes imported lazily inside `replay`)
+    cli (auth, clock, config, consumer, db, evals_store, events, hub, ma_client, request,
+         sessions, triptracker_schema; tests.fakes imported lazily inside `replay`)
 11  main (config, db, jobs, routes, sessions)
     schemas (events, plan, request, results)                    the JSON Schema exporter
 ```
@@ -918,6 +921,34 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
     on `app.state.cover_resolver`. The table has no retention job: one small row per distinct
     destination. The page must show the author, license and a link to `source_page` next to
     the photo (CC BY / CC BY-SA require it).
+35. Eval history (`app/evals_store.py`, table `eval_runs`, migration `a3f5b8c1d7e2`). CI
+    uploads each paid eval run with `POST /evals/runs` and the web app reads it back with
+    `GET /evals/runs` (`{"runs": [...]}`, newest first, `limit` 1-200, default 50) and `GET
+    /evals/runs/{id}` (the list fields plus `results` and `comparison`). The write side is a
+    machine endpoint: `Authorization: Bearer <EVALS_INGEST_TOKEN>`, no cookie, no Origin check,
+    no CORS; 404 `evals_ingest_disabled` while the token is empty (the default), 401
+    `invalid_ingest_token` for a wrong one (compared as SHA-256 digests with
+    `hmac.compare_digest`), 422 `invalid_eval_results` (`data.errors[{field, reason}]`). The
+    read side is `current_user` like `/plans`, but runs belong to the project, not to a user:
+    every allowed user sees all of them, and the bearer token opens nothing there. The body is
+    `{"results", "comparison", "workflow_run_url"}`, capped at 5 MB, so
+    `RequestBodyLimitMiddleware` takes a per-path cap (`path_limits`, POST /evals/runs only;
+    everything else keeps 64 KB), and the handler reads the body only after the token checks
+    out, so an unauthenticated caller costs no memory. Validation is loose on purpose: an
+    unknown `kind` or `format`, a missing or naive `started_at`, an empty `profile` or a
+    `requests` that is not a list of objects are refused, every other key is stored as sent
+    (U+0000 stripped, NaN refused: `jsonb`); a comparison must not claim another `kind` or
+    `format`. Idempotency: `run_key` = profile, git sha and start instant in UTC; a repeat
+    (CI retry, a second `import-evals`) answers 200 with the same id, keeps the stored
+    results, and only a comparison or workflow link it carries replaces the stored one (a
+    repeat without them never erases them). The list fields (`requests_total`,
+    `requests_accepted` = status `ready`, `checks_passed`, `blocking_failures_count`,
+    `total_cost_cents`, `web_search_requests`, `judge_mean` = mean of every criterion score,
+    `compare_status`) are computed once at ingest into `eval_runs.summary`, so the list never
+    reads the 35 KB to 5 MB documents; `compare_status` is `evals/compare.py --json`'s `status`
+    (passed, blocked or report_only), else derived from its `blocked` and `report_only`. `python
+    -m app.cli import-evals RESULTS.json [--comparison FILE] [--workflow-run-url URL]` writes
+    through the same `store_eval_run`. There is no retention job: one row per paid run.
 
 ---
 

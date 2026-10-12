@@ -1,0 +1,1421 @@
+{
+ "id": "7b2e9d04-1c63-4f58-a0d9-6e8f3b5c2a77",
+ "started_at": "2026-10-12T20:12:04.114203+02:00",
+ "finished_at": "2026-10-12T20:17:41.552071+02:00",
+ "git_sha": "a91c3e07f2d84b5c6e1f0a9b8c7d6e5f4a3b2c1d",
+ "profile": "development",
+ "aborted": false,
+ "requests_total": 5,
+ "requests_accepted": 2,
+ "checks_passed": 1,
+ "blocking_failures_count": 7,
+ "total_cost_cents": 288,
+ "web_search_requests": 61,
+ "judge_mean": 4.0,
+ "compare_status": "blocked",
+ "workflow_run_url": "https://github.com/example-org/trip-planner/actions/runs/1234567890",
+ "results": {
+  "kind": "trip-planner-eval-results",
+  "format": 1,
+  "date": "2026-10-12",
+  "started_at": "2026-10-12T20:12:04.114203+02:00",
+  "finished_at": "2026-10-12T20:17:41.552071+02:00",
+  "git_sha": "a91c3e07f2d84b5c6e1f0a9b8c7d6e5f4a3b2c1d",
+  "profile": "development",
+  "aborted": false,
+  "dataset": {
+   "version": 1,
+   "valid_until": "2027-10-12",
+   "selected": [
+    "city-weekend-lisbon",
+    "sea-week-family",
+    "suggest-low-budget",
+    "train-trip-florence",
+    "flexible-dates-budapest"
+   ],
+   "tags": []
+  },
+  "estimate": {
+   "cost_cents": 55,
+   "web_search_requests": 20,
+   "session_budget_cents": 60
+  },
+  "agent_versions": {
+   "profile": "development",
+   "coordinator": {
+    "id": "agent_01JznpMrk3fnHyBcuf2RCc8i",
+    "version": 1
+   },
+   "subagents": {
+    "flights": {
+     "id": "agent_01JfcnhW1Ao6cdZT4yVpjNMv",
+     "version": 1
+    },
+    "lodging": {
+     "id": "agent_014r5YWJg6poR7a86PYWF4Go",
+     "version": 1
+    },
+    "activities": {
+     "id": "agent_01NaQ9sYvmaopb42W31EhiEw",
+     "version": 1
+    },
+    "transport": {
+     "id": "agent_01TvCecHjHfChmMirz5Dfqew",
+     "version": 1
+    }
+   },
+   "skills": {
+    "booking-links": {
+     "id": "skill_01W9ke5J7RYC6DKDFYiY9sHj",
+     "version": "skver_01HTaxeyVg2qLMATAGksNynp"
+    },
+    "travel-research-rules": {
+     "id": "skill_01Sqw9CZUP8yZqCYd3FtHe6W",
+     "version": "skver_01SBz3bRu9iWddXV8L3Tn3ZL"
+    },
+    "trip-tracker-schema": {
+     "id": "skill_012cmKsRcRG9dCo276DzqDmE",
+     "version": "skver_019TECLQSid42UzT5ytfjVnA"
+    }
+   },
+   "environment_id": "env_01Gy43EyAD4AwPiA5SrCm7vm",
+   "lockfile_sha256": "31a4ac929e8cf9c7dee25c57845054295ea6f235a4d243f8e1ad0a6d4c5d76f2",
+   "trip_schema_sha256": null,
+   "git_sha": "5d22125b035243839e5ce2ece301861aaf5e4977"
+  },
+  "judge": {
+   "enabled": true,
+   "model": "claude-sonnet-5-5",
+   "cap_cents": 100.0,
+   "spent_cents": 14.9,
+   "exhausted": false
+  },
+  "requests": [
+   {
+    "id": "city-weekend-lisbon",
+    "title": "Weekend in città europea",
+    "tags": [
+     "city",
+     "weekend",
+     "flights",
+     "europe",
+     "smoke"
+    ],
+    "request": {
+     "origin": "Milano",
+     "destination": "Lisbona",
+     "suggest_destination": false,
+     "dates": {
+      "exact_start": "2027-11-12",
+      "exact_end": "2027-11-14"
+     },
+     "travelers": [
+      {
+       "kind": "adult"
+      },
+      {
+       "kind": "adult"
+      }
+     ],
+     "budget_eur": 900,
+     "preferences": "Voli diretti, niente partenze prima delle 8. Cucina locale e almeno un museo, quartieri da girare a piedi."
+    },
+    "plan_id": "b6f2f3c1-0a1d-4f6b-8f7e-2d3c4b5a6978",
+    "status": "ready",
+    "failure_reason": null,
+    "submit_attempts": 1,
+    "cost_cents": 47,
+    "web_search_requests": 11,
+    "checks": [
+     {
+      "name": "schema_valid",
+      "status": "pass",
+      "blocking": true,
+      "message": "Plan and Trip are valid",
+      "details": []
+     },
+     {
+      "name": "book_by_before_scheduled_for",
+      "status": "pass",
+      "blocking": true,
+      "message": "12 bookings checked, every book_by is before its event",
+      "details": []
+     },
+     {
+      "name": "within_budget_or_warned",
+      "status": "pass",
+      "blocking": true,
+      "message": "total 612 EUR within the budget of 900 EUR",
+      "details": []
+     },
+     {
+      "name": "prices_have_source",
+      "status": "pass",
+      "blocking": true,
+      "message": "14 prices, all with a source and a date",
+      "details": []
+     },
+     {
+      "name": "links_on_allowed_domains",
+      "status": "pass",
+      "blocking": true,
+      "message": "9 links, all on allowed domains",
+      "details": []
+     },
+     {
+      "name": "no_empty_days",
+      "status": "pass",
+      "blocking": true,
+      "message": "3 days, none empty",
+      "details": []
+     },
+     {
+      "name": "submit_plan_attempts",
+      "status": "pass",
+      "blocking": true,
+      "message": "accepted at attempt 1",
+      "details": []
+     },
+     {
+      "name": "cost_and_searches_vs_estimate",
+      "status": "pass",
+      "blocking": false,
+      "message": "cost 47 cents, estimate 55 cents",
+      "details": []
+     },
+     {
+      "name": "matches_request",
+      "status": "pass",
+      "blocking": true,
+      "message": "2 travellers, dates and destination match",
+      "details": []
+     }
+    ],
+    "checks_passed": true,
+    "blocking_failures": [],
+    "warnings_count": 2,
+    "judge": {
+     "status": "ok",
+     "model": "claude-sonnet-5-5",
+     "scores": {
+      "time_coherence": {
+       "score": 5,
+       "reason": "Every day is realistic hour by hour; the arrival day starts after the 11:20 landing and the departure day ends before the return flight."
+      },
+      "realistic_transfers": {
+       "score": 4,
+       "reason": "The Aerobus and metro legs are stated with plausible durations; a 20 minute buffer at the Lisbon station on day 2 is a little tight."
+      },
+      "preference_respect": {
+       "score": 5,
+       "reason": "Direct flights, no departure before 8:00, a museum and local cuisine are all present."
+      },
+      "alternatives_quality": {
+       "score": 4,
+       "reason": "The rejected hotel and flight alternatives are comparable and explain why they lose; one alternative has no price."
+      },
+      "summary_clarity": {
+       "score": 4,
+       "reason": "The summary names the base, the flights and the estimated cost in three short lines."
+      }
+     },
+     "error": null,
+     "cost_cents": 4.1,
+     "stop_reason": "end_turn"
+    },
+    "plan": {
+     "title": "Weekend a Lisbona, 12-14 novembre 2027",
+     "days": [
+      {
+       "date": "2027-04-14",
+       "stops": [
+        {
+         "lat": null,
+         "lon": null,
+         "ref": "d1-volo",
+         "url": null,
+         "kind": "transfer",
+         "notes": "Partenza alle 09:40 ora italiana, arrivo alle 11:20 ora di Lisbona.",
+         "title": "Volo TP827 Milano Malpensa → Lisbona",
+         "address": null,
+         "start_time": "08:40",
+         "duration_min": 160,
+         "location_name": "Aeroporto di Milano Malpensa"
+        },
+        {
+         "lat": 38.7742,
+         "lon": -9.1342,
+         "ref": "d1-aerobus",
+         "url": null,
+         "kind": "transfer",
+         "notes": null,
+         "title": "Aerobus dall'aeroporto all'hotel",
+         "address": null,
+         "start_time": "11:50",
+         "duration_min": 35,
+         "location_name": "Aeroporto Humberto Delgado"
+        },
+        {
+         "lat": 38.7196,
+         "lon": -9.1455,
+         "ref": "d1-hotel",
+         "url": null,
+         "kind": "rest",
+         "notes": null,
+         "title": "Check-in all'Hotel Lisboa Plaza",
+         "address": "Travessa do Salitre 7, 1269-066 Lisboa",
+         "start_time": "15:00",
+         "duration_min": null,
+         "location_name": "Hotel Lisboa Plaza"
+        },
+        {
+         "lat": 38.7076,
+         "lon": -9.1365,
+         "ref": "d1-baixa",
+         "url": null,
+         "kind": "activity",
+         "notes": null,
+         "title": "Passeggiata in Baixa fino a Praça do Comércio",
+         "address": null,
+         "start_time": "16:30",
+         "duration_min": 120,
+         "location_name": "Praça do Comércio"
+        },
+        {
+         "lat": 38.7069,
+         "lon": -9.1458,
+         "ref": "d1-cena",
+         "url": null,
+         "kind": "meal",
+         "notes": null,
+         "title": "Cena al Time Out Market",
+         "address": "Av. 24 de Julho 49, 1200-479 Lisboa",
+         "start_time": "19:30",
+         "duration_min": null,
+         "location_name": "Time Out Market Lisboa"
+        }
+       ],
+       "title": "Arrivo e Baixa"
+      },
+      {
+       "date": "2027-04-15",
+       "stops": [
+        {
+         "lat": 38.7635,
+         "lon": -9.0937,
+         "ref": "d2-oceanario",
+         "url": "https://www.oceanario.pt/",
+         "kind": "activity",
+         "notes": "Biglietto famiglia: due adulti e due bambini.",
+         "title": "Oceanário de Lisboa",
+         "address": "Esplanada Dom Carlos I, 1990-005 Lisboa",
+         "start_time": "10:00",
+         "duration_min": 150,
+         "location_name": "Oceanário de Lisboa"
+        },
+        {
+         "lat": null,
+         "lon": null,
+         "ref": "d2-pranzo",
+         "url": null,
+         "kind": "meal",
+         "notes": null,
+         "title": "Pranzo sul lungofiume",
+         "address": null,
+         "start_time": "13:00",
+         "duration_min": null,
+         "location_name": null
+        },
+        {
+         "lat": 38.7646,
+         "lon": -9.0952,
+         "ref": "d2-telecabina",
+         "url": null,
+         "kind": "activity",
+         "notes": null,
+         "title": "Telecabina sul Tago",
+         "address": null,
+         "start_time": "15:00",
+         "duration_min": 40,
+         "location_name": "Telecabine Lisboa"
+        }
+       ],
+       "title": "Oceanário e Parque das Nações"
+      },
+      {
+       "date": "2027-04-16",
+       "stops": [
+        {
+         "lat": 38.7141,
+         "lon": -9.1415,
+         "ref": "d3-treno",
+         "url": null,
+         "kind": "transfer",
+         "notes": null,
+         "title": "Treno da Rossio a Sintra",
+         "address": null,
+         "start_time": "08:45",
+         "duration_min": 40,
+         "location_name": "Estação do Rossio"
+        },
+        {
+         "lat": 38.7876,
+         "lon": -9.3906,
+         "ref": "d3-pena",
+         "url": "https://www.parquesdesintra.pt/",
+         "kind": "activity",
+         "notes": null,
+         "title": "Palácio da Pena",
+         "address": null,
+         "start_time": "10:30",
+         "duration_min": 180,
+         "location_name": "Parque e Palácio Nacional da Pena"
+        },
+        {
+         "lat": null,
+         "lon": null,
+         "ref": "d3-pranzo",
+         "url": null,
+         "kind": "meal",
+         "notes": null,
+         "title": "Pranzo nel centro di Sintra",
+         "address": null,
+         "start_time": "13:45",
+         "duration_min": null,
+         "location_name": null
+        },
+        {
+         "lat": null,
+         "lon": null,
+         "ref": "d3-rientro",
+         "url": null,
+         "kind": "transfer",
+         "notes": null,
+         "title": "Treno di rientro a Lisbona",
+         "address": null,
+         "start_time": "17:00",
+         "duration_min": 40,
+         "location_name": null
+        }
+       ],
+       "title": "Sintra"
+      }
+     ],
+     "bookings": [
+      {
+       "kind": "transport",
+       "link": "https://www.expedia.it/Flights-Search?trip=roundtrip&leg1=from:MXP,to:LIS,departure:2027-04-14TANYT&leg2=from:LIS,to:MXP,departure:2027-04-18TANYT&passengers=adults:2,children:2[9;6],seniors:0,infantinlap:N&options=cabinclass:economy&mode=search",
+       "notes": "Andata TP827 il 14 aprile, ritorno TP826 il 18 aprile. Bagaglio incluso.",
+       "phone": null,
+       "price": {
+        "status": "verified",
+        "currency": "EUR",
+        "source_url": "https://www.expedia.it/Flights-Search?trip=roundtrip&leg1=from:MXP,to:LIS,departure:2027-04-14TANYT&leg2=from:LIS,to:MXP,departure:2027-04-18TANYT&passengers=adults:2,children:2[9;6],seniors:0,infantinlap:N&options=cabinclass:economy&mode=search",
+        "amount_cents": 81200,
+        "retrieved_at": "2026-10-12T12:01:34+02:00"
+       },
+       "title": "Volo TAP Milano Malpensa ⇄ Lisbona",
+       "vendor": "TAP Air Portugal",
+       "book_by": "2027-02-26T20:00:00Z",
+       "stop_ref": "d1-volo",
+       "scheduled_for": "2027-04-14T08:40:00+01:00",
+       "book_by_reason": "Le tariffe per metà aprile di solito salgono da marzo."
+      },
+      {
+       "kind": "lodging",
+       "link": "https://www.expedia.it/Lisbona-Hotel-Hotel-Lisboa-Plaza.h524981.Informazioni-Hotel?chkin=2027-04-14&chkout=2027-04-18&rm1=a2:c9:c6",
+       "notes": "Cancellazione gratuita fino all'11 aprile 2027.",
+       "phone": null,
+       "price": {
+        "status": "verified",
+        "currency": "EUR",
+        "source_url": "https://www.expedia.it/Lisbona-Hotel-Hotel-Lisboa-Plaza.h524981.Informazioni-Hotel?chkin=2027-04-14&chkout=2027-04-18&rm1=a2:c9:c6",
+        "amount_cents": 73600,
+        "retrieved_at": "2026-10-12T12:02:41+02:00"
+       },
+       "title": "Hotel Lisboa Plaza, camera familiare (4 notti)",
+       "vendor": "Hotel Lisboa Plaza",
+       "book_by": "2027-03-14T20:00:00Z",
+       "stop_ref": "d1-hotel",
+       "scheduled_for": "2027-04-14T15:00:00+01:00",
+       "book_by_reason": "Ad aprile le camere familiari in centro finiscono presto."
+      },
+      {
+       "kind": "ticket",
+       "link": null,
+       "notes": null,
+       "phone": null,
+       "price": {
+        "status": "estimated",
+        "currency": "EUR",
+        "source_url": "https://www.oceanario.pt/",
+        "amount_cents": 6000,
+        "retrieved_at": "2026-10-12T12:03:12+02:00"
+       },
+       "title": "Biglietti Oceanário de Lisboa",
+       "vendor": "Oceanário de Lisboa",
+       "book_by": null,
+       "stop_ref": "d2-oceanario",
+       "scheduled_for": "2027-04-15T10:00:00+01:00",
+       "book_by_reason": null
+      },
+      {
+       "kind": "ticket",
+       "link": null,
+       "notes": null,
+       "phone": null,
+       "price": {
+        "status": "estimated",
+        "currency": "EUR",
+        "source_url": "https://www.parquesdesintra.pt/",
+        "amount_cents": 6400,
+        "retrieved_at": "2026-10-12T12:03:20+02:00"
+       },
+       "title": "Ingressi Palácio da Pena a orario fisso",
+       "vendor": "Parques de Sintra",
+       "book_by": "2027-04-09T20:00:00+01:00",
+       "stop_ref": "d3-pena",
+       "scheduled_for": "2027-04-16T10:30:00+01:00",
+       "book_by_reason": "Gli ingressi a orario fisso del fine settimana si esauriscono."
+      },
+      {
+       "kind": "transport",
+       "link": null,
+       "notes": null,
+       "phone": null,
+       "price": {
+        "status": "estimated",
+        "currency": "EUR",
+        "source_url": "https://www.aerobus.pt/",
+        "amount_cents": 1800,
+        "retrieved_at": "2026-10-12T12:03:55+02:00"
+       },
+       "title": "Aerobus aeroporto → centro",
+       "vendor": "Aerobus",
+       "book_by": null,
+       "stop_ref": "d1-aerobus",
+       "scheduled_for": "2027-04-14T11:50:00+01:00",
+       "book_by_reason": null
+      }
+     ],
+     "summary": "Cinque giorni a Lisbona per due adulti e due bambini, con base all'Hotel Lisboa Plaza vicino ad Avenida da Liberdade.\nVoli TAP diretti da Malpensa, Oceanário, Sintra e Belém con ritmi adatti ai bambini.\nCosto stimato: circa 1.690 € (voli 812 €, hotel 736 €, ingressi e trasporti 142 €).",
+     "warnings": [
+      "I prezzi di Oceanário, Palácio da Pena e Aerobus sono stimati dai siti ufficiali.",
+      "Prezzi di voli e hotel verificati su Expedia il 12 ottobre 2026: possono cambiare."
+     ]
+    },
+    "timed_out": false,
+    "error": null,
+    "duration_seconds": 184.2,
+    "agent_versions": null
+   },
+   {
+    "id": "sea-week-family",
+    "title": "Settimana al mare con bambini",
+    "tags": [
+     "sea",
+     "family",
+     "children",
+     "week"
+    ],
+    "request": {
+     "origin": "Milano",
+     "destination": "Sardegna",
+     "suggest_destination": false,
+     "dates": {
+      "exact_start": "2028-06-24",
+      "exact_end": "2028-07-01"
+     },
+     "travelers": [
+      {
+       "kind": "adult"
+      },
+      {
+       "kind": "adult"
+      },
+      {
+       "kind": "child",
+       "age": 4
+      },
+      {
+       "kind": "child",
+       "age": 8
+      }
+     ],
+     "budget_eur": 3200,
+     "preferences": "Spiaggia sabbiosa con acqua bassa adatta ai bambini, alloggio con cucina o mezza pensione, spostamenti brevi dall'alloggio. Traghetto con la nostra auto oppure volo più auto a noleggio."
+    },
+    "plan_id": "0c7e5a21-9d3b-4e6f-a1b2-c3d4e5f60718",
+    "status": "ready",
+    "failure_reason": null,
+    "submit_attempts": 2,
+    "cost_cents": 58,
+    "web_search_requests": 14,
+    "checks": [
+     {
+      "name": "schema_valid",
+      "status": "pass",
+      "blocking": true,
+      "message": "Plan and Trip are valid",
+      "details": []
+     },
+     {
+      "name": "book_by_before_scheduled_for",
+      "status": "pass",
+      "blocking": true,
+      "message": "12 bookings checked, every book_by is before its event",
+      "details": []
+     },
+     {
+      "name": "within_budget_or_warned",
+      "status": "warn",
+      "blocking": true,
+      "message": "total 2140 EUR is above the budget of 2000 EUR; a plan warning mentions it",
+      "details": []
+     },
+     {
+      "name": "prices_have_source",
+      "status": "fail",
+      "blocking": true,
+      "message": "2 prices without a source_url",
+      "details": [
+       "bookings[3].price: source_url is missing",
+       "alternatives[1].price: retrieved_at has no offset"
+      ]
+     },
+     {
+      "name": "links_on_allowed_domains",
+      "status": "skip",
+      "blocking": true,
+      "message": "no link checker available in this run",
+      "details": []
+     },
+     {
+      "name": "no_empty_days",
+      "status": "pass",
+      "blocking": true,
+      "message": "3 days, none empty",
+      "details": []
+     },
+     {
+      "name": "submit_plan_attempts",
+      "status": "pass",
+      "blocking": true,
+      "message": "accepted at attempt 1",
+      "details": []
+     },
+     {
+      "name": "cost_and_searches_vs_estimate",
+      "status": "pass",
+      "blocking": false,
+      "message": "cost 47 cents, estimate 55 cents",
+      "details": []
+     },
+     {
+      "name": "matches_request",
+      "status": "pass",
+      "blocking": true,
+      "message": "2 travellers, dates and destination match",
+      "details": []
+     }
+    ],
+    "checks_passed": false,
+    "blocking_failures": [
+     "prices_have_source"
+    ],
+    "warnings_count": 3,
+    "judge": {
+     "status": "ok",
+     "model": "claude-sonnet-5-5",
+     "scores": {
+      "time_coherence": {
+       "score": 3,
+       "reason": "The rhythm works, but day 4 stacks a ferry at 10:00 and a museum at 10:30 with no travel time between them."
+      },
+      "realistic_transfers": {
+       "score": 2,
+       "reason": "The ferry crossing is shown as 20 minutes where the timetable gives about 70; the transfer to the port is missing."
+      },
+      "preference_respect": {
+       "score": 5,
+       "reason": "Direct flights, no departure before 8:00, a museum and local cuisine are all present."
+      },
+      "alternatives_quality": {
+       "score": 4,
+       "reason": "The rejected hotel and flight alternatives are comparable and explain why they lose; one alternative has no price."
+      },
+      "summary_clarity": {
+       "score": 4,
+       "reason": "The summary names the base, the flights and the estimated cost in three short lines."
+      }
+     },
+     "error": null,
+     "cost_cents": 4.8,
+     "stop_reason": "end_turn"
+    },
+    "plan": {
+     "title": "Una settimana al mare in Sardegna, 9-16 agosto 2027",
+     "days": [
+      {
+       "date": "2027-04-14",
+       "stops": [
+        {
+         "lat": null,
+         "lon": null,
+         "ref": "d1-volo",
+         "url": null,
+         "kind": "transfer",
+         "notes": "Partenza alle 09:40 ora italiana, arrivo alle 11:20 ora di Lisbona.",
+         "title": "Volo TP827 Milano Malpensa → Lisbona",
+         "address": null,
+         "start_time": "08:40",
+         "duration_min": 160,
+         "location_name": "Aeroporto di Milano Malpensa"
+        },
+        {
+         "lat": 38.7742,
+         "lon": -9.1342,
+         "ref": "d1-aerobus",
+         "url": null,
+         "kind": "transfer",
+         "notes": null,
+         "title": "Aerobus dall'aeroporto all'hotel",
+         "address": null,
+         "start_time": "11:50",
+         "duration_min": 35,
+         "location_name": "Aeroporto Humberto Delgado"
+        },
+        {
+         "lat": 38.7196,
+         "lon": -9.1455,
+         "ref": "d1-hotel",
+         "url": null,
+         "kind": "rest",
+         "notes": null,
+         "title": "Check-in all'Hotel Lisboa Plaza",
+         "address": "Travessa do Salitre 7, 1269-066 Lisboa",
+         "start_time": "15:00",
+         "duration_min": null,
+         "location_name": "Hotel Lisboa Plaza"
+        },
+        {
+         "lat": 38.7076,
+         "lon": -9.1365,
+         "ref": "d1-baixa",
+         "url": null,
+         "kind": "activity",
+         "notes": null,
+         "title": "Passeggiata in Baixa fino a Praça do Comércio",
+         "address": null,
+         "start_time": "16:30",
+         "duration_min": 120,
+         "location_name": "Praça do Comércio"
+        },
+        {
+         "lat": 38.7069,
+         "lon": -9.1458,
+         "ref": "d1-cena",
+         "url": null,
+         "kind": "meal",
+         "notes": null,
+         "title": "Cena al Time Out Market",
+         "address": "Av. 24 de Julho 49, 1200-479 Lisboa",
+         "start_time": "19:30",
+         "duration_min": null,
+         "location_name": "Time Out Market Lisboa"
+        }
+       ],
+       "title": "Arrivo e Baixa"
+      },
+      {
+       "date": "2027-04-15",
+       "stops": [
+        {
+         "lat": 38.7635,
+         "lon": -9.0937,
+         "ref": "d2-oceanario",
+         "url": "https://www.oceanario.pt/",
+         "kind": "activity",
+         "notes": "Biglietto famiglia: due adulti e due bambini.",
+         "title": "Oceanário de Lisboa",
+         "address": "Esplanada Dom Carlos I, 1990-005 Lisboa",
+         "start_time": "10:00",
+         "duration_min": 150,
+         "location_name": "Oceanário de Lisboa"
+        },
+        {
+         "lat": null,
+         "lon": null,
+         "ref": "d2-pranzo",
+         "url": null,
+         "kind": "meal",
+         "notes": null,
+         "title": "Pranzo sul lungofiume",
+         "address": null,
+         "start_time": "13:00",
+         "duration_min": null,
+         "location_name": null
+        },
+        {
+         "lat": 38.7646,
+         "lon": -9.0952,
+         "ref": "d2-telecabina",
+         "url": null,
+         "kind": "activity",
+         "notes": null,
+         "title": "Telecabina sul Tago",
+         "address": null,
+         "start_time": "15:00",
+         "duration_min": 40,
+         "location_name": "Telecabine Lisboa"
+        }
+       ],
+       "title": "Oceanário e Parque das Nações"
+      },
+      {
+       "date": "2027-04-16",
+       "stops": [
+        {
+         "lat": 38.7141,
+         "lon": -9.1415,
+         "ref": "d3-treno",
+         "url": null,
+         "kind": "transfer",
+         "notes": null,
+         "title": "Treno da Rossio a Sintra",
+         "address": null,
+         "start_time": "08:45",
+         "duration_min": 40,
+         "location_name": "Estação do Rossio"
+        },
+        {
+         "lat": 38.7876,
+         "lon": -9.3906,
+         "ref": "d3-pena",
+         "url": "https://www.parquesdesintra.pt/",
+         "kind": "activity",
+         "notes": null,
+         "title": "Palácio da Pena",
+         "address": null,
+         "start_time": "10:30",
+         "duration_min": 180,
+         "location_name": "Parque e Palácio Nacional da Pena"
+        },
+        {
+         "lat": null,
+         "lon": null,
+         "ref": "d3-pranzo",
+         "url": null,
+         "kind": "meal",
+         "notes": null,
+         "title": "Pranzo nel centro di Sintra",
+         "address": null,
+         "start_time": "13:45",
+         "duration_min": null,
+         "location_name": null
+        },
+        {
+         "lat": null,
+         "lon": null,
+         "ref": "d3-rientro",
+         "url": null,
+         "kind": "transfer",
+         "notes": null,
+         "title": "Treno di rientro a Lisbona",
+         "address": null,
+         "start_time": "17:00",
+         "duration_min": 40,
+         "location_name": null
+        }
+       ],
+       "title": "Sintra"
+      },
+      {
+       "date": "2027-04-17",
+       "stops": [
+        {
+         "lat": 38.6916,
+         "lon": -9.216,
+         "ref": "d4-torre",
+         "url": null,
+         "kind": "activity",
+         "notes": null,
+         "title": "Torre di Belém",
+         "address": null,
+         "start_time": "10:00",
+         "duration_min": 60,
+         "location_name": "Torre de Belém"
+        },
+        {
+         "lat": null,
+         "lon": null,
+         "ref": "d4-pasteis",
+         "url": null,
+         "kind": "meal",
+         "notes": null,
+         "title": "Merenda ai Pastéis de Belém",
+         "address": "Rua de Belém 84-92, 1300-085 Lisboa",
+         "start_time": "11:15",
+         "duration_min": null,
+         "location_name": "Pastéis de Belém"
+        },
+        {
+         "lat": 38.6979,
+         "lon": -9.2068,
+         "ref": "d4-mosteiro",
+         "url": null,
+         "kind": "activity",
+         "notes": null,
+         "title": "Mosteiro dos Jerónimos",
+         "address": null,
+         "start_time": "12:00",
+         "duration_min": 90,
+         "location_name": "Mosteiro dos Jerónimos"
+        },
+        {
+         "lat": null,
+         "lon": null,
+         "ref": "d4-tram",
+         "url": null,
+         "kind": "transfer",
+         "notes": null,
+         "title": "Tram 15 verso il centro",
+         "address": null,
+         "start_time": "16:00",
+         "duration_min": 25,
+         "location_name": null
+        }
+       ],
+       "title": "Belém"
+      }
+     ],
+     "bookings": [
+      {
+       "kind": "transport",
+       "link": "https://www.expedia.it/Flights-Search?trip=roundtrip&leg1=from:MXP,to:LIS,departure:2027-04-14TANYT&leg2=from:LIS,to:MXP,departure:2027-04-18TANYT&passengers=adults:2,children:2[9;6],seniors:0,infantinlap:N&options=cabinclass:economy&mode=search",
+       "notes": "Andata TP827 il 14 aprile, ritorno TP826 il 18 aprile. Bagaglio incluso.",
+       "phone": null,
+       "price": {
+        "status": "verified",
+        "currency": "EUR",
+        "source_url": "https://www.expedia.it/Flights-Search?trip=roundtrip&leg1=from:MXP,to:LIS,departure:2027-04-14TANYT&leg2=from:LIS,to:MXP,departure:2027-04-18TANYT&passengers=adults:2,children:2[9;6],seniors:0,infantinlap:N&options=cabinclass:economy&mode=search",
+        "amount_cents": 81200,
+        "retrieved_at": "2026-10-12T12:01:34+02:00"
+       },
+       "title": "Volo TAP Milano Malpensa ⇄ Lisbona",
+       "vendor": "TAP Air Portugal",
+       "book_by": "2027-02-26T20:00:00Z",
+       "stop_ref": "d1-volo",
+       "scheduled_for": "2027-04-14T08:40:00+01:00",
+       "book_by_reason": "Le tariffe per metà aprile di solito salgono da marzo."
+      },
+      {
+       "kind": "lodging",
+       "link": "https://www.expedia.it/Lisbona-Hotel-Hotel-Lisboa-Plaza.h524981.Informazioni-Hotel?chkin=2027-04-14&chkout=2027-04-18&rm1=a2:c9:c6",
+       "notes": "Cancellazione gratuita fino all'11 aprile 2027.",
+       "phone": null,
+       "price": {
+        "status": "verified",
+        "currency": "EUR",
+        "source_url": "https://www.expedia.it/Lisbona-Hotel-Hotel-Lisboa-Plaza.h524981.Informazioni-Hotel?chkin=2027-04-14&chkout=2027-04-18&rm1=a2:c9:c6",
+        "amount_cents": 73600,
+        "retrieved_at": "2026-10-12T12:02:41+02:00"
+       },
+       "title": "Hotel Lisboa Plaza, camera familiare (4 notti)",
+       "vendor": "Hotel Lisboa Plaza",
+       "book_by": "2027-03-14T20:00:00Z",
+       "stop_ref": "d1-hotel",
+       "scheduled_for": "2027-04-14T15:00:00+01:00",
+       "book_by_reason": "Ad aprile le camere familiari in centro finiscono presto."
+      },
+      {
+       "kind": "ticket",
+       "link": null,
+       "notes": null,
+       "phone": null,
+       "price": {
+        "status": "estimated",
+        "currency": "EUR",
+        "source_url": "https://www.oceanario.pt/",
+        "amount_cents": 6000,
+        "retrieved_at": "2026-10-12T12:03:12+02:00"
+       },
+       "title": "Biglietti Oceanário de Lisboa",
+       "vendor": "Oceanário de Lisboa",
+       "book_by": null,
+       "stop_ref": "d2-oceanario",
+       "scheduled_for": "2027-04-15T10:00:00+01:00",
+       "book_by_reason": null
+      }
+     ],
+     "summary": "x",
+     "warnings": []
+    },
+    "timed_out": false,
+    "error": null,
+    "duration_seconds": 221.7,
+    "agent_versions": null
+   },
+   {
+    "id": "suggest-low-budget",
+    "title": "Suggeriscimi tu, budget basso",
+    "tags": [
+     "suggest",
+     "low-budget",
+     "weekend",
+     "solo"
+    ],
+    "request": {
+     "origin": "Bologna",
+     "suggest_destination": true,
+     "destination_idea": "Una città d'arte raggiungibile in treno o in autobus, con buon cibo e musei economici.",
+     "dates": {
+      "exact_start": "2027-11-26",
+      "exact_end": "2027-11-28"
+     },
+     "travelers": [
+      {
+       "kind": "adult"
+      }
+     ],
+     "budget_eur": 250,
+     "preferences": "Ostello o B&B semplice va bene. Niente auto."
+    },
+    "plan_id": "e3c4ccc4-b9ee-45c0-a69c-012e5f9e48f1",
+    "status": "failed",
+    "failure_reason": "Il planner non ha prodotto un piano valido dopo due tentativi.",
+    "submit_attempts": 2,
+    "cost_cents": 60,
+    "web_search_requests": 14,
+    "checks": [
+     {
+      "name": "schema_valid",
+      "status": "fail",
+      "blocking": true,
+      "message": "no plan was accepted (status budget_paused)",
+      "details": []
+     },
+     {
+      "name": "book_by_before_scheduled_for",
+      "status": "skip",
+      "blocking": true,
+      "message": "no accepted plan (status budget_paused)",
+      "details": []
+     },
+     {
+      "name": "within_budget_or_warned",
+      "status": "skip",
+      "blocking": true,
+      "message": "no accepted plan (status budget_paused)",
+      "details": []
+     },
+     {
+      "name": "prices_have_source",
+      "status": "skip",
+      "blocking": true,
+      "message": "no accepted plan (status budget_paused)",
+      "details": []
+     },
+     {
+      "name": "links_on_allowed_domains",
+      "status": "skip",
+      "blocking": true,
+      "message": "no accepted plan (status budget_paused)",
+      "details": []
+     },
+     {
+      "name": "no_empty_days",
+      "status": "skip",
+      "blocking": true,
+      "message": "no accepted plan (status budget_paused)",
+      "details": []
+     },
+     {
+      "name": "submit_plan_attempts",
+      "status": "fail",
+      "blocking": true,
+      "message": "plan not accepted: status budget_paused, 0 attempt(s)",
+      "details": []
+     },
+     {
+      "name": "cost_and_searches_vs_estimate",
+      "status": "warn",
+      "blocking": false,
+      "message": "cost 64¢ above the estimate 55¢",
+      "details": [
+       "cost 64¢, estimate 55¢, session budget 60¢ (development)",
+       "web searches 14, estimate 20"
+      ]
+     },
+     {
+      "name": "matches_request",
+      "status": "skip",
+      "blocking": true,
+      "message": "no accepted plan (status budget_paused)",
+      "details": []
+     }
+    ],
+    "checks_passed": false,
+    "blocking_failures": [
+     "schema_valid",
+     "submit_plan_attempts"
+    ],
+    "warnings_count": null,
+    "judge": {
+     "status": "error",
+     "model": "claude-sonnet-5-5",
+     "scores": null,
+     "error": "judge reply was cut off (max_tokens)",
+     "cost_cents": 6.0
+    },
+    "plan": null,
+    "timed_out": false,
+    "error": "plan failed",
+    "duration_seconds": 134.9,
+    "agent_versions": null
+   },
+   {
+    "id": "train-trip-florence",
+    "title": "Viaggio in treno",
+    "tags": [
+     "train",
+     "italy",
+     "long-weekend"
+    ],
+    "request": {
+     "origin": "Torino",
+     "destination": "Firenze",
+     "suggest_destination": false,
+     "dates": {
+      "exact_start": "2028-04-21",
+      "exact_end": "2028-04-25"
+     },
+     "travelers": [
+      {
+       "kind": "adult"
+      },
+      {
+       "kind": "adult"
+      }
+     ],
+     "budget_eur": 1100,
+     "preferences": "Solo treno, niente aerei e niente auto. Alta velocità con posti vicini. Una gita in giornata in Toscana, sempre in treno."
+    },
+    "plan_id": "a1a19f91-4161-4e23-b294-daaf82e45cc2",
+    "status": "budget_paused",
+    "failure_reason": null,
+    "submit_attempts": 0,
+    "cost_cents": 61,
+    "web_search_requests": 12,
+    "checks": [
+     {
+      "name": "schema_valid",
+      "status": "fail",
+      "blocking": true,
+      "message": "no plan was accepted (status budget_paused)",
+      "details": []
+     },
+     {
+      "name": "book_by_before_scheduled_for",
+      "status": "skip",
+      "blocking": true,
+      "message": "no accepted plan (status budget_paused)",
+      "details": []
+     },
+     {
+      "name": "within_budget_or_warned",
+      "status": "skip",
+      "blocking": true,
+      "message": "no accepted plan (status budget_paused)",
+      "details": []
+     },
+     {
+      "name": "prices_have_source",
+      "status": "skip",
+      "blocking": true,
+      "message": "no accepted plan (status budget_paused)",
+      "details": []
+     },
+     {
+      "name": "links_on_allowed_domains",
+      "status": "skip",
+      "blocking": true,
+      "message": "no accepted plan (status budget_paused)",
+      "details": []
+     },
+     {
+      "name": "no_empty_days",
+      "status": "skip",
+      "blocking": true,
+      "message": "no accepted plan (status budget_paused)",
+      "details": []
+     },
+     {
+      "name": "submit_plan_attempts",
+      "status": "fail",
+      "blocking": true,
+      "message": "plan not accepted: status budget_paused, 0 attempt(s)",
+      "details": []
+     },
+     {
+      "name": "cost_and_searches_vs_estimate",
+      "status": "warn",
+      "blocking": false,
+      "message": "cost 61¢ above the estimate 55¢",
+      "details": [
+       "cost 61¢, estimate 55¢, session budget 60¢ (development)",
+       "web searches 12, estimate 20"
+      ]
+     },
+     {
+      "name": "matches_request",
+      "status": "skip",
+      "blocking": true,
+      "message": "no accepted plan (status budget_paused)",
+      "details": []
+     }
+    ],
+    "checks_passed": false,
+    "blocking_failures": [
+     "schema_valid",
+     "submit_plan_attempts"
+    ],
+    "warnings_count": null,
+    "judge": {
+     "status": "skipped",
+     "model": "claude-sonnet-5-5",
+     "scores": null,
+     "error": "no accepted plan to judge",
+     "estimated_input_tokens": null,
+     "estimate_source": null,
+     "projected_cents": null,
+     "input_tokens": null,
+     "output_tokens": null,
+     "cost_cents": 0.0,
+     "stop_reason": null
+    },
+    "plan": null,
+    "timed_out": false,
+    "error": null,
+    "duration_seconds": 129.1,
+    "agent_versions": null
+   },
+   {
+    "id": "flexible-dates-budapest",
+    "title": "Date flessibili",
+    "tags": [
+     "flexible-dates",
+     "city",
+     "flights",
+     "family"
+    ],
+    "request": {
+     "origin": "Venezia",
+     "destination": "Budapest",
+     "suggest_destination": false,
+     "dates": {
+      "month": "2028-02",
+      "nights": 4
+     },
+     "travelers": [
+      {
+       "kind": "adult"
+      },
+      {
+       "kind": "adult"
+      },
+      {
+       "kind": "child",
+       "age": 12
+      }
+     ],
+     "budget_eur": 1500,
+     "preferences": "Scegliete voi i giorni più convenienti del mese. Terme, cucina ungherese, un giro sul Danubio."
+    },
+    "plan_id": "65dc91f4-8fb3-459a-94e6-5e3121c5faeb",
+    "status": "budget_paused",
+    "failure_reason": null,
+    "submit_attempts": 0,
+    "cost_cents": 62,
+    "web_search_requests": 10,
+    "checks": [
+     {
+      "name": "schema_valid",
+      "status": "fail",
+      "blocking": true,
+      "message": "no plan was accepted (status budget_paused)",
+      "details": []
+     },
+     {
+      "name": "book_by_before_scheduled_for",
+      "status": "skip",
+      "blocking": true,
+      "message": "no accepted plan (status budget_paused)",
+      "details": []
+     },
+     {
+      "name": "within_budget_or_warned",
+      "status": "skip",
+      "blocking": true,
+      "message": "no accepted plan (status budget_paused)",
+      "details": []
+     },
+     {
+      "name": "prices_have_source",
+      "status": "skip",
+      "blocking": true,
+      "message": "no accepted plan (status budget_paused)",
+      "details": []
+     },
+     {
+      "name": "links_on_allowed_domains",
+      "status": "skip",
+      "blocking": true,
+      "message": "no accepted plan (status budget_paused)",
+      "details": []
+     },
+     {
+      "name": "no_empty_days",
+      "status": "skip",
+      "blocking": true,
+      "message": "no accepted plan (status budget_paused)",
+      "details": []
+     },
+     {
+      "name": "submit_plan_attempts",
+      "status": "fail",
+      "blocking": true,
+      "message": "plan not accepted: status budget_paused, 0 attempt(s)",
+      "details": []
+     },
+     {
+      "name": "cost_and_searches_vs_estimate",
+      "status": "warn",
+      "blocking": false,
+      "message": "cost 62¢ above the estimate 55¢",
+      "details": [
+       "cost 62¢, estimate 55¢, session budget 60¢ (development)",
+       "web searches 10, estimate 20"
+      ]
+     },
+     {
+      "name": "matches_request",
+      "status": "skip",
+      "blocking": true,
+      "message": "no accepted plan (status budget_paused)",
+      "details": []
+     }
+    ],
+    "checks_passed": false,
+    "blocking_failures": [
+     "schema_valid",
+     "submit_plan_attempts"
+    ],
+    "warnings_count": null,
+    "judge": {
+     "status": "skipped",
+     "model": "claude-sonnet-5-5",
+     "scores": null,
+     "error": "no accepted plan to judge",
+     "estimated_input_tokens": null,
+     "estimate_source": null,
+     "projected_cents": null,
+     "input_tokens": null,
+     "output_tokens": null,
+     "cost_cents": 0.0,
+     "stop_reason": null
+    },
+    "plan": null,
+    "timed_out": false,
+    "error": null,
+    "duration_seconds": 158.5,
+    "agent_versions": null
+   }
+  ],
+  "summary": null
+ },
+ "comparison": {
+  "baseline_name": "evals/baseline.json",
+  "report_only": false,
+  "findings": [
+   {
+    "rule": "deterministic checks",
+    "blocking": true,
+    "message": "prices_have_source fail: 2 prices without a source_url",
+    "request_id": "sea-week-family",
+    "blocks": true
+   },
+   {
+    "rule": "deterministic checks",
+    "blocking": true,
+    "message": "schema_valid fail: no plan was accepted (status budget_paused)",
+    "request_id": "suggest-low-budget",
+    "blocks": true
+   },
+   {
+    "rule": "judge criteria",
+    "blocking": true,
+    "message": "Realistic transfers: mean 3.00 vs baseline 4.00 (-1.00, more than 0.5)",
+    "request_id": null,
+    "blocks": true
+   },
+   {
+    "rule": "mean cost per plan",
+    "blocking": false,
+    "message": "mean cost per plan 55.0 cents vs baseline 50.0 cents (+10%)",
+    "request_id": null,
+    "blocks": false
+   }
+  ],
+  "notes": [
+   "not in the baseline (checks only): flexible-dates-budapest"
+  ],
+  "criteria": [
+   {
+    "criterion": "time_coherence",
+    "baseline_mean": 4.0,
+    "current_mean": 4.0,
+    "compared": 2,
+    "drop": 0.0
+   },
+   {
+    "criterion": "realistic_transfers",
+    "baseline_mean": 4.0,
+    "current_mean": 3.0,
+    "compared": 2,
+    "drop": 1.0
+   },
+   {
+    "criterion": "preference_respect",
+    "baseline_mean": 4.0,
+    "current_mean": 4.5,
+    "compared": 2,
+    "drop": -0.5
+   },
+   {
+    "criterion": "alternatives_quality",
+    "baseline_mean": 4.0,
+    "current_mean": 4.0,
+    "compared": 2,
+    "drop": 0.0
+   },
+   {
+    "criterion": "summary_clarity",
+    "baseline_mean": 4.0,
+    "current_mean": 4.0,
+    "compared": 2,
+    "drop": 0.0
+   }
+  ],
+  "cost": {
+   "baseline_mean_cents": 50.0,
+   "current_mean_cents": 55.0,
+   "change": 0.1,
+   "compared": 2
+  },
+  "kind": "trip-planner-eval-comparison",
+  "format": 1,
+  "status": "blocked",
+  "blocked": true
+ }
+}

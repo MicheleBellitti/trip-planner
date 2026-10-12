@@ -157,6 +157,232 @@ export type HealthResponse = z.output<typeof HealthResponseSchema>;
 export const StreamEndSchema = z.object({ status: PlanStatusSchema });
 export type StreamEnd = z.output<typeof StreamEndSchema>;
 
+// --- eval history -----------------------------------------------------------------------------
+
+/**
+ * The eval history (backend routes GET /evals/runs and GET /evals/runs/{id}). The results are the
+ * JSON `evals/run.py` writes (kind "trip-planner-eval-results", format 1) and the comparison is the
+ * JSON `evals/compare.py --json` writes, stored as they arrived. The backend ships first and the
+ * eval scripts evolve on their own, so everything the UI does not need to draw is optional with a
+ * default, and unknown keys are stripped: an older or newer file must still open.
+ */
+
+/** Verdict of the gate against the baseline (`compare.py`), as the backend summarises it. */
+export const EvalCompareStatusSchema = z.enum(["passed", "blocked", "report_only"]);
+export type EvalCompareStatus = z.output<typeof EvalCompareStatusSchema>;
+
+const NullableString = z._default(z.nullable(z.string()), null);
+const NullableNumber = z._default(z.nullable(z.number()), null);
+const Count = z.number().check(z.gte(0));
+
+/** One row of GET /evals/runs, and the first part of GET /evals/runs/{id}. Costs are US cents. */
+export const EvalRunSummarySchema = z.object({
+  id: PlanIdSchema,
+  started_at: InstantSchema,
+  finished_at: z._default(z.nullable(InstantSchema), null),
+  /** The commit the run measured; null when the run could not tell. */
+  git_sha: NullableString,
+  /** The agent roster: "development" or "production". */
+  profile: z.string(),
+  aborted: z._default(z.boolean(), false),
+  requests_total: Count,
+  /** Requests whose plan was accepted (status "ready"). */
+  requests_accepted: Count,
+  /** Requests whose blocking checks all passed. */
+  checks_passed: Count,
+  blocking_failures_count: Count,
+  total_cost_cents: Count,
+  web_search_requests: Count,
+  /** Mean of every judge score of the run, 1 to 5; null when nothing was scored. */
+  judge_mean: NullableNumber,
+  compare_status: z._default(z.nullable(EvalCompareStatusSchema), null),
+  /** The GitHub Actions run that produced it, when CI uploaded it. */
+  workflow_run_url: NullableString,
+});
+export type EvalRunSummary = z.output<typeof EvalRunSummarySchema>;
+
+/** GET /evals/runs: newest first. */
+export const EvalRunListResponseSchema = z.object({ runs: z.array(EvalRunSummarySchema) });
+export type EvalRunListResponse = z.output<typeof EvalRunListResponseSchema>;
+
+/** A check of `evals/checks.py`: pass, warn, fail, error or skip. Unknown statuses are kept. */
+export const EvalCheckSchema = z.object({
+  name: z.string(),
+  status: z.string(),
+  blocking: z._default(z.boolean(), false),
+  /** English: the check's own words. */
+  message: z._default(z.string(), ""),
+  details: z._default(z.array(z.string()), () => []),
+});
+export type EvalCheck = z.output<typeof EvalCheckSchema>;
+
+/** The judge's verdict on one plan (`evals/judge.py`): per criterion a 1 to 5 score and an English
+ * reason, only when `status` is "ok". */
+export const EvalJudgeSchema = z.object({
+  status: z._default(z.string(), "skipped"),
+  model: NullableString,
+  scores: z._default(
+    z.nullable(z.record(z.string(), z.object({ score: z.number(), reason: z._default(z.string(), "") }))),
+    null,
+  ),
+  error: NullableString,
+  cost_cents: NullableNumber,
+});
+export type EvalJudge = z.output<typeof EvalJudgeSchema>;
+
+/** The accepted plan inside an eval entry: only what the history shows (the full contract is
+ * `PlanSchema`, which a stored plan may predate). */
+export const EvalPlanSchema = z.object({
+  title: z._default(z.string(), ""),
+  days: z._default(z.array(z.unknown()), () => []),
+  bookings: z._default(z.array(z.unknown()), () => []),
+});
+export type EvalPlan = z.output<typeof EvalPlanSchema>;
+
+/** One reference request of the run, with its checks and verdict. */
+export const EvalRequestResultSchema = z.object({
+  id: z.string(),
+  title: z._default(z.string(), ""),
+  tags: z._default(z.array(z.string()), () => []),
+  /** The PlanRequest as sent. */
+  request: z._default(z.record(z.string(), z.unknown()), () => ({})),
+  plan_id: NullableString,
+  /** `plans.status` when the run stopped following the plan; null when it never started. */
+  status: NullableString,
+  failure_reason: NullableString,
+  submit_attempts: NullableNumber,
+  cost_cents: NullableNumber,
+  web_search_requests: NullableNumber,
+  checks: z._default(z.array(EvalCheckSchema), () => []),
+  checks_passed: z._default(z.boolean(), false),
+  blocking_failures: z._default(z.array(z.string()), () => []),
+  warnings_count: NullableNumber,
+  judge: z._default(z.nullable(EvalJudgeSchema), null),
+  plan: z._default(z.nullable(EvalPlanSchema), null),
+  timed_out: z._default(z.boolean(), false),
+  error: NullableString,
+  duration_seconds: NullableNumber,
+});
+export type EvalRequestResult = z.output<typeof EvalRequestResultSchema>;
+
+/** The Managed Agents versions a run used (`agent_versions` of the plans table, once per run). */
+export const EvalAgentVersionsSchema = z.object({
+  profile: NullableString,
+  coordinator: z._default(z.nullable(z.object({ id: z.string(), version: z._default(z.unknown(), null) })), null),
+  subagents: z._default(
+    z.record(z.string(), z.object({ id: z.string(), version: z._default(z.unknown(), null) })),
+    () => ({}),
+  ),
+  skills: z._default(
+    z.record(z.string(), z.object({ id: z.string(), version: z._default(z.unknown(), null) })),
+    () => ({}),
+  ),
+  environment_id: NullableString,
+  lockfile_sha256: NullableString,
+  git_sha: NullableString,
+});
+export type EvalAgentVersions = z.output<typeof EvalAgentVersionsSchema>;
+
+/** The `evals/run.py` document. */
+export const EvalResultsSchema = z.object({
+  date: NullableString,
+  started_at: InstantSchema,
+  finished_at: z._default(z.nullable(InstantSchema), null),
+  git_sha: NullableString,
+  profile: z._default(z.string(), ""),
+  aborted: z._default(z.boolean(), false),
+  dataset: z._default(
+    z.nullable(
+      z.object({
+        version: NullableNumber,
+        selected: z._default(z.array(z.string()), () => []),
+        tags: z._default(z.array(z.string()), () => []),
+      }),
+    ),
+    null,
+  ),
+  /** The spec's per-plan estimate: cost in US cents and web searches. */
+  estimate: z._default(
+    z.nullable(z.object({ cost_cents: NullableNumber, web_search_requests: NullableNumber })),
+    null,
+  ),
+  agent_versions: z._default(z.nullable(EvalAgentVersionsSchema), null),
+  judge: z._default(
+    z.nullable(
+      z.object({
+        enabled: z._default(z.boolean(), true),
+        model: NullableString,
+        cap_cents: NullableNumber,
+        spent_cents: NullableNumber,
+      }),
+    ),
+    null,
+  ),
+  requests: z._default(z.array(EvalRequestResultSchema), () => []),
+});
+export type EvalResults = z.output<typeof EvalResultsSchema>;
+
+/** One finding of the gate. `rule` is compare.py's own name ("deterministic checks", "judge
+ * criteria", "mean cost per plan", "run"); `message` is English. */
+export const EvalFindingSchema = z.pipe(
+  z.object({
+    rule: z._default(z.string(), ""),
+    blocking: z._default(z.boolean(), false),
+    /** Whether the finding blocks this comparison (a "blocking" rule is only a warning when
+     * there is no baseline, or the run is report-only); older documents have no such key. */
+    blocks: z._default(z.nullable(z.boolean()), null),
+    message: z._default(z.string(), ""),
+    request_id: NullableString,
+  }),
+  z.transform((finding) => ({
+    rule: finding.rule,
+    blocking: finding.blocks ?? finding.blocking,
+    message: finding.message,
+    request_id: finding.request_id,
+  })),
+);
+export type EvalFinding = z.output<typeof EvalFindingSchema>;
+
+/** The `evals/compare.py --json` document: the gate's findings and the figures behind them. */
+export const EvalComparisonSchema = z.object({
+  baseline_name: NullableString,
+  /** No baseline: only the checks and the run itself can block. */
+  report_only: z._default(z.boolean(), false),
+  findings: z._default(z.array(EvalFindingSchema), () => []),
+  notes: z._default(z.array(z.string()), () => []),
+  criteria: z._default(
+    z.array(
+      z.object({
+        criterion: z.string(),
+        baseline_mean: NullableNumber,
+        current_mean: NullableNumber,
+        compared: z._default(z.number(), 0),
+      }),
+    ),
+    () => [],
+  ),
+  /** Mean cost per plan, in US cents (compare.CostDelta). */
+  cost: z._default(
+    z.nullable(
+      z.object({
+        baseline_mean_cents: NullableNumber,
+        current_mean_cents: NullableNumber,
+        compared: z._default(z.number(), 0),
+      }),
+    ),
+    null,
+  ),
+});
+export type EvalComparison = z.output<typeof EvalComparisonSchema>;
+
+/** GET /evals/runs/{id}: the list fields, the stored results and the stored comparison. */
+export const EvalRunDetailSchema = z.object({
+  ...EvalRunSummarySchema.shape,
+  results: EvalResultsSchema,
+  comparison: z._default(z.nullable(EvalComparisonSchema), null),
+});
+export type EvalRunDetail = z.output<typeof EvalRunDetailSchema>;
+
 // --- errors -----------------------------------------------------------------------------------
 
 /** `detail.code` values of errors the framework raises rather than a route (main.AppErrorCode):

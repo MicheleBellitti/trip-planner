@@ -3,6 +3,7 @@
     cd backend
     uv run python ../evals/compare.py ../evals/results/2026-10-13-1a2b3c4d5e6f.json
     uv run python ../evals/compare.py RESULTS --markdown comment.md   # PR comment
+    uv run python ../evals/compare.py RESULTS --json comparison.json  # for evals/upload.py
     uv run python ../evals/compare.py RESULTS --update-baseline       # only when asked
     uv run python ../evals/compare.py SONNET_RESULTS --baseline OPUS_RESULTS --decide-coordinator
 
@@ -54,6 +55,8 @@ BASELINE_PATH = EVALS_DIR / "baseline.json"
 RESULTS_KIND = "trip-planner-eval-results"
 BASELINE_KIND = "trip-planner-eval-baseline"
 BASELINE_FORMAT = 1
+COMPARISON_KIND = "trip-planner-eval-comparison"
+COMPARISON_FORMAT = 1
 
 CRITERION_LABELS: Mapping[str, str] = {
     "time_coherence": "Time coherence",
@@ -568,6 +571,94 @@ def render_markdown(comparison: Comparison) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+# --- machine-readable comparison -----------------------------------------------------------------
+
+STATUS_PASSED = "passed"
+STATUS_BLOCKED = "blocked"
+STATUS_REPORT_ONLY = "report_only"
+
+RULE_KEYS: Mapping[str, tuple[str, ...]] = {
+    "checks": (RULE_CHECKS, RULE_RUN),
+    "judge": (RULE_JUDGE,),
+    "cost": (RULE_COST,),
+}
+"""Stable keys of the three spec rules in the JSON (rule 1 includes an aborted or empty run)."""
+
+
+def comparison_status(comparison: Comparison) -> str:
+    """`blocked` when anything blocks (rule 1 even without a baseline), else `report_only`
+    when there is no baseline (rules 2 and 3 were not compared), else `passed`."""
+    if comparison.blocked:
+        return STATUS_BLOCKED
+    return STATUS_REPORT_ONLY if comparison.report_only else STATUS_PASSED
+
+
+def comparison_document(comparison: Comparison) -> dict[str, Any]:
+    """The comparison as JSON (`--json`): what evals/upload.py sends to the eval history.
+
+    `status` is passed | blocked | report_only; `rules` has one entry per spec rule
+    (checks, judge, cost) with status ok | blocking | not_compared; `findings` lists every
+    finding, `blocks` telling the ones that actually block this comparison."""
+    rules: list[dict[str, Any]] = []
+    for key, names in RULE_KEYS.items():
+        blocking = [f for f in comparison.findings if f.rule in names and comparison.blocks(f)]
+        if key != "checks" and comparison.report_only:
+            status = "not_compared"
+        else:
+            status = "blocking" if blocking else "ok"
+        rules.append(
+            {
+                "rule": key,
+                "label": " / ".join(names) if key == "checks" else names[0],
+                "status": status,
+                "blocking_count": len(blocking),
+            }
+        )
+    cost = comparison.cost
+    return {
+        "kind": COMPARISON_KIND,
+        "format": COMPARISON_FORMAT,
+        "status": comparison_status(comparison),
+        "blocked": comparison.blocked,
+        "report_only": comparison.report_only,
+        "results_name": comparison.results_name,
+        "baseline_name": comparison.baseline_name,
+        "profile": comparison.profile,
+        "git_sha": comparison.git_sha,
+        "rules": rules,
+        "findings": [
+            {
+                "rule": finding.rule,
+                "blocking": finding.blocking,
+                "blocks": comparison.blocks(finding),
+                "message": finding.message,
+                "request_id": finding.request_id,
+            }
+            for finding in comparison.findings
+        ],
+        "criteria": [
+            {
+                "criterion": delta.criterion,
+                "baseline_mean": delta.baseline_mean,
+                "current_mean": delta.current_mean,
+                "drop": delta.drop,
+                "compared": delta.compared,
+            }
+            for delta in comparison.criteria
+        ],
+        "cost": None
+        if cost is None
+        else {
+            "baseline_mean_cents": cost.baseline_mean,
+            "current_mean_cents": cost.current_mean,
+            "change": cost.change,
+            "compared": cost.compared,
+        },
+        "notes": list(comparison.notes),
+        "requests": comparison.rows,
+    }
+
+
 # --- coordinator decision (spec decision 3) -----------------------------------------------------
 
 
@@ -703,6 +794,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--markdown", type=Path, default=None, help="write the report here")
     parser.add_argument(
+        "--json",
+        type=Path,
+        default=None,
+        dest="json_path",
+        help="write the comparison as JSON here (status passed|blocked|report_only, rules, "
+        "findings); for evals/upload.py",
+    )
+    parser.add_argument(
         "--update-baseline",
         action="store_true",
         help="write the baseline from this run (commit it yourself afterwards)",
@@ -730,6 +829,11 @@ def run(argv: Sequence[str] | None = None) -> int:
     if not is_results(results):
         raise UsageError(f"{args.results} is not an eval results file")
     results_name = _display(args.results)
+
+    if args.json_path is not None and (args.decide_coordinator or args.update_baseline):
+        raise UsageError(
+            "--json writes the comparison: not with --decide-coordinator or --update-baseline"
+        )
 
     if args.decide_coordinator:
         if not args.baseline.exists():
@@ -769,6 +873,12 @@ def run(argv: Sequence[str] | None = None) -> int:
             )
     comparison = compare(results, baseline, results_name=results_name, baseline_name=baseline_name)
     _emit(render_markdown(comparison), args.markdown)
+    if args.json_path is not None:
+        args.json_path.parent.mkdir(parents=True, exist_ok=True)
+        args.json_path.write_text(
+            json.dumps(comparison_document(comparison), ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
     return EXIT_BLOCKED if comparison.blocked else EXIT_PASS
 
 

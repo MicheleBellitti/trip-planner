@@ -325,8 +325,8 @@ clear error.
 
    | Environment | Variables | Secrets | Protection |
    |---|---|---|---|
-   | `development` | none in key mode. Federation: `ANTHROPIC_FEDERATION_RULE_ID`, `ANTHROPIC_ORGANIZATION_ID`, `ANTHROPIC_WORKSPACE_ID`, `ANTHROPIC_SERVICE_ACCOUNT_ID` (development values) | `ANTHROPIC_API_KEY` (the development GitHub key; delete it once federation works) | No reviewers. Deployment branches: no restriction (PR evals need it). |
-   | `production` | none in key mode. Federation: the same three names (production values) | `ANTHROPIC_API_KEY` (the production GitHub key; delete it once federation works); optional `LOCKFILE_PUSH_TOKEN` (see 4) | Required reviewer: **Michele**. "Prevent self-review": **off** (the run is triggered by your own merge, and you must be able to approve it). "Allow administrators to bypass": off. Deployment branches and tags: **selected, `main` only**. |
+   | `development` | none in key mode. Federation: `ANTHROPIC_FEDERATION_RULE_ID`, `ANTHROPIC_ORGANIZATION_ID`, `ANTHROPIC_WORKSPACE_ID`, `ANTHROPIC_SERVICE_ACCOUNT_ID` (development values). Optional, eval history: `EVALS_INGEST_URL` | `ANTHROPIC_API_KEY` (the development GitHub key; delete it once federation works); optional, eval history: `EVALS_INGEST_TOKEN` | No reviewers. Deployment branches: no restriction (PR evals need it). |
+   | `production` | none in key mode. Federation: the same three names (production values). Optional, eval history: `EVALS_INGEST_URL` | `ANTHROPIC_API_KEY` (the production GitHub key; delete it once federation works); optional `LOCKFILE_PUSH_TOKEN` (see 4); optional, eval history: `EVALS_INGEST_TOKEN` | Required reviewer: **Michele**. "Prevent self-review": **off** (the run is triggered by your own merge, and you must be able to approve it). "Allow administrators to bypass": off. Deployment branches and tags: **selected, `main` only**. |
 
    The Anthropic key is an **environment** secret, one per environment under the same name, so
    the job's environment decides which key it gets. No repository or organization secret holds
@@ -441,6 +441,7 @@ clear error.
    | `FRONTEND_ORIGIN` | `https://pianifica.bellittim.com` | yes | | the only CORS origin and the required `Origin` on POST |
    | `TRIPTRACKER_ORIGIN` | `https://viaggi.bellittim.com` | yes | | session check, `trip.json`, CORS of `GET /plans/{id}/trip` |
    | `TRIP_SCHEMA_URL` | **`file:///app/pinned/trip.schema.json`** until TripTracker serves `/schema/trip.json`, then unset | yes | | the pinned copy `backend/pinned/trip.schema.json` ships in the image (`tests/` doesn't) and equals the test fixture (a backend test checks it); production never falls back on its own: without this setting POST /plans answers 503 until TripTracker serves the schema |
+   | `EVALS_INGEST_TOKEN` | a random token ("Eval history" below) | yes | | sealed; optional. Empty (the default) disables `POST /evals/runs` (404); the same value goes in both GitHub environments |
    | `LOG_LEVEL` | `INFO` | yes | yes | |
    | `AUTH_MODE`, `LOCKFILE_PATH`, `GIT_SHA` | leave unset | | | `triptracker`; `backend/claude-lock.<AGENT_PROFILE>.json`; Railway sets `RAILWAY_GIT_COMMIT_SHA` |
    | `PORT`, `FORWARDED_ALLOW_IPS` | leave unset | | | Railway injects `PORT`; the image sets `FORWARDED_ALLOW_IPS=*` |
@@ -621,8 +622,8 @@ your approval.
 |---|---|---|---|---|
 | `ci-backend.yml` | PR touching `backend/`, `skills/`, `scripts/`, `evals/`, `schema/`, `agents/`, `profiles/`, `.github/workflows/`, `.github/actions/`, the web's backend-generated timeline fixtures | uv sync --locked, ruff check and ruff format --check (backend, `scripts/`, `evals/`, `skills/` at Python 3.10), pyright, `app.schemas --check`, `render_profiles.py --check`, skill/script/eval tests, `gen-backend-fixtures.py --check`; pytest on a Postgres 16 service; actionlint and the Anthropic-credentials guard | none | contents: read |
 | `ci-web.yml` | PR touching `web/`, `schema/` | npm ci, `gen:schemas -- --check`, lint, typecheck, test, build | none | contents: read |
-| `evals.yml` | PR touching `agents/`, `profiles/`, `skills/`, `backend/app/plan.py` (not drafts); called by `deploy-agents.yml`; by hand | freshness checks, `ant apply` of development, `evals/run.py`, `evals/compare.py`, sticky PR comment; fails when the comparison blocks | `development` environment: federation or its `ANTHROPIC_API_KEY` secret | contents: read and id-token: write in the apply and evals jobs; pull-requests: write only in the comment job |
-| `deploy-agents.yml` | push to `main` touching `agents/`, `profiles/`, `skills/`; by hand on `main` | `evals.yml` again, then approval, `ant apply` of production, lockfile commit; optional production evals | `production` environment: federation or its `ANTHROPIC_API_KEY` secret | contents: write and id-token: write only in the apply job; id-token: write in the production evals |
+| `evals.yml` | PR touching `agents/`, `profiles/`, `skills/`, `backend/app/plan.py` (not drafts); called by `deploy-agents.yml`; by hand | freshness checks, `ant apply` of development, `evals/run.py`, `evals/compare.py` (also `--json`), sticky PR comment, upload to the eval history when configured (warning only); fails when the comparison blocks | `development` environment: federation or its `ANTHROPIC_API_KEY` secret | contents: read and id-token: write in the apply and evals jobs; pull-requests: write only in the comment job |
+| `deploy-agents.yml` | push to `main` touching `agents/`, `profiles/`, `skills/`; by hand on `main` | `evals.yml` again, then approval, `ant apply` of production, lockfile commit; optional production evals (uploaded to the eval history when configured) | `production` environment: federation or its `ANTHROPIC_API_KEY` secret | contents: write and id-token: write only in the apply job; id-token: write in the production evals |
 | `anthropic-auth-check.yml` | by hand | prints the auth mode, lists one model through `ant` and the SDK to prove the credentials | the chosen environment, either mode | contents: read, id-token: write |
 
 **Backend.** Railway rebuilds on every push to `main` under `backend/`, runs the migration,
@@ -686,6 +687,86 @@ Rollback to the previous production deployment.
   prompt change in a PR. The next production apply will see that the remote agents moved past
   the lockfile and refuse: run it by hand with `force` after checking its plan.
 
+## Eval history
+
+Atlas shows the runs of `evals/run.py` in the planner web app (the "Valutazioni" page). CI sends
+each run to the backend, which stores it in the `eval_runs` table; nothing about this is
+required, and without it the evals work exactly as before.
+
+**How it flows.** After `evals/compare.py` (which now also writes its verdict with
+`--json <file>`: status `passed`, `blocked` or `report_only`, one result per rule, every
+finding), the `Upload to the eval history` step of `evals.yml` runs `evals/upload.py`. It
+POSTs `{"results", "comparison", "workflow_run_url"}` to `<EVALS_INGEST_URL>/evals/runs` with
+`Authorization: Bearer <EVALS_INGEST_TOKEN>`. `deploy-agents.yml` does the same after the manual
+production evals, without a comparison (that run is reported, not compared). The upload
+
+- runs in the same environment-scoped job as the run, so it reads the environment's variable
+  and secret; with either missing it logs a notice (`eval history upload skipped`) and goes on;
+- retries three times on connection errors, timeouts, 429 and 5xx (pauses of 2, 4 and 8
+  seconds); any other answer is final (401 wrong token, 404 ingest disabled on the backend or a
+  wrong URL, 413 over 5 MB, 422 unknown format);
+- never fails the job: a failure is a `::warning::` line and exit 0 (`--strict`, for local use,
+  turns it into exit 1);
+- never prints the token, and refuses a plain `http://` URL (except localhost) so the token
+  can't travel in clear text;
+- is idempotent: the backend keys a run by profile, git sha and start time, so a re-run of the
+  workflow (or the same file sent again) updates the comparison and the workflow run URL
+  instead of adding a row.
+
+Pull request runs upload too (their row carries the PR head's sha); fork pull requests have no
+environment secrets, so they skip with the notice. The token only lets a caller add or update
+eval history rows. It is as exposed as `ANTHROPIC_API_KEY` in the `development` environment
+(any workflow job in that environment can read it), which is why nothing else is behind it.
+
+**Set it up, once.** The backend has one token, so the same value goes in three places.
+
+1. Make the token and keep it out of shell history and logs:
+
+   ```sh
+   openssl rand -hex 32 | pbcopy      # paste it where asked below, then clear the clipboard
+   ```
+
+2. **Railway**, service `backend` only (not `cleanup`): Variables > New variable
+   `EVALS_INGEST_TOKEN`, then seal it. Redeploy. Until it is set the endpoint answers 404
+   `evals_ingest_disabled`, which is the intended "off".
+3. **GitHub**, Settings > Environments > `development`, and again for `production`:
+   - Secret `EVALS_INGEST_TOKEN`: the same value. From a terminal, `gh secret set
+     EVALS_INGEST_TOKEN --env development` asks for it on the prompt (do not pass it with
+     `--body`, which lands in the shell history); repeat with `--env production`.
+   - Variable `EVALS_INGEST_URL`: the backend's origin, `https://pianifica.api.bellittim.com`
+     (no trailing path), a plain variable, not a secret: `gh variable set EVALS_INGEST_URL
+     --env development --body https://pianifica.api.bellittim.com`, and the same with
+     `--env production`.
+4. Check: run the `evals` workflow by hand (Actions > evals > Run workflow). The step prints
+   `Eval run created in the history: <id>` (or `updated`), and the run appears in Atlas. A
+   `::warning::` line says why it did not (the list above).
+
+**Rotation.** Make a new token, set it on Railway and in both GitHub environments, redeploy.
+Between the first and last change uploads warn with a 401; nothing else breaks. To switch the
+history off, empty the Railway variable (the endpoint answers 404 and CI warns) or delete the
+GitHub variable `EVALS_INGEST_URL` (CI skips with a notice).
+
+**Local use.**
+
+```sh
+cd backend
+# Into the local database (backend/.env's DATABASE_URL), no HTTP and no token: the same service
+# function the endpoint calls. Run `uv run alembic upgrade head` once first.
+uv run python -m app.cli import-evals ../evals/results/<date>-<sha>.json \
+  --comparison comparison.json --workflow-run-url <url>        # the last two are optional
+# To get a comparison file for an old run:
+uv run python ../evals/compare.py ../evals/results/<date>-<sha>.json --json comparison.json
+# To a deployed backend instead (a past run, an artifact of an earlier CI run): the token is
+# read from the prompt, never typed in the command line.
+read -rs EVALS_INGEST_TOKEN && export EVALS_INGEST_TOKEN
+EVALS_INGEST_URL=https://pianifica.api.bellittim.com \
+  uv run python ../evals/upload.py ../evals/results/<date>-<sha>.json --strict
+unset EVALS_INGEST_TOKEN
+```
+
+The `eval-results` artifact of an evals run (30 days; 90 for the production check) holds the
+results file to import. Importing the same file twice updates the existing row.
+
 ## Deploy order when the contract changes
 
 Contract rule 7 (CLAUDE.md): **backend first** (accepting both the old and the new format),
@@ -731,6 +812,10 @@ uvx --from shellcheck-py shellcheck -s bash /tmp/anthropic-auth.sh
 # The Anthropic-credentials guard and its self-test (the negative cases)
 uv run --no-project --with pyyaml==6.0.3 python .github/scripts/check_anthropic_credentials.py
 uv run --no-project --with pyyaml==6.0.3 python .github/scripts/check_anthropic_credentials.py --self-test
+
+# The eval scripts (compare.py --json, upload.py) and their tests, from backend/
+(cd backend && uv run pytest ../evals/tests -q && uv run ruff check ../evals \
+  && uv run ruff format --check ../evals && uv run pyright -p ../evals)
 
 # Dockerfile
 uvx --from hadolint-bin==2.15.1 hadolint --failure-threshold info backend/Dockerfile

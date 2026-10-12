@@ -1,7 +1,8 @@
 """Database schema (SQLAlchemy 2, async) and session plumbing.
 
 Tables follow the "Tabelle" section of the implementation doc: `plans`, `events`, `fx_rates`,
-plus `destination_covers` (the Wikimedia cover photo cache, app/covers.py).
+plus `destination_covers` (the Wikimedia cover photo cache, app/covers.py) and `eval_runs`
+(the uploaded eval results, app/evals_store.py).
 Every change here ships with an Alembic migration in backend/migrations/ (one per PR);
 tests/test_db.py fails when the models and the migrations drift apart.
 """
@@ -18,6 +19,7 @@ from typing import TYPE_CHECKING, Annotated, Any, ClassVar
 from fastapi import Depends, Request
 from sqlalchemy import (
     CHAR,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -172,6 +174,35 @@ class DestinationCoverRecord(Base):
     destination_key: Mapped[str] = mapped_column(Text, primary_key=True)
     cover: Mapped[JsonObject | None]
     fetched_at: Mapped[dt.datetime] = mapped_column(server_default=func.now())
+
+
+class EvalRunRecord(Base):
+    """One uploaded eval run (the JSON `evals/run.py` writes), for the eval history page.
+
+    `run_key` (profile, git sha and start time, `evals_store.run_key`) makes an upload
+    idempotent. The first-class columns are the ones the history is sorted and filtered by;
+    `summary` holds the list fields computed at ingest (`evals_store.summarize_run`), so the
+    list never reads `results`, the whole document (up to 5 MB). `comparison` is evals/compare.py's
+    `--json`, NULL when the run was not compared.
+    """
+
+    __tablename__ = "eval_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        primary_key=True, default=uuid.uuid4, server_default=func.gen_random_uuid()
+    )
+    run_key: Mapped[str] = mapped_column(Text, unique=True)
+    profile: Mapped[str] = mapped_column(Text)
+    git_sha: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[dt.datetime]
+    finished_at: Mapped[dt.datetime | None]
+    aborted: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    summary: Mapped[JsonObject]
+    results: Mapped[JsonObject]
+    comparison: Mapped[JsonObject | None]
+    workflow_run_url: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[dt.datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[dt.datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 
 
 def create_engine(settings: Settings) -> AsyncEngine:

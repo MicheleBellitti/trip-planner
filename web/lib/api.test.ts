@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+import evalList from "../components/evals/__fixtures__/list.json";
+import evalRun from "../components/evals/__fixtures__/run-accepted.json";
 import happyPath from "./plan-events/__fixtures__/happy-path.json";
 import {
   ApiError,
@@ -380,5 +382,82 @@ describe("loginUrl", () => {
     expect(loginUrl("https://viaggi.bellittim.com/", "https://pianifica.bellittim.com/new?x=1&y=2")).toBe(
       "https://viaggi.bellittim.com/accedi?returnTo=https%3A%2F%2Fpianifica.bellittim.com%2Fnew%3Fx%3D1%26y%3D2",
     );
+  });
+});
+
+describe("the eval history", () => {
+  it("GET /evals/runs sends the limit and answers the rows, newest first as the backend sent them", async () => {
+    const { api, fetchMock } = client(json(200, { runs: evalList }));
+
+    const runs = await api.listEvalRuns({ limit: 20 });
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://pianifica.api.test/evals/runs?limit=20");
+    expect(fetchMock.mock.calls[0]?.[1]?.credentials).toBe("include");
+    expect(runs.map((run) => run.id)).toEqual(evalList.map((run) => run.id));
+    expect(runs[0]).toMatchObject({ compare_status: null, requests_total: 5, total_cost_cents: 309 });
+  });
+
+  it("GET /evals/runs without a limit sends none, and an empty history is an empty list", async () => {
+    const { api, fetchMock } = client(json(200, { runs: [] }));
+
+    await expect(api.listEvalRuns()).resolves.toEqual([]);
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://pianifica.api.test/evals/runs");
+  });
+
+  it("GET /evals/runs/{id} parses the stored results and comparison", async () => {
+    const { api, fetchMock } = client(json(200, evalRun));
+
+    const run = await api.getEvalRun(evalRun.id);
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`https://pianifica.api.test/evals/runs/${evalRun.id}`);
+    expect(run.compare_status).toBe("blocked");
+    expect(run.results.requests).toHaveLength(5);
+    expect(run.comparison?.findings.filter((finding) => finding.blocking)).toHaveLength(3);
+  });
+
+  it("opens a stored run whose results leave out what the screens can do without", async () => {
+    const { api } = client(
+      json(200, {
+        ...evalRun,
+        comparison: null,
+        results: { started_at: evalRun.started_at, requests: [{ id: "only-an-id" }] },
+      }),
+    );
+
+    const run = await api.getEvalRun(evalRun.id);
+
+    expect(run.results.requests[0]).toMatchObject({ id: "only-an-id", checks: [], tags: [], judge: null, plan: null });
+    expect(run.results.agent_versions).toBeNull();
+  });
+
+  it("a run the backend does not have is its own Italian sentence, not 'Questo piano non c'è'", async () => {
+    const own = client(json(404, envelope("eval_run_not_found", "Questa valutazione non esiste.")));
+    expect((await failure(own.api.getEvalRun(evalRun.id))).message).toBe("Questa valutazione non esiste.");
+
+    const bare = client(new Response("", { status: 404 }));
+    expect((await failure(bare.api.getEvalRun(evalRun.id))).message).toBe("Questa valutazione non c'è.");
+  });
+
+  it("an older backend without the routes says the history is not available", async () => {
+    const { api } = client(json(404, envelope("not_found", "Non c'è.")));
+
+    const error = await failure(api.listEvalRuns());
+
+    expect(error.kind).toBe("not_found");
+    expect(error.message).toBe("La cronologia delle valutazioni non è disponibile su questo planner.");
+  });
+
+  it("401 sends the browser to the login like every other call", async () => {
+    const { api, onUnauthorized } = client(json(401, envelope("not_authenticated", "Accedi.")));
+
+    expect((await failure(api.listEvalRuns())).kind).toBe("unauthorized");
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+
+  it("a 2xx body that breaks the contract is an invalid response", async () => {
+    const { api } = client(json(200, { runs: [{ id: "not-a-uuid" }] }));
+
+    expect((await failure(api.listEvalRuns())).kind).toBe("invalid_response");
   });
 });

@@ -1,0 +1,1159 @@
+{
+  "kind": "trip-planner-eval-results",
+  "format": 1,
+  "date": "2026-10-12",
+  "started_at": "2026-10-12T22:49:40.848706+02:00",
+  "finished_at": "2026-10-12T22:52:22.043410+02:00",
+  "git_sha": "5d22125b035243839e5ce2ece301861aaf5e4977",
+  "profile": "development",
+  "aborted": false,
+  "dataset": {
+    "version": 1,
+    "valid_until": "2027-10-12",
+    "selected": [
+      "city-weekend-lisbon",
+      "sea-week-family",
+      "suggest-low-budget",
+      "train-trip-florence",
+      "flexible-dates-budapest"
+    ],
+    "tags": []
+  },
+  "estimate": {
+    "cost_cents": 55,
+    "web_search_requests": 20,
+    "session_budget_cents": 60
+  },
+  "agent_versions": {
+    "profile": "development",
+    "coordinator": {
+      "id": "agent_01JznpMrk3fnHyBcuf2RCc8i",
+      "version": 1
+    },
+    "subagents": {
+      "flights": {
+        "id": "agent_01JfcnhW1Ao6cdZT4yVpjNMv",
+        "version": 1
+      },
+      "lodging": {
+        "id": "agent_014r5YWJg6poR7a86PYWF4Go",
+        "version": 1
+      },
+      "activities": {
+        "id": "agent_01NaQ9sYvmaopb42W31EhiEw",
+        "version": 1
+      },
+      "transport": {
+        "id": "agent_01TvCecHjHfChmMirz5Dfqew",
+        "version": 1
+      }
+    },
+    "skills": {
+      "booking-links": {
+        "id": "skill_01W9ke5J7RYC6DKDFYiY9sHj",
+        "version": "skver_01HTaxeyVg2qLMATAGksNynp"
+      },
+      "travel-research-rules": {
+        "id": "skill_01Sqw9CZUP8yZqCYd3FtHe6W",
+        "version": "skver_01SBz3bRu9iWddXV8L3Tn3ZL"
+      },
+      "trip-tracker-schema": {
+        "id": "skill_012cmKsRcRG9dCo276DzqDmE",
+        "version": "skver_019TECLQSid42UzT5ytfjVnA"
+      }
+    },
+    "environment_id": "env_01Gy43EyAD4AwPiA5SrCm7vm",
+    "lockfile_sha256": "31a4ac929e8cf9c7dee25c57845054295ea6f235a4d243f8e1ad0a6d4c5d76f2",
+    "trip_schema_sha256": null,
+    "git_sha": "5d22125b035243839e5ce2ece301861aaf5e4977"
+  },
+  "judge": {
+    "enabled": true,
+    "model": "claude-sonnet-5-5",
+    "cap_cents": 100.0,
+    "spent_cents": 0.0,
+    "exhausted": false
+  },
+  "requests": [
+    {
+      "id": "city-weekend-lisbon",
+      "title": "Weekend in città europea",
+      "tags": [
+        "city",
+        "weekend",
+        "flights",
+        "europe",
+        "smoke"
+      ],
+      "request": {
+        "origin": "Milano",
+        "destination": "Lisbona",
+        "suggest_destination": false,
+        "dates": {
+          "exact_start": "2027-11-12",
+          "exact_end": "2027-11-14"
+        },
+        "travelers": [
+          {
+            "kind": "adult"
+          },
+          {
+            "kind": "adult"
+          }
+        ],
+        "budget_eur": 900,
+        "preferences": "Voli diretti, niente partenze prima delle 8. Cucina locale e almeno un museo, quartieri da girare a piedi."
+      },
+      "expect": {
+        "travelers": 2,
+        "budget_eur": 900,
+        "dates": {
+          "start": "2027-11-12",
+          "end": "2027-11-14"
+        },
+        "destination_any": [
+          "lisbona",
+          "lisboa",
+          "lisbon"
+        ],
+        "must_mention": [
+          [
+            "museo",
+            "musei",
+            "museu",
+            "museum",
+            "mosteiro",
+            "monastero"
+          ],
+          [
+            "cucina locale",
+            "cucina portoghese",
+            "tasca",
+            "taberna",
+            "mercato",
+            "pastel",
+            "bacalhau",
+            "baccala",
+            "ristorante tipico"
+          ]
+        ],
+        "must_not_book": []
+      },
+      "plan_id": "e64a6499-e545-4268-8e2c-9778d0ccd2eb",
+      "session_id": "sesn_01L6XwY6Xm7uHcTm7DkXeRaz",
+      "status": "budget_paused",
+      "failure_reason": null,
+      "submit_attempts": 0,
+      "cost_cents": 62,
+      "cost_source": "session_usage",
+      "web_search_requests": 10,
+      "usage": {
+        "list_cost_cents": 62,
+        "input_tokens": 126,
+        "output_tokens": 38755,
+        "cache_read_input_tokens": 2294957,
+        "web_search_requests": 10,
+        "active_seconds": 105.477
+      },
+      "checks": [
+        {
+          "name": "schema_valid",
+          "status": "fail",
+          "blocking": true,
+          "message": "no plan was accepted (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "book_by_before_scheduled_for",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "within_budget_or_warned",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "prices_have_source",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "links_on_allowed_domains",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "no_empty_days",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "submit_plan_attempts",
+          "status": "fail",
+          "blocking": true,
+          "message": "plan not accepted: status budget_paused, 0 attempt(s)",
+          "details": []
+        },
+        {
+          "name": "cost_and_searches_vs_estimate",
+          "status": "warn",
+          "blocking": false,
+          "message": "cost 62¢ above the estimate 55¢",
+          "details": [
+            "cost 62¢, estimate 55¢, session budget 60¢ (development)",
+            "web searches 10, estimate 20"
+          ]
+        },
+        {
+          "name": "matches_request",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        }
+      ],
+      "checks_passed": false,
+      "blocking_failures": [
+        "schema_valid",
+        "submit_plan_attempts"
+      ],
+      "warnings_count": null,
+      "judge": {
+        "status": "skipped",
+        "model": "claude-sonnet-5-5",
+        "scores": null,
+        "error": "no accepted plan to judge",
+        "estimated_input_tokens": null,
+        "estimate_source": null,
+        "projected_cents": null,
+        "input_tokens": null,
+        "output_tokens": null,
+        "cost_cents": 0.0,
+        "stop_reason": null
+      },
+      "agent_versions": {
+        "skills": {
+          "booking-links": {
+            "id": "skill_01W9ke5J7RYC6DKDFYiY9sHj",
+            "version": "skver_01HTaxeyVg2qLMATAGksNynp"
+          },
+          "trip-tracker-schema": {
+            "id": "skill_012cmKsRcRG9dCo276DzqDmE",
+            "version": "skver_019TECLQSid42UzT5ytfjVnA"
+          },
+          "travel-research-rules": {
+            "id": "skill_01Sqw9CZUP8yZqCYd3FtHe6W",
+            "version": "skver_01SBz3bRu9iWddXV8L3Tn3ZL"
+          }
+        },
+        "git_sha": "5d22125b035243839e5ce2ece301861aaf5e4977",
+        "profile": "development",
+        "subagents": {
+          "flights": {
+            "id": "agent_01JfcnhW1Ao6cdZT4yVpjNMv",
+            "version": 1
+          },
+          "lodging": {
+            "id": "agent_014r5YWJg6poR7a86PYWF4Go",
+            "version": 1
+          },
+          "transport": {
+            "id": "agent_01TvCecHjHfChmMirz5Dfqew",
+            "version": 1
+          },
+          "activities": {
+            "id": "agent_01NaQ9sYvmaopb42W31EhiEw",
+            "version": 1
+          }
+        },
+        "coordinator": {
+          "id": "agent_01JznpMrk3fnHyBcuf2RCc8i",
+          "version": 1
+        },
+        "environment_id": "env_01Gy43EyAD4AwPiA5SrCm7vm",
+        "lockfile_sha256": "31a4ac929e8cf9c7dee25c57845054295ea6f235a4d243f8e1ad0a6d4c5d76f2",
+        "trip_schema_sha256": "c71daedb38513e0e54ef642882bea35aae6ad7d87cdb8a18833e7434168e05c2"
+      },
+      "plan": null,
+      "trip": null,
+      "timed_out": false,
+      "error": null,
+      "duration_seconds": 117.6
+    },
+    {
+      "id": "sea-week-family",
+      "title": "Settimana al mare con bambini",
+      "tags": [
+        "sea",
+        "family",
+        "children",
+        "week"
+      ],
+      "request": {
+        "origin": "Milano",
+        "destination": "Sardegna",
+        "suggest_destination": false,
+        "dates": {
+          "exact_start": "2028-06-24",
+          "exact_end": "2028-07-01"
+        },
+        "travelers": [
+          {
+            "kind": "adult"
+          },
+          {
+            "kind": "adult"
+          },
+          {
+            "kind": "child",
+            "age": 4
+          },
+          {
+            "kind": "child",
+            "age": 8
+          }
+        ],
+        "budget_eur": 3200,
+        "preferences": "Spiaggia sabbiosa con acqua bassa adatta ai bambini, alloggio con cucina o mezza pensione, spostamenti brevi dall'alloggio. Traghetto con la nostra auto oppure volo più auto a noleggio."
+      },
+      "expect": {
+        "travelers": 4,
+        "budget_eur": 3200,
+        "dates": {
+          "start": "2028-06-24",
+          "end": "2028-07-01"
+        },
+        "destination_any": [
+          "sardegna",
+          "sardinia"
+        ],
+        "must_mention": [
+          [
+            "bambin",
+            "famiglia",
+            "family",
+            "figli"
+          ],
+          [
+            "spiaggia",
+            "spiagge",
+            "beach",
+            "lido",
+            "mare"
+          ]
+        ],
+        "must_not_book": []
+      },
+      "plan_id": "60c5cec6-d37a-4907-baad-bf7e2ff195f1",
+      "session_id": "sesn_011rnppEEdvP9L7tX7e43zzw",
+      "status": "budget_paused",
+      "failure_reason": null,
+      "submit_attempts": 0,
+      "cost_cents": 60,
+      "cost_source": "session_usage",
+      "web_search_requests": 13,
+      "usage": {
+        "list_cost_cents": 60,
+        "input_tokens": 88,
+        "output_tokens": 47479,
+        "cache_read_input_tokens": 1797501,
+        "web_search_requests": 13,
+        "active_seconds": 127.27
+      },
+      "checks": [
+        {
+          "name": "schema_valid",
+          "status": "fail",
+          "blocking": true,
+          "message": "no plan was accepted (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "book_by_before_scheduled_for",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "within_budget_or_warned",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "prices_have_source",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "links_on_allowed_domains",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "no_empty_days",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "submit_plan_attempts",
+          "status": "fail",
+          "blocking": true,
+          "message": "plan not accepted: status budget_paused, 0 attempt(s)",
+          "details": []
+        },
+        {
+          "name": "cost_and_searches_vs_estimate",
+          "status": "warn",
+          "blocking": false,
+          "message": "cost 60¢ above the estimate 55¢",
+          "details": [
+            "cost 60¢, estimate 55¢, session budget 60¢ (development)",
+            "web searches 13, estimate 20"
+          ]
+        },
+        {
+          "name": "matches_request",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        }
+      ],
+      "checks_passed": false,
+      "blocking_failures": [
+        "schema_valid",
+        "submit_plan_attempts"
+      ],
+      "warnings_count": null,
+      "judge": {
+        "status": "skipped",
+        "model": "claude-sonnet-5-5",
+        "scores": null,
+        "error": "no accepted plan to judge",
+        "estimated_input_tokens": null,
+        "estimate_source": null,
+        "projected_cents": null,
+        "input_tokens": null,
+        "output_tokens": null,
+        "cost_cents": 0.0,
+        "stop_reason": null
+      },
+      "agent_versions": {
+        "skills": {
+          "booking-links": {
+            "id": "skill_01W9ke5J7RYC6DKDFYiY9sHj",
+            "version": "skver_01HTaxeyVg2qLMATAGksNynp"
+          },
+          "trip-tracker-schema": {
+            "id": "skill_012cmKsRcRG9dCo276DzqDmE",
+            "version": "skver_019TECLQSid42UzT5ytfjVnA"
+          },
+          "travel-research-rules": {
+            "id": "skill_01Sqw9CZUP8yZqCYd3FtHe6W",
+            "version": "skver_01SBz3bRu9iWddXV8L3Tn3ZL"
+          }
+        },
+        "git_sha": "5d22125b035243839e5ce2ece301861aaf5e4977",
+        "profile": "development",
+        "subagents": {
+          "flights": {
+            "id": "agent_01JfcnhW1Ao6cdZT4yVpjNMv",
+            "version": 1
+          },
+          "lodging": {
+            "id": "agent_014r5YWJg6poR7a86PYWF4Go",
+            "version": 1
+          },
+          "transport": {
+            "id": "agent_01TvCecHjHfChmMirz5Dfqew",
+            "version": 1
+          },
+          "activities": {
+            "id": "agent_01NaQ9sYvmaopb42W31EhiEw",
+            "version": 1
+          }
+        },
+        "coordinator": {
+          "id": "agent_01JznpMrk3fnHyBcuf2RCc8i",
+          "version": 1
+        },
+        "environment_id": "env_01Gy43EyAD4AwPiA5SrCm7vm",
+        "lockfile_sha256": "31a4ac929e8cf9c7dee25c57845054295ea6f235a4d243f8e1ad0a6d4c5d76f2",
+        "trip_schema_sha256": "c71daedb38513e0e54ef642882bea35aae6ad7d87cdb8a18833e7434168e05c2"
+      },
+      "plan": null,
+      "trip": null,
+      "timed_out": false,
+      "error": null,
+      "duration_seconds": 139.3
+    },
+    {
+      "id": "suggest-low-budget",
+      "title": "Suggeriscimi tu, budget basso",
+      "tags": [
+        "suggest",
+        "low-budget",
+        "weekend",
+        "solo"
+      ],
+      "request": {
+        "origin": "Bologna",
+        "suggest_destination": true,
+        "destination_idea": "Una città d'arte raggiungibile in treno o in autobus, con buon cibo e musei economici.",
+        "dates": {
+          "exact_start": "2027-11-26",
+          "exact_end": "2027-11-28"
+        },
+        "travelers": [
+          {
+            "kind": "adult"
+          }
+        ],
+        "budget_eur": 250,
+        "preferences": "Ostello o B&B semplice va bene. Niente auto."
+      },
+      "expect": {
+        "travelers": 1,
+        "budget_eur": 250,
+        "dates": {
+          "start": "2027-11-26",
+          "end": "2027-11-28"
+        },
+        "destination_any": [],
+        "must_mention": [
+          [
+            "treno",
+            "treni",
+            "autobus",
+            "bus",
+            "pullman",
+            "frecciarossa",
+            "italo",
+            "regionale",
+            "flixbus"
+          ]
+        ],
+        "must_not_book": [
+          "noleggio",
+          "autonoleggio",
+          "car rental",
+          "rent a car"
+        ]
+      },
+      "plan_id": "e3c4ccc4-b9ee-45c0-a69c-012e5f9e48f1",
+      "session_id": "sesn_01KncJXDQsfrxz8hGNyePDMp",
+      "status": "budget_paused",
+      "failure_reason": null,
+      "submit_attempts": 0,
+      "cost_cents": 64,
+      "cost_source": "session_usage",
+      "web_search_requests": 14,
+      "usage": {
+        "list_cost_cents": 64,
+        "input_tokens": 92,
+        "output_tokens": 47792,
+        "cache_read_input_tokens": 1591736,
+        "web_search_requests": 14,
+        "active_seconds": 124.239
+      },
+      "checks": [
+        {
+          "name": "schema_valid",
+          "status": "fail",
+          "blocking": true,
+          "message": "no plan was accepted (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "book_by_before_scheduled_for",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "within_budget_or_warned",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "prices_have_source",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "links_on_allowed_domains",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "no_empty_days",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "submit_plan_attempts",
+          "status": "fail",
+          "blocking": true,
+          "message": "plan not accepted: status budget_paused, 0 attempt(s)",
+          "details": []
+        },
+        {
+          "name": "cost_and_searches_vs_estimate",
+          "status": "warn",
+          "blocking": false,
+          "message": "cost 64¢ above the estimate 55¢",
+          "details": [
+            "cost 64¢, estimate 55¢, session budget 60¢ (development)",
+            "web searches 14, estimate 20"
+          ]
+        },
+        {
+          "name": "matches_request",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        }
+      ],
+      "checks_passed": false,
+      "blocking_failures": [
+        "schema_valid",
+        "submit_plan_attempts"
+      ],
+      "warnings_count": null,
+      "judge": {
+        "status": "skipped",
+        "model": "claude-sonnet-5-5",
+        "scores": null,
+        "error": "no accepted plan to judge",
+        "estimated_input_tokens": null,
+        "estimate_source": null,
+        "projected_cents": null,
+        "input_tokens": null,
+        "output_tokens": null,
+        "cost_cents": 0.0,
+        "stop_reason": null
+      },
+      "agent_versions": {
+        "skills": {
+          "booking-links": {
+            "id": "skill_01W9ke5J7RYC6DKDFYiY9sHj",
+            "version": "skver_01HTaxeyVg2qLMATAGksNynp"
+          },
+          "trip-tracker-schema": {
+            "id": "skill_012cmKsRcRG9dCo276DzqDmE",
+            "version": "skver_019TECLQSid42UzT5ytfjVnA"
+          },
+          "travel-research-rules": {
+            "id": "skill_01Sqw9CZUP8yZqCYd3FtHe6W",
+            "version": "skver_01SBz3bRu9iWddXV8L3Tn3ZL"
+          }
+        },
+        "git_sha": "5d22125b035243839e5ce2ece301861aaf5e4977",
+        "profile": "development",
+        "subagents": {
+          "flights": {
+            "id": "agent_01JfcnhW1Ao6cdZT4yVpjNMv",
+            "version": 1
+          },
+          "lodging": {
+            "id": "agent_014r5YWJg6poR7a86PYWF4Go",
+            "version": 1
+          },
+          "transport": {
+            "id": "agent_01TvCecHjHfChmMirz5Dfqew",
+            "version": 1
+          },
+          "activities": {
+            "id": "agent_01NaQ9sYvmaopb42W31EhiEw",
+            "version": 1
+          }
+        },
+        "coordinator": {
+          "id": "agent_01JznpMrk3fnHyBcuf2RCc8i",
+          "version": 1
+        },
+        "environment_id": "env_01Gy43EyAD4AwPiA5SrCm7vm",
+        "lockfile_sha256": "31a4ac929e8cf9c7dee25c57845054295ea6f235a4d243f8e1ad0a6d4c5d76f2",
+        "trip_schema_sha256": "c71daedb38513e0e54ef642882bea35aae6ad7d87cdb8a18833e7434168e05c2"
+      },
+      "plan": null,
+      "trip": null,
+      "timed_out": false,
+      "error": null,
+      "duration_seconds": 134.9
+    },
+    {
+      "id": "train-trip-florence",
+      "title": "Viaggio in treno",
+      "tags": [
+        "train",
+        "italy",
+        "long-weekend"
+      ],
+      "request": {
+        "origin": "Torino",
+        "destination": "Firenze",
+        "suggest_destination": false,
+        "dates": {
+          "exact_start": "2028-04-21",
+          "exact_end": "2028-04-25"
+        },
+        "travelers": [
+          {
+            "kind": "adult"
+          },
+          {
+            "kind": "adult"
+          }
+        ],
+        "budget_eur": 1100,
+        "preferences": "Solo treno, niente aerei e niente auto. Alta velocità con posti vicini. Una gita in giornata in Toscana, sempre in treno."
+      },
+      "expect": {
+        "travelers": 2,
+        "budget_eur": 1100,
+        "dates": {
+          "start": "2028-04-21",
+          "end": "2028-04-25"
+        },
+        "destination_any": [
+          "firenze",
+          "florence"
+        ],
+        "must_mention": [
+          [
+            "treno",
+            "treni",
+            "frecciarossa",
+            "italo",
+            "trenitalia",
+            "alta velocita",
+            "regionale"
+          ]
+        ],
+        "must_not_book": [
+          "volo",
+          "voli",
+          "aereo",
+          "flight",
+          "noleggio",
+          "autonoleggio",
+          "car rental"
+        ]
+      },
+      "plan_id": "a1a19f91-4161-4e23-b294-daaf82e45cc2",
+      "session_id": "sesn_018gdvkXH62AWLxpZvKb2sV4",
+      "status": "budget_paused",
+      "failure_reason": null,
+      "submit_attempts": 0,
+      "cost_cents": 61,
+      "cost_source": "session_usage",
+      "web_search_requests": 12,
+      "usage": {
+        "list_cost_cents": 61,
+        "input_tokens": 100,
+        "output_tokens": 40742,
+        "cache_read_input_tokens": 2136232,
+        "web_search_requests": 12,
+        "active_seconds": 115.869
+      },
+      "checks": [
+        {
+          "name": "schema_valid",
+          "status": "fail",
+          "blocking": true,
+          "message": "no plan was accepted (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "book_by_before_scheduled_for",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "within_budget_or_warned",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "prices_have_source",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "links_on_allowed_domains",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "no_empty_days",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "submit_plan_attempts",
+          "status": "fail",
+          "blocking": true,
+          "message": "plan not accepted: status budget_paused, 0 attempt(s)",
+          "details": []
+        },
+        {
+          "name": "cost_and_searches_vs_estimate",
+          "status": "warn",
+          "blocking": false,
+          "message": "cost 61¢ above the estimate 55¢",
+          "details": [
+            "cost 61¢, estimate 55¢, session budget 60¢ (development)",
+            "web searches 12, estimate 20"
+          ]
+        },
+        {
+          "name": "matches_request",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        }
+      ],
+      "checks_passed": false,
+      "blocking_failures": [
+        "schema_valid",
+        "submit_plan_attempts"
+      ],
+      "warnings_count": null,
+      "judge": {
+        "status": "skipped",
+        "model": "claude-sonnet-5-5",
+        "scores": null,
+        "error": "no accepted plan to judge",
+        "estimated_input_tokens": null,
+        "estimate_source": null,
+        "projected_cents": null,
+        "input_tokens": null,
+        "output_tokens": null,
+        "cost_cents": 0.0,
+        "stop_reason": null
+      },
+      "agent_versions": {
+        "skills": {
+          "booking-links": {
+            "id": "skill_01W9ke5J7RYC6DKDFYiY9sHj",
+            "version": "skver_01HTaxeyVg2qLMATAGksNynp"
+          },
+          "trip-tracker-schema": {
+            "id": "skill_012cmKsRcRG9dCo276DzqDmE",
+            "version": "skver_019TECLQSid42UzT5ytfjVnA"
+          },
+          "travel-research-rules": {
+            "id": "skill_01Sqw9CZUP8yZqCYd3FtHe6W",
+            "version": "skver_01SBz3bRu9iWddXV8L3Tn3ZL"
+          }
+        },
+        "git_sha": "5d22125b035243839e5ce2ece301861aaf5e4977",
+        "profile": "development",
+        "subagents": {
+          "flights": {
+            "id": "agent_01JfcnhW1Ao6cdZT4yVpjNMv",
+            "version": 1
+          },
+          "lodging": {
+            "id": "agent_014r5YWJg6poR7a86PYWF4Go",
+            "version": 1
+          },
+          "transport": {
+            "id": "agent_01TvCecHjHfChmMirz5Dfqew",
+            "version": 1
+          },
+          "activities": {
+            "id": "agent_01NaQ9sYvmaopb42W31EhiEw",
+            "version": 1
+          }
+        },
+        "coordinator": {
+          "id": "agent_01JznpMrk3fnHyBcuf2RCc8i",
+          "version": 1
+        },
+        "environment_id": "env_01Gy43EyAD4AwPiA5SrCm7vm",
+        "lockfile_sha256": "31a4ac929e8cf9c7dee25c57845054295ea6f235a4d243f8e1ad0a6d4c5d76f2",
+        "trip_schema_sha256": "c71daedb38513e0e54ef642882bea35aae6ad7d87cdb8a18833e7434168e05c2"
+      },
+      "plan": null,
+      "trip": null,
+      "timed_out": false,
+      "error": null,
+      "duration_seconds": 129.1
+    },
+    {
+      "id": "flexible-dates-budapest",
+      "title": "Date flessibili",
+      "tags": [
+        "flexible-dates",
+        "city",
+        "flights",
+        "family"
+      ],
+      "request": {
+        "origin": "Venezia",
+        "destination": "Budapest",
+        "suggest_destination": false,
+        "dates": {
+          "month": "2028-02",
+          "nights": 4
+        },
+        "travelers": [
+          {
+            "kind": "adult"
+          },
+          {
+            "kind": "adult"
+          },
+          {
+            "kind": "child",
+            "age": 12
+          }
+        ],
+        "budget_eur": 1500,
+        "preferences": "Scegliete voi i giorni più convenienti del mese. Terme, cucina ungherese, un giro sul Danubio."
+      },
+      "expect": {
+        "travelers": 3,
+        "budget_eur": 1500,
+        "dates": {
+          "month": "2028-02",
+          "nights": 4
+        },
+        "destination_any": [
+          "budapest"
+        ],
+        "must_mention": [
+          [
+            "terme",
+            "termale",
+            "bagni",
+            "thermal",
+            "szechenyi",
+            "gellert",
+            "furdo",
+            "rudas",
+            "lukacs"
+          ],
+          [
+            "danubio",
+            "duna",
+            "danube"
+          ]
+        ],
+        "must_not_book": []
+      },
+      "plan_id": "65dc91f4-8fb3-459a-94e6-5e3121c5faeb",
+      "session_id": "sesn_0182K7SGC2GVWf7rkebAyXDs",
+      "status": "budget_paused",
+      "failure_reason": null,
+      "submit_attempts": 0,
+      "cost_cents": 62,
+      "cost_source": "session_usage",
+      "web_search_requests": 10,
+      "usage": {
+        "list_cost_cents": 62,
+        "input_tokens": 92,
+        "output_tokens": 45230,
+        "cache_read_input_tokens": 1929672,
+        "web_search_requests": 10,
+        "active_seconds": 148.791
+      },
+      "checks": [
+        {
+          "name": "schema_valid",
+          "status": "fail",
+          "blocking": true,
+          "message": "no plan was accepted (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "book_by_before_scheduled_for",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "within_budget_or_warned",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "prices_have_source",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "links_on_allowed_domains",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "no_empty_days",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        },
+        {
+          "name": "submit_plan_attempts",
+          "status": "fail",
+          "blocking": true,
+          "message": "plan not accepted: status budget_paused, 0 attempt(s)",
+          "details": []
+        },
+        {
+          "name": "cost_and_searches_vs_estimate",
+          "status": "warn",
+          "blocking": false,
+          "message": "cost 62¢ above the estimate 55¢",
+          "details": [
+            "cost 62¢, estimate 55¢, session budget 60¢ (development)",
+            "web searches 10, estimate 20"
+          ]
+        },
+        {
+          "name": "matches_request",
+          "status": "skip",
+          "blocking": true,
+          "message": "no accepted plan (status budget_paused)",
+          "details": []
+        }
+      ],
+      "checks_passed": false,
+      "blocking_failures": [
+        "schema_valid",
+        "submit_plan_attempts"
+      ],
+      "warnings_count": null,
+      "judge": {
+        "status": "skipped",
+        "model": "claude-sonnet-5-5",
+        "scores": null,
+        "error": "no accepted plan to judge",
+        "estimated_input_tokens": null,
+        "estimate_source": null,
+        "projected_cents": null,
+        "input_tokens": null,
+        "output_tokens": null,
+        "cost_cents": 0.0,
+        "stop_reason": null
+      },
+      "agent_versions": {
+        "skills": {
+          "booking-links": {
+            "id": "skill_01W9ke5J7RYC6DKDFYiY9sHj",
+            "version": "skver_01HTaxeyVg2qLMATAGksNynp"
+          },
+          "trip-tracker-schema": {
+            "id": "skill_012cmKsRcRG9dCo276DzqDmE",
+            "version": "skver_019TECLQSid42UzT5ytfjVnA"
+          },
+          "travel-research-rules": {
+            "id": "skill_01Sqw9CZUP8yZqCYd3FtHe6W",
+            "version": "skver_01SBz3bRu9iWddXV8L3Tn3ZL"
+          }
+        },
+        "git_sha": "5d22125b035243839e5ce2ece301861aaf5e4977",
+        "profile": "development",
+        "subagents": {
+          "flights": {
+            "id": "agent_01JfcnhW1Ao6cdZT4yVpjNMv",
+            "version": 1
+          },
+          "lodging": {
+            "id": "agent_014r5YWJg6poR7a86PYWF4Go",
+            "version": 1
+          },
+          "transport": {
+            "id": "agent_01TvCecHjHfChmMirz5Dfqew",
+            "version": 1
+          },
+          "activities": {
+            "id": "agent_01NaQ9sYvmaopb42W31EhiEw",
+            "version": 1
+          }
+        },
+        "coordinator": {
+          "id": "agent_01JznpMrk3fnHyBcuf2RCc8i",
+          "version": 1
+        },
+        "environment_id": "env_01Gy43EyAD4AwPiA5SrCm7vm",
+        "lockfile_sha256": "31a4ac929e8cf9c7dee25c57845054295ea6f235a4d243f8e1ad0a6d4c5d76f2",
+        "trip_schema_sha256": "c71daedb38513e0e54ef642882bea35aae6ad7d87cdb8a18833e7434168e05c2"
+      },
+      "plan": null,
+      "trip": null,
+      "timed_out": false,
+      "error": null,
+      "duration_seconds": 158.5
+    }
+  ],
+  "summary": {
+    "plans": 5,
+    "ready": 0,
+    "valid": 0,
+    "blocking_failures": 10,
+    "warnings": 0,
+    "total_cost_cents": 309,
+    "mean_cost_cents": 61.8,
+    "cost_known": 5,
+    "total_web_search_requests": 59,
+    "judge_means": {
+      "time_coherence": null,
+      "realistic_transfers": null,
+      "preference_respect": null,
+      "alternatives_quality": null,
+      "summary_clarity": null
+    }
+  }
+}

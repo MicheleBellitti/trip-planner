@@ -15,6 +15,9 @@ Spec: "Backend FastAPI" -> "Endpoint" table, "SSE verso il browser", "Autenticaz
 | GET /plans/{id}/cover        | user                     | the destination's Wikimedia photo      |
 | POST /plans/{id}/interrupt   | user + Origin            | send user.interrupt                    |
 | POST /plans/{id}/continue    | user + Origin            | raise the budget by $2 and resume      |
+| POST /evals/runs             | Bearer EVALS_INGEST_TOKEN| CI uploads an eval run (no Origin/CORS)|
+| GET /evals/runs              | user                     | the eval history, newest first         |
+| GET /evals/runs/{id}         | user                     | one run with its results and comparison|
 
 Errors: `HTTPException(detail=ErrorBody)` -> `{"detail": {"code", "message", "data"}}` with an
 Italian `message`; auth errors use the same envelope (`auth.AuthErrorCode`). Request-body
@@ -38,6 +41,8 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import hashlib
+import hmac
 import re
 import uuid
 from collections.abc import AsyncIterator, Mapping
@@ -48,7 +53,7 @@ import structlog
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import AwareDatetime, BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field, ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette import EventSourceResponse, ServerSentEvent
@@ -56,7 +61,7 @@ from starlette.datastructures import Headers
 from starlette.middleware.cors import CORSMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from app import consumer, sessions
+from app import consumer, evals_store, sessions
 from app.auth import CurrentUser, CurrentUserDep, RequireOrigin
 from app.config import AgentProfile, Settings
 from app.covers import Cover, CoverErrorCode, CoverResolver
@@ -92,7 +97,11 @@ MAX_SEQ = 2**31 - 1
 MAX_REQUEST_BODY_BYTES = 64 * 1024
 """Largest request body the API accepts (`RequestBodyLimitMiddleware`). The biggest valid
 PlanRequest is about 2,900 characters of capped fields, under 35 KB even with every character
-JSON-escaped; no other route takes a body."""
+JSON-escaped; no other route takes a body, except POST /evals/runs (`EVALS_INGEST_PATH`)."""
+
+EVALS_INGEST_PATH = "/evals/runs"
+"""The machine endpoint CI uploads eval results to: its body cap is
+`evals_store.MAX_INGEST_BYTES` (5 MB), not `MAX_REQUEST_BODY_BYTES`."""
 
 TRIP_PATH = re.compile(r"/plans/[^/]+/trip/?")
 """The one path whose GET (and preflight) also admits TRIPTRACKER_ORIGIN in CORS."""
@@ -114,6 +123,10 @@ class PlanErrorCode(StrEnum):
     AGENTS_UNAVAILABLE = "agents_unavailable"  # 502: the Managed Agents API failed
     REQUEST_TOO_LARGE = "request_too_large"  # 413: body over MAX_REQUEST_BODY_BYTES
     DEMO_UNAVAILABLE = "demo_unavailable"  # 404: ?demo_scenario= without DEMO_MODE
+    EVAL_RUN_NOT_FOUND = "eval_run_not_found"  # 404: GET /evals/runs/{id}
+    EVALS_INGEST_DISABLED = "evals_ingest_disabled"  # 404: POST /evals/runs without a token set
+    INVALID_INGEST_TOKEN = "invalid_ingest_token"  # 401: wrong or missing bearer
+    INVALID_EVAL_RESULTS = "invalid_eval_results"  # 422: data {errors: [{field, reason}]}
 
 
 PLAN_ERROR_STATUS: dict[PlanErrorCode, int] = {
@@ -125,6 +138,10 @@ PLAN_ERROR_STATUS: dict[PlanErrorCode, int] = {
     PlanErrorCode.AGENTS_UNAVAILABLE: 502,
     PlanErrorCode.REQUEST_TOO_LARGE: 413,
     PlanErrorCode.DEMO_UNAVAILABLE: 404,
+    PlanErrorCode.EVAL_RUN_NOT_FOUND: 404,
+    PlanErrorCode.EVALS_INGEST_DISABLED: 404,
+    PlanErrorCode.INVALID_INGEST_TOKEN: 401,
+    PlanErrorCode.INVALID_EVAL_RESULTS: 422,
 }
 
 PLAN_ERROR_MESSAGES: dict[PlanErrorCode, str] = {
@@ -144,6 +161,12 @@ PLAN_ERROR_MESSAGES: dict[PlanErrorCode, str] = {
     ),
     PlanErrorCode.REQUEST_TOO_LARGE: "La richiesta è troppo grande: accorcia i testi e riprova.",
     PlanErrorCode.DEMO_UNAVAILABLE: "La modalità demo non è attiva su questo server.",
+    PlanErrorCode.EVAL_RUN_NOT_FOUND: "Questa esecuzione delle eval non c'è.",
+    PlanErrorCode.EVALS_INGEST_DISABLED: (
+        "Il caricamento dei risultati delle eval non è attivo su questo server."
+    ),
+    PlanErrorCode.INVALID_INGEST_TOKEN: "Il token di caricamento non è valido.",
+    PlanErrorCode.INVALID_EVAL_RESULTS: "I risultati delle eval non sono nel formato atteso.",
 }
 """Italian user-facing messages; `{spent}`/`{limit}` are formatted with `format_usd`."""
 
@@ -874,6 +897,131 @@ async def continue_plan(
     return ContinueResponse(id=plan_id, status=PlanStatus.RUNNING, budget_cents=budget_cents)
 
 
+# --- eval history -------------------------------------------------------------------------------
+
+evals_router = APIRouter(prefix="/evals", tags=["evals"])
+
+
+def _bearer_token(authorization: str | None) -> str | None:
+    """The token of an `Authorization: Bearer <token>` header (scheme case-insensitive)."""
+    if authorization is None:
+        return None
+    scheme, _, token = authorization.strip().partition(" ")
+    return token.strip() or None if scheme.lower() == "bearer" else None
+
+
+def _token_matches(presented: str | None, settings: Settings) -> bool:
+    """Constant-time comparison of the presented bearer token with EVALS_INGEST_TOKEN (both
+    hashed first, so neither the value nor its length shows in the timing)."""
+    expected = settings.evals_ingest_token.get_secret_value()
+    digest = hashlib.sha256((presented or "").encode()).digest()
+    matches = hmac.compare_digest(digest, hashlib.sha256(expected.encode()).digest())
+    return matches and presented is not None
+
+
+def _invalid_eval_results(exc: evals_store.InvalidEvalResultsError) -> HTTPException:
+    return plan_error(PlanErrorCode.INVALID_EVAL_RESULTS, data={"errors": exc.errors})
+
+
+@evals_router.post(
+    "/runs",
+    status_code=201,
+    responses={
+        200: {"model": evals_store.EvalRunCreated, "description": "The run was already stored."},
+        401: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        413: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+    },
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {
+                "application/json": {
+                    "schema": evals_store.IngestBody.model_json_schema(
+                        ref_template="#/components/schemas/{model}"
+                    )
+                }
+            },
+        }
+    },
+)
+async def ingest_eval_run(
+    request: Request,
+    response: Response,
+    db: DbSession,
+    settings: SettingsDep,
+    authorization: Annotated[str | None, Header()] = None,
+) -> evals_store.EvalRunCreated:
+    """Machine endpoint for the CI eval job: `Authorization: Bearer <EVALS_INGEST_TOKEN>`,
+    body `{"results", "comparison", "workflow_run_url"}` (`evals_store.IngestBody`). No cookie,
+    no Origin check, no CORS. 404 `evals_ingest_disabled` while the token is unset, 401
+    `invalid_ingest_token` for a wrong one, 422 `invalid_eval_results` for a document that is not
+    an eval run; 201 for a new run, 200 (same body) when it already existed.
+
+    The body is read only after the token is checked (a parameter of type PlanRequest-style would
+    make FastAPI read all of it first), so an unauthenticated caller costs no memory."""
+    if not settings.evals_ingest_enabled:
+        raise plan_error(PlanErrorCode.EVALS_INGEST_DISABLED)
+    if not _token_matches(_bearer_token(authorization), settings):
+        error = plan_error(PlanErrorCode.INVALID_INGEST_TOKEN)
+        error.headers = {"WWW-Authenticate": "Bearer"}
+        raise error
+    raw = await request.body()
+    if len(raw) > evals_store.MAX_INGEST_BYTES:
+        raise plan_error(PlanErrorCode.REQUEST_TOO_LARGE)
+    try:
+        document = evals_store.parse_json(raw)
+        if not isinstance(document, dict):
+            raise evals_store.InvalidEvalResultsError(
+                [{"field": "(body)", "reason": "must be a JSON object"}]
+            )
+        try:
+            body = evals_store.IngestBody.model_validate(document)
+        except ValidationError as exc:
+            raise evals_store.InvalidEvalResultsError(
+                [
+                    {"field": ".".join(str(p) for p in e["loc"]), "reason": e["msg"]}
+                    for e in exc.errors(include_input=False, include_url=False)
+                ]
+            ) from None
+        stored = await evals_store.store_eval_run(
+            db,
+            results=body.results,
+            comparison=body.comparison,
+            workflow_run_url=body.workflow_run_url,
+        )
+    except evals_store.InvalidEvalResultsError as exc:
+        raise _invalid_eval_results(exc) from None
+    if not stored.created:
+        response.status_code = 200
+    return evals_store.EvalRunCreated(id=stored.id)
+
+
+@evals_router.get("/runs", responses=_ERRORS)
+async def list_eval_runs(
+    user: CurrentUserDep,
+    db: DbSession,
+    limit: Annotated[
+        int, Query(ge=1, le=evals_store.MAX_LIST_LIMIT)
+    ] = evals_store.DEFAULT_LIST_LIMIT,
+) -> evals_store.EvalRunListResponse:
+    """The eval history, newest first: the counts and the verdict of each run, never its
+    documents. Any allowed user sees every run (they belong to the project, not to a user)."""
+    return evals_store.EvalRunListResponse(runs=await evals_store.list_eval_runs(db, limit=limit))
+
+
+@evals_router.get("/runs/{run_id}", responses=_ERRORS)
+async def get_eval_run(
+    run_id: uuid.UUID, user: CurrentUserDep, db: DbSession
+) -> evals_store.EvalRunDetail:
+    """One run with its stored results and comparison; 404 `eval_run_not_found`."""
+    run = await evals_store.get_eval_run(db, run_id)
+    if run is None:
+        raise plan_error(PlanErrorCode.EVAL_RUN_NOT_FOUND)
+    return run
+
+
 # --- request body cap ---------------------------------------------------------------------------
 
 
@@ -897,18 +1045,29 @@ class RequestBodyLimitMiddleware:
     over the cap is answered at once, without reading anything and without calling the app; a
     body without one (chunked) is counted as the app reads it and refused as soon as it passes
     the cap. `install_routes` puts it inside the CORS policy, so the browser can read the 413.
+    `path_limits` raises the cap for the POST paths it names (the eval upload).
     """
 
-    def __init__(self, app: ASGIApp, *, max_body_size: int) -> None:
+    def __init__(
+        self, app: ASGIApp, *, max_body_size: int, path_limits: Mapping[str, int] | None = None
+    ) -> None:
         self._app = app
-        self._max = max_body_size
+        self._default_max = max_body_size
+        self._path_limits = dict(path_limits or {})
+
+    def _limit_for(self, scope: Scope) -> int:
+        """`max_body_size`, or the larger cap of a POST path in `path_limits`."""
+        if scope.get("method") == "POST":
+            return self._path_limits.get(scope["path"].rstrip("/"), self._default_max)
+        return self._default_max
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self._app(scope, receive, send)
             return
+        limit = self._limit_for(scope)
         declared = _content_length(scope)
-        if declared is not None and declared > self._max:
+        if declared is not None and declared > limit:
             await _body_too_large_response()(scope, receive, send)
             return
         received = 0
@@ -919,7 +1078,7 @@ class RequestBodyLimitMiddleware:
             message = await receive()
             if message["type"] == "http.request":
                 received += len(message.get("body", b""))
-                if received > self._max:
+                if received > limit:
                     raise RequestBodyTooLargeError
             return message
 
@@ -1000,7 +1159,12 @@ def install_routes(app: FastAPI, settings: Settings) -> None:
     /plans/{id}/trip and its preflight). Never a wildcard. The last middleware added is the
     outermost: CORS wraps the body cap, which wraps routing."""
     app.include_router(router)
-    app.add_middleware(RequestBodyLimitMiddleware, max_body_size=MAX_REQUEST_BODY_BYTES)
+    app.include_router(evals_router)
+    app.add_middleware(
+        RequestBodyLimitMiddleware,
+        max_body_size=MAX_REQUEST_BODY_BYTES,
+        path_limits={EVALS_INGEST_PATH: evals_store.MAX_INGEST_BYTES},
+    )
     app.add_middleware(
         PlanCorsMiddleware,
         frontend_origin=settings.frontend_origin,

@@ -378,3 +378,129 @@ def test_decide_coordinator_command(tmp_path: Path) -> None:
     )
     assert code == compare.EXIT_PASS
     assert "Coordinator comparison" in markdown.read_text(encoding="utf-8")
+
+
+# --- --json: the machine-readable comparison ----------------------------------------------------
+
+
+def rule_statuses(document: Json) -> dict[str, str]:
+    return {rule["rule"]: rule["status"] for rule in document["rules"]}
+
+
+def test_json_passed_against_a_baseline(tmp_path: Path) -> None:
+    run_file = write(tmp_path / "run.json", base_run())
+    base_file = write(tmp_path / "baseline.json", baseline())
+    out = tmp_path / "out" / "comparison.json"
+    code = compare.main([str(run_file), "--baseline", str(base_file), "--json", str(out)])
+    assert code == compare.EXIT_PASS
+    document = json.loads(out.read_text(encoding="utf-8"))
+    assert document["kind"] == compare.COMPARISON_KIND
+    assert document["format"] == compare.COMPARISON_FORMAT
+    assert document["status"] == "passed"
+    assert document["blocked"] is False
+    assert document["report_only"] is False
+    assert rule_statuses(document) == {"checks": "ok", "judge": "ok", "cost": "ok"}
+    assert document["findings"] == []
+    assert document["cost"]["compared"] == len(IDS)
+    assert len(document["criteria"]) == len(judge.CRITERIA)
+    assert [row["id"] for row in document["requests"]] == list(IDS)
+
+
+def test_json_report_only_without_a_baseline(tmp_path: Path) -> None:
+    run_file = write(tmp_path / "run.json", base_run())
+    out = tmp_path / "comparison.json"
+    code = compare.main(
+        [str(run_file), "--baseline", str(tmp_path / "none.json"), "--json", str(out)]
+    )
+    assert code == compare.EXIT_PASS
+    document = json.loads(out.read_text(encoding="utf-8"))
+    assert document["status"] == "report_only"
+    assert document["report_only"] is True
+    assert document["baseline_name"] is None
+    assert document["cost"] is None
+    assert rule_statuses(document) == {
+        "checks": "ok",
+        "judge": "not_compared",
+        "cost": "not_compared",
+    }
+
+
+def test_json_blocked_by_a_check_even_without_a_baseline(tmp_path: Path) -> None:
+    bad = results(*(entry(i) for i in IDS))
+    bad["requests"][0]["checks"][0]["status"] = "fail"
+    run_file = write(tmp_path / "run.json", bad)
+    out = tmp_path / "comparison.json"
+    code = compare.main(
+        [str(run_file), "--baseline", str(tmp_path / "none.json"), "--json", str(out)]
+    )
+    assert code == compare.EXIT_BLOCKED
+    document = json.loads(out.read_text(encoding="utf-8"))
+    assert document["status"] == "blocked"
+    assert document["blocked"] is True
+    assert rule_statuses(document)["checks"] == "blocking"
+    blocking = [f for f in document["findings"] if f["blocks"]]
+    assert [f["request_id"] for f in blocking] == ["a"]
+    assert blocking[0]["rule"] == compare.RULE_CHECKS
+    assert "schema_valid" in blocking[0]["message"]
+
+
+def test_json_blocked_by_judge_and_cost_against_a_baseline(tmp_path: Path) -> None:
+    worse = results(*(entry(i, cost=80, score=3) for i in IDS))
+    run_file = write(tmp_path / "run.json", worse)
+    base_file = write(tmp_path / "baseline.json", baseline())
+    out = tmp_path / "comparison.json"
+    code = compare.main([str(run_file), "--baseline", str(base_file), "--json", str(out)])
+    assert code == compare.EXIT_BLOCKED
+    document = json.loads(out.read_text(encoding="utf-8"))
+    assert document["status"] == "blocked"
+    assert rule_statuses(document) == {"checks": "ok", "judge": "blocking", "cost": "blocking"}
+    assert document["cost"]["change"] == pytest.approx(1.0)
+    assert {c["criterion"]: c["drop"] for c in document["criteria"]}["time_coherence"] == 1.0
+
+
+def test_json_aborted_run_counts_under_the_checks_rule(tmp_path: Path) -> None:
+    run_file = write(tmp_path / "run.json", results(*(entry(i) for i in IDS), aborted=True))
+    out = tmp_path / "comparison.json"
+    code = compare.main(
+        [str(run_file), "--baseline", str(tmp_path / "none.json"), "--json", str(out)]
+    )
+    assert code == compare.EXIT_BLOCKED
+    document = json.loads(out.read_text(encoding="utf-8"))
+    assert document["status"] == "blocked"
+    assert rule_statuses(document)["checks"] == "blocking"
+    assert document["findings"][0]["rule"] == compare.RULE_RUN
+
+
+def test_json_is_strict_json_and_matches_the_markdown_verdict(tmp_path: Path) -> None:
+    run_file = write(tmp_path / "run.json", base_run())
+    markdown = tmp_path / "comment.md"
+    out = tmp_path / "comparison.json"
+    compare.main(
+        [
+            str(run_file),
+            "--baseline",
+            str(tmp_path / "none.json"),
+            "--json",
+            str(out),
+            "--markdown",
+            str(markdown),
+        ]
+    )
+    document = json.loads(out.read_text(encoding="utf-8"), parse_constant=_reject_constant)
+    assert document["status"] == "report_only"
+    assert "REPORT ONLY" in markdown.read_text(encoding="utf-8")
+
+
+def _reject_constant(name: str) -> None:
+    raise AssertionError(f"non-standard JSON constant {name}")
+
+
+def test_json_is_not_written_for_usage_errors_or_other_modes(tmp_path: Path) -> None:
+    out = tmp_path / "comparison.json"
+    assert compare.main([str(tmp_path / "missing.json"), "--json", str(out)]) == compare.EXIT_USAGE
+    run_file = write(tmp_path / "run.json", base_run())
+    base_file = write(tmp_path / "baseline.json", baseline())
+    for flag in ("--update-baseline", "--decide-coordinator"):
+        args = [str(run_file), "--baseline", str(base_file), flag, "--json", str(out)]
+        assert compare.main(args) == compare.EXIT_USAGE
+    assert not out.exists()
