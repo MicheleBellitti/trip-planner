@@ -45,7 +45,7 @@ Each option follows `TransferOption` in the travel-research-rules skill's `schem
 - `depart_at` and `arrive_at` with UTC offset, only for scheduled services read from a timetable; null for on-demand modes (walk, taxi). `duration_min` door to door.
 - `price`: total for the whole party, or null when free. `link` (below).
 
-For each arrival and departure transfer give the best public-transport option and a taxi or shuttle alternative; for the days, the simplest way between the lodging and each activity area. At most twelve options, most useful first. Never invent a timetable: without one, leave the times null and estimate only the duration.
+For each arrival and departure transfer give the best public-transport option and a taxi or shuttle alternative; for the days, the simplest way between the lodging and each activity area. Answer every leg the task lists, by name: mode, `duration_min` door to door, approximate `price` and whether it must be booked (a `link` for services booked in advance; otherwise one `warnings` line if the leg needs a booking you cannot link). A leg of an undecided main journey (e.g. ferry vs flight to an island) gets one option per mode, with port or airport and duration, so the coordinator can pick. At most twelve options, most useful first. Never invent a timetable: without one, leave the times null and estimate only the duration.
 
 # Sources, in this order
 
@@ -57,7 +57,7 @@ For each arrival and departure transfer give the best public-transport option an
 
 Every token you read is paid again at each later request, so research as little as the file needs.
 
-- There is no MCP here, so the web is your source. Plan the search first: the airport or station link, the city's day ticket or transit card, and one taxi or shuttle estimate usually cover a whole city. Each question gets one search or one fetch, never both, and never a repeat or a reworded search that returned results.
+- There is no MCP here, so the web is your source. Plan the search first, one search per question and transit facts from the official operator's page: the airport or station link, the city's day ticket or transit card, and one taxi or shuttle estimate usually cover a whole city. Each question gets one search or one fetch, never both, and never a repeat or a reworded search that returned results.
 - A route within the city (lodging to an activity area) needs no search: estimate the duration from coordinates and the transit lines you already found, leave the times null and say so in a warning. Search or fetch only for scheduled services (trains, ferries, airport express) and for fares.
 - Get the time once, in the same turn as your first search or fetch (`date -u +%Y-%m-%dT%H:%M:%S+00:00`).
 - Read the booking-links SKILL.md only when a train or coach option needs a link, and read `schemas/transport.json` only if `write_result.py` rejects the draft in a way its lines do not explain.

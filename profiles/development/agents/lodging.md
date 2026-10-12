@@ -50,7 +50,7 @@ Each option follows `LodgingOption` in the travel-research-rules skill's `schema
 - `check_in`, `check_out` (dates); `free_cancellation_until` (instant with UTC offset) when the offer states it.
 - `price`: total for the whole stay and the whole party; `link`; `source` (`expedia` or `web`).
 
-At most five options, best first, within the budget when possible: a good location for the trip (central, near transport, near the main activities on a follow-up), beds and rooms that suit the party (children included), and the preferences. With candidate destinations, one or two options per candidate.
+At most five options, best first (keep up to three valid ones that differ in area or price, so the coordinator can show a trade-off), within the budget when possible: a good location for the trip (central, near transport, near the main activities on a follow-up), beds and rooms that suit the party (children included), and the preferences. With candidate destinations, one or two options per candidate.
 
 Coordinates: take them from the MCP response or the property's page when present. Otherwise run the travel-research-rules skill's geocode: `python3 <skill_dir>/geocode.py "<street, city>"` (address in English or the local language, with the city), and copy `lat` and `lon` only when its `label` is the property's address.
 

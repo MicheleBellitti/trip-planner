@@ -4,6 +4,7 @@ weekend of evals/requests.yaml) and, for every rule, a copy that violates it."""
 from __future__ import annotations
 
 import copy
+import datetime as dt
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -11,9 +12,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-import yaml
 
 import checks
+import run
 from app.request import PlanRequest
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
@@ -45,17 +46,22 @@ def fake_link_checker(url: str) -> FakeVerdict:
     return FakeVerdict(True, host)
 
 
-def lisbon_case() -> dict[str, Any]:
-    data = yaml.safe_load(DATASET.read_text(encoding="utf-8"))
-    return next(case for case in data["requests"] if case["id"] == "city-weekend-lisbon")
+FIXTURE_RUN_DATE = dt.date(2027, 10, 1)
+"""The run date that puts the Lisbon weekend on the fixtures' dates (Fri 2027-11-12 to Sun
+2027-11-14): 6 weeks later is exactly that Friday."""
+
+
+def lisbon_case() -> run.EvalCase:
+    dataset = run.load_dataset(DATASET, run_date=FIXTURE_RUN_DATE)
+    return next(case for case in dataset.cases if case.id == "city-weekend-lisbon")
 
 
 def lisbon_request() -> PlanRequest:
-    return PlanRequest.from_stored(lisbon_case()["request"])
+    return PlanRequest.from_stored(lisbon_case().request)
 
 
 def lisbon_expect() -> checks.Expectations:
-    return checks.Expectations.from_mapping(lisbon_case()["expect"])
+    return lisbon_case().expectations
 
 
 def ok_plan() -> Json:
@@ -432,9 +438,7 @@ def test_keyword_matching(text: str, keyword: str, expected: bool) -> None:
 
 def test_must_not_book_looks_at_bookings_only() -> None:
     plan, trip = ok_plan(), ok_trip()
-    expect = checks.Expectations.from_mapping(
-        {**lisbon_case()["expect"], "must_not_book": ["volo"]}
-    )
+    expect = checks.Expectations.from_mapping({**lisbon_case().expect, "must_not_book": ["volo"]})
     result = checks.check_matches_request(lisbon_request(), plan, trip, OK_METADATA, expect=expect)
     assert result.status == "fail"
     plan["bookings"] = [b for b in plan["bookings"] if b["kind"] != "transport"]

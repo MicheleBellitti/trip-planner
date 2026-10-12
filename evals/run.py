@@ -5,6 +5,7 @@
     uv run python ../evals/run.py --tags train,smoke    # requests with any of these tags
     uv run python ../evals/run.py --ids sea-week-family --no-judge
     uv run python ../evals/run.py --dry-run             # validate and print, spend nothing
+    uv run python ../evals/run.py --dry-run --run-date 2026-10-13   # dates as of that day
     uv run python ../evals/run.py --profile production  # final check only (spec)
 
 Spec: "Eval sui piani" and "Eval strutturate e versioning dei prompt". For every selected
@@ -65,6 +66,7 @@ import yaml  # noqa: E402
 
 import checks  # noqa: E402
 import judge  # noqa: E402
+from app import clock  # noqa: E402
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -106,7 +108,7 @@ class UsageError(Exception):
 
 @dataclass(frozen=True, slots=True)
 class EvalCase:
-    """One entry of evals/requests.yaml."""
+    """One entry of evals/requests.yaml, its dates already resolved against the run date."""
 
     id: str
     title: str
@@ -122,13 +124,130 @@ class EvalCase:
 @dataclass(frozen=True, slots=True)
 class Dataset:
     version: int
-    authored_on: dt.date
-    valid_until: dt.date
+    run_date: dt.date
+    """The day the relative dates were resolved against."""
     cases: tuple[EvalCase, ...]
 
+    def resolved_dates(self, cases: Sequence[EvalCase] | None = None) -> dict[str, Any]:
+        """Each case's resolved `request.dates`, by id (recorded in the results file)."""
+        return {case.id: dict(case.request["dates"]) for case in cases or self.cases}
 
-def load_dataset(path: Path = DATASET_PATH) -> Dataset:
-    """Parse evals/requests.yaml (shape only; `validate_requests` checks the requests)."""
+
+WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+
+
+def _int(value: Any, where: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise UsageError(f"{where}: expected a whole number of 0 or more, got {value!r}")
+    return value
+
+
+def _only_keys(spec: Mapping[str, Any], allowed: Sequence[str], where: str) -> None:
+    unknown = sorted(set(spec) - set(allowed))
+    if unknown:
+        raise UsageError(f"{where}: unknown key(s) {', '.join(unknown)} (allowed: {allowed})")
+
+
+def resolve_date(spec: Any, run_date: dt.date, where: str) -> dt.date:
+    """A date from `{in_days: N}` or `{in_weeks: N}`, optionally with `weekday: friday`, which
+    moves it forward to that weekday (the same day if it already is one). A literal date
+    (a YYYY-MM-DD string) passes through."""
+    if not isinstance(spec, Mapping):
+        try:
+            return dt.date.fromisoformat(str(spec))
+        except ValueError as error:
+            raise UsageError(f"{where}: {spec!r} is not a date or an offset") from error
+    spec = cast(Mapping[str, Any], spec)
+    _only_keys(spec, ("in_days", "in_weeks", "weekday"), where)
+    if ("in_days" in spec) == ("in_weeks" in spec):
+        raise UsageError(f"{where}: give exactly one of in_days and in_weeks")
+    if "in_days" in spec:
+        days = _int(spec["in_days"], f"{where}.in_days")
+    else:
+        days = 7 * _int(spec["in_weeks"], f"{where}.in_weeks")
+    day = run_date + dt.timedelta(days=days)
+    if "weekday" in spec:
+        name = str(spec["weekday"]).lower()
+        if name not in WEEKDAYS:
+            raise UsageError(f"{where}.weekday: {spec['weekday']!r} is not one of {WEEKDAYS}")
+        day += dt.timedelta(days=(WEEKDAYS.index(name) - day.weekday()) % 7)
+    return day
+
+
+def resolve_month(spec: Any, run_date: dt.date, where: str) -> str:
+    """A "YYYY-MM" from `{in_months: N}`: the calendar month N months after the run date's
+    (no day arithmetic, so the 31st never overflows). A literal "YYYY-MM" passes through."""
+    if not isinstance(spec, Mapping):
+        return str(spec)
+    spec = cast(Mapping[str, Any], spec)
+    _only_keys(spec, ("in_months",), where)
+    if "in_months" not in spec:
+        raise UsageError(f"{where}: give in_months")
+    index = run_date.year * 12 + run_date.month - 1 + _int(spec["in_months"], f"{where}.in_months")
+    year, month = divmod(index, 12)
+    return f"{year:04d}-{month + 1:02d}"
+
+
+def resolve_dates(dates: Mapping[str, Any], run_date: dt.date, where: str) -> dict[str, Any]:
+    """A request's `dates` with the relative parts resolved: `exact_start` as an offset plus
+    `nights` gives `exact_start` and `exact_end`; `month` as `{in_months}` gives "YYYY-MM"
+    (and keeps `nights`). Literal dates pass through."""
+    out = dict(dates)
+    if "exact_start" in out:
+        start = resolve_date(out["exact_start"], run_date, f"{where}.exact_start")
+        out["exact_start"] = start.isoformat()
+        if isinstance(dates["exact_start"], Mapping):
+            if "exact_end" in out or "nights" not in out:
+                raise UsageError(f"{where}: a relative exact_start takes nights, not exact_end")
+            out["exact_end"] = (
+                start + dt.timedelta(days=_int(out.pop("nights"), where))
+            ).isoformat()
+        elif "exact_end" in out:
+            out["exact_end"] = resolve_date(
+                out["exact_end"], run_date, f"{where}.exact_end"
+            ).isoformat()
+    if "month" in out:
+        out["month"] = resolve_month(out["month"], run_date, f"{where}.month")
+    return out
+
+
+def expected_dates(dates: Mapping[str, Any]) -> dict[str, Any]:
+    """The `expect.dates` of resolved request dates: the exact start and end, or the month
+    and number of nights."""
+    if "exact_start" in dates:
+        return {"start": dates["exact_start"], "end": dates["exact_end"]}
+    return {"month": dates["month"], "nights": dates["nights"]}
+
+
+def resolve_case(raw: Mapping[str, Any], run_date: dt.date) -> EvalCase:
+    """An EvalCase from its YAML entry: relative dates resolved once, and `expect.dates`
+    derived from them (writing `expect.dates` by hand is an error)."""
+    where = f"requests[{raw['id']}]"
+    request = dict(cast(Mapping[str, Any], raw["request"]))
+    expect = dict(cast(Mapping[str, Any], raw.get("expect") or {}))
+    if "dates" in expect:
+        raise UsageError(f"{where}.expect: dates are derived from the request, remove them")
+    dates = request.get("dates")
+    if isinstance(dates, Mapping):
+        request["dates"] = resolve_dates(cast(Mapping[str, Any], dates), run_date, f"{where}.dates")
+        try:
+            expect["dates"] = expected_dates(request["dates"])
+        except KeyError as error:
+            raise UsageError(f"{where}.dates: incomplete, missing {error}") from error
+    return EvalCase(
+        id=str(raw["id"]),
+        title=str(raw.get("title") or raw["id"]),
+        tags=tuple(str(tag) for tag in raw.get("tags") or ()),
+        request=request,
+        expect=expect,
+    )
+
+
+def load_dataset(path: Path = DATASET_PATH, *, run_date: dt.date | None = None) -> Dataset:
+    """Parse evals/requests.yaml and resolve its relative dates against `run_date` (default:
+    today on Michele's clock, Europe/Rome). Shape only; `validate_requests` checks the
+    requests."""
+    run_date = run_date or clock.today()
     try:
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
     except (OSError, yaml.YAMLError) as error:
@@ -140,25 +259,11 @@ def load_dataset(path: Path = DATASET_PATH) -> Dataset:
     for index, raw in enumerate(cast(list[Any], data["requests"])):
         if not isinstance(raw, Mapping) or not isinstance(raw.get("request"), Mapping):
             raise UsageError(f"{path}: requests[{index}] needs 'id', 'request' and 'expect'")
-        raw = cast(Mapping[str, Any], raw)
-        cases.append(
-            EvalCase(
-                id=str(raw["id"]),
-                title=str(raw.get("title") or raw["id"]),
-                tags=tuple(str(tag) for tag in raw.get("tags") or ()),
-                request=cast(Mapping[str, Any], raw["request"]),
-                expect=cast(Mapping[str, Any], raw.get("expect") or {}),
-            )
-        )
+        cases.append(resolve_case(cast(Mapping[str, Any], raw), run_date))
     ids = [case.id for case in cases]
     if len(set(ids)) != len(ids):
         raise UsageError(f"{path}: duplicate request ids")
-    return Dataset(
-        version=int(data.get("version", 1)),
-        authored_on=dt.date.fromisoformat(str(data["authored_on"])),
-        valid_until=dt.date.fromisoformat(str(data["valid_until"])),
-        cases=tuple(cases),
-    )
+    return Dataset(version=int(data.get("version", 1)), run_date=run_date, cases=tuple(cases))
 
 
 def select_cases(
@@ -200,8 +305,8 @@ def validate_requests(
             problems.append(f"{case.id}: {error}")
     if problems:
         raise UsageError(
-            "invalid request(s) in evals/requests.yaml (dates in the past? see its header):\n"
-            + "\n".join(problems)
+            "invalid request(s) in evals/requests.yaml (dates are relative to the run date; "
+            "a --run-date in the past gives dates in the past):\n" + "\n".join(problems)
         )
     return requests
 
@@ -211,6 +316,13 @@ def validate_requests(
 
 def _csv(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _run_date(value: str) -> dt.date:
+    try:
+        return dt.date.fromisoformat(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(f"{value!r} is not a YYYY-MM-DD date") from error
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -240,6 +352,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--judge-cap-cents", type=float, default=judge.JUDGE_CAP_CENTS, help=argparse.SUPPRESS
     )
     parser.add_argument("--output", type=Path, default=None, help="results file path")
+    parser.add_argument(
+        "--run-date",
+        type=_run_date,
+        default=None,
+        help="resolve the dataset's relative dates against this day (YYYY-MM-DD) instead of "
+        "today (Europe/Rome): for a repeatable dry run, or a rerun with the dates of an "
+        "earlier run (it must be today or later, or the trips would be in the past)",
+    )
     parser.add_argument("--yes", action="store_true", help="do not ask for confirmation")
     parser.add_argument(
         "--dry-run", action="store_true", help="validate and print the selection only"
@@ -638,7 +758,8 @@ def results_document(
         "aborted": aborted,
         "dataset": {
             "version": dataset.version,
-            "valid_until": dataset.valid_until.isoformat(),
+            "run_date": dataset.run_date.isoformat(),
+            "resolved_dates": dataset.resolved_dates(selected),
             "selected": [case.id for case in selected],
             "tags": list(tags),
         },
@@ -790,21 +911,30 @@ class Prepared:
     judge_cap_cents: float
 
 
+def _dates_text(dates: Mapping[str, Any]) -> str:
+    if "exact_start" in dates:
+        return f"{dates['exact_start']} -> {dates['exact_end']}"
+    return f"{dates['month']}, {dates['nights']} nights"
+
+
 def prepare(args: argparse.Namespace) -> Prepared | None:
     """Validate the selection and the configuration, print the ceiling and confirm. None for a
     dry run (or a "no" at the prompt): nothing is spent."""
     if args.judge_cap_cents > judge.JUDGE_CAP_CENTS or args.judge_cap_cents < 0:
         raise UsageError(f"the judge cap is at most {judge.JUDGE_CAP_CENTS:.0f}¢ (spec: 1 $)")
-    dataset = load_dataset()
+    dataset = load_dataset(run_date=args.run_date)
     selected = select_cases(dataset.cases, tags=args.tags, ids=args.ids)
     requests = validate_requests(selected)
     judge_cap = 0.0 if args.no_judge else float(args.judge_cap_cents)
     if args.dry_run:
         profile = resolve_profile(args.profile, None)
         ceiling = spending_ceiling_cents(len(selected), profile, judge_cap_cents=judge_cap)
-        print(f"{len(selected)} request(s), profile {profile}, ceiling {ceiling / 100:.2f} $:")
+        print(
+            f"{len(selected)} request(s), profile {profile}, ceiling {ceiling / 100:.2f} $, "
+            f"dates resolved for run date {dataset.run_date}:"
+        )
         for case in selected:
-            print(f"  {case.id:28} {', '.join(case.tags)}")
+            print(f"  {case.id:28} {_dates_text(case.request['dates']):26} {', '.join(case.tags)}")
         return None
 
     from pydantic import ValidationError
@@ -833,7 +963,8 @@ def prepare(args: argparse.Namespace) -> Prepared | None:
         )
     ceiling = spending_ceiling_cents(len(selected), profile, judge_cap_cents=judge_cap)
     message = (
-        f"evals: {len(selected)} real session(s) on the {profile} profile, at most "
+        f"evals: {len(selected)} real session(s) on the {profile} profile (dates relative to "
+        f"{dataset.run_date}), at most "
         f"{checks.COST_ESTIMATES[profile].session_budget_cents}¢ each plus "
         f"{judge_cap:.0f}¢ for the judge: up to {ceiling / 100:.2f} $."
     )
@@ -854,8 +985,6 @@ def prepare(args: argparse.Namespace) -> Prepared | None:
 
 async def execute(prepared: Prepared, args: argparse.Namespace) -> int:
     """Migrate the eval database, run the plans, write the results file."""
-    from app import clock
-
     await prepare_database(prepared.database_url)
     started_at = clock.now()
     state: dict[str, Any] = {

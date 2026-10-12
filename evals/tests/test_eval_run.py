@@ -22,7 +22,7 @@ import run
 from app import sessions
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
-DATASET = run.load_dataset()
+DATASET = run.load_dataset(run_date=dt.date(2027, 10, 1))  # Lisbon on the fixtures' dates
 LISBON = next(case for case in DATASET.cases if case.id == "city-weekend-lisbon")
 
 
@@ -122,6 +122,42 @@ def test_dry_run_spends_nothing(
     out = capsys.readouterr().out
     assert "1 request(s), profile development, ceiling 2.00 $" in out
     assert "train-trip-florence" in out
+
+
+def test_dry_run_resolves_the_dates_for_the_run_date(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from app import clock
+
+    day = dt.date(2026, 10, 13)
+    monkeypatch.setattr(
+        clock, "now", lambda: dt.datetime.combine(day, dt.time(12), tzinfo=clock.HOME_TIMEZONE)
+    )
+    assert run.main(["--dry-run", "--run-date", "2026-10-13"]) == run.EXIT_OK
+    out = capsys.readouterr().out
+    assert "run date 2026-10-13" in out
+    assert "city-weekend-lisbon" in out
+    assert "2026-11-27 -> 2026-11-29" in out  # Fri to Sun, 6 weeks ahead
+    assert "2026-12, 4 nights" in out
+
+
+def test_run_date_must_be_a_date(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as stop:
+        run.main(["--dry-run", "--run-date", "13/10/2026"])
+    assert stop.value.code == 2
+    assert "YYYY-MM-DD" in capsys.readouterr().err
+
+
+def test_a_run_date_in_the_past_is_refused(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from app import clock
+
+    monkeypatch.setattr(
+        clock, "now", lambda: dt.datetime(2026, 10, 13, 12, tzinfo=clock.HOME_TIMEZONE)
+    )
+    assert run.main(["--dry-run", "--run-date", "2026-01-05"]) == run.EXIT_USAGE
+    assert "run date" in capsys.readouterr().err
 
 
 def test_spending_ceiling() -> None:
@@ -357,6 +393,11 @@ def test_results_document_is_what_compare_reads(monkeypatch: pytest.MonkeyPatch)
     json.dumps(document)
     assert compare.is_results(document)
     assert document["date"] == "2026-10-13"
+    assert document["dataset"]["run_date"] == "2027-10-01"
+    assert document["dataset"]["resolved_dates"] == {
+        "city-weekend-lisbon": {"exact_start": "2027-11-12", "exact_end": "2027-11-14"}
+    }
+    assert document["dataset"]["selected"] == ["city-weekend-lisbon"]
     summary = document["summary"]
     assert summary["valid"] == 1
     assert summary["mean_cost_cents"] == 41

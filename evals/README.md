@@ -29,7 +29,8 @@ repository root, or by `scripts/bootstrap.py --profile development`):
 
 ```sh
 cd backend
-uv run python ../evals/run.py --dry-run                 # validate and show the ceiling: free
+uv run python ../evals/run.py --dry-run                 # validate, show the resolved dates and the ceiling: free
+uv run python ../evals/run.py --dry-run --run-date 2026-10-13   # dates as resolved on that day
 uv run python ../evals/run.py                           # all five, development, asks first
 uv run python ../evals/run.py --tags train,smoke        # requests with any of these tags
 uv run python ../evals/run.py --ids sea-week-family --no-judge
@@ -195,9 +196,20 @@ a developer machine: run steps 1 and 3 in the GitHub `production` environment.
 
 ## Maintaining the dataset
 
-- **Dates.** `requests.yaml` dates stay valid until `valid_until`, at least a year after
-  `authored_on`. When `tests/test_eval_requests.py::test_valid_today` fails, move every date
-  forward by the same amount and update both fields.
+- **Dates are relative to the run date**, so the dataset never goes stale and always asks for
+  a trip a few weeks ahead (flight schedules, train timetables and hotel rates are published;
+  the 2026-10-12 run asked for trips a year out and 4 of 5 plans had no flights). In
+  `requests.yaml` a fixed trip is `exact_start: {in_weeks: 6, weekday: friday}` plus
+  `nights: 2` (the first Friday on or after the run date plus 6 weeks; `in_days` also works,
+  `weekday` is optional, `exact_end` is start plus `nights`), and a flexible one is
+  `month: {in_months: 2}` plus `nights`. Pick offsets that land the trip 5 to 14 weeks ahead
+  and keep the weekday the request implies. `expect.dates` is never written: it is derived
+  from the same resolved dates.
+- **The run date** is today on the Europe/Rome clock, or `--run-date YYYY-MM-DD` (today or
+  later) for a repeatable dry run or a rerun with the dates of an earlier run. The results
+  file records it as `dataset.run_date`, with `dataset.resolved_dates` (by request id); each
+  entry's `request` and `expect` hold the resolved values. `compare.py` matches runs by request
+  id and ignores dates, so runs on different days compare fine.
 - **New cases.** Every real plan that goes wrong becomes a new entry (spec). Give it an `id`,
   a `title`, `tags`, a valid `request` without personal data, and `expect`: `travelers`,
   `budget_eur`, `dates`, `destination_any`, `must_mention` (groups of synonyms; Italian first,

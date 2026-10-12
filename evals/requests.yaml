@@ -6,20 +6,30 @@
 # Rules for every entry (tests/test_eval_requests.py enforces them offline):
 # - `request` is a valid backend app.request.PlanRequest: no personal data, ever (agents only
 #   get cities, dates, travellers' kinds and ages, budget and free-text preferences).
-# - Dates are quoted strings and stay valid until `valid_until`, at least a year after
-#   `authored_on`. When the tests start failing because a date is in the past, move every date
-#   forward by the same amount and refresh both fields.
-# - `expect` repeats the constraints the plan must respect: travellers, budget, dates, the
+# - Dates are RELATIVE to the run date (today on the Europe/Rome clock, or `run.py --run-date
+#   YYYY-MM-DD`), so they never go stale and always ask for a trip a few weeks ahead, where
+#   flight schedules, train timetables and hotel rates are published (far-off dates made the
+#   2026-10-12 run find no flights). `run.py` resolves them once; the resolved dates are what
+#   the agents get, what `expect` checks and what the results file records. Write them as:
+#     exact_start: {in_weeks: 6, weekday: friday}   # the first Friday on or after run date + 6
+#                                                  #   weeks (or `in_days: N`; `weekday` is
+#                                                  #   optional)
+#     nights: 2                                     # exact_end = exact_start + nights
+#   or, for flexible dates, `month: {in_months: 2}` (the calendar month 2 months after the run
+#   date's) with `nights`. Pick offsets that put the trip 5 to 14 weeks ahead and keep the
+#   weekday the request implies (a weekend starts on a Friday). A literal date still works,
+#   quoted, but it will go stale.
+# - `expect` repeats the constraints the plan must respect: travellers, budget, the
 #   destination (when the user chose it), keyword groups that must appear in the plan text
 #   (`must_mention`: every group needs one of its keywords) and keywords that must not appear
 #   in any booking (`must_not_book`). Keywords match case- and accent-insensitively at the
 #   start of a word ("bambin" matches "bambini", "volo" does not match "tavolo"); give
-#   generous synonyms, Italian first, because a missing keyword blocks the PR.
+#   generous synonyms, Italian first, because a missing keyword blocks the PR. Do not write
+#   `expect.dates`: it is derived from the resolved request dates (exact start and end, or
+#   month and nights).
 # - The dataset grows: every real plan that goes wrong becomes a new entry (spec).
 
 version: 1
-authored_on: "2026-10-12"
-valid_until: "2027-10-12"
 
 requests:
   - id: city-weekend-lisbon
@@ -29,8 +39,8 @@ requests:
       origin: Milano
       destination: Lisbona
       dates:
-        exact_start: "2027-11-12"
-        exact_end: "2027-11-14"
+        exact_start: {in_weeks: 6, weekday: friday}
+        nights: 2
       travelers:
         - kind: adult
         - kind: adult
@@ -41,9 +51,6 @@ requests:
     expect:
       travelers: 2
       budget_eur: 900
-      dates:
-        start: "2027-11-12"
-        end: "2027-11-14"
       destination_any: [lisbona, lisboa, lisbon]
       must_mention:
         - [museo, musei, museu, museum, mosteiro, monastero]
@@ -57,8 +64,8 @@ requests:
       origin: Milano
       destination: Sardegna
       dates:
-        exact_start: "2028-06-24"
-        exact_end: "2028-07-01"
+        exact_start: {in_weeks: 12, weekday: saturday}
+        nights: 7
       travelers:
         - kind: adult
         - kind: adult
@@ -68,15 +75,12 @@ requests:
           age: 8
       budget_eur: 3200
       preferences: >-
-        Spiaggia sabbiosa con acqua bassa adatta ai bambini, alloggio con cucina o mezza
-        pensione, spostamenti brevi dall'alloggio. Traghetto con la nostra auto oppure volo più
-        auto a noleggio.
+        Spiaggia sabbiosa con acqua bassa adatta ai bambini (anche fuori stagione), alloggio
+        con cucina o mezza pensione, spostamenti brevi dall'alloggio. Traghetto con la nostra
+        auto oppure volo più auto a noleggio.
     expect:
       travelers: 4
       budget_eur: 3200
-      dates:
-        start: "2028-06-24"
-        end: "2028-07-01"
       destination_any: [sardegna, sardinia]
       must_mention:
         - [bambin, famiglia, family, figli]
@@ -92,8 +96,8 @@ requests:
       destination_idea: >-
         Una città d'arte raggiungibile in treno o in autobus, con buon cibo e musei economici.
       dates:
-        exact_start: "2027-11-26"
-        exact_end: "2027-11-28"
+        exact_start: {in_weeks: 5, weekday: friday}
+        nights: 2
       travelers:
         - kind: adult
       budget_eur: 250
@@ -101,9 +105,6 @@ requests:
     expect:
       travelers: 1
       budget_eur: 250
-      dates:
-        start: "2027-11-26"
-        end: "2027-11-28"
       destination_any: []
       must_mention:
         - [treno, treni, autobus, bus, pullman, frecciarossa, italo, regionale, flixbus]
@@ -116,8 +117,8 @@ requests:
       origin: Torino
       destination: Firenze
       dates:
-        exact_start: "2028-04-21"
-        exact_end: "2028-04-25"
+        exact_start: {in_weeks: 7, weekday: friday}
+        nights: 4
       travelers:
         - kind: adult
         - kind: adult
@@ -128,9 +129,6 @@ requests:
     expect:
       travelers: 2
       budget_eur: 1100
-      dates:
-        start: "2028-04-21"
-        end: "2028-04-25"
       destination_any: [firenze, florence]
       must_mention:
         - [treno, treni, frecciarossa, italo, trenitalia, alta velocita, regionale]
@@ -143,7 +141,7 @@ requests:
       origin: Venezia
       destination: Budapest
       dates:
-        month: "2028-02"
+        month: {in_months: 2}
         nights: 4
       travelers:
         - kind: adult
@@ -157,9 +155,6 @@ requests:
     expect:
       travelers: 3
       budget_eur: 1500
-      dates:
-        month: "2028-02"
-        nights: 4
       destination_any: [budapest]
       must_mention:
         - [terme, termale, bagni, thermal, szechenyi, gellert, furdo, rudas, lukacs]
