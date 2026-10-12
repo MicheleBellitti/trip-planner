@@ -46,19 +46,19 @@ description: Authenticate the job to Anthropic through Workload Identity Federat
 
 inputs:
   federation-rule-id:
-    description: The federation rule id (fdrl_...). Pass ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }} from the job's GitHub environment. Empty means no federation.
+    description: The federation rule id (fdrl_...). Pass vars.ANTHROPIC_FEDERATION_RULE_ID from the job's GitHub environment. Empty means no federation.
     required: false
     default: ""
   organization-id:
-    description: The Anthropic organization id (a UUID). Pass ${{ vars.ANTHROPIC_ORGANIZATION_ID }}. Empty means no federation.
+    description: The Anthropic organization id (a UUID). Pass vars.ANTHROPIC_ORGANIZATION_ID. Empty means no federation.
     required: false
     default: ""
   workspace-id:
-    description: The workspace id (wrkspc_...) the rule is enabled for (federation only). Optional; pass ${{ vars.ANTHROPIC_WORKSPACE_ID }}. Empty lets Anthropic pick the rule's only workspace.
+    description: The workspace id (wrkspc_...) the rule is enabled for (federation only). Optional; pass vars.ANTHROPIC_WORKSPACE_ID. Empty lets Anthropic pick the rule's only workspace.
     required: false
     default: ""
   service-account-id:
-    description: The service account id (svac_...) the rule targets (federation only). Optional; pass ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}. The official GitHub Actions guide sets it.
+    description: The service account id (svac_...) the rule targets (federation only). Optional; pass vars.ANTHROPIC_SERVICE_ACCOUNT_ID. The official GitHub Actions guide sets it.
     required: false
     default: ""
   api-key:
