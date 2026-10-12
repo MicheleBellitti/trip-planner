@@ -1,0 +1,26 @@
+# Local development database: `docker compose up -d`, then from backend/: `uv run alembic upgrade head`.
+# Matches DATABASE_URL in backend/.env.example. If another Postgres already listens on 5432,
+# start with POSTGRES_PORT=5433 and change the port in DATABASE_URL.
+name: trip-planner
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: trip_planner
+      POSTGRES_PASSWORD: trip_planner # local only; Railway provides its own DATABASE_URL
+      POSTGRES_DB: trip_planner_dev
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trip_planner -d trip_planner_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  postgres-data:

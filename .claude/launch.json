@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "backend-demo",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd backend && ENVIRONMENT=development AUTH_MODE=local DEMO_MODE=true DEMO_PACE=0.5 PLANNER_ALLOWED_EMAILS=michele@example.com FRONTEND_ORIGIN=http://localhost:3000 TRIPTRACKER_ORIGIN=http://localhost:3999 DATABASE_URL=postgresql://michb@localhost:5432/trip_planner_dev uv run alembic upgrade head && ENVIRONMENT=development AUTH_MODE=local DEMO_MODE=true DEMO_PACE=0.5 PLANNER_ALLOWED_EMAILS=michele@example.com FRONTEND_ORIGIN=http://localhost:3000 TRIPTRACKER_ORIGIN=http://localhost:3999 DATABASE_URL=postgresql://michb@localhost:5432/trip_planner_dev uv run uvicorn app.main:app --port 8810 --reload"],
+      "port": 8810
+    },
+    {
+      "name": "web-dev",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd web && NEXT_PUBLIC_API_URL=http://localhost:8810 NEXT_PUBLIC_TRIPTRACKER_URL=http://localhost:3999 npm run dev -- --port 3000"],
+      "port": 3000
+    },
+    {
+      "name": "design-directions",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "4817", "--bind", "127.0.0.1", "--directory", "web/design/directions"],
+      "port": 4817
+    }
+  ]
+}

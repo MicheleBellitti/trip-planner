@@ -45,3 +45,7 @@ pnpm-debug.log*
 
 # impeccable's platform binary (14 MB): its launcher downloads it on first use
 .claude/skills/impeccable/scripts/bin/
+
+# TripTracker is a private repository: its code snapshot and the integration patch stay local
+docs/triptracker/snapshot/
+docs/triptracker/pr/

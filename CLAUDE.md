@@ -78,9 +78,11 @@ schema/                  generated JSON Schemas (plan.json is the submit_plan in
 docs/                    spec (Italian), notes, backend-interfaces.md, research/integrations.md,
                          deploy.md (runbook), triptracker/ (schema-notes.md; snapshot/: a read-only
                          copy of TripTracker's code, e.g. lib/schema.ts (LIMITE), lib/bookings.ts
-                         (DEFAULT_LEAD_DAYS); pr/: the TripTracker patch for the integration)
+                         (DEFAULT_LEAD_DAYS); pr/: the TripTracker patch for the integration. snapshot/ and pr/
+                         are gitignored: TripTracker is private, they exist only on Michele's Mac)
 .github/workflows/       ci-backend, ci-web, evals, deploy-agents
 .github/actions/setup-ant/   installs the pinned `ant` release (sha256-checked) for the agent workflows
+.github/actions/anthropic-auth/   dual-mode Anthropic login (federation or the environment's key)
 .claude/skills/          impeccable + design-taste-frontend, for UI work
 docker-compose.yml       local Postgres 16
 ```
@@ -209,18 +211,20 @@ CI must pass before merge.
   `ruff format --check` on the backend, scripts, evals and skills, pyright, `app.schemas
   --check`, `render_profiles.py --check`, the skill/script/eval tests,
   `gen-backend-fixtures.py --check`, pytest on Postgres 16, actionlint and a guard that keeps
-  Anthropic credentials out of PR-triggered jobs (no production job, no static key).
+  Anthropic credentials out of PR-triggered jobs (no production job, the secret only through the
+  auth action, always inside a GitHub environment).
 - `ci-web.yml` (PRs touching `web/` or `schema/`): npm ci, `gen:schemas --check`, eslint,
   tsc --noEmit, vitest, next build.
 - `evals.yml` (PRs touching `agents/**`, `profiles/**`, `skills/**` or `backend/app/plan.py`;
   also called by deploy-agents and runnable by hand): `ant apply` of the development profile,
   the paid evals, then compare.py against the baseline as a PR comment.
-- CI has **no Anthropic API key**: the jobs that call Anthropic authenticate through Workload
-  Identity Federation (`.github/actions/anthropic-oidc`, `id-token: write` only on those jobs;
-  GitHub environment variables `ANTHROPIC_FEDERATION_RULE_ID`, `ANTHROPIC_ORGANIZATION_ID`,
-  `ANTHROPIC_WORKSPACE_ID` in `development` and `production`). Never set `ANTHROPIC_API_KEY` in
-  a workflow (it beats federation). `anthropic-auth-check.yml` is the by-hand smoke test;
-  setup in docs/deploy.md.
+- CI Anthropic auth is dual mode (`.github/actions/anthropic-auth`, `id-token: write` only on the
+  jobs that call Anthropic): Workload Identity Federation when the GitHub environment variables
+  `ANTHROPIC_FEDERATION_RULE_ID` and `ANTHROPIC_ORGANIZATION_ID` are set, else the environment
+  SECRET `ANTHROPIC_API_KEY` (one per environment, `development` and `production`; today's setup,
+  Michele's Individual Org has no federation). Pass it only as the action's `api-key` input, never
+  set `ANTHROPIC_API_KEY` in a workflow `env:`. `anthropic-auth-check.yml` is the by-hand smoke
+  test; setup in docs/deploy.md.
 - `deploy-agents.yml` (push to `main` touching `agents/`, `profiles/` or `skills/`, or by
   hand): evals again, Michele's approval (the `production` environment), `ant apply` of
   production, and the production lockfile committed to `main`.
@@ -316,8 +320,9 @@ CI must pass before merge.
 ## Secrets, auth, config
 
 - **Never use production keys locally.** Only the development key goes in `backend/.env`
-  (gitignored). The production key lives on Railway only; GitHub holds no Anthropic key (CI
-  uses federation, see CI). The API key never reaches the browser, and `NEXT_PUBLIC_*` values are public.
+  (gitignored). The production key lives on Railway and as the `production` GitHub environment
+  secret (CI, see CI); no repository-level Anthropic secret. The API key never reaches the
+  browser, and `NEXT_PUBLIC_*` values are public.
 - **Anthropic credentials**: `ANTHROPIC_API_KEY` if set, else Workload Identity Federation from
   `ANTHROPIC_FEDERATION_RULE_ID` / `ANTHROPIC_ORGANIZATION_ID` / `ANTHROPIC_IDENTITY_TOKEN_FILE`,
   development only (production refuses to start without the key). Build every client with
