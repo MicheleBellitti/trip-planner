@@ -1,0 +1,359 @@
+/*
+ * Atlas design tokens, direction 1 "Linee" (web/DESIGN.md is the authority; change a value
+ * there and here together). Two layers:
+ *
+ * 1. Raw tokens (--ground, --ink, --line-flights, ...) set per theme on :root and on any element
+ *    with data-theme="light" | "dark". The system theme applies unless <html data-theme> pins
+ *    one (the theme toggle; see components/ui/theme-script.tsx, no flash).
+ * 2. `@theme inline` maps them to Tailwind utilities (bg-ground, text-ink-2, border-rule-strong,
+ *    bg-line-flights, shadow-plate, ...). `inline` makes each utility read the raw variable on
+ *    the element itself, so a [data-theme] subtree (the /dev/ui gallery) themes correctly.
+ *
+ * Tailwind's default palette, radii, type sizes and breakpoints are reset: only these tokens
+ * exist, so an off-system value cannot be typed by accident.
+ */
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------------------------
+   Raw tokens: light (default), dark by system preference, dark or light pinned by data-theme.
+   Order matters: the explicit [data-theme="dark"] block comes last so it wins on :root.
+--------------------------------------------------------------------------------------------- */
+:root,
+[data-theme="light"] {
+  --ground: #f2f4f7;
+  --surface: #fbfcfd;
+  --ink: #0f1a2a;
+  --ink-2: #4b5768;
+  --rule: #d5dbe3;
+  --rule-strong: #7a8597;
+  --line-coordinator: #33404f;
+  --line-flights: #1f55c4;
+  --line-lodging: #0f7348;
+  --line-activities: #6d3fc0;
+  --line-transport: #08707f;
+  --on-line: #fbfcfd;
+  --error: #b3261e;
+  --error-wash: #fbeae8;
+  --notice-wash: #e8ecf2;
+  /* Reserved: only a booking whose dueAt is within 72 hours (DatePair). Never on a button. */
+  --amber: #c47a0b;
+  --amber-ink: #8a4a00;
+  --amber-wash: #fbefd9;
+  --action: #0f1a2a;
+  --on-action: #fbfcfd;
+  --focus: #0f1a2a;
+  --selection: rgb(31 85 196 / 0.18);
+  --scrim: rgb(15 26 42 / 0.4);
+  --elevation-plate: 0 1px 2px rgb(15 26 42 / 0.06), 0 10px 28px -14px rgb(15 26 42 / 0.22);
+  --elevation-pop: 0 1px 2px rgb(15 26 42 / 0.08), 0 16px 32px -18px rgb(15 26 42 / 0.32);
+  /* Inherited switches for theme-dependent glyphs (the theme toggle's moon and sun). */
+  --show-in-light: inline-block;
+  --show-in-dark: none;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #0c121b;
+    --surface: #131b26;
+    --ink: #e6ebf2;
+    --ink-2: #9ba7b8;
+    --rule: #263241;
+    --rule-strong: #5f6c7e;
+    --line-coordinator: #a9b6c7;
+    --line-flights: #7aa2f7;
+    --line-lodging: #43c08a;
+    --line-activities: #b497f5;
+    --line-transport: #3fc0d3;
+    --on-line: #0c121b;
+    --error: #f2766b;
+    --error-wash: #2a1516;
+    --notice-wash: #1a2431;
+    --amber: #f3a845;
+    --amber-ink: #f3a845;
+    --amber-wash: #2a2112;
+    --action: #e6ebf2;
+    --on-action: #0c121b;
+    --focus: #e6ebf2;
+    --selection: rgb(122 162 247 / 0.3);
+    --scrim: rgb(3 6 10 / 0.62);
+    --elevation-plate: 0 1px 2px rgb(0 0 0 / 0.4), 0 10px 28px -14px rgb(0 0 0 / 0.7);
+    --elevation-pop: 0 1px 2px rgb(0 0 0 / 0.45), 0 18px 36px -16px rgb(0 0 0 / 0.75);
+    --show-in-light: none;
+    --show-in-dark: inline-block;
+    color-scheme: dark;
+  }
+}
+
+[data-theme="dark"] {
+  --ground: #0c121b;
+  --surface: #131b26;
+  --ink: #e6ebf2;
+  --ink-2: #9ba7b8;
+  --rule: #263241;
+  --rule-strong: #5f6c7e;
+  --line-coordinator: #a9b6c7;
+  --line-flights: #7aa2f7;
+  --line-lodging: #43c08a;
+  --line-activities: #b497f5;
+  --line-transport: #3fc0d3;
+  --on-line: #0c121b;
+  --error: #f2766b;
+  --error-wash: #2a1516;
+  --notice-wash: #1a2431;
+  --amber: #f3a845;
+  --amber-ink: #f3a845;
+  --amber-wash: #2a2112;
+  --action: #e6ebf2;
+  --on-action: #0c121b;
+  --focus: #e6ebf2;
+  --selection: rgb(122 162 247 / 0.3);
+  --scrim: rgb(3 6 10 / 0.62);
+  --elevation-plate: 0 1px 2px rgb(0 0 0 / 0.4), 0 10px 28px -14px rgb(0 0 0 / 0.7);
+  --elevation-pop: 0 1px 2px rgb(0 0 0 / 0.45), 0 18px 36px -16px rgb(0 0 0 / 0.75);
+  --show-in-light: none;
+  --show-in-dark: inline-block;
+  color-scheme: dark;
+}
+
+/* A subtree themed by data-theme repaints its own ground and text. */
+[data-theme] {
+  background-color: var(--ground);
+  color: var(--ink);
+}
+
+/* Motion tokens (DESIGN.md, "Motion"). Plain variables: used as duration-(--duration-draw). */
+:root {
+  --duration-press: 120ms;
+  --duration-hover: 160ms;
+  --duration-toggle: 220ms;
+  --duration-expand: 240ms;
+  --duration-arrive: 260ms;
+  --duration-draw: 320ms;
+  --duration-meter: 400ms;
+  --duration-reduced: 120ms;
+}
+
+/* Each lane's colour: any element with data-agent sets --line for itself and its children. */
+[data-agent="coordinator"] {
+  --line: var(--line-coordinator);
+}
+[data-agent="flights"] {
+  --line: var(--line-flights);
+}
+[data-agent="lodging"] {
+  --line: var(--line-lodging);
+}
+[data-agent="activities"] {
+  --line: var(--line-activities);
+}
+[data-agent="transport"] {
+  --line: var(--line-transport);
+}
+
+/* `dark:` follows the resolved theme of the nearest scope: a pinned data-theme, else the system
+   preference. Prefer tokens (they switch by themselves); use dark: only for glyph swaps. */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *):not(
+      :where([data-theme="dark"] [data-theme="light"], [data-theme="dark"] [data-theme="light"] *)
+    ) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme]), :root:not([data-theme]) *):not(
+        :where([data-theme="light"], [data-theme="light"] *)
+      ) {
+      @slot;
+    }
+  }
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Tailwind theme: only the Linee tokens.
+--------------------------------------------------------------------------------------------- */
+@theme inline {
+  --color-*: initial;
+  --color-ground: var(--ground);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-line: var(--line, var(--line-coordinator));
+  --color-line-coordinator: var(--line-coordinator);
+  --color-line-flights: var(--line-flights);
+  --color-line-lodging: var(--line-lodging);
+  --color-line-activities: var(--line-activities);
+  --color-line-transport: var(--line-transport);
+  --color-on-line: var(--on-line);
+  --color-error: var(--error);
+  --color-error-wash: var(--error-wash);
+  --color-notice-wash: var(--notice-wash);
+  --color-amber: var(--amber);
+  --color-amber-ink: var(--amber-ink);
+  --color-amber-wash: var(--amber-wash);
+  --color-action: var(--action);
+  --color-on-action: var(--on-action);
+  --color-focus: var(--focus);
+  --color-scrim: var(--scrim);
+
+  --font-*: initial;
+  --font-sans: var(--font-barlow), ui-sans-serif, system-ui, sans-serif;
+  --font-cond: var(--font-barlow-semi-condensed), var(--font-barlow), ui-sans-serif, system-ui, sans-serif;
+
+  --shadow-*: initial;
+  --shadow-plate: var(--elevation-plate);
+  --shadow-pop: var(--elevation-pop);
+}
+
+@theme {
+  --text-*: initial;
+  --text-micro: 0.78125rem; /* 12.5px: time gutter, hints, tags, field captions */
+  --text-micro--line-height: 1.35;
+  --text-meta: 0.84375rem; /* 13.5px: meta lines, lane state, notices, message text */
+  --text-meta--line-height: 1.4;
+  --text-small: 0.90625rem; /* 14.5px: station titles, buttons, secondary prose */
+  --text-small--line-height: 1.38;
+  --text-body: 0.9375rem; /* 15px: body text */
+  --text-body--line-height: 1.45;
+  --text-title: 1.125rem; /* 18px, condensed 600: lane names, plan state */
+  --text-title--line-height: 1.2;
+  --text-heading: 1.25rem; /* 20px, condensed 600: section headings */
+  --text-heading--line-height: 1.2;
+  --text-input: 1rem; /* 16px: form controls only, so iOS Safari does not zoom on focus */
+  --text-input--line-height: 1.35;
+  --text-display: 1.5rem; /* 24px phone, 30px from lg, 32px from xl: the page title */
+  --text-display--line-height: 1.15;
+  --text-display-lg: 1.875rem;
+  --text-display-lg--line-height: 1.15;
+  --text-display-xl: 2rem;
+  --text-display-xl--line-height: 1.12;
+
+  --font-weight-*: initial;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  --radius-*: initial;
+  --radius-xs: 4px; /* message summary, small marks */
+  --radius-sm: 10px; /* plates, notices, date fields, inputs, toasts */
+  --radius-md: 16px; /* lane cards, sheets, popovers */
+
+  --breakpoint-*: initial;
+  --breakpoint-sm: 40rem; /* 640px */
+  --breakpoint-md: 48rem; /* 768px: sheet becomes a centred dialog */
+  --breakpoint-lg: 67.5rem; /* 1080px: lanes side by side */
+  --breakpoint-xl: 80rem; /* 1280px */
+
+  --container-page: 92.5rem; /* 1480px */
+  --container-prose: 40rem;
+
+  --ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --animate-draw: draw var(--duration-draw) var(--ease-expo) both;
+  --animate-arrive: arrive var(--duration-arrive) 140ms var(--ease-expo) both;
+  --animate-fade-in: arrive var(--duration-reduced) ease-out both;
+  --animate-halo: halo 2.6s var(--ease-expo) infinite;
+  --animate-turn: turn 1.8s linear infinite;
+  --animate-breathe: breathe 1.6s ease-in-out infinite;
+  --animate-toast-in: toast-in 200ms var(--ease-expo) both;
+
+  @keyframes draw {
+    from {
+      transform: scaleY(0);
+    }
+  }
+  @keyframes arrive {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes halo {
+    0% {
+      opacity: 0.55;
+      transform: scale(0.6);
+    }
+    70%,
+    100% {
+      opacity: 0;
+      transform: scale(1.15);
+    }
+  }
+  @keyframes turn {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
+  @keyframes breathe {
+    50% {
+      opacity: 0.55;
+    }
+  }
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Base: browser surfaces belong to the palette too.
+--------------------------------------------------------------------------------------------- */
+@layer base {
+  html {
+    background-color: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-barlow), ui-sans-serif, system-ui, sans-serif;
+    font-size: 100%;
+    font-variant-numeric: tabular-nums;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    scrollbar-color: var(--rule-strong) transparent;
+    -webkit-tap-highlight-color: transparent;
+    /* A focused or scrolled-to element is never left under the live screen's sticky bar and
+       lane heads (WCAG 2.4.11): LiveHeader and AgentLanes publish their heights. The bottom
+       keeps clear of the "Vai all'ultimo" pill. */
+    scroll-padding-top: calc(var(--live-bar-h, 0px) + var(--live-heads-h, 0px) + 0.75rem);
+    scroll-padding-bottom: 4rem;
+  }
+
+  body {
+    min-height: 100dvh;
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    caret-color: var(--ink);
+    padding-bottom: env(safe-area-inset-bottom);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background-color: var(--selection);
+    color: var(--ink);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 3px;
+  }
+
+  a {
+    color: inherit;
+    text-underline-offset: 0.2em;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  /* A modal sheet holds the page still behind it. */
+  html:has(dialog[open][data-modal]) {
+    overflow: hidden;
+  }
+}

@@ -1,0 +1,144 @@
+{
+  "description": "Roma → Porto in March 2027: the session budget runs out (budget_paused), then 'Continua' raises it to 261 cents and the plan runs again. Hand-written with the older alias keys (type, from/to with AgentName, mcp_server, ms, accepted, a plan_status on session events), which detail.ts still accepts; the backend's real events are in backend/ (generated).",
+  "plan_id": "0b9e8d7c-6a5f-4e3d-9c2b-1a0f9e8d7c6b",
+  "events": [
+    {
+      "seq": 0,
+      "ts": "2026-10-12T16:30:00.000000+02:00",
+      "agent": "coordinator",
+      "kind": "status",
+      "title": "Piano avviato",
+      "detail": {
+        "plan_status": "running"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 1,
+      "ts": "2026-10-12T16:30:03.137000+02:00",
+      "agent": "coordinator",
+      "kind": "status",
+      "title": "Coordinatore al lavoro",
+      "detail": {
+        "type": "session.status_running"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 2,
+      "ts": "2026-10-12T16:30:04.411000+02:00",
+      "agent": "flights",
+      "kind": "status",
+      "title": "Voli: incarico ricevuto",
+      "detail": {
+        "type": "session.thread_created"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 3,
+      "ts": "2026-10-12T16:30:05.822000+02:00",
+      "agent": "flights",
+      "kind": "message",
+      "title": "coordinatore → voli: incarico",
+      "detail": {
+        "type": "agent.thread_message_sent",
+        "from": "coordinator",
+        "to": "flights",
+        "text": "Find flights FCO→OPO in March 2027, 5 nights."
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 4,
+      "ts": "2026-10-12T16:30:09.370000+02:00",
+      "agent": "flights",
+      "kind": "tool",
+      "title": "Kiwi · voli FCO→OPO · marzo",
+      "detail": {
+        "type": "agent.mcp_tool_use",
+        "tool": "search-flight",
+        "mcp_server": "kiwi",
+        "params": {
+          "from": "FCO",
+          "to": "OPO",
+          "month": "2027-03"
+        },
+        "tool_use_id": "sevt_f1"
+      },
+      "cost_cents": 31
+    },
+    {
+      "seq": 5,
+      "ts": "2026-10-12T16:30:13.055000+02:00",
+      "agent": "flights",
+      "kind": "status",
+      "title": "Voli: budget esaurito",
+      "detail": {
+        "type": "session.thread_status_idle",
+        "stop_reason": "budget_reached"
+      },
+      "cost_cents": 58
+    },
+    {
+      "seq": 6,
+      "ts": "2026-10-12T16:30:16.877000+02:00",
+      "agent": "coordinator",
+      "kind": "usage",
+      "title": "Costo aggiornato",
+      "detail": {
+        "type": "session.usage",
+        "list_cost_cents": 61
+      },
+      "cost_cents": 61
+    },
+    {
+      "seq": 7,
+      "ts": "2026-10-12T16:30:18.877000+02:00",
+      "agent": "coordinator",
+      "kind": "status",
+      "title": "Budget raggiunto",
+      "detail": {
+        "type": "session.status_idle",
+        "stop_reason": "budget_reached",
+        "plan_status": "budget_paused"
+      },
+      "cost_cents": 61
+    },
+    {
+      "seq": 8,
+      "ts": "2026-10-12T16:32:19.014000+02:00",
+      "agent": "coordinator",
+      "kind": "status",
+      "title": "Budget aumentato: si riprende",
+      "detail": {
+        "plan_status": "running",
+        "budget_cents": 261
+      },
+      "cost_cents": 61
+    },
+    {
+      "seq": 9,
+      "ts": "2026-10-12T16:32:22.288000+02:00",
+      "agent": "coordinator",
+      "kind": "status",
+      "title": "Coordinatore al lavoro",
+      "detail": {
+        "type": "session.status_running"
+      },
+      "cost_cents": 61
+    },
+    {
+      "seq": 10,
+      "ts": "2026-10-12T16:32:25.699000+02:00",
+      "agent": "flights",
+      "kind": "status",
+      "title": "Voli: di nuovo al lavoro",
+      "detail": {
+        "type": "session.thread_status_running"
+      },
+      "cost_cents": 61
+    }
+  ],
+  "pause_after_seq": 7
+}

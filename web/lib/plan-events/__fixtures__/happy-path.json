@@ -1,0 +1,569 @@
+{
+  "description": "Milano → Lisbona, 14–17 nov 2026, two adults: every lane works, Expedia (lodging) is down, the transport agent fails, the first submit_plan is rejected and the second accepted. Hand-written with the older alias keys (type, from/to with AgentName, mcp_server, ms, accepted, a plan_status on session events), which detail.ts still accepts; the backend's real events are in backend/ (generated).",
+  "plan_id": "6f1c2a7e-3b4d-4e5f-8a9b-0c1d2e3f4a5b",
+  "detail": {
+    "id": "6f1c2a7e-3b4d-4e5f-8a9b-0c1d2e3f4a5b",
+    "status": "running",
+    "title": "Lisbona, 14-17 nov",
+    "agent_profile": "development",
+    "created_at": "2026-10-12T13:00:00Z",
+    "updated_at": "2026-10-12T13:00:00Z",
+    "cost_cents": 0,
+    "budget_cents": 60,
+    "failure_reason": null,
+    "submit_attempts": 0,
+    "request": {
+      "origin": "Milano",
+      "destination": "Lisbona",
+      "dates": {
+        "exact_start": "2026-11-14",
+        "exact_end": "2026-11-17"
+      },
+      "travelers": [
+        {
+          "kind": "adult"
+        },
+        {
+          "kind": "adult"
+        }
+      ],
+      "budget_eur": 1500
+    },
+    "plan": null,
+    "booking_links": [],
+    "alternative_links": [],
+    "import_url": null
+  },
+  "events": [
+    {
+      "seq": 0,
+      "ts": "2026-10-12T15:00:00.000000+02:00",
+      "agent": "coordinator",
+      "kind": "status",
+      "title": "Piano avviato",
+      "detail": {
+        "plan_status": "running"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 1,
+      "ts": "2026-10-12T15:00:03.137000+02:00",
+      "agent": "coordinator",
+      "kind": "status",
+      "title": "Coordinatore al lavoro",
+      "detail": {
+        "type": "session.status_running"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 2,
+      "ts": "2026-10-12T15:00:06.411000+02:00",
+      "agent": "coordinator",
+      "kind": "tool",
+      "title": "Salva la richiesta · request.json",
+      "detail": {
+        "type": "agent.tool_use",
+        "tool": "write",
+        "params": {
+          "path": "/workspace/shared/request.json"
+        },
+        "tool_use_id": "sevt_c_write"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 3,
+      "ts": "2026-10-12T15:00:09.822000+02:00",
+      "agent": "coordinator",
+      "kind": "tool",
+      "title": "Richiesta salvata",
+      "detail": {
+        "type": "agent.tool_result",
+        "tool": "write",
+        "tool_use_id": "sevt_c_write",
+        "ms": 41
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 4,
+      "ts": "2026-10-12T15:00:11.370000+02:00",
+      "agent": "flights",
+      "kind": "status",
+      "title": "Voli: incarico ricevuto",
+      "detail": {
+        "type": "session.thread_created"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 5,
+      "ts": "2026-10-12T15:00:13.055000+02:00",
+      "agent": "flights",
+      "kind": "message",
+      "title": "coordinatore → voli: incarico",
+      "detail": {
+        "type": "agent.thread_message_sent",
+        "from": "coordinator",
+        "to": "flights",
+        "text": "Find round-trip flights MXP→LIS, 14–17 Nov 2026, 2 adults. Write /workspace/results/flights.json."
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 6,
+      "ts": "2026-10-12T15:00:14.877000+02:00",
+      "agent": "lodging",
+      "kind": "status",
+      "title": "Alloggio: incarico ricevuto",
+      "detail": {
+        "type": "session.thread_created"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 7,
+      "ts": "2026-10-12T15:00:15.877000+02:00",
+      "agent": "lodging",
+      "kind": "message",
+      "title": "coordinatore → alloggio: incarico",
+      "detail": {
+        "type": "agent.thread_message_sent",
+        "from": "coordinator",
+        "to": "lodging",
+        "text": "Find lodging in Lisbon for 3 nights, 14–17 Nov 2026, 2 adults, central. Write /workspace/results/lodging.json."
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 8,
+      "ts": "2026-10-12T15:00:17.014000+02:00",
+      "agent": "activities",
+      "kind": "status",
+      "title": "Attività: incarico ricevuto",
+      "detail": {
+        "type": "session.thread_created"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 9,
+      "ts": "2026-10-12T15:00:18.288000+02:00",
+      "agent": "activities",
+      "kind": "message",
+      "title": "coordinatore → attività: incarico",
+      "detail": {
+        "type": "agent.thread_message_sent",
+        "from": "coordinator",
+        "to": "activities",
+        "text": "Plan activities in Lisbon for 14–17 Nov 2026. Write /workspace/results/activities.json."
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 10,
+      "ts": "2026-10-12T15:00:19.699000+02:00",
+      "agent": "transport",
+      "kind": "status",
+      "title": "Spostamenti: incarico ricevuto",
+      "detail": {
+        "type": "session.thread_created"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 11,
+      "ts": "2026-10-12T15:00:21.247000+02:00",
+      "agent": "transport",
+      "kind": "message",
+      "title": "coordinatore → spostamenti: incarico",
+      "detail": {
+        "type": "agent.thread_message_sent",
+        "from": "coordinator",
+        "to": "transport",
+        "text": "Airport transfers and local transport in Lisbon. Write /workspace/results/transport.json."
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 12,
+      "ts": "2026-10-12T15:00:24.932000+02:00",
+      "agent": "coordinator",
+      "kind": "usage",
+      "title": "Costo aggiornato",
+      "detail": {
+        "type": "session.usage",
+        "list_cost_cents": 6
+      },
+      "cost_cents": 6
+    },
+    {
+      "seq": 13,
+      "ts": "2026-10-12T15:00:28.754000+02:00",
+      "agent": "flights",
+      "kind": "tool",
+      "title": "Kiwi · voli MXP→LIS · 14–17 nov",
+      "detail": {
+        "type": "agent.mcp_tool_use",
+        "tool": "search-flight",
+        "mcp_server": "kiwi",
+        "params": {
+          "from": "MXP",
+          "to": "LIS",
+          "depart": "2026-11-14",
+          "return": "2026-11-17",
+          "adults": 2
+        },
+        "tool_use_id": "sevt_f_search"
+      },
+      "cost_cents": 6
+    },
+    {
+      "seq": 14,
+      "ts": "2026-10-12T15:00:31.754000+02:00",
+      "agent": "lodging",
+      "kind": "tool",
+      "title": "Expedia · hotel Lisbona · 14–17 nov",
+      "detail": {
+        "type": "agent.mcp_tool_use",
+        "tool": "search_hotels",
+        "mcp_server": "expedia",
+        "params": {
+          "city": "Lisbona",
+          "check_in": "2026-11-14",
+          "check_out": "2026-11-17",
+          "adults": 2
+        },
+        "tool_use_id": "sevt_l_search"
+      },
+      "cost_cents": 7
+    },
+    {
+      "seq": 15,
+      "ts": "2026-10-12T15:00:34.891000+02:00",
+      "agent": "activities",
+      "kind": "tool",
+      "title": "Ricerca web · Lisbona a novembre, cosa fare",
+      "detail": {
+        "type": "agent.tool_use",
+        "tool": "web_search",
+        "params": {
+          "query": "Lisbona novembre cosa fare"
+        },
+        "tool_use_id": "sevt_a_search"
+      },
+      "cost_cents": 7
+    },
+    {
+      "seq": 16,
+      "ts": "2026-10-12T15:00:38.165000+02:00",
+      "agent": "transport",
+      "kind": "tool",
+      "title": "Ricerca web · aeroporto di Lisbona → centro",
+      "detail": {
+        "type": "agent.tool_use",
+        "tool": "web_search",
+        "params": {
+          "query": "Lisbon airport to city centre metro"
+        },
+        "tool_use_id": "sevt_t_search"
+      },
+      "cost_cents": 8
+    },
+    {
+      "seq": 17,
+      "ts": "2026-10-12T15:00:41.576000+02:00",
+      "agent": "lodging",
+      "kind": "error",
+      "title": "Expedia non risponde: si prosegue con il web",
+      "detail": {
+        "type": "agent.mcp_tool_result",
+        "mcp_server": "expedia",
+        "error_type": "mcp_connection_failed_error",
+        "tool_use_id": "sevt_l_search",
+        "is_error": true
+      },
+      "cost_cents": 8
+    },
+    {
+      "seq": 18,
+      "ts": "2026-10-12T15:00:45.124000+02:00",
+      "agent": "flights",
+      "kind": "tool",
+      "title": "Kiwi · 12 voli trovati",
+      "detail": {
+        "type": "agent.mcp_tool_result",
+        "tool": "search-flight",
+        "mcp_server": "kiwi",
+        "tool_use_id": "sevt_f_search",
+        "ms": 2140
+      },
+      "cost_cents": 9
+    },
+    {
+      "seq": 19,
+      "ts": "2026-10-12T15:00:48.809000+02:00",
+      "agent": "activities",
+      "kind": "tool",
+      "title": "Ricerca web · 8 risultati",
+      "detail": {
+        "type": "agent.tool_result",
+        "tool": "web_search",
+        "tool_use_id": "sevt_a_search",
+        "ms": 1310
+      },
+      "cost_cents": 9
+    },
+    {
+      "seq": 20,
+      "ts": "2026-10-12T15:00:52.631000+02:00",
+      "agent": "lodging",
+      "kind": "tool",
+      "title": "Pagina web · Booking.com · Alfama",
+      "detail": {
+        "type": "agent.tool_use",
+        "tool": "web_fetch",
+        "params": {
+          "url": "https://www.booking.com/searchresults.it.html?ss=Lisbona"
+        },
+        "tool_use_id": "sevt_l_fetch"
+      },
+      "cost_cents": 10
+    },
+    {
+      "seq": 21,
+      "ts": "2026-10-12T15:00:55.631000+02:00",
+      "agent": "transport",
+      "kind": "error",
+      "title": "Spostamenti: il modello non ha risposto",
+      "detail": {
+        "type": "session.error",
+        "error_type": "model_request_failed_error",
+        "retry_status": "exhausted"
+      },
+      "cost_cents": 11
+    },
+    {
+      "seq": 22,
+      "ts": "2026-10-12T15:00:58.768000+02:00",
+      "agent": "flights",
+      "kind": "tool",
+      "title": "Salva l'esito · flights.json",
+      "detail": {
+        "type": "agent.tool_use",
+        "tool": "write",
+        "params": {
+          "path": "/workspace/results/flights.json"
+        },
+        "tool_use_id": "sevt_f_write"
+      },
+      "cost_cents": 12
+    },
+    {
+      "seq": 23,
+      "ts": "2026-10-12T15:01:02.042000+02:00",
+      "agent": "flights",
+      "kind": "tool",
+      "title": "Esito salvato",
+      "detail": {
+        "type": "agent.tool_result",
+        "tool": "write",
+        "tool_use_id": "sevt_f_write",
+        "ms": 35
+      },
+      "cost_cents": 12
+    },
+    {
+      "seq": 24,
+      "ts": "2026-10-12T15:01:05.453000+02:00",
+      "agent": "flights",
+      "kind": "message",
+      "title": "voli → coordinatore: esito",
+      "detail": {
+        "type": "agent.thread_message_received",
+        "from": "flights",
+        "to": "coordinator",
+        "text": "3 options saved; best: TAP TP825 07:05, 2 adults, 312 EUR total (verified, Kiwi)."
+      },
+      "cost_cents": 13
+    },
+    {
+      "seq": 25,
+      "ts": "2026-10-12T15:01:09.001000+02:00",
+      "agent": "flights",
+      "kind": "status",
+      "title": "Voli: finito",
+      "detail": {
+        "type": "session.thread_status_idle",
+        "stop_reason": "end_turn"
+      },
+      "cost_cents": 13
+    },
+    {
+      "seq": 26,
+      "ts": "2026-10-12T15:01:12.686000+02:00",
+      "agent": "lodging",
+      "kind": "tool",
+      "title": "Pagina web letta",
+      "detail": {
+        "type": "agent.tool_result",
+        "tool": "web_fetch",
+        "tool_use_id": "sevt_l_fetch",
+        "ms": 2870
+      },
+      "cost_cents": 14
+    },
+    {
+      "seq": 27,
+      "ts": "2026-10-12T15:01:16.508000+02:00",
+      "agent": "activities",
+      "kind": "message",
+      "title": "attività → coordinatore: esito",
+      "detail": {
+        "type": "agent.thread_message_received",
+        "from": "activities",
+        "to": "coordinator",
+        "text": "Day plans for 4 days saved."
+      },
+      "cost_cents": 15
+    },
+    {
+      "seq": 28,
+      "ts": "2026-10-12T15:01:19.508000+02:00",
+      "agent": "activities",
+      "kind": "status",
+      "title": "Attività: finito",
+      "detail": {
+        "type": "session.thread_status_idle",
+        "stop_reason": "end_turn"
+      },
+      "cost_cents": 15
+    },
+    {
+      "seq": 29,
+      "ts": "2026-10-12T15:01:22.645000+02:00",
+      "agent": "lodging",
+      "kind": "message",
+      "title": "alloggio → coordinatore: esito",
+      "detail": {
+        "type": "agent.thread_message_received",
+        "from": "lodging",
+        "to": "coordinator",
+        "text": "Expedia unavailable; 2 hotels from the web, prices estimated."
+      },
+      "cost_cents": 17
+    },
+    {
+      "seq": 30,
+      "ts": "2026-10-12T15:01:25.919000+02:00",
+      "agent": "lodging",
+      "kind": "status",
+      "title": "Alloggio: finito",
+      "detail": {
+        "type": "session.thread_status_idle",
+        "stop_reason": "end_turn"
+      },
+      "cost_cents": 17
+    },
+    {
+      "seq": 31,
+      "ts": "2026-10-12T15:01:29.330000+02:00",
+      "agent": "coordinator",
+      "kind": "usage",
+      "title": "Costo aggiornato",
+      "detail": {
+        "type": "session.usage",
+        "list_cost_cents": 29
+      },
+      "cost_cents": 29
+    },
+    {
+      "seq": 32,
+      "ts": "2026-10-12T15:01:32.878000+02:00",
+      "agent": "coordinator",
+      "kind": "tool",
+      "title": "Legge gli esiti · flights.json",
+      "detail": {
+        "type": "agent.tool_use",
+        "tool": "read",
+        "params": {
+          "path": "/workspace/results/flights.json"
+        },
+        "tool_use_id": "sevt_c_read"
+      },
+      "cost_cents": 29
+    },
+    {
+      "seq": 33,
+      "ts": "2026-10-12T15:01:36.563000+02:00",
+      "agent": "coordinator",
+      "kind": "tool",
+      "title": "Esiti letti",
+      "detail": {
+        "type": "agent.tool_result",
+        "tool": "read",
+        "tool_use_id": "sevt_c_read",
+        "ms": 22
+      },
+      "cost_cents": 29
+    },
+    {
+      "seq": 34,
+      "ts": "2026-10-12T15:01:40.385000+02:00",
+      "agent": "coordinator",
+      "kind": "plan",
+      "title": "Piano rifiutato: 2 problemi da correggere",
+      "detail": {
+        "type": "agent.custom_tool_use",
+        "accepted": false,
+        "errors": [
+          "bookings.0.book_by: book_by must be before scheduled_for",
+          "days.2.date: date outside the trip"
+        ]
+      },
+      "cost_cents": 33
+    },
+    {
+      "seq": 35,
+      "ts": "2026-10-12T15:01:43.385000+02:00",
+      "agent": "coordinator",
+      "kind": "plan",
+      "title": "Piano accettato",
+      "detail": {
+        "type": "agent.custom_tool_use",
+        "accepted": true
+      },
+      "cost_cents": 38
+    },
+    {
+      "seq": 36,
+      "ts": "2026-10-12T15:01:46.522000+02:00",
+      "agent": "coordinator",
+      "kind": "usage",
+      "title": "Costo aggiornato",
+      "detail": {
+        "type": "session.usage",
+        "list_cost_cents": 41
+      },
+      "cost_cents": 41
+    },
+    {
+      "seq": 37,
+      "ts": "2026-10-12T15:01:49.796000+02:00",
+      "agent": "coordinator",
+      "kind": "status",
+      "title": "Piano pronto",
+      "detail": {
+        "type": "session.status_idle",
+        "stop_reason": "end_turn",
+        "plan_status": "ready"
+      },
+      "cost_cents": 41
+    }
+  ],
+  "end": {
+    "status": "ready"
+  }
+}

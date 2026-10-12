@@ -1,0 +1,1778 @@
+{
+  "source": "backend/tests/fixtures/ma/happy_path.jsonl",
+  "generated_by": "web/scripts/gen-backend-fixtures.py (do not edit by hand)",
+  "description": "Lisbon family trip in waves: wave 1 (flights, lodging, activities in parallel, MCP + web research, results files), the coordinator's choice (reads the results, writes shared/constraints.json), wave 2 (activities follow-up, transport tasked only now), submit_plan accepted, end_turn. The coordinator's messages name 'Ondata 1', 'Scelta' and 'Ondata 2'. The transport thread's first events predate its stream (backfill); the flights MCP call is also cross-posted to the session stream with session_thread_id. Status lag 1 on the final idle.",
+  "plan_id": "7d1f3c1e-2a4b-4c5d-8e6f-0a1b2c3d4e5f",
+  "events": [
+    {
+      "seq": 0,
+      "ts": "2026-10-12T09:59:59.722000Z",
+      "agent": "coordinator",
+      "kind": "status",
+      "title": "Piano avviato",
+      "detail": null,
+      "cost_cents": null
+    },
+    {
+      "seq": 1,
+      "ts": "2026-10-12T10:00:01.762000Z",
+      "agent": "coordinator",
+      "kind": "message",
+      "title": "utente → coordinatore: richiesta di viaggio",
+      "detail": {
+        "event_type": "user.message",
+        "sender": "utente",
+        "recipient": "coordinatore",
+        "text": "Today is 2026-10-12 (Europe/Rome).\n\nAll user-facing text (titles, notes, summary, warnings) must be in Italian.\n\n```json\n{\n  \"origin\": \"Milano\",\n  \"destination\": \"Lisbona\",\n  \"suggest_destination\": false,\n  \"dates\": {\n    \"exact_start\": \"2027-04-14\",\n    \"exact_end\": \"2027-04-18\"\n  },\n  \"travelers\": [\n    {\n      \"kind\": \"adult\"\n    },\n    {\n      \"kind\": \"adult\"\n    },\n    {\n      \"kind\": \"child\",\n      \"age\": 9\n    },\n    {\n      \"kind\": \"child\",\n      \"age\": 6\n    }\n  ],\n  \"budget_eur\": 2800,\n  \"preferences\": \"Niente voli prima delle 8, hotel centrale con camera familiare, ritmi tranquilli per i bambini.\"\n}\n```\n\nSave this JSON verbatim to /workspace/shared/request.json before delegating."
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 2,
+      "ts": "2026-10-12T10:00:02.722000Z",
+      "agent": "coordinator",
+      "kind": "status",
+      "title": "Al lavoro",
+      "detail": {
+        "event_type": "session.status_running",
+        "lane_state": "working"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 3,
+      "ts": "2026-10-12T10:00:02.874000Z",
+      "agent": "coordinator",
+      "kind": "status",
+      "title": "Richiesta al modello",
+      "detail": {
+        "event_type": "span.model_request_start"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 4,
+      "ts": "2026-10-12T10:00:06.338000Z",
+      "agent": "coordinator",
+      "kind": "status",
+      "title": "Risposta del modello",
+      "detail": {
+        "event_type": "span.model_request_end",
+        "is_error": false,
+        "input_tokens": 4200,
+        "output_tokens": 466,
+        "cache_read_input_tokens": 8400,
+        "cache_creation_input_tokens": 840
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 5,
+      "ts": "2026-10-12T10:00:06.464000Z",
+      "agent": "coordinator",
+      "kind": "status",
+      "title": "Ragionamento in corso",
+      "detail": {
+        "event_type": "agent.thinking"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 6,
+      "ts": "2026-10-12T10:00:06.712000Z",
+      "agent": "coordinator",
+      "kind": "message",
+      "title": "coordinatore → utente: Ricevuto: Lisbona dal 14 al 18 aprile 2027 per 2 adulti e 2 bambini (9 e 6 anni), budget 2.800 €. Salvo la richiesta e coinvolgo gli specialisti.",
+      "detail": {
+        "event_type": "agent.message",
+        "sender": "coordinatore",
+        "recipient": "utente",
+        "text": "Ricevuto: Lisbona dal 14 al 18 aprile 2027 per 2 adulti e 2 bambini (9 e 6 anni), budget 2.800 €. Salvo la richiesta e coinvolgo gli specialisti."
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 7,
+      "ts": "2026-10-12T10:00:06.979000Z",
+      "agent": "coordinator",
+      "kind": "tool",
+      "title": "Scrive shared/request.json",
+      "detail": {
+        "event_type": "agent.tool_use",
+        "tool": "write",
+        "params": {
+          "file_path": "/workspace/shared/request.json"
+        },
+        "tool_use_id": "sevt_011CZngrftWsh9kCsDpzcVy9"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 8,
+      "ts": "2026-10-12T10:00:07.163000Z",
+      "agent": "coordinator",
+      "kind": "tool",
+      "title": "Risultato ricevuto in 184 ms",
+      "detail": {
+        "event_type": "agent.tool_result",
+        "tool_use_id": "sevt_011CZngrftWsh9kCsDpzcVy9",
+        "is_error": false,
+        "duration_ms": 184
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 9,
+      "ts": "2026-10-12T10:00:07.402000Z",
+      "agent": "coordinator",
+      "kind": "message",
+      "title": "coordinatore → utente: Ondata 1: voli, alloggio e attività cercano in parallelo. Gli spostamenti partono dopo la scelta di volo e hotel.",
+      "detail": {
+        "event_type": "agent.message",
+        "sender": "coordinatore",
+        "recipient": "utente",
+        "text": "Ondata 1: voli, alloggio e attività cercano in parallelo. Gli spostamenti partono dopo la scelta di volo e hotel."
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 10,
+      "ts": "2026-10-12T10:00:07.564000Z",
+      "agent": "flights",
+      "kind": "status",
+      "title": "Incarico a voli",
+      "detail": {
+        "event_type": "session.thread_created",
+        "lane_state": "working",
+        "thread_id": "sthr_011CZAHWEU8atzMG7JiyC11h",
+        "agent_name": "flights"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 11,
+      "ts": "2026-10-12T10:00:07.611000Z",
+      "agent": "flights",
+      "kind": "message",
+      "title": "coordinatore → voli: Find round-trip flights Milan (MXP/LIN/BGY) to Lisbon, out 2027-04-14, back 2027-04-18, for 2 adults and 2 children aged 9 and 6. No departures before 08:00. Use the MCP servers…",
+      "detail": {
+        "event_type": "agent.thread_message_sent",
+        "sender": "coordinatore",
+        "recipient": "voli",
+        "text": "Find round-trip flights Milan (MXP/LIN/BGY) to Lisbon, out 2027-04-14, back 2027-04-18, for 2 adults and 2 children aged 9 and 6. No departures before 08:00. Use the MCP servers first, then the web. Write /workspace/results/flights.json.",
+        "thread_id": "sthr_011CZAHWEU8atzMG7JiyC11h"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 12,
+      "ts": "2026-10-12T10:00:08.255000Z",
+      "agent": "lodging",
+      "kind": "status",
+      "title": "Incarico ad alloggio",
+      "detail": {
+        "event_type": "session.thread_created",
+        "lane_state": "working",
+        "thread_id": "sthr_011CZQ2VxjDkjkuQZjhcE9Wb",
+        "agent_name": "lodging"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 13,
+      "ts": "2026-10-12T10:00:08.297000Z",
+      "agent": "lodging",
+      "kind": "message",
+      "title": "coordinatore → alloggio: Find a central family room in Lisbon, check-in 2027-04-14, check-out 2027-04-18, 2 adults and 2 children aged 9 and 6. Use Expedia first. Write /workspace/results/lodging.jso…",
+      "detail": {
+        "event_type": "agent.thread_message_sent",
+        "sender": "coordinatore",
+        "recipient": "alloggio",
+        "text": "Find a central family room in Lisbon, check-in 2027-04-14, check-out 2027-04-18, 2 adults and 2 children aged 9 and 6. Use Expedia first. Write /workspace/results/lodging.json.",
+        "thread_id": "sthr_011CZQ2VxjDkjkuQZjhcE9Wb"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 14,
+      "ts": "2026-10-12T10:00:09.086000Z",
+      "agent": "activities",
+      "kind": "status",
+      "title": "Incarico ad attività",
+      "detail": {
+        "event_type": "session.thread_created",
+        "lane_state": "working",
+        "thread_id": "sthr_011CZgAYptwh43mxJfh8m6gt",
+        "agent_name": "activities"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 15,
+      "ts": "2026-10-12T10:00:09.170000Z",
+      "agent": "activities",
+      "kind": "message",
+      "title": "coordinatore → attività: List child-friendly activities in and around Lisbon for 2027-04-14..18 with prices and booking deadlines. First wave: no days yet. Write /workspace/results/activities.json.",
+      "detail": {
+        "event_type": "agent.thread_message_sent",
+        "sender": "coordinatore",
+        "recipient": "attività",
+        "text": "List child-friendly activities in and around Lisbon for 2027-04-14..18 with prices and booking deadlines. First wave: no days yet. Write /workspace/results/activities.json.",
+        "thread_id": "sthr_011CZgAYptwh43mxJfh8m6gt"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 16,
+      "ts": "2026-10-12T10:00:09.817000Z",
+      "agent": "flights",
+      "kind": "status",
+      "title": "Al lavoro",
+      "detail": {
+        "event_type": "session.thread_status_running",
+        "lane_state": "working",
+        "thread_id": "sthr_011CZAHWEU8atzMG7JiyC11h",
+        "agent_name": "flights"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 17,
+      "ts": "2026-10-12T10:00:10.226000Z",
+      "agent": "lodging",
+      "kind": "status",
+      "title": "Al lavoro",
+      "detail": {
+        "event_type": "session.thread_status_running",
+        "lane_state": "working",
+        "thread_id": "sthr_011CZQ2VxjDkjkuQZjhcE9Wb",
+        "agent_name": "lodging"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 18,
+      "ts": "2026-10-12T10:00:10.621000Z",
+      "agent": "activities",
+      "kind": "status",
+      "title": "Al lavoro",
+      "detail": {
+        "event_type": "session.thread_status_running",
+        "lane_state": "working",
+        "thread_id": "sthr_011CZgAYptwh43mxJfh8m6gt",
+        "agent_name": "activities"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 19,
+      "ts": "2026-10-12T10:00:11.234000Z",
+      "agent": "flights",
+      "kind": "status",
+      "title": "Ragionamento in corso",
+      "detail": {
+        "event_type": "agent.thinking"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 20,
+      "ts": "2026-10-12T10:00:11.427000Z",
+      "agent": "lodging",
+      "kind": "status",
+      "title": "Ragionamento in corso",
+      "detail": {
+        "event_type": "agent.thinking"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 21,
+      "ts": "2026-10-12T10:00:11.668000Z",
+      "agent": "activities",
+      "kind": "status",
+      "title": "Ragionamento in corso",
+      "detail": {
+        "event_type": "agent.thinking"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 22,
+      "ts": "2026-10-12T10:00:12.617000Z",
+      "agent": "lodging",
+      "kind": "tool",
+      "title": "Expedia · hotel Lisbona, Portogallo · 14–18 apr",
+      "detail": {
+        "event_type": "agent.mcp_tool_use",
+        "tool": "search_hotels",
+        "server": "expedia",
+        "params": {
+          "destination": "Lisbona, Portogallo",
+          "check_in": "2027-04-14",
+          "check_out": "2027-04-18",
+          "adults": 2,
+          "children_ages": [
+            9,
+            6
+          ],
+          "rooms": 1
+        },
+        "tool_use_id": "sevt_011CZwW5yBxKNxkB6qDkigpn"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 23,
+      "ts": "2026-10-12T10:00:12.718000Z",
+      "agent": "flights",
+      "kind": "tool",
+      "title": "Expedia · voli MXP→LIS · 14–18 apr",
+      "detail": {
+        "event_type": "agent.mcp_tool_use",
+        "tool": "search_flights",
+        "server": "expedia",
+        "params": {
+          "origin": "MXP",
+          "destination": "LIS",
+          "departure_date": "2027-04-14",
+          "return_date": "2027-04-18",
+          "adults": 2,
+          "children_ages": [
+            9,
+            6
+          ],
+          "cabin_class": "economy"
+        },
+        "tool_use_id": "sevt_011CZoVJQuoEkfKwS9qBajYL"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 24,
+      "ts": "2026-10-12T10:00:15.374000Z",
+      "agent": "flights",
+      "kind": "tool",
+      "title": "Risposta della fonte ricevuta in 2,7 s",
+      "detail": {
+        "event_type": "agent.mcp_tool_result",
+        "tool_use_id": "sevt_011CZoVJQuoEkfKwS9qBajYL",
+        "is_error": false,
+        "duration_ms": 2656
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 25,
+      "ts": "2026-10-12T10:00:15.512000Z",
+      "agent": "activities",
+      "kind": "tool",
+      "title": "Ricerca web: attività per bambini Lisbona aprile Oceanário biglietti famiglia",
+      "detail": {
+        "event_type": "agent.tool_use",
+        "tool": "web_search",
+        "params": {
+          "query": "attività per bambini Lisbona aprile Oceanário biglietti famiglia"
+        },
+        "tool_use_id": "sevt_011CZFQMgoxFqvWHzwJMVQnb"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 26,
+      "ts": "2026-10-12T10:00:16.131000Z",
+      "agent": "flights",
+      "kind": "tool",
+      "title": "Ricerca web: TAP TP827 Milano Malpensa Lisbona orario aprile 2027",
+      "detail": {
+        "event_type": "agent.tool_use",
+        "tool": "web_search",
+        "params": {
+          "query": "TAP TP827 Milano Malpensa Lisbona orario aprile 2027"
+        },
+        "tool_use_id": "sevt_011CZuPvRBq5csFxqwnbZrTp"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 27,
+      "ts": "2026-10-12T10:00:16.951000Z",
+      "agent": "activities",
+      "kind": "tool",
+      "title": "Risultato ricevuto in 1,4 s",
+      "detail": {
+        "event_type": "agent.tool_result",
+        "tool_use_id": "sevt_011CZFQMgoxFqvWHzwJMVQnb",
+        "is_error": false,
+        "duration_ms": 1439
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 28,
+      "ts": "2026-10-12T10:00:17.402000Z",
+      "agent": "lodging",
+      "kind": "tool",
+      "title": "Risposta della fonte ricevuta in 4,8 s",
+      "detail": {
+        "event_type": "agent.mcp_tool_result",
+        "tool_use_id": "sevt_011CZwW5yBxKNxkB6qDkigpn",
+        "is_error": false,
+        "duration_ms": 4785
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 29,
+      "ts": "2026-10-12T10:00:17.642000Z",
+      "agent": "flights",
+      "kind": "tool",
+      "title": "Risultato ricevuto in 1,5 s",
+      "detail": {
+        "event_type": "agent.tool_result",
+        "tool_use_id": "sevt_011CZuPvRBq5csFxqwnbZrTp",
+        "is_error": false,
+        "duration_ms": 1511
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 30,
+      "ts": "2026-10-12T10:00:17.880000Z",
+      "agent": "activities",
+      "kind": "tool",
+      "title": "Legge la pagina www.parquesdesintra.pt",
+      "detail": {
+        "event_type": "agent.tool_use",
+        "tool": "web_fetch",
+        "params": {
+          "host": "www.parquesdesintra.pt"
+        },
+        "tool_use_id": "sevt_011CZXZqqgnoaS6n8157FXFM"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 31,
+      "ts": "2026-10-12T10:00:18.353000Z",
+      "agent": "activities",
+      "kind": "tool",
+      "title": "Risultato ricevuto in 473 ms",
+      "detail": {
+        "event_type": "agent.tool_result",
+        "tool_use_id": "sevt_011CZXZqqgnoaS6n8157FXFM",
+        "is_error": false,
+        "duration_ms": 473
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 32,
+      "ts": "2026-10-12T10:00:18.491000Z",
+      "agent": "flights",
+      "kind": "tool",
+      "title": "Link di prenotazione · Google Flights · MXP→LIS · 14–18 apr",
+      "detail": {
+        "event_type": "agent.tool_use",
+        "tool": "bash",
+        "params": {
+          "command": "python3 /mnt/skills/booking-links/scripts/build_link.py google_flights --from MXP --to LIS --depart 2027-04-14 --return 2027-04-18 --adults 2 --children-ages 9,6",
+          "provider": "google_flights",
+          "args": {
+            "from": "MXP",
+            "to": "LIS",
+            "depart": "2027-04-14",
+            "return": "2027-04-18",
+            "adults": "2",
+            "children-ages": "9,6"
+          }
+        },
+        "tool_use_id": "sevt_011CZeykGcdom6D94cDuX8fA"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 33,
+      "ts": "2026-10-12T10:00:18.901000Z",
+      "agent": "flights",
+      "kind": "tool",
+      "title": "Risultato ricevuto in 410 ms",
+      "detail": {
+        "event_type": "agent.tool_result",
+        "tool_use_id": "sevt_011CZeykGcdom6D94cDuX8fA",
+        "is_error": false,
+        "duration_ms": 410
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 34,
+      "ts": "2026-10-12T10:00:19.255000Z",
+      "agent": "lodging",
+      "kind": "tool",
+      "title": "Link di prenotazione · Booking.com · Lisbona, Portogallo · 14–18 apr",
+      "detail": {
+        "event_type": "agent.tool_use",
+        "tool": "bash",
+        "params": {
+          "command": "python3 /mnt/skills/booking-links/scripts/build_link.py booking --destination 'Lisbona, Portogallo' --checkin 2027-04-14 --checkout 2027-04-18 --adults 2 --children-ages 9,6 --rooms 1",
+          "provider": "booking",
+          "args": {
+            "destination": "Lisbona, Portogallo",
+            "checkin": "2027-04-14",
+            "checkout": "2027-04-18",
+            "adults": "2",
+            "children-ages": "9,6",
+            "rooms": "1"
+          }
+        },
+        "tool_use_id": "sevt_011CZybE9DX6oRAUCRwuagNt"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 35,
+      "ts": "2026-10-12T10:00:19.536000Z",
+      "agent": "flights",
+      "kind": "tool",
+      "title": "Scrive results/flights.json.tmp",
+      "detail": {
+        "event_type": "agent.tool_use",
+        "tool": "write",
+        "params": {
+          "file_path": "/workspace/results/flights.json.tmp"
+        },
+        "tool_use_id": "sevt_011CZM3AJFyhBoxTGhxDMAre"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 36,
+      "ts": "2026-10-12T10:00:19.657000Z",
+      "agent": "flights",
+      "kind": "tool",
+      "title": "Risultato ricevuto in 121 ms",
+      "detail": {
+        "event_type": "agent.tool_result",
+        "tool_use_id": "sevt_011CZM3AJFyhBoxTGhxDMAre",
+        "is_error": false,
+        "duration_ms": 121
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 37,
+      "ts": "2026-10-12T10:00:20.840000Z",
+      "agent": "lodging",
+      "kind": "tool",
+      "title": "Risultato ricevuto in 1,6 s",
+      "detail": {
+        "event_type": "agent.tool_result",
+        "tool_use_id": "sevt_011CZybE9DX6oRAUCRwuagNt",
+        "is_error": false,
+        "duration_ms": 1585
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 38,
+      "ts": "2026-10-12T10:00:21.073000Z",
+      "agent": "flights",
+      "kind": "tool",
+      "title": "Comando: mv /workspace/results/flights.json.tmp /workspace/results/flights.json",
+      "detail": {
+        "event_type": "agent.tool_use",
+        "tool": "bash",
+        "params": {
+          "command": "mv /workspace/results/flights.json.tmp /workspace/results/flights.json"
+        },
+        "tool_use_id": "sevt_011CZUuyrxCHEVYdE976Tzkt"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 39,
+      "ts": "2026-10-12T10:00:21.214000Z",
+      "agent": "flights",
+      "kind": "tool",
+      "title": "Risultato ricevuto in 141 ms",
+      "detail": {
+        "event_type": "agent.tool_result",
+        "tool_use_id": "sevt_011CZUuyrxCHEVYdE976Tzkt",
+        "is_error": false,
+        "duration_ms": 141
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 40,
+      "ts": "2026-10-12T10:00:21.350000Z",
+      "agent": "lodging",
+      "kind": "tool",
+      "title": "Legge la pagina www.martinhal.com",
+      "detail": {
+        "event_type": "agent.tool_use",
+        "tool": "web_fetch",
+        "params": {
+          "host": "www.martinhal.com"
+        },
+        "tool_use_id": "sevt_011CZWn8C7jVCDmF4atohfn1"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 41,
+      "ts": "2026-10-12T10:00:22.573000Z",
+      "agent": "flights",
+      "kind": "message",
+      "title": "voli → coordinatore: Trovati due voli diretti: TAP con bagaglio a 812 € e easyJet senza bagaglio a 698 €.",
+      "detail": {
+        "event_type": "agent.message",
+        "sender": "voli",
+        "recipient": "coordinatore",
+        "text": "Trovati due voli diretti: TAP con bagaglio a 812 € e easyJet senza bagaglio a 698 €."
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 42,
+      "ts": "2026-10-12T10:00:22.750000Z",
+      "agent": "flights",
+      "kind": "message",
+      "title": "voli → coordinatore: flights.json v1 written: f1 TAP TP827/TP826 direct, 812 EUR verified (Expedia); f2 easyJet, 698 EUR verified, no checked bag.",
+      "detail": {
+        "event_type": "agent.thread_message_received",
+        "sender": "voli",
+        "recipient": "coordinatore",
+        "text": "flights.json v1 written: f1 TAP TP827/TP826 direct, 812 EUR verified (Expedia); f2 easyJet, 698 EUR verified, no checked bag.",
+        "thread_id": "sthr_011CZAHWEU8atzMG7JiyC11h"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 43,
+      "ts": "2026-10-12T10:00:23.125000Z",
+      "agent": "flights",
+      "kind": "status",
+      "title": "Turno concluso",
+      "detail": {
+        "event_type": "session.thread_status_idle",
+        "stop_reason": "end_turn",
+        "lane_state": "done",
+        "thread_id": "sthr_011CZAHWEU8atzMG7JiyC11h",
+        "agent_name": "flights"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 44,
+      "ts": "2026-10-12T10:00:23.380000Z",
+      "agent": "activities",
+      "kind": "tool",
+      "title": "Scrive results/activities.json.tmp",
+      "detail": {
+        "event_type": "agent.tool_use",
+        "tool": "write",
+        "params": {
+          "file_path": "/workspace/results/activities.json.tmp"
+        },
+        "tool_use_id": "sevt_011CZdbr3YAvh5vTXSmqx9ga"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 45,
+      "ts": "2026-10-12T10:00:23.493000Z",
+      "agent": "activities",
+      "kind": "tool",
+      "title": "Risultato ricevuto in 113 ms",
+      "detail": {
+        "event_type": "agent.tool_result",
+        "tool_use_id": "sevt_011CZdbr3YAvh5vTXSmqx9ga",
+        "is_error": false,
+        "duration_ms": 113
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 46,
+      "ts": "2026-10-12T10:00:23.840000Z",
+      "agent": "lodging",
+      "kind": "tool",
+      "title": "Risultato ricevuto in 2,5 s",
+      "detail": {
+        "event_type": "agent.tool_result",
+        "tool_use_id": "sevt_011CZWn8C7jVCDmF4atohfn1",
+        "is_error": false,
+        "duration_ms": 2490
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 47,
+      "ts": "2026-10-12T10:00:24.700000Z",
+      "agent": "activities",
+      "kind": "tool",
+      "title": "Comando: mv /workspace/results/activities.json.tmp /workspace/results/activities.json",
+      "detail": {
+        "event_type": "agent.tool_use",
+        "tool": "bash",
+        "params": {
+          "command": "mv /workspace/results/activities.json.tmp /workspace/results/activities.json"
+        },
+        "tool_use_id": "sevt_011CZFgYfhAXWyQMyrLcvBio"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 48,
+      "ts": "2026-10-12T10:00:24.889000Z",
+      "agent": "activities",
+      "kind": "tool",
+      "title": "Risultato ricevuto in 189 ms",
+      "detail": {
+        "event_type": "agent.tool_result",
+        "tool_use_id": "sevt_011CZFgYfhAXWyQMyrLcvBio",
+        "is_error": false,
+        "duration_ms": 189
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 49,
+      "ts": "2026-10-12T10:00:26.452000Z",
+      "agent": "activities",
+      "kind": "message",
+      "title": "attività → coordinatore: Selezionate tre attività adatte ai bambini: Oceanário, Palácio da Pena e Belém.",
+      "detail": {
+        "event_type": "agent.message",
+        "sender": "attività",
+        "recipient": "coordinatore",
+        "text": "Selezionate tre attività adatte ai bambini: Oceanário, Palácio da Pena e Belém."
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 50,
+      "ts": "2026-10-12T10:00:26.736000Z",
+      "agent": "activities",
+      "kind": "message",
+      "title": "attività → coordinatore: activities.json v1 written: a1 Oceanário, a2 Pena (book by 2027-04-09), a3 Belém. Days not placed yet.",
+      "detail": {
+        "event_type": "agent.thread_message_received",
+        "sender": "attività",
+        "recipient": "coordinatore",
+        "text": "activities.json v1 written: a1 Oceanário, a2 Pena (book by 2027-04-09), a3 Belém. Days not placed yet.",
+        "thread_id": "sthr_011CZgAYptwh43mxJfh8m6gt"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 51,
+      "ts": "2026-10-12T10:00:27.041000Z",
+      "agent": "activities",
+      "kind": "status",
+      "title": "Turno concluso",
+      "detail": {
+        "event_type": "session.thread_status_idle",
+        "stop_reason": "end_turn",
+        "lane_state": "done",
+        "thread_id": "sthr_011CZgAYptwh43mxJfh8m6gt",
+        "agent_name": "activities"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 52,
+      "ts": "2026-10-12T10:00:28.620000Z",
+      "agent": "lodging",
+      "kind": "tool",
+      "title": "Scrive results/lodging.json.tmp",
+      "detail": {
+        "event_type": "agent.tool_use",
+        "tool": "write",
+        "params": {
+          "file_path": "/workspace/results/lodging.json.tmp"
+        },
+        "tool_use_id": "sevt_011CZmwQr5GMKC4fsVxCJf5t"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 53,
+      "ts": "2026-10-12T10:00:28.881000Z",
+      "agent": "lodging",
+      "kind": "tool",
+      "title": "Risultato ricevuto in 261 ms",
+      "detail": {
+        "event_type": "agent.tool_result",
+        "tool_use_id": "sevt_011CZmwQr5GMKC4fsVxCJf5t",
+        "is_error": false,
+        "duration_ms": 261
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 54,
+      "ts": "2026-10-12T10:00:30.072000Z",
+      "agent": "lodging",
+      "kind": "tool",
+      "title": "Comando: mv /workspace/results/lodging.json.tmp /workspace/results/lodging.json",
+      "detail": {
+        "event_type": "agent.tool_use",
+        "tool": "bash",
+        "params": {
+          "command": "mv /workspace/results/lodging.json.tmp /workspace/results/lodging.json"
+        },
+        "tool_use_id": "sevt_011CZ4zn9ic8YUiJrt8rYNqA"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 55,
+      "ts": "2026-10-12T10:00:30.335000Z",
+      "agent": "lodging",
+      "kind": "tool",
+      "title": "Risultato ricevuto in 263 ms",
+      "detail": {
+        "event_type": "agent.tool_result",
+        "tool_use_id": "sevt_011CZ4zn9ic8YUiJrt8rYNqA",
+        "is_error": false,
+        "duration_ms": 263
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 56,
+      "ts": "2026-10-12T10:00:31.096000Z",
+      "agent": "lodging",
+      "kind": "message",
+      "title": "alloggio → coordinatore: Proposto l'Hotel Lisboa Plaza, camera familiare a 736 € per 4 notti.",
+      "detail": {
+        "event_type": "agent.message",
+        "sender": "alloggio",
+        "recipient": "coordinatore",
+        "text": "Proposto l'Hotel Lisboa Plaza, camera familiare a 736 € per 4 notti."
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 57,
+      "ts": "2026-10-12T10:00:31.345000Z",
+      "agent": "lodging",
+      "kind": "message",
+      "title": "alloggio → coordinatore: lodging.json v1 written: l1 Hotel Lisboa Plaza family room 736 EUR verified (Expedia), free cancellation until 2027-04-11; l2 Martinhal Chiado ~1280 EUR estimated.",
+      "detail": {
+        "event_type": "agent.thread_message_received",
+        "sender": "alloggio",
+        "recipient": "coordinatore",
+        "text": "lodging.json v1 written: l1 Hotel Lisboa Plaza family room 736 EUR verified (Expedia), free cancellation until 2027-04-11; l2 Martinhal Chiado ~1280 EUR estimated.",
+        "thread_id": "sthr_011CZQ2VxjDkjkuQZjhcE9Wb"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 58,
+      "ts": "2026-10-12T10:00:31.526000Z",
+      "agent": "lodging",
+      "kind": "status",
+      "title": "Turno concluso",
+      "detail": {
+        "event_type": "session.thread_status_idle",
+        "stop_reason": "end_turn",
+        "lane_state": "done",
+        "thread_id": "sthr_011CZQ2VxjDkjkuQZjhcE9Wb",
+        "agent_name": "lodging"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 59,
+      "ts": "2026-10-12T10:00:32.140000Z",
+      "agent": "coordinator",
+      "kind": "tool",
+      "title": "Legge results/flights.json",
+      "detail": {
+        "event_type": "agent.tool_use",
+        "tool": "read",
+        "params": {
+          "file_path": "/workspace/results/flights.json"
+        },
+        "tool_use_id": "sevt_011CZXjjmEof6KbxgfVnfqZc"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 60,
+      "ts": "2026-10-12T10:00:32.360000Z",
+      "agent": "coordinator",
+      "kind": "tool",
+      "title": "Risultato ricevuto in 220 ms",
+      "detail": {
+        "event_type": "agent.tool_result",
+        "tool_use_id": "sevt_011CZXjjmEof6KbxgfVnfqZc",
+        "is_error": false,
+        "duration_ms": 220
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 61,
+      "ts": "2026-10-12T10:00:32.720000Z",
+      "agent": "coordinator",
+      "kind": "tool",
+      "title": "Legge results/lodging.json",
+      "detail": {
+        "event_type": "agent.tool_use",
+        "tool": "read",
+        "params": {
+          "file_path": "/workspace/results/lodging.json"
+        },
+        "tool_use_id": "sevt_011CZkfmb3mGQZi9E1caf1BU"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 62,
+      "ts": "2026-10-12T10:00:32.930000Z",
+      "agent": "coordinator",
+      "kind": "tool",
+      "title": "Risultato ricevuto in 210 ms",
+      "detail": {
+        "event_type": "agent.tool_result",
+        "tool_use_id": "sevt_011CZkfmb3mGQZi9E1caf1BU",
+        "is_error": false,
+        "duration_ms": 210
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 63,
+      "ts": "2026-10-12T10:00:33.600000Z",
+      "agent": "coordinator",
+      "kind": "status",
+      "title": "Ragionamento in corso",
+      "detail": {
+        "event_type": "agent.thinking"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 64,
+      "ts": "2026-10-12T10:00:33.750000Z",
+      "agent": "coordinator",
+      "kind": "status",
+      "title": "Richiesta al modello",
+      "detail": {
+        "event_type": "span.model_request_start"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 65,
+      "ts": "2026-10-12T10:00:38.950000Z",
+      "agent": "coordinator",
+      "kind": "status",
+      "title": "Risposta del modello",
+      "detail": {
+        "event_type": "span.model_request_end",
+        "is_error": false,
+        "input_tokens": 7400,
+        "output_tokens": 920,
+        "cache_read_input_tokens": 14800,
+        "cache_creation_input_tokens": 1480
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 66,
+      "ts": "2026-10-12T10:00:39.400000Z",
+      "agent": "coordinator",
+      "kind": "message",
+      "title": "coordinatore → utente: Scelta: volo TAP diretto con bagaglio (812 €) e Hotel Lisboa Plaza in centro (736 € per 4 notti). Aggiorno i vincoli per la seconda ondata.",
+      "detail": {
+        "event_type": "agent.message",
+        "sender": "coordinatore",
+        "recipient": "utente",
+        "text": "Scelta: volo TAP diretto con bagaglio (812 €) e Hotel Lisboa Plaza in centro (736 € per 4 notti). Aggiorno i vincoli per la seconda ondata."
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 67,
+      "ts": "2026-10-12T10:00:39.800000Z",
+      "agent": "coordinator",
+      "kind": "tool",
+      "title": "Scrive shared/constraints.json",
+      "detail": {
+        "event_type": "agent.tool_use",
+        "tool": "write",
+        "params": {
+          "file_path": "/workspace/shared/constraints.json"
+        },
+        "tool_use_id": "sevt_011CZotf6nQ7r5Nj5Qt8R4Pz"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 68,
+      "ts": "2026-10-12T10:00:39.990000Z",
+      "agent": "coordinator",
+      "kind": "tool",
+      "title": "Risultato ricevuto in 190 ms",
+      "detail": {
+        "event_type": "agent.tool_result",
+        "tool_use_id": "sevt_011CZotf6nQ7r5Nj5Qt8R4Pz",
+        "is_error": false,
+        "duration_ms": 190
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 69,
+      "ts": "2026-10-12T10:00:40.500000Z",
+      "agent": "coordinator",
+      "kind": "message",
+      "title": "coordinatore → utente: Ondata 2: le attività si dispongono sui giorni attorno ai voli e all'hotel, e partono gli spostamenti.",
+      "detail": {
+        "event_type": "agent.message",
+        "sender": "coordinatore",
+        "recipient": "utente",
+        "text": "Ondata 2: le attività si dispongono sui giorni attorno ai voli e all'hotel, e partono gli spostamenti."
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 70,
+      "ts": "2026-10-12T10:00:40.900000Z",
+      "agent": "transport",
+      "kind": "status",
+      "title": "Incarico a spostamenti",
+      "detail": {
+        "event_type": "session.thread_created",
+        "lane_state": "working",
+        "thread_id": "sthr_011CZkZyF7ea1NzZz9djX988",
+        "agent_name": "transport"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 71,
+      "ts": "2026-10-12T10:00:40.950000Z",
+      "agent": "transport",
+      "kind": "message",
+      "title": "coordinatore → spostamenti: Today is 2026-10-12. Find local transport in Lisbon for 2 adults and 2 children aged 9 and 6, budget 170 EUR: LIS airport to Hotel Lisboa Plaza (Travessa do Salitre 7) aft…",
+      "detail": {
+        "event_type": "agent.thread_message_sent",
+        "sender": "coordinatore",
+        "recipient": "spostamenti",
+        "text": "Today is 2026-10-12. Find local transport in Lisbon for 2 adults and 2 children aged 9 and 6, budget 170 EUR: LIS airport to Hotel Lisboa Plaza (Travessa do Salitre 7) after TAP TP827 lands at 11:20 on 2027-04-14, and back for TP826 at 18:10 on 2027-04-18; the hotel to the activity areas (Oceanário, Sintra, Belém). Read /workspace/shared/constraints.json v1 and the latest /workspace/results/activities.json. Write /workspace/results/transport.json.",
+        "thread_id": "sthr_011CZkZyF7ea1NzZz9djX988"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 72,
+      "ts": "2026-10-12T10:00:41.290000Z",
+      "agent": "transport",
+      "kind": "status",
+      "title": "Al lavoro",
+      "detail": {
+        "event_type": "session.thread_status_running",
+        "lane_state": "working",
+        "thread_id": "sthr_011CZkZyF7ea1NzZz9djX988",
+        "agent_name": "transport"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 73,
+      "ts": "2026-10-12T10:00:41.400000Z",
+      "agent": "activities",
+      "kind": "message",
+      "title": "coordinatore → attività: Follow-up. Read /workspace/shared/constraints.json v1: TAP TP827 lands at LIS 11:20 on 2027-04-14, TP826 leaves LIS 18:10 on 2027-04-18; lodging Hotel Lisboa Plaza, Travessa…",
+      "detail": {
+        "event_type": "agent.thread_message_sent",
+        "sender": "coordinatore",
+        "recipient": "attività",
+        "text": "Follow-up. Read /workspace/shared/constraints.json v1: TAP TP827 lands at LIS 11:20 on 2027-04-14, TP826 leaves LIS 18:10 on 2027-04-18; lodging Hotel Lisboa Plaza, Travessa do Salitre 7. Place your options on days with start times around the flights and the hotel, light arrival and departure days, and rewrite /workspace/results/activities.json.",
+        "thread_id": "sthr_011CZgAYptwh43mxJfh8m6gt"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 74,
+      "ts": "2026-10-12T10:00:41.740000Z",
+      "agent": "activities",
+      "kind": "status",
+      "title": "Al lavoro",
+      "detail": {
+        "event_type": "session.thread_status_running",
+        "lane_state": "working",
+        "thread_id": "sthr_011CZgAYptwh43mxJfh8m6gt",
+        "agent_name": "activities"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 75,
+      "ts": "2026-10-12T10:00:42.300000Z",
+      "agent": "transport",
+      "kind": "tool",
+      "title": "Legge shared/constraints.json",
+      "detail": {
+        "event_type": "agent.tool_use",
+        "tool": "read",
+        "params": {
+          "file_path": "/workspace/shared/constraints.json"
+        },
+        "tool_use_id": "sevt_011CZbeq5GWJ4dns93wKqHbJ"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 76,
+      "ts": "2026-10-12T10:00:42.460000Z",
+      "agent": "transport",
+      "kind": "tool",
+      "title": "Risultato ricevuto in 160 ms",
+      "detail": {
+        "event_type": "agent.tool_result",
+        "tool_use_id": "sevt_011CZbeq5GWJ4dns93wKqHbJ",
+        "is_error": false,
+        "duration_ms": 160
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 77,
+      "ts": "2026-10-12T10:00:42.900000Z",
+      "agent": "activities",
+      "kind": "tool",
+      "title": "Legge shared/constraints.json",
+      "detail": {
+        "event_type": "agent.tool_use",
+        "tool": "read",
+        "params": {
+          "file_path": "/workspace/shared/constraints.json"
+        },
+        "tool_use_id": "sevt_011CZbE8RNFXfy13hNPYQSv2"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 78,
+      "ts": "2026-10-12T10:00:43.050000Z",
+      "agent": "activities",
+      "kind": "tool",
+      "title": "Risultato ricevuto in 150 ms",
+      "detail": {
+        "event_type": "agent.tool_result",
+        "tool_use_id": "sevt_011CZbE8RNFXfy13hNPYQSv2",
+        "is_error": false,
+        "duration_ms": 150
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 79,
+      "ts": "2026-10-12T10:00:43.500000Z",
+      "agent": "transport",
+      "kind": "status",
+      "title": "Ragionamento in corso",
+      "detail": {
+        "event_type": "agent.thinking"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 80,
+      "ts": "2026-10-12T10:00:44.200000Z",
+      "agent": "activities",
+      "kind": "status",
+      "title": "Ragionamento in corso",
+      "detail": {
+        "event_type": "agent.thinking"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 81,
+      "ts": "2026-10-12T10:00:45.004000Z",
+      "agent": "transport",
+      "kind": "tool",
+      "title": "Ricerca web: Aerobus Lisbona aeroporto centro prezzo biglietto bambini",
+      "detail": {
+        "event_type": "agent.tool_use",
+        "tool": "web_search",
+        "params": {
+          "query": "Aerobus Lisbona aeroporto centro prezzo biglietto bambini"
+        },
+        "tool_use_id": "sevt_011CZgFk7gSR1PHG9D6cpV1Z"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 82,
+      "ts": "2026-10-12T10:00:46.928000Z",
+      "agent": "transport",
+      "kind": "tool",
+      "title": "Risultato ricevuto in 1,9 s",
+      "detail": {
+        "event_type": "agent.tool_result",
+        "tool_use_id": "sevt_011CZgFk7gSR1PHG9D6cpV1Z",
+        "is_error": false,
+        "duration_ms": 1924
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 83,
+      "ts": "2026-10-12T10:00:47.600000Z",
+      "agent": "transport",
+      "kind": "tool",
+      "title": "Legge la pagina www.cp.pt",
+      "detail": {
+        "event_type": "agent.tool_use",
+        "tool": "web_fetch",
+        "params": {
+          "host": "www.cp.pt"
+        },
+        "tool_use_id": "sevt_011CZKPhZqX4Vrx6UswAG1MK"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 84,
+      "ts": "2026-10-12T10:00:48.700000Z",
+      "agent": "activities",
+      "kind": "tool",
+      "title": "Scrive results/activities.json.tmp",
+      "detail": {
+        "event_type": "agent.tool_use",
+        "tool": "write",
+        "params": {
+          "file_path": "/workspace/results/activities.json.tmp"
+        },
+        "tool_use_id": "sevt_011CZXpxkg7N3rroWRjXyBK8"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 85,
+      "ts": "2026-10-12T10:00:48.908000Z",
+      "agent": "activities",
+      "kind": "tool",
+      "title": "Risultato ricevuto in 208 ms",
+      "detail": {
+        "event_type": "agent.tool_result",
+        "tool_use_id": "sevt_011CZXpxkg7N3rroWRjXyBK8",
+        "is_error": false,
+        "duration_ms": 208
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 86,
+      "ts": "2026-10-12T10:00:49.500000Z",
+      "agent": "activities",
+      "kind": "tool",
+      "title": "Comando: mv /workspace/results/activities.json.tmp /workspace/results/activities.json",
+      "detail": {
+        "event_type": "agent.tool_use",
+        "tool": "bash",
+        "params": {
+          "command": "mv /workspace/results/activities.json.tmp /workspace/results/activities.json"
+        },
+        "tool_use_id": "sevt_011CZJX9GJXwFYJe3dHpDDnT"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 87,
+      "ts": "2026-10-12T10:00:49.611000Z",
+      "agent": "activities",
+      "kind": "tool",
+      "title": "Risultato ricevuto in 111 ms",
+      "detail": {
+        "event_type": "agent.tool_result",
+        "tool_use_id": "sevt_011CZJX9GJXwFYJe3dHpDDnT",
+        "is_error": false,
+        "duration_ms": 111
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 88,
+      "ts": "2026-10-12T10:00:49.897000Z",
+      "agent": "transport",
+      "kind": "tool",
+      "title": "Risultato ricevuto in 2,3 s",
+      "detail": {
+        "event_type": "agent.tool_result",
+        "tool_use_id": "sevt_011CZKPhZqX4Vrx6UswAG1MK",
+        "is_error": false,
+        "duration_ms": 2297
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 89,
+      "ts": "2026-10-12T10:00:50.700000Z",
+      "agent": "activities",
+      "kind": "message",
+      "title": "attività → coordinatore: Attività distribuite sui giorni: Oceanário giovedì, Sintra venerdì, Belém sabato.",
+      "detail": {
+        "event_type": "agent.message",
+        "sender": "attività",
+        "recipient": "coordinatore",
+        "text": "Attività distribuite sui giorni: Oceanário giovedì, Sintra venerdì, Belém sabato."
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 90,
+      "ts": "2026-10-12T10:00:50.927000Z",
+      "agent": "activities",
+      "kind": "message",
+      "title": "attività → coordinatore: activities.json v2 written: a1 on 04-15 10:00, a2 on 04-16 10:30, a3 on 04-17 10:00. Read: constraints.json v1.",
+      "detail": {
+        "event_type": "agent.thread_message_received",
+        "sender": "attività",
+        "recipient": "coordinatore",
+        "text": "activities.json v2 written: a1 on 04-15 10:00, a2 on 04-16 10:30, a3 on 04-17 10:00. Read: constraints.json v1.",
+        "thread_id": "sthr_011CZgAYptwh43mxJfh8m6gt"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 91,
+      "ts": "2026-10-12T10:00:51.354000Z",
+      "agent": "activities",
+      "kind": "status",
+      "title": "Turno concluso",
+      "detail": {
+        "event_type": "session.thread_status_idle",
+        "stop_reason": "end_turn",
+        "lane_state": "done",
+        "thread_id": "sthr_011CZgAYptwh43mxJfh8m6gt",
+        "agent_name": "activities"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 92,
+      "ts": "2026-10-12T10:00:52.300000Z",
+      "agent": "transport",
+      "kind": "tool",
+      "title": "Legge results/activities.json",
+      "detail": {
+        "event_type": "agent.tool_use",
+        "tool": "read",
+        "params": {
+          "file_path": "/workspace/results/activities.json"
+        },
+        "tool_use_id": "sevt_011CZCsptzKAS13Smjjtfmin"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 93,
+      "ts": "2026-10-12T10:00:52.450000Z",
+      "agent": "transport",
+      "kind": "tool",
+      "title": "Risultato ricevuto in 150 ms",
+      "detail": {
+        "event_type": "agent.tool_result",
+        "tool_use_id": "sevt_011CZCsptzKAS13Smjjtfmin",
+        "is_error": false,
+        "duration_ms": 150
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 94,
+      "ts": "2026-10-12T10:00:55.100000Z",
+      "agent": "transport",
+      "kind": "tool",
+      "title": "Scrive results/transport.json.tmp",
+      "detail": {
+        "event_type": "agent.tool_use",
+        "tool": "write",
+        "params": {
+          "file_path": "/workspace/results/transport.json.tmp"
+        },
+        "tool_use_id": "sevt_011CZcUjuFMM2yLmLWkhn98M"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 95,
+      "ts": "2026-10-12T10:00:55.250000Z",
+      "agent": "transport",
+      "kind": "tool",
+      "title": "Risultato ricevuto in 150 ms",
+      "detail": {
+        "event_type": "agent.tool_result",
+        "tool_use_id": "sevt_011CZcUjuFMM2yLmLWkhn98M",
+        "is_error": false,
+        "duration_ms": 150
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 96,
+      "ts": "2026-10-12T10:00:55.771000Z",
+      "agent": "transport",
+      "kind": "tool",
+      "title": "Comando: mv /workspace/results/transport.json.tmp /workspace/results/transport.json",
+      "detail": {
+        "event_type": "agent.tool_use",
+        "tool": "bash",
+        "params": {
+          "command": "mv /workspace/results/transport.json.tmp /workspace/results/transport.json"
+        },
+        "tool_use_id": "sevt_011CZr2CAaox8kjSeDVEr7m3"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 97,
+      "ts": "2026-10-12T10:00:55.882000Z",
+      "agent": "transport",
+      "kind": "tool",
+      "title": "Risultato ricevuto in 111 ms",
+      "detail": {
+        "event_type": "agent.tool_result",
+        "tool_use_id": "sevt_011CZr2CAaox8kjSeDVEr7m3",
+        "is_error": false,
+        "duration_ms": 111
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 98,
+      "ts": "2026-10-12T10:00:56.775000Z",
+      "agent": "transport",
+      "kind": "message",
+      "title": "spostamenti → coordinatore: Trasferimenti trovati: Aerobus dall'aeroporto e treno da Rossio per Sintra.",
+      "detail": {
+        "event_type": "agent.message",
+        "sender": "spostamenti",
+        "recipient": "coordinatore",
+        "text": "Trasferimenti trovati: Aerobus dall'aeroporto e treno da Rossio per Sintra."
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 99,
+      "ts": "2026-10-12T10:00:57.084000Z",
+      "agent": "transport",
+      "kind": "message",
+      "title": "spostamenti → coordinatore: transport.json v1 written: t1 Aerobus 18 EUR, t2 Rossio-Sintra train 13.80 EUR round trip. Read: constraints.json v1, activities.json v2.",
+      "detail": {
+        "event_type": "agent.thread_message_received",
+        "sender": "spostamenti",
+        "recipient": "coordinatore",
+        "text": "transport.json v1 written: t1 Aerobus 18 EUR, t2 Rossio-Sintra train 13.80 EUR round trip. Read: constraints.json v1, activities.json v2.",
+        "thread_id": "sthr_011CZkZyF7ea1NzZz9djX988"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 100,
+      "ts": "2026-10-12T10:00:57.486000Z",
+      "agent": "transport",
+      "kind": "status",
+      "title": "Turno concluso",
+      "detail": {
+        "event_type": "session.thread_status_idle",
+        "stop_reason": "end_turn",
+        "lane_state": "done",
+        "thread_id": "sthr_011CZkZyF7ea1NzZz9djX988",
+        "agent_name": "transport"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 101,
+      "ts": "2026-10-12T10:00:58.600000Z",
+      "agent": "coordinator",
+      "kind": "tool",
+      "title": "Legge results/activities.json",
+      "detail": {
+        "event_type": "agent.tool_use",
+        "tool": "read",
+        "params": {
+          "file_path": "/workspace/results/activities.json"
+        },
+        "tool_use_id": "sevt_011CZCmQdJHefdMxji1Sq7w5"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 102,
+      "ts": "2026-10-12T10:00:59.891000Z",
+      "agent": "coordinator",
+      "kind": "tool",
+      "title": "Risultato ricevuto in 1,3 s",
+      "detail": {
+        "event_type": "agent.tool_result",
+        "tool_use_id": "sevt_011CZCmQdJHefdMxji1Sq7w5",
+        "is_error": false,
+        "duration_ms": 1291
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 103,
+      "ts": "2026-10-12T10:01:00.300000Z",
+      "agent": "coordinator",
+      "kind": "tool",
+      "title": "Legge results/transport.json",
+      "detail": {
+        "event_type": "agent.tool_use",
+        "tool": "read",
+        "params": {
+          "file_path": "/workspace/results/transport.json"
+        },
+        "tool_use_id": "sevt_011CZcmn8ERgftYFHvu4jRVm"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 104,
+      "ts": "2026-10-12T10:01:00.520000Z",
+      "agent": "coordinator",
+      "kind": "tool",
+      "title": "Risultato ricevuto in 220 ms",
+      "detail": {
+        "event_type": "agent.tool_result",
+        "tool_use_id": "sevt_011CZcmn8ERgftYFHvu4jRVm",
+        "is_error": false,
+        "duration_ms": 220
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 105,
+      "ts": "2026-10-12T10:01:06.055000Z",
+      "agent": "coordinator",
+      "kind": "status",
+      "title": "Ragionamento in corso",
+      "detail": {
+        "event_type": "agent.thinking"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 106,
+      "ts": "2026-10-12T10:01:06.221000Z",
+      "agent": "coordinator",
+      "kind": "status",
+      "title": "Richiesta al modello",
+      "detail": {
+        "event_type": "span.model_request_start"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 107,
+      "ts": "2026-10-12T10:01:08.755000Z",
+      "agent": "coordinator",
+      "kind": "status",
+      "title": "Risposta del modello",
+      "detail": {
+        "event_type": "span.model_request_end",
+        "is_error": false,
+        "input_tokens": 9800,
+        "output_tokens": 1088,
+        "cache_read_input_tokens": 19600,
+        "cache_creation_input_tokens": 1960
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 108,
+      "ts": "2026-10-12T10:01:10.040000Z",
+      "agent": "coordinator",
+      "kind": "message",
+      "title": "coordinatore → utente: Ho tutti i risultati: compongo il piano e lo invio per la verifica.",
+      "detail": {
+        "event_type": "agent.message",
+        "sender": "coordinatore",
+        "recipient": "utente",
+        "text": "Ho tutti i risultati: compongo il piano e lo invio per la verifica."
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 109,
+      "ts": "2026-10-12T10:01:13.155000Z",
+      "agent": "coordinator",
+      "kind": "plan",
+      "title": "Piano inviato per la verifica",
+      "detail": {
+        "event_type": "agent.custom_tool_use",
+        "tool": "submit_plan",
+        "tool_use_id": "sevt_011CZeGzLRh4ATERYGUCJyYV"
+      },
+      "cost_cents": null
+    },
+    {
+      "seq": 110,
+      "ts": "2026-10-12T10:01:13.224000Z",
+      "agent": "coordinator",
+      "kind": "usage",
+      "title": "Costo finora: 0,38 $ su 0,60 $",
+      "detail": {
+        "event_type": "session.usage",
+        "list_cost_cents": 38,
+        "budget_cents": 60,
+        "input_tokens": 61000,
+        "output_tokens": 7400,
+        "cache_read_input_tokens": 183000,
+        "web_search_requests": 11,
+        "active_seconds": 410.5
+      },
+      "cost_cents": 38
+    },
+    {
+      "seq": 111,
+      "ts": "2026-10-12T10:01:13.302000Z",
+      "agent": "coordinator",
+      "kind": "status",
+      "title": "In attesa di una risposta",
+      "detail": {
+        "event_type": "session.status_idle",
+        "stop_reason": "requires_action",
+        "lane_state": "waiting",
+        "event_ids": [
+          "sevt_011CZeGzLRh4ATERYGUCJyYV"
+        ]
+      },
+      "cost_cents": 38
+    },
+    {
+      "seq": 112,
+      "ts": "2026-10-12T10:01:13.322000Z",
+      "agent": "coordinator",
+      "kind": "plan",
+      "title": "Piano accettato",
+      "detail": {
+        "event_type": "backend.submit_plan",
+        "tool_use_id": "sevt_011CZeGzLRh4ATERYGUCJyYV",
+        "outcome": "accepted",
+        "attempt": 1,
+        "warnings": 2,
+        "is_error": false,
+        "answer": "Plan accepted."
+      },
+      "cost_cents": 38
+    },
+    {
+      "seq": 113,
+      "ts": "2026-10-12T10:01:13.362000Z",
+      "agent": "coordinator",
+      "kind": "tool",
+      "title": "Esito inviato all'agente",
+      "detail": {
+        "event_type": "user.custom_tool_result",
+        "tool_use_id": "sevt_011CZeGzLRh4ATERYGUCJyYV",
+        "is_error": false
+      },
+      "cost_cents": 38
+    },
+    {
+      "seq": 114,
+      "ts": "2026-10-12T10:01:14.842000Z",
+      "agent": "coordinator",
+      "kind": "status",
+      "title": "Al lavoro",
+      "detail": {
+        "event_type": "session.status_running",
+        "lane_state": "working"
+      },
+      "cost_cents": 38
+    },
+    {
+      "seq": 115,
+      "ts": "2026-10-12T10:01:14.985000Z",
+      "agent": "coordinator",
+      "kind": "status",
+      "title": "Richiesta al modello",
+      "detail": {
+        "event_type": "span.model_request_start"
+      },
+      "cost_cents": 38
+    },
+    {
+      "seq": 116,
+      "ts": "2026-10-12T10:01:16.875000Z",
+      "agent": "coordinator",
+      "kind": "status",
+      "title": "Risposta del modello",
+      "detail": {
+        "event_type": "span.model_request_end",
+        "is_error": false,
+        "input_tokens": 4200,
+        "output_tokens": 466,
+        "cache_read_input_tokens": 8400,
+        "cache_creation_input_tokens": 840
+      },
+      "cost_cents": 38
+    },
+    {
+      "seq": 117,
+      "ts": "2026-10-12T10:01:17.531000Z",
+      "agent": "coordinator",
+      "kind": "message",
+      "title": "coordinatore → utente: Piano accettato. Cinque giorni a Lisbona con voli TAP diretti, Hotel Lisboa Plaza in centro, Oceanário, Sintra e Belém; spesa stimata circa 1.690 €.",
+      "detail": {
+        "event_type": "agent.message",
+        "sender": "coordinatore",
+        "recipient": "utente",
+        "text": "Piano accettato. Cinque giorni a Lisbona con voli TAP diretti, Hotel Lisboa Plaza in centro, Oceanário, Sintra e Belém; spesa stimata circa 1.690 €."
+      },
+      "cost_cents": 38
+    },
+    {
+      "seq": 118,
+      "ts": "2026-10-12T10:01:17.603000Z",
+      "agent": "coordinator",
+      "kind": "usage",
+      "title": "Costo finora: 0,41 $ su 0,60 $",
+      "detail": {
+        "event_type": "session.usage",
+        "list_cost_cents": 41,
+        "budget_cents": 60,
+        "input_tokens": 64800,
+        "output_tokens": 7900,
+        "cache_read_input_tokens": 194400,
+        "web_search_requests": 11,
+        "active_seconds": 421.0
+      },
+      "cost_cents": 41
+    },
+    {
+      "seq": 119,
+      "ts": "2026-10-12T10:01:17.662000Z",
+      "agent": "coordinator",
+      "kind": "status",
+      "title": "Turno concluso",
+      "detail": {
+        "event_type": "session.status_idle",
+        "stop_reason": "end_turn",
+        "lane_state": "done"
+      },
+      "cost_cents": 41
+    }
+  ],
+  "statuses": [
+    {
+      "after_seq": 119,
+      "status": "ready"
+    }
+  ],
+  "end": "ready"
+}

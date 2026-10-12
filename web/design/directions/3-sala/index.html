@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sala · piano in corso</title>
+<meta name="color-scheme" content="light dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..700&display=swap" rel="stylesheet">
+<style>
+/* Direction 3, "Sala": the calm control room. A night-blue shell holds the plan and the five
+   bays; each agent's live activity is a strip held up across the shell's edge, and every
+   finished step drops into the bay's rack below it, newest on top. Static design study, not
+   production code. */
+:root {
+  --shell: #1B2440;
+  --shell-ink: #EEF1F8;
+  --shell-ink-2: #AEB8D2;
+  --shell-line: #36416A;
+  --shell-live: #8DB7FF;
+  --bg: #E7EBF3;
+  --surface: #FBFCFE;
+  --ink: #141A2B;
+  --ink-2: #4D576C;
+  --rule: #CDD4E2;
+  --rule-strong: #7C879E;
+  --live: #2C5FD0;
+  --live-wash: #E3EBFB;
+  --error: #B42318;
+  --error-wash: #F8E4E1;
+  --amber: #B87308;
+  --amber-ink: #8C4D00;
+  --amber-wash: #F8EBD3;
+  --seg-empty: #34406A;
+  --shadow-held: 0 1px 1px rgb(20 26 43 / .08), 0 14px 30px -12px rgb(20 26 43 / .35);
+  --sel: rgb(44 95 208 / .2);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --shell: #18213C; --shell-ink: #E9EDF7; --shell-ink-2: #A7B1CC; --shell-line: #2E3960; --shell-live: #8DB7FF;
+    --bg: #0C1120; --surface: #141B2E; --ink: #E6EAF4; --ink-2: #A1ABC2; --rule: #252E47; --rule-strong: #67728C;
+    --live: #8DB7FF; --live-wash: #1A2747; --error: #F27A6E; --error-wash: #2D1719;
+    --amber: #F2AA48; --amber-ink: #F2AA48; --amber-wash: #2B2112; --seg-empty: #313C63;
+    --shadow-held: 0 1px 1px rgb(0 0 0 / .4), 0 16px 34px -12px rgb(0 0 0 / .8); --sel: rgb(141 183 255 / .3);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --shell: #18213C; --shell-ink: #E9EDF7; --shell-ink-2: #A7B1CC; --shell-line: #2E3960; --shell-live: #8DB7FF;
+  --bg: #0C1120; --surface: #141B2E; --ink: #E6EAF4; --ink-2: #A1ABC2; --rule: #252E47; --rule-strong: #67728C;
+  --live: #8DB7FF; --live-wash: #1A2747; --error: #F27A6E; --error-wash: #2D1719;
+  --amber: #F2AA48; --amber-ink: #F2AA48; --amber-wash: #2B2112; --seg-empty: #313C63;
+  --shadow-held: 0 1px 1px rgb(0 0 0 / .4), 0 16px 34px -12px rgb(0 0 0 / .8); --sel: rgb(141 183 255 / .3);
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scrollbar-color: var(--rule-strong) transparent; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: "Archivo", system-ui, sans-serif; font-size: 15px; line-height: 1.42; font-stretch: 100%;
+  font-variant-numeric: tabular-nums; caret-color: var(--live); padding-bottom: env(safe-area-inset-bottom);
+}
+::selection { background: var(--sel); }
+:focus-visible { outline: 2px solid var(--live); outline-offset: 2px; }
+.shell :focus-visible { outline-color: var(--shell-live); }
+h1, h2, h3, p { margin: 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.icon { width: 1em; height: 1em; fill: currentColor; flex: none; }
+.narrow { font-stretch: 80%; }
+
+/* ---------- Shell ---------- */
+.shell { background: var(--shell); color: var(--shell-ink); }
+.shell-in { max-width: 1520px; margin: 0 auto; padding: 18px 16px 0; }
+.title h1 { font-stretch: 118%; font-weight: 650; font-size: 23px; line-height: 1.12; letter-spacing: -.01em; }
+.title p { color: var(--shell-ink-2); margin-top: 5px; font-size: 14.5px; text-wrap: pretty; }
+.console {
+  position: sticky; top: 0; z-index: 20; background: var(--shell); color: var(--shell-ink);
+  display: grid; grid-template-columns: 1fr auto; grid-template-areas: "st act" "gauge gauge"; gap: 10px 12px; align-items: center;
+  padding: 12px 16px 14px; border-bottom: 1px solid var(--shell-line);
+}
+.st { grid-area: st; display: flex; flex-direction: column; }
+.st .plan-state { font-weight: 600; font-size: 14.5px; color: var(--shell-ink-2); display: inline-flex; align-items: center; gap: 7px; }
+.st .plan-state::before { content: ""; width: 8px; height: 8px; border-radius: 1px; background: var(--shell-live); }
+.st .clock { font-stretch: 75%; font-weight: 600; font-size: 28px; line-height: 1.05; letter-spacing: .01em; }
+.st .clock small { font-size: 13.5px; font-weight: 400; color: var(--shell-ink-2); font-stretch: 100%; margin-left: 6px; letter-spacing: 0; }
+.act { grid-area: act; display: flex; gap: 8px; }
+.gauge { grid-area: gauge; }
+.gauge-head { display: flex; justify-content: space-between; font-size: 13.5px; color: var(--shell-ink-2); margin-bottom: 6px; }
+.gauge-head b { color: var(--shell-ink); font-weight: 600; font-size: 15px; }
+.segs { display: grid; grid-template-columns: repeat(40, 1fr); gap: 2px; height: 10px; }
+.segs i { background: var(--seg-empty); border-radius: 1px; transition: background-color 300ms ease; }
+.segs i.on { background: var(--shell-live); }
+
+.btn {
+  font: inherit; font-weight: 600; font-size: 14.5px; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
+  min-height: 40px; padding: 0 14px; border-radius: 6px; cursor: pointer; border: 1px solid currentColor; background: transparent; color: inherit;
+  transition: background-color 160ms ease, transform 120ms ease;
+}
+a.btn { text-decoration: none; }
+.btn:hover { background: color-mix(in srgb, currentColor 10%, transparent); }
+.btn:active { transform: scale(.98); }
+.btn[disabled] { opacity: .5; cursor: not-allowed; }
+.btn .icon { width: 17px; height: 17px; }
+.btn--solid { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.btn--solid:hover { background: color-mix(in srgb, var(--ink) 85%, var(--bg)); }
+.shell .btn { border-color: color-mix(in srgb, var(--shell-ink) 55%, transparent); }
+.icon-btn { width: 40px; padding: 0; justify-content: center; }
+.theme-dark-icon { display: none; }
+:root[data-resolved="dark"] .theme-dark-icon { display: block; }
+:root[data-resolved="dark"] .theme-light-icon { display: none; }
+.confirm { position: relative; }
+.confirm-pop { position: absolute; right: 0; top: calc(100% + 8px); width: min(320px, calc(100vw - 32px)); z-index: 30; background: var(--surface); color: var(--ink); border-radius: 8px; padding: 14px; box-shadow: var(--shadow-held); }
+.confirm-pop p { margin-bottom: 12px; font-size: 14.5px; }
+.confirm-pop .row { display: flex; gap: 8px; justify-content: flex-end; }
+.confirm-pop .btn:not(.btn--solid) { color: var(--ink); border-color: var(--ink); }
+
+.reconnect { display: flex; gap: 8px; align-items: center; color: var(--shell-ink-2); font-size: 13.5px; padding: 12px 16px 14px; max-width: 1520px; margin: 0 auto; }
+.reconnect .icon { width: 15px; height: 15px; }
+
+/* ---------- Bays ---------- */
+main { max-width: 1520px; margin: 0 auto; padding: 14px 16px 32px; }
+.bays { display: grid; gap: 10px; }
+.bay { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; }
+.bay-toggle { all: unset; box-sizing: border-box; width: 100%; display: grid; grid-template-columns: auto 1fr auto auto; gap: 10px; align-items: center; padding: 12px 14px; cursor: pointer; border-radius: 8px; }
+.bay-toggle:focus-visible { outline: 2px solid var(--live); outline-offset: -2px; }
+div.bay-toggle { cursor: default; }
+.bay-ico { width: 30px; height: 30px; border-radius: 6px; display: grid; place-items: center; background: var(--live-wash); color: var(--live); }
+.bay-ico .icon { width: 18px; height: 18px; }
+.bay-name { font-weight: 650; font-size: 16.5px; font-stretch: 105%; }
+.bstate { display: inline-flex; gap: 6px; align-items: center; font-size: 13.5px; color: var(--ink-2); font-weight: 500; }
+.bstate .icon { width: 15px; height: 15px; }
+.bstate[data-state="working"] { color: var(--live); }
+.bstate[data-state="error"] { color: var(--error); }
+.live-sq { width: 8px; height: 8px; border-radius: 1px; background: currentColor; }
+.chev { width: 16px; height: 16px; color: var(--ink-2); transition: transform 220ms cubic-bezier(.16, 1, .3, 1); }
+.bay.is-open .chev { transform: rotate(180deg); }
+.bay-peek { padding: 0 14px 14px; }
+.bay.is-open .bay-peek { display: none; }
+.bay-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 240ms cubic-bezier(.16, 1, .3, 1); }
+.bay.is-open .bay-body { grid-template-rows: 1fr; }
+.bay-body > div { overflow: hidden; min-height: 0; }
+.bay-inner { padding: 0 14px 14px; display: grid; gap: 10px; }
+
+/* Strips: the held one (live), the summary one, and the rack. */
+.held {
+  position: relative; background: var(--surface); border-radius: 6px; box-shadow: var(--shadow-held);
+  display: grid; grid-template-columns: 3.4rem minmax(0, 1fr); overflow: hidden;
+}
+.held .f-time { background: var(--live-wash); color: var(--live); font-stretch: 75%; font-weight: 650; font-size: 18px; display: grid; place-items: center; border-right: 1px solid var(--rule); padding: 8px 4px; line-height: 1; text-align: center; }
+.held .f-time small { display: block; font-size: 11.5px; font-weight: 500; font-stretch: 90%; margin-top: 3px; }
+.held .f-body { padding: 9px 11px 12px; min-width: 0; }
+.held .f-k { font-size: 12.5px; color: var(--ink-2); }
+.held .f-ti { font-weight: 650; font-stretch: 85%; font-size: 15.5px; line-height: 1.25; overflow-wrap: anywhere; }
+.held .progress { position: absolute; left: 3.4rem; right: 0; bottom: 0; height: 3px; overflow: hidden; }
+.held .progress::before { content: ""; position: absolute; inset: 0; background: var(--live); border-radius: 0 2px 2px 0; transform-origin: left; transform: scaleX(var(--p, .1)); transition: transform 900ms linear; }
+.held.is-flat { box-shadow: none; border: 1px solid var(--rule); }
+.held.is-done .f-time { background: transparent; color: var(--ink-2); }
+.held.is-error { border-color: color-mix(in srgb, var(--error) 50%, var(--rule)); }
+.held.is-error .f-time { background: var(--error-wash); color: var(--error); }
+.held.is-wait { border-style: dashed; border-color: var(--rule-strong); background: transparent; box-shadow: none; }
+.held.is-wait .f-time { background: transparent; color: var(--ink-2); border-right-style: dashed; }
+.held .f-ti.plain { font-weight: 500; font-stretch: 100%; font-size: 14.5px; }
+
+.notam { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; padding: 8px 10px; border: 1px dashed var(--rule-strong); border-radius: 6px; background: transparent; }
+.notam .icon { width: 17px; height: 17px; margin-top: 1px; }
+.note { font-size: 14px; color: var(--ink-2); }
+
+.rack { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.strip { display: grid; grid-template-columns: 3rem minmax(0, 1fr) auto; border: 1px solid var(--rule); border-radius: 4px; background: var(--surface); min-height: 38px; }
+.strip > * { padding: 6px 8px; min-width: 0; }
+.strip .s-time { border-right: 1px solid var(--rule); font-stretch: 75%; font-weight: 600; font-size: 14px; color: var(--ink-2); text-align: center; }
+.strip .s-ti { font-stretch: 88%; font-size: 14.5px; line-height: 1.3; overflow-wrap: anywhere; }
+.strip .s-d { border-left: 1px solid var(--rule); font-stretch: 75%; font-size: 13px; color: var(--ink-2); white-space: nowrap; display: flex; align-items: flex-start; }
+.strip .s-err { display: flex; gap: 4px; align-items: center; color: var(--error); font-stretch: 100%; font-size: 12.5px; margin-top: 2px; }
+.strip .s-err .icon { width: 13px; height: 13px; }
+.strip.is-failed .s-time { color: var(--error); }
+.strip--status { grid-template-columns: 3rem 1fr; background: transparent; border-style: dashed; min-height: 30px; }
+.strip--status .s-ti { font-weight: 600; font-stretch: 100%; font-size: 13.5px; color: var(--ink-2); }
+.strip--error { border-color: color-mix(in srgb, var(--error) 50%, var(--rule)); background: var(--error-wash); grid-template-columns: 3rem 1fr; }
+.strip--error .s-ti, .strip--error .s-time { color: var(--error); font-weight: 600; }
+.strip--msg { grid-template-columns: 3rem minmax(0, 1fr); background: color-mix(in srgb, var(--live-wash) 55%, var(--surface)); }
+.strip--msg summary { cursor: pointer; list-style: none; display: flex; gap: 6px; align-items: baseline; font-stretch: 88%; font-weight: 600; font-size: 14.5px; }
+.strip--msg summary::-webkit-details-marker { display: none; }
+.strip--msg summary .icon { width: 12px; height: 12px; color: var(--ink-2); position: relative; top: 1px; transition: transform 200ms ease; }
+.strip--msg details[open] summary .icon { transform: rotate(180deg); }
+.strip--msg .msg-text { margin-top: 6px; font-size: 13.5px; line-height: 1.5; color: var(--ink-2); font-stretch: 100%; }
+
+.fresh { animation: drop 300ms cubic-bezier(.16, 1, .3, 1) both; }
+@keyframes drop { from { opacity: 0; transform: translateY(-8px); } }
+@media (prefers-reduced-motion: no-preference) {
+  .reconnect .spin { animation: spin 1.8s linear infinite; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fresh { animation-name: fade; animation-duration: 120ms; }
+  .held .progress::before { transition: none; }
+  .bay-body, .chev, .segs i { transition: none; }
+}
+@keyframes fade { from { opacity: 0; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- Bookings ---------- */
+.bookings { margin-top: 28px; }
+.bookings h2 { font-weight: 650; font-stretch: 112%; font-size: 19px; }
+.bookings > p { color: var(--ink-2); margin: 2px 0 12px; font-size: 14.5px; }
+.bk { display: grid; gap: 8px; }
+.bk-strip { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: "what what" "due when" "go go"; overflow: hidden; }
+.bk-strip > * { padding: 10px 12px; min-width: 0; }
+.bk-what { grid-area: what; border-bottom: 1px solid var(--rule); display: grid; grid-template-columns: auto 1fr; gap: 0 10px; }
+.bk-what .bay-ico { grid-row: span 3; width: 28px; height: 28px; }
+.bk-what .k { font-size: 12.5px; color: var(--ink-2); }
+.bk-what h3 { font-weight: 650; font-stretch: 90%; font-size: 15.5px; line-height: 1.25; }
+.bk-what .p { font-size: 13.5px; color: var(--ink-2); margin-top: 3px; }
+.bk-what .p b { color: var(--ink); font-weight: 650; }
+.bk-what .tag { font-weight: 600; color: var(--ink); }
+.bk-date dt { font-size: 12.5px; color: var(--ink-2); }
+.bk-date dd { margin: 0; font-weight: 650; font-stretch: 88%; font-size: 16px; }
+.bk-date .hint { display: block; font-weight: 400; font-stretch: 100%; font-size: 12.5px; color: var(--ink-2); }
+.bk-due { grid-area: due; border-right: 1px solid var(--rule); }
+.bk-due.is-due { background: var(--amber-wash); box-shadow: inset 0 0 0 2px var(--amber); }
+.bk-due.is-due dd, .bk-due.is-due .hint { color: var(--amber-ink); }
+.bk-when { grid-area: when; }
+.bk-go { grid-area: go; border-top: 1px solid var(--rule); display: flex; align-items: center; }
+.bk-go .btn { width: 100%; justify-content: center; }
+
+.proto { max-width: 1520px; margin: 0 auto; padding: 16px 16px 40px; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; color: var(--ink-2); font-size: 13.5px; border-top: 1px dashed var(--rule-strong); }
+
+/* ---------- Desktop: the bays side by side, the held strips across the shell's edge ---------- */
+@media (min-width: 1080px) {
+  .shell-in { padding: 22px 28px 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 28px; align-items: end; }
+  .title h1 { font-size: 30px; }
+  .console { position: static; padding: 0; border: 0; grid-template-columns: auto minmax(240px, 300px) auto; grid-template-areas: "st gauge act"; gap: 28px; }
+  .reconnect { padding: 14px 28px 0; }
+  main { padding: 0 28px 40px; }
+  .bays { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; align-items: start; }
+  .bay { background: transparent; border: 0; border-radius: 0; }
+  .bay-toggle { padding: 0 0 12px; grid-template-columns: auto 1fr; grid-template-areas: "i n" "i s"; gap: 0 10px; }
+  .bay-toggle .bay-ico { grid-area: i; }
+  .bay-toggle .bay-name { grid-area: n; color: var(--shell-ink); }
+  .bay-toggle .bstate { grid-area: s; }
+  .bays-band .bay-ico { background: rgb(255 255 255 / .08); color: var(--shell-ink); }
+  .bstate { color: var(--shell-ink-2); }
+  .bstate[data-state="working"] { color: var(--shell-live); }
+  .bstate[data-state="error"] { color: #FFB4AB; }
+  .chev, .bay-peek { display: none; }
+  .bay-body, .bay.is-open .bay-body { grid-template-rows: 1fr; }
+  .bay-body > div { overflow: visible; }
+  .bay-inner { padding: 0; gap: 12px; }
+  .bays-band { background: var(--shell); padding: 18px 28px 0; }
+  .bays-band-fill { position: relative; }
+  /* The shell runs on behind the top of the held strips, edge to edge without adding scroll. */
+  .bays-band-fill::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 34px; z-index: -1; border-image: conic-gradient(var(--shell) 0 0) fill 0 / / 0 100vw; }
+  .slot { min-height: 72px; }
+  .held.is-wait { background: var(--bg); }
+  .bk-strip { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr) 250px; grid-template-areas: "what due when go"; }
+  .bk-what { border-bottom: 0; border-right: 1px solid var(--rule); }
+  .bk-go { border-top: 0; border-left: 1px solid var(--rule); justify-content: flex-end; }
+  .bk-go .btn { width: auto; }
+}
+</style>
+</head>
+<body>
+<!-- sprite:start -->
+<!-- Icons: Phosphor Icons v2.1.1 (regular), MIT licence, https://github.com/phosphor-icons/core, copied 2026-10-12 -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+<symbol id="i-coord" viewBox="0 0 256 256"><path d="M160,112h48a16,16,0,0,0,16-16V48a16,16,0,0,0-16-16H160a16,16,0,0,0-16,16V64H128a24,24,0,0,0-24,24v32H72v-8A16,16,0,0,0,56,96H24A16,16,0,0,0,8,112v32a16,16,0,0,0,16,16H56a16,16,0,0,0,16-16v-8h32v32a24,24,0,0,0,24,24h16v16a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V160a16,16,0,0,0-16-16H160a16,16,0,0,0-16,16v16H128a8,8,0,0,1-8-8V88a8,8,0,0,1,8-8h16V96A16,16,0,0,0,160,112ZM56,144H24V112H56v32Zm104,16h48v48H160Zm0-112h48V96H160Z"/></symbol>
+<symbol id="i-voli" viewBox="0 0 256 256"><path d="M185.33,114.21l29.14-27.42.17-.17a32,32,0,0,0-45.26-45.26c0,.06-.11.11-.17.17L141.79,70.67l-83-30.2a8,8,0,0,0-8.39,1.86l-24,24a8,8,0,0,0,1.22,12.31l63.89,42.59L76.69,136H56a8,8,0,0,0-5.65,2.34l-24,24A8,8,0,0,0,29,175.42l36.82,14.73,14.7,36.75.06.16a8,8,0,0,0,13.18,2.47l23.87-23.88A8,8,0,0,0,120,200V179.31l14.76-14.76,42.59,63.89a8,8,0,0,0,12.31,1.22l24-24a8,8,0,0,0,1.86-8.39Zm-.07,97.23-42.59-63.88A8,8,0,0,0,136.8,144c-.27,0-.53,0-.79,0a8,8,0,0,0-5.66,2.35l-24,24A8,8,0,0,0,104,176v20.69L90.93,209.76,79.43,181A8,8,0,0,0,75,176.57l-28.74-11.5L59.32,152H80a8,8,0,0,0,5.66-2.34l24-24a8,8,0,0,0-1.22-12.32L44.56,70.74l13.5-13.49,83.22,30.26a8,8,0,0,0,8.56-2L180.78,52.6A16,16,0,0,1,203.4,75.23l-32.87,30.93a8,8,0,0,0-2,8.56l30.26,83.22Z"/></symbol>
+<symbol id="i-alloggio" viewBox="0 0 256 256"><path d="M216,72H32V48a8,8,0,0,0-16,0V208a8,8,0,0,0,16,0V176H240v32a8,8,0,0,0,16,0V112A40,40,0,0,0,216,72ZM32,88h72v72H32Zm88,72V88h96a24,24,0,0,1,24,24v48Z"/></symbol>
+<symbol id="i-attivita" viewBox="0 0 256 256"><path d="M232,104a8,8,0,0,0,8-8V64a16,16,0,0,0-16-16H32A16,16,0,0,0,16,64V96a8,8,0,0,0,8,8,24,24,0,0,1,0,48,8,8,0,0,0-8,8v32a16,16,0,0,0,16,16H224a16,16,0,0,0,16-16V160a8,8,0,0,0-8-8,24,24,0,0,1,0-48ZM32,167.2a40,40,0,0,0,0-78.4V64H88V192H32Zm192,0V192H104V64H224V88.8a40,40,0,0,0,0,78.4Z"/></symbol>
+<symbol id="i-spost" viewBox="0 0 256 256"><path d="M184,48H136V24h32a8,8,0,0,0,0-16H88a8,8,0,0,0,0,16h32V48H72A32,32,0,0,0,40,80V184a32,32,0,0,0,32,32h8L65.6,235.2a8,8,0,1,0,12.8,9.6L100,216h56l21.6,28.8a8,8,0,1,0,12.8-9.6L176,216h8a32,32,0,0,0,32-32V80A32,32,0,0,0,184,48ZM72,64H184a16,16,0,0,1,16,16v40H56V80A16,16,0,0,1,72,64ZM184,200H72a16,16,0,0,1-16-16V136H200v48A16,16,0,0,1,184,200ZM96,172a12,12,0,1,1-12-12A12,12,0,0,1,96,172Zm88,0a12,12,0,1,1-12-12A12,12,0,0,1,184,172Z"/></symbol>
+<symbol id="i-stop" viewBox="0 0 256 256"><path d="M200,40H56A16,16,0,0,0,40,56V200a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V56A16,16,0,0,0,200,40Zm0,160H56V56H200V200Z"/></symbol>
+<symbol id="i-sun" viewBox="0 0 256 256"><path d="M120,40V16a8,8,0,0,1,16,0V40a8,8,0,0,1-16,0Zm72,88a64,64,0,1,1-64-64A64.07,64.07,0,0,1,192,128Zm-16,0a48,48,0,1,0-48,48A48.05,48.05,0,0,0,176,128ZM58.34,69.66A8,8,0,0,0,69.66,58.34l-16-16A8,8,0,0,0,42.34,53.66Zm0,116.68-16,16a8,8,0,0,0,11.32,11.32l16-16a8,8,0,0,0-11.32-11.32ZM192,72a8,8,0,0,0,5.66-2.34l16-16a8,8,0,0,0-11.32-11.32l-16,16A8,8,0,0,0,192,72Zm5.66,114.34a8,8,0,0,0-11.32,11.32l16,16a8,8,0,0,0,11.32-11.32ZM48,128a8,8,0,0,0-8-8H16a8,8,0,0,0,0,16H40A8,8,0,0,0,48,128Zm80,80a8,8,0,0,0-8,8v24a8,8,0,0,0,16,0V216A8,8,0,0,0,128,208Zm112-88H216a8,8,0,0,0,0,16h24a8,8,0,0,0,0-16Z"/></symbol>
+<symbol id="i-moon" viewBox="0 0 256 256"><path d="M233.54,142.23a8,8,0,0,0-8-2,88.08,88.08,0,0,1-109.8-109.8,8,8,0,0,0-10-10,104.84,104.84,0,0,0-52.91,37A104,104,0,0,0,136,224a103.09,103.09,0,0,0,62.52-20.88,104.84,104.84,0,0,0,37-52.91A8,8,0,0,0,233.54,142.23ZM188.9,190.34A88,88,0,0,1,65.66,67.11a89,89,0,0,1,31.4-26A106,106,0,0,0,96,56,104.11,104.11,0,0,0,200,160a106,106,0,0,0,14.92-1.06A89,89,0,0,1,188.9,190.34Z"/></symbol>
+<symbol id="i-warn" viewBox="0 0 256 256"><path d="M236.8,188.09,149.35,36.22h0a24.76,24.76,0,0,0-42.7,0L19.2,188.09a23.51,23.51,0,0,0,0,23.72A24.35,24.35,0,0,0,40.55,224h174.9a24.35,24.35,0,0,0,21.33-12.19A23.51,23.51,0,0,0,236.8,188.09ZM222.93,203.8a8.5,8.5,0,0,1-7.48,4.2H40.55a8.5,8.5,0,0,1-7.48-4.2,7.59,7.59,0,0,1,0-7.72L120.52,44.21a8.75,8.75,0,0,1,15,0l87.45,151.87A7.59,7.59,0,0,1,222.93,203.8ZM120,144V104a8,8,0,0,1,16,0v40a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,180Z"/></symbol>
+<symbol id="i-reconnect" viewBox="0 0 256 256"><path d="M224,48V96a8,8,0,0,1-8,8H168a8,8,0,0,1,0-16h28.69L182.06,73.37a79.56,79.56,0,0,0-56.13-23.43h-.45A79.52,79.52,0,0,0,69.59,72.71,8,8,0,0,1,58.41,61.27a96,96,0,0,1,135,.79L208,76.69V48a8,8,0,0,1,16,0ZM186.41,183.29a80,80,0,0,1-112.47-.66L59.31,168H88a8,8,0,0,0,0-16H40a8,8,0,0,0-8,8v48a8,8,0,0,0,16,0V179.31l14.63,14.63A95.43,95.43,0,0,0,130,222.06h.53a95.36,95.36,0,0,0,67.07-27.33,8,8,0,0,0-11.18-11.44Z"/></symbol>
+<symbol id="i-caret" viewBox="0 0 256 256"><path d="M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z"/></symbol>
+<symbol id="i-out" viewBox="0 0 256 256"><path d="M224,104a8,8,0,0,1-16,0V59.32l-66.33,66.34a8,8,0,0,1-11.32-11.32L196.68,48H152a8,8,0,0,1,0-16h64a8,8,0,0,1,8,8Zm-40,24a8,8,0,0,0-8,8v72H48V80h72a8,8,0,0,0,0-16H48A16,16,0,0,0,32,80V208a16,16,0,0,0,16,16H176a16,16,0,0,0,16-16V136A8,8,0,0,0,184,128Z"/></symbol>
+<symbol id="i-err" viewBox="0 0 256 256"><path d="M165.66,101.66,139.31,128l26.35,26.34a8,8,0,0,1-11.32,11.32L128,139.31l-26.34,26.35a8,8,0,0,1-11.32-11.32L116.69,128,90.34,101.66a8,8,0,0,1,11.32-11.32L128,116.69l26.34-26.35a8,8,0,0,1,11.32,11.32ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></symbol>
+<symbol id="i-done" viewBox="0 0 256 256"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></symbol>
+<symbol id="i-wait" viewBox="0 0 256 256"><path d="M200,75.64V40a16,16,0,0,0-16-16H72A16,16,0,0,0,56,40V76a16.07,16.07,0,0,0,6.4,12.8L114.67,128,62.4,167.2A16.07,16.07,0,0,0,56,180v36a16,16,0,0,0,16,16H184a16,16,0,0,0,16-16V180.36a16.09,16.09,0,0,0-6.35-12.77L141.27,128l52.38-39.6A16.05,16.05,0,0,0,200,75.64ZM72,40H184V75.64L178.23,80H77.33L72,76Zm56,78L98.67,96h58.4Zm56,98H72V180l48-36v24a8,8,0,0,0,16,0V144.08l48,36.28Z"/></symbol>
+<symbol id="i-msg" viewBox="0 0 256 256"><path d="M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z"/></symbol>
+</svg>
+<!-- sprite:end -->
+
+<div class="shell">
+  <div class="shell-in">
+    <header class="title">
+      <h1>Lisbona, 14–18 nov</h1>
+      <p>Da Milano, 2 adulti e 2 bambini (8 e 11 anni), budget 2.400&nbsp;€</p>
+    </header>
+    <div class="console" id="console" aria-label="Stato del piano">
+      <div class="st">
+        <span class="plan-state" id="plan-state-label">In corso</span>
+        <span class="clock"><span id="elapsed">7:12</span><small>trascorsi</small></span>
+      </div>
+      <div class="gauge" role="meter" id="meter" aria-label="Costo della sessione" aria-valuemin="0" aria-valuemax="400" aria-valuenow="162" aria-valuetext="1,62 dollari su un budget di 4,00">
+        <div class="gauge-head"><span><b id="cost">1,62 $</b> spesi</span><span>budget <span id="budget">4,00 $</span></span></div>
+        <div class="segs" id="segs" aria-hidden="true"></div>
+      </div>
+      <div class="act">
+        <div class="confirm">
+          <button class="btn" id="stop-btn" aria-expanded="false" aria-controls="stop-pop"><svg class="icon"><use href="#i-stop"/></svg>Interrompi</button>
+          <div class="confirm-pop" id="stop-pop" hidden>
+            <p>Interrompere il piano? Gli agenti chiudono il passo in corso e quello che hanno trovato resta salvato.</p>
+            <div class="row"><button class="btn" id="stop-cancel">Continua</button><button class="btn btn--solid" id="stop-confirm">Interrompi il piano</button></div>
+          </div>
+        </div>
+        <button class="btn icon-btn" id="theme-btn" aria-label="Cambia tema"><svg class="icon theme-light-icon"><use href="#i-moon"/></svg><svg class="icon theme-dark-icon"><use href="#i-sun"/></svg></button>
+      </div>
+    </div>
+  </div>
+  <div class="reconnect"><svg class="icon spin" aria-hidden="true"><use href="#i-reconnect"/></svg><span>Stream in riconnessione. Gli eventi persi arrivano da soli.</span></div>
+  <div class="bays-band-desk" id="band-desk"></div>
+</div>
+
+<main>
+  <h2 class="sr-only">Corsie degli agenti</h2>
+  <div id="lanes"></div>
+  <div class="sr-only" aria-live="polite" id="announcer"></div>
+
+  <section class="bookings" aria-labelledby="bk-h">
+    <h2 id="bk-h">Anteprima delle prenotazioni</h2>
+    <p>Così appare ogni prenotazione nel piano finito.</p>
+    <div class="bk" id="bookings"></div>
+  </section>
+</main>
+
+<footer class="proto">
+  <span>Direzione 3 di 3, Sala. Dati di esempio: nessuna sessione reale.</span>
+  <button class="btn" id="sim-btn">Simula i prossimi eventi</button>
+</footer>
+
+<script>
+/* scenario:start */
+/* Synthetic scenario shared by the three directions (same data, different design).
+   A production-profile plan (400 cent session budget) seen 7:12 after it started.
+   Times are seconds since the session started at 10:29:00 Europe/Rome. Event titles follow
+   the backend's one-line Italian UIEvent titles; message bodies are what the agents wrote
+   to each other (English, like their prompts). Prices and names are examples, not data. */
+const SCENARIO = {
+  startClock: 10 * 3600 + 29 * 60,
+  elapsed: 432,
+  costCents: 162,
+  budgetCents: 400,
+  agents: [
+    {
+      id: "coordinator", name: "Coordinatore", short: "coordinatore", icon: "coord",
+      state: "working",
+      current: { title: "Legge results/lodging.json · v2", started: 412 },
+      note: "Ondata 1: alloggio e attività hanno risposto, aspetta i voli per scegliere.",
+      events: [
+        { t: 0, kind: "status", title: "Sessione avviata" },
+        { t: 4, kind: "tool", title: "Legge shared/request.json", dur: 0.3 },
+        { t: 19, kind: "tool", title: "Scrive shared/constraints.json · v1", dur: 0.4 },
+        { t: 26, kind: "message", from: "coordinator", to: "flights", label: "incarico",
+          text: "Find round-trip flights from Milan (MXP or LIN) to Lisbon for 2 adults and 2 children aged 8 and 11, out Sat 14 Nov, back Wed 18 Nov 2026. Direct flights first. Flight budget: 700 EUR in total. Write your options to /workspace/results/flights.json and reply in two lines." },
+        { t: 26, kind: "message", from: "coordinator", to: "lodging", label: "incarico",
+          text: "Find lodging in Lisbon for 2 adults and 2 children, check-in Sat 14 Nov, check-out Wed 18 Nov 2026, in a quiet area near public transport. Lodging budget: 1,100 EUR for 4 nights. Write your options to /workspace/results/lodging.json and reply in two lines." },
+        { t: 27, kind: "message", from: "coordinator", to: "activities", label: "incarico",
+          text: "List child-friendly activities in Lisbon for 15 to 17 Nov 2026, with opening hours and prices, no fixed times yet. Activities budget: 350 EUR. Write them to /workspace/results/activities.json and reply in two lines." },
+        { t: 303, kind: "message", from: "activities", to: "coordinator", label: "esito parziale",
+          text: "Partial result in results/activities.json v1: 9 activities, opening hours missing for 2. web_fetch timed out 3 times on the Museu da Carris site." },
+        { t: 348, kind: "message", from: "lodging", to: "coordinator", label: "esito",
+          text: "4 options in results/lodging.json v2. Best fit: 2-bedroom apartment in Alfama, 1,080 EUR for 4 nights, free cancellation until 7 Nov." },
+        { t: 352, kind: "tool", title: "Legge results/activities.json · v1", dur: 0.2 },
+      ],
+    },
+    {
+      id: "flights", name: "Voli", short: "voli", icon: "voli",
+      state: "working",
+      current: { title: "Expedia · voli MXP→LIS · 14–18 nov", started: 418 },
+      warning: "Kiwi non risponde dopo 2 tentativi. Cerco su Expedia e lastminute.com.",
+      events: [
+        { t: 31, kind: "status", title: "Al lavoro" },
+        { t: 44, kind: "tool", title: "Kiwi · voli MXP→LIS · 14–18 nov", err: "Nessuna risposta in 30 s" },
+        { t: 80, kind: "tool", title: "Kiwi · voli MXP→LIS · 14–18 nov", err: "Nessuna risposta in 30 s" },
+        { t: 112, kind: "tool", title: "lastminute.com · voli MXP→LIS · 14–18 nov", dur: 6.2 },
+        { t: 190, kind: "tool", title: "Cerca sul web: voli diretti Milano Lisbona novembre", dur: 2.1 },
+        { t: 275, kind: "tool", title: "Expedia · voli LIN→LIS · 14–18 nov", dur: 5.8 },
+      ],
+    },
+    {
+      id: "lodging", name: "Alloggio", short: "alloggio", icon: "alloggio",
+      state: "done",
+      summary: "4 opzioni scritte in results/lodging.json · v2.",
+      events: [
+        { t: 30, kind: "status", title: "Al lavoro" },
+        { t: 40, kind: "tool", title: "Expedia · hotel Lisbona · 14–18 nov", dur: 7.4 },
+        { t: 118, kind: "tool", title: "Expedia · offerte hotel · Alfama, 4 ospiti", dur: 4.9 },
+        { t: 210, kind: "tool", title: "Apre la pagina: condizioni di cancellazione", dur: 1.2 },
+        { t: 292, kind: "tool", title: "Scrive results/lodging.json · v2", dur: 0.3 },
+        { t: 349, kind: "status", title: "Finito" },
+      ],
+    },
+    {
+      id: "activities", name: "Attività", short: "attività", icon: "attivita",
+      state: "error",
+      summary: "La ricerca si è fermata. Esito parziale salvato; il coordinatore prosegue con gli altri.",
+      events: [
+        { t: 32, kind: "status", title: "Al lavoro" },
+        { t: 45, kind: "tool", title: "Cerca sul web: Lisbona con bambini a novembre", dur: 1.8 },
+        { t: 100, kind: "tool", title: "Apre la pagina: Oceanário de Lisboa, orari e biglietti", dur: 0.9 },
+        { t: 175, kind: "tool", title: "Cerca sul web: musei di Lisbona per bambini", dur: 2.4 },
+        { t: 250, kind: "tool", title: "Apre la pagina: Museu da Carris", err: "Timeout dopo 3 tentativi" },
+        { t: 298, kind: "tool", title: "Scrive results/activities.json · v1", dur: 0.2 },
+        { t: 304, kind: "error", title: "Errore: ricerca interrotta" },
+      ],
+    },
+    {
+      id: "transport", name: "Spostamenti", short: "spostamenti", icon: "spost",
+      state: "waiting",
+      summary: "Parte dopo la scelta di volo e alloggio.",
+      events: [],
+    },
+  ],
+  bookings: [
+    { kind: "Alloggio", icon: "alloggio", title: "Appartamento con due camere, Alfama",
+      dueLabel: "mer 14 ott, 23:59", dueIso: "2026-10-14T23:59:00+02:00", dueSoon: true, dueHint: "tra 2 giorni",
+      whenLabel: "sab 14 nov, 15:00", whenIso: "2026-11-14T15:00:00+00:00", whenHint: "fino a mer 18 nov",
+      price: "1.080\u00a0€", priceNote: "4 notti", status: "verificato", source: "Expedia", retrieved: "10:31",
+      site: "Expedia" },
+    { kind: "Voli", icon: "voli", title: "Volo diretto Malpensa → Lisbona, andata e ritorno",
+      dueLabel: "ven 30 ott", dueIso: "2026-10-30T23:59:00+01:00", dueSoon: false, dueHint: "tra 18 giorni",
+      whenLabel: "sab 14 nov, 07:05", whenIso: "2026-11-14T07:05:00+01:00", whenHint: "ritorno mer 18 nov",
+      price: "684\u00a0€", priceNote: "per 4", status: "stimato", source: "lastminute.com", retrieved: "10:30",
+      site: "lastminute.com" },
+  ],
+};
+
+/* A message belongs to both parties: mirror the coordinator's messages into the other lane. */
+for (const e of SCENARIO.agents[0].events.filter((x) => x.kind === "message")) {
+  const other = e.from === "coordinator" ? e.to : e.from;
+  SCENARIO.agents.find((a) => a.id === other).events.push({ ...e });
+}
+
+/* The next few events, played by "Simula i prossimi eventi". Each step: wait (ms), then apply. */
+const SIM_STEPS = [
+  { wait: 400, cost: 171, apply: (s) => {
+      const f = lane(s, "flights");
+      f.events.push({ t: s.elapsed, kind: "tool", title: "Expedia · voli MXP→LIS · 14–18 nov", dur: 18.4, fresh: true });
+      f.current = { title: "Scrive results/flights.json · v1", started: s.elapsed };
+      return null; } },
+  { wait: 2600, cost: 178, apply: (s) => {
+      const f = lane(s, "flights"), c = lane(s, "coordinator");
+      f.events.push({ t: s.elapsed, kind: "tool", title: "Scrive results/flights.json · v1", dur: 0.3, fresh: true });
+      const msg = { t: s.elapsed, kind: "message", from: "flights", to: "coordinator", label: "esito", fresh: true,
+        text: "3 options in results/flights.json v1. Best fit: direct MXP-LIS round trip, out 07:05, back 19:40, 684 EUR for 4 (estimated, lastminute.com)." };
+      f.events.push(msg); c.events.push({ ...msg });
+      f.events.push({ t: s.elapsed, kind: "status", title: "Finito", fresh: true });
+      f.current = null; f.state = "done"; f.summary = "3 opzioni scritte in results/flights.json · v1.";
+      return "Voli: finito"; } },
+  { wait: 2600, cost: 183, apply: (s) => {
+      const c = lane(s, "coordinator");
+      c.events.push({ t: s.elapsed, kind: "tool", title: "Legge results/flights.json · v1", dur: 0.2, fresh: true });
+      c.current = { title: "Scrive shared/constraints.json · v2", started: s.elapsed };
+      c.note = "Scelta fatta: volo diretto MXP→LIS e appartamento ad Alfama. Parte l'ondata 2.";
+      return null; } },
+  { wait: 2600, cost: 191, apply: (s) => {
+      const c = lane(s, "coordinator"), t = lane(s, "transport");
+      c.events.push({ t: s.elapsed, kind: "tool", title: "Scrive shared/constraints.json · v2", dur: 0.4, fresh: true });
+      const msg = { t: s.elapsed, kind: "message", from: "coordinator", to: "transport", label: "incarico", fresh: true,
+        text: "Read shared/constraints.json v2. Connect Lisbon airport, the Alfama apartment and the activities in results/activities.json v1 for 2 adults and 2 children, 14 to 18 Nov 2026. Transport budget: 150 EUR. Write to /workspace/results/transport.json and reply in two lines." };
+      c.events.push(msg); t.events.push({ ...msg });
+      c.current = { title: "Aspetta l'ondata 2", started: s.elapsed };
+      t.events.push({ t: s.elapsed, kind: "status", title: "Al lavoro", fresh: true });
+      t.state = "working"; t.summary = null;
+      t.current = { title: "Cerca sul web: Aeroporto di Lisbona → Alfama, metro e taxi", started: s.elapsed };
+      return "Spostamenti: al lavoro"; } },
+];
+
+function lane(s, id) { return s.agents.find((a) => a.id === id); }
+const SHORT = { coordinator: "coordinatore", flights: "voli", lodging: "alloggio", activities: "attività", transport: "spostamenti" };
+const STATE_LABEL = { waiting: "In attesa", working: "Al lavoro", done: "Finito", error: "Errore" };
+function mmss(sec) { sec = Math.max(0, Math.floor(sec)); return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0"); }
+function clock(sec) { const t = SCENARIO.startClock + sec; return String(Math.floor(t / 3600)).padStart(2, "0") + ":" + String(Math.floor(t / 60) % 60).padStart(2, "0") + ":" + String(t % 60).padStart(2, "0"); }
+function dur(d) { return d < 1 ? "meno di 1 s" : d.toLocaleString("it-IT", { maximumFractionDigits: 1 }) + " s"; }
+function usd(cents) { return (cents / 100).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " $"; }
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function msgTitle(e) { return SHORT[e.from] + " → " + SHORT[e.to] + ": " + e.label; }
+function cloneScenario() { return JSON.parse(JSON.stringify(SCENARIO)); }
+/* scenario:end */
+
+const root = document.documentElement;
+const mqDesk = matchMedia("(min-width: 1080px)");
+const mqDark = matchMedia("(prefers-color-scheme: dark)");
+let S = cloneScenario();
+const openLanes = new Set(["flights"]);
+let userToggled = false;
+
+function resolvedTheme() { return root.dataset.theme || (mqDark.matches ? "dark" : "light"); }
+function syncTheme() { const r = resolvedTheme(); root.dataset.resolved = r; document.getElementById("theme-btn").setAttribute("aria-label", r === "dark" ? "Passa al tema chiaro" : "Passa al tema scuro"); }
+try { const t = localStorage.getItem("tp-theme"); if (t === "light" || t === "dark") root.dataset.theme = t; } catch (e) {}
+document.getElementById("theme-btn").addEventListener("click", () => {
+  root.dataset.theme = resolvedTheme() === "dark" ? "light" : "dark";
+  try { localStorage.setItem("tp-theme", root.dataset.theme); } catch (e) {}
+  syncTheme();
+});
+mqDark.addEventListener("change", syncTheme);
+syncTheme();
+
+function icon(id) { return `<svg class="icon" aria-hidden="true"><use href="#i-${id}"/></svg>`; }
+function stateHtml(a) {
+  const g = a.state === "working" ? `<span class="live-sq" aria-hidden="true"></span>` : a.state === "done" ? icon("done") : a.state === "error" ? icon("err") : icon("wait");
+  return `<span class="bstate" data-state="${a.state}">${g}${STATE_LABEL[a.state]}</span>`;
+}
+/* The slot: the strip held up for this bay. Live tool, or what the bay is waiting for, or how it ended. */
+function slotHtml(a) {
+  if (a.current) {
+    return `<div class="held"><div class="f-time"><span data-since="${a.current.started}">${mmss(S.elapsed - a.current.started)}</span><small>in corso</small></div>
+      <div class="f-body"><p class="f-k">Dalle ${mmss(a.current.started)}</p><p class="f-ti">${esc(a.current.title)}</p></div><span class="progress" data-prog="${a.current.started}" style="--p:${prog(S.elapsed - a.current.started)}" aria-hidden="true"></span></div>`;
+  }
+  const cls = a.state === "error" ? "is-error is-flat" : a.state === "waiting" ? "is-wait" : "is-done is-flat";
+  const g = a.state === "error" ? icon("err") : a.state === "waiting" ? icon("wait") : icon("done");
+  return `<div class="held ${cls}"><div class="f-time" aria-hidden="true">${g}</div><div class="f-body"><p class="f-ti plain">${esc(a.summary || "")}</p></div></div>`;
+}
+/* Time spent on the live tool, on a scale that slows down and never reaches the end: it says how long, not how much is left. */
+function prog(sec) { return (1 - Math.exp(-sec / 40)).toFixed(3); }
+function stripHtml(e) {
+  const f = e.fresh ? " fresh" : "";
+  const t = `<span class="s-time">${mmss(e.t)}</span>`;
+  if (e.kind === "message") return `<li class="strip strip--msg${f}">${t}<div><details><summary>${esc(msgTitle(e))}${icon("caret")}</summary><p class="msg-text" lang="en">${esc(e.text)}</p></details></div></li>`;
+  if (e.kind === "status") return `<li class="strip strip--status${f}">${t}<span class="s-ti">${esc(e.title)}</span></li>`;
+  if (e.kind === "error") return `<li class="strip strip--error${f}">${t}<span class="s-ti">${esc(e.title)}</span></li>`;
+  const err = e.err ? `<span class="s-err">${icon("warn")}${esc(e.err)}</span>` : "";
+  return `<li class="strip${e.err ? " is-failed" : ""}${f}">${t}<div class="s-ti">${esc(e.title)}${err}</div><span class="s-d">${e.err ? "fallito" : dur(e.dur)}</span></li>`;
+}
+function rackHtml(a) {
+  /* Newest first; events in the same second keep their arrival order, reversed. */
+  const evs = a.events.map((e, i) => [e, i]).sort((x, y) => y[0].t - x[0].t || y[1] - x[1]).map((x) => x[0]);
+  let h = "";
+  if (a.note) h += `<p class="note">${esc(a.note)}</p>`;
+  if (a.warning) h += `<p class="notam">${icon("warn")}<span>${esc(a.warning)}</span></p>`;
+  if (evs.length) h += `<ol class="rack" aria-label="Eventi di ${esc(a.short)}, dal più recente">${evs.map(stripHtml).join("")}</ol>`;
+  return h;
+}
+function headInner(a) { return `<span class="bay-ico" aria-hidden="true">${icon(a.icon)}</span><span class="bay-name">${a.name}</span>${stateHtml(a)}`; }
+
+function render() {
+  const desk = mqDesk.matches;
+  const lanes = document.getElementById("lanes"), band = document.getElementById("band-desk");
+  if (desk) {
+    /* Headers and held strips live in the shell; the racks sit below on the ground. */
+    band.className = "bays-band";
+    band.innerHTML = `<div class="bays" style="max-width:1464px;margin:0 auto">${S.agents.map((a) => `
+      <section class="bay" aria-labelledby="h-${a.id}"><h3 id="h-${a.id}"><div class="bay-toggle">${headInner(a)}</div></h3></section>`).join("")}</div>`;
+    lanes.innerHTML = `<div class="bays-band-fill"><div class="bays">${S.agents.map((a) => `
+      <div class="bay" aria-labelledby="h-${a.id}" role="group"><div class="bay-inner"><div class="slot">${slotHtml(a)}</div>${rackHtml(a)}</div></div>`).join("")}</div></div>`;
+  } else {
+    band.className = ""; band.innerHTML = "";
+    lanes.innerHTML = `<div class="bays">${S.agents.map((a) => {
+      const open = openLanes.has(a.id);
+      return `<section class="bay${open ? " is-open" : ""}" aria-labelledby="h-${a.id}">
+        <h3 id="h-${a.id}"><button class="bay-toggle" aria-expanded="${open}" aria-controls="b-${a.id}" data-lane="${a.id}">${headInner(a)}<svg class="icon chev" aria-hidden="true"><use href="#i-caret"/></svg></button></h3>
+        <div class="bay-peek">${slotHtml(a)}</div>
+        <div class="bay-body" id="b-${a.id}"><div><div class="bay-inner">${slotHtml(a)}${rackHtml(a)}</div></div></div></section>`;
+    }).join("")}</div>`;
+  }
+  S.agents.forEach((a) => a.events.forEach((e) => delete e.fresh));
+}
+document.getElementById("lanes").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button.bay-toggle"); if (!b) return;
+  const bay = b.closest(".bay"), id = b.dataset.lane; userToggled = true;
+  const open = !bay.classList.contains("is-open");
+  bay.classList.toggle("is-open", open); b.setAttribute("aria-expanded", open);
+  open ? openLanes.add(id) : openLanes.delete(id);
+});
+mqDesk.addEventListener("change", render);
+
+document.getElementById("bookings").innerHTML = S.bookings.map((b) => `
+  <article class="bk-strip">
+    <div class="bk-what"><span class="bay-ico" aria-hidden="true">${icon(b.icon)}</span><span class="k">${b.kind}</span><h3>${esc(b.title)}</h3>
+      <p class="p"><b>${b.price}</b> ${b.priceNote}, <span class="tag">${b.status}</span>, ${esc(b.source)} alle ${b.retrieved}</p></div>
+    <dl class="bk-date bk-due${b.dueSoon ? " is-due" : ""}" style="margin:0"><dt>Prenota entro</dt><dd><time datetime="${b.dueIso}">${b.dueLabel}</time><span class="hint">${b.dueHint}</span></dd></dl>
+    <dl class="bk-date bk-when" style="margin:0"><dt>Quando</dt><dd><time datetime="${b.whenIso}">${b.whenLabel}</time><span class="hint">${b.whenHint}</span></dd></dl>
+    <div class="bk-go"><a class="btn btn--solid" href="#" target="_blank" rel="noopener noreferrer">Prenota su ${esc(b.site)} ${icon("out")}</a></div>
+  </article>`).join("");
+
+/* Cost: forty segments of ten cents each, up to the session budget. */
+function setCost(c) {
+  const segs = document.getElementById("segs"), n = 40;
+  if (!segs.children.length) segs.innerHTML = "<i></i>".repeat(n);
+  const on = Math.round(Math.min(1, c / S.budgetCents) * n);
+  [...segs.children].forEach((s, i) => s.classList.toggle("on", i < on));
+  document.getElementById("cost").textContent = usd(c); document.getElementById("budget").textContent = usd(S.budgetCents);
+  const m = document.getElementById("meter"); m.setAttribute("aria-valuenow", c);
+  m.setAttribute("aria-valuetext", `${usd(c).replace(" $", "")} dollari su un budget di ${usd(S.budgetCents).replace(" $", "")}`);
+}
+function tick() {
+  S.elapsed += 1; document.getElementById("elapsed").textContent = mmss(S.elapsed);
+  document.querySelectorAll("[data-since]").forEach((n) => { n.textContent = mmss(S.elapsed - Number(n.dataset.since)); });
+  document.querySelectorAll("[data-prog]").forEach((n) => n.style.setProperty("--p", prog(S.elapsed - Number(n.dataset.prog))));
+}
+setInterval(tick, 1000);
+
+const stopBtn = document.getElementById("stop-btn"), pop = document.getElementById("stop-pop");
+function closePop() { pop.hidden = true; stopBtn.setAttribute("aria-expanded", "false"); }
+stopBtn.addEventListener("click", () => { pop.hidden = !pop.hidden; stopBtn.setAttribute("aria-expanded", String(!pop.hidden)); if (!pop.hidden) document.getElementById("stop-cancel").focus(); });
+document.getElementById("stop-cancel").addEventListener("click", () => { closePop(); stopBtn.focus(); });
+document.getElementById("stop-confirm").addEventListener("click", () => { closePop(); stopBtn.disabled = true; document.getElementById("plan-state-label").textContent = "In interruzione"; announce("Piano in interruzione"); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !pop.hidden) { closePop(); stopBtn.focus(); } });
+function announce(t) { const n = document.getElementById("announcer"); n.textContent = ""; setTimeout(() => { n.textContent = t; }, 60); }
+
+const simBtn = document.getElementById("sim-btn"); let simRunning = false, simDone = false;
+simBtn.addEventListener("click", async () => {
+  if (simRunning) return;
+  if (simDone) { S = cloneScenario(); openLanes.clear(); openLanes.add("flights"); userToggled = false; render(); setCost(S.costCents); simDone = false; simBtn.textContent = "Simula i prossimi eventi"; return; }
+  simRunning = true; simBtn.disabled = true;
+  for (const step of SIM_STEPS) {
+    await new Promise((r) => setTimeout(r, step.wait));
+    const said = step.apply(S);
+    if (said && said.endsWith("al lavoro") && !userToggled) { openLanes.clear(); openLanes.add(S.agents.find((a) => said.startsWith(a.name)).id); }
+    render(); setCost(step.cost); if (said) announce(said);
+  }
+  simRunning = false; simDone = true; simBtn.disabled = false; simBtn.textContent = "Torna all'istantanea";
+});
+
+render(); setCost(S.costCents);
+</script>
+</body>
+</html>

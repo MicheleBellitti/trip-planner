@@ -1,0 +1,14 @@
+# Next.js web app (the repository's root .gitignore covers most of this too).
+
+/node_modules
+/.next/
+/.next-build/
+/out/
+/coverage
+*.tsbuildinfo
+next-env.d.ts
+.vercel
+
+# Local settings: only the documented example is committed.
+.env*
+!.env.example

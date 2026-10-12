@@ -1,0 +1,60 @@
+{
+  "generated_by": "web/scripts/gen-backend-fixtures.py (do not edit by hand)",
+  "events": {
+    "thread_terminated": {
+      "seq": 0,
+      "ts": "2026-10-12T10:05:00Z",
+      "agent": "flights",
+      "kind": "status",
+      "title": "Lavoro chiuso",
+      "detail": {
+        "event_type": "session.thread_status_terminated",
+        "lane_state": "done",
+        "thread_id": "sthr_sample_flights",
+        "agent_name": "flights"
+      },
+      "cost_cents": null
+    },
+    "session_terminated": {
+      "seq": 0,
+      "ts": "2026-10-12T10:05:00Z",
+      "agent": "coordinator",
+      "kind": "status",
+      "title": "Sessione chiusa",
+      "detail": {
+        "event_type": "session.status_terminated",
+        "lane_state": "done"
+      },
+      "cost_cents": null
+    },
+    "submit_result_rejected": {
+      "seq": 0,
+      "ts": "2026-10-12T10:05:00Z",
+      "agent": "coordinator",
+      "kind": "tool",
+      "title": "Esito inviato all'agente: da correggere",
+      "detail": {
+        "event_type": "user.custom_tool_result",
+        "tool_use_id": "sevt_sample_submit",
+        "is_error": true
+      },
+      "cost_cents": null
+    },
+    "requires_action": {
+      "seq": 0,
+      "ts": "2026-10-12T10:05:00Z",
+      "agent": "coordinator",
+      "kind": "status",
+      "title": "In attesa di una risposta",
+      "detail": {
+        "event_type": "session.status_idle",
+        "stop_reason": "requires_action",
+        "lane_state": "waiting",
+        "event_ids": [
+          "sevt_sample_submit"
+        ]
+      },
+      "cost_cents": null
+    }
+  }
+}

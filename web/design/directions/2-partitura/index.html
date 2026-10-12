@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Partitura · piano in corso</title>
+<meta name="color-scheme" content="light dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Red+Hat+Mono:wght@400;500&family=Red+Hat+Text:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+/* Direction 2, "Partitura": the run set as a conductor's score. The five agents are parts
+   side by side, time runs down in one-minute bars shared by every part, so parallel work
+   lines up; messages are cues drawn across the parts; a running tool is a held note that
+   grows down to the "adesso" line. Static design study, not production code. */
+:root {
+  --bg: #F3F3F0;
+  --surface: #FAFAF8;
+  --ink: #18191B;
+  --ink-2: #55585D;
+  --rule: #D6D7D1;
+  --rule-strong: #848781;
+  --accent: #0B7566;
+  --accent-ink: #0A6658;
+  --accent-wash: #DCEDE8;
+  --error: #B42318;
+  --error-wash: #F6E3E0;
+  --amber: #C27C0E;
+  --amber-ink: #8C4D00;
+  --amber-wash: #F8EBD3;
+  --btn: #18191B;
+  --on-btn: #FAFAF8;
+  --hatch: rgb(180 35 24 / .05);
+  --sel: rgb(11 117 102 / .2);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111213; --surface: #18191B; --ink: #ECECE8; --ink-2: #A3A6A8; --rule: #2E3033; --rule-strong: #6C7073;
+    --accent: #4CC2AE; --accent-ink: #4CC2AE; --accent-wash: #15302B;
+    --error: #F27A6E; --error-wash: #2E1715; --amber: #F2AA48; --amber-ink: #F2AA48; --amber-wash: #2B2112;
+    --btn: #ECECE8; --on-btn: #111213; --hatch: rgb(242 122 110 / .06); --sel: rgb(76 194 174 / .28);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111213; --surface: #18191B; --ink: #ECECE8; --ink-2: #A3A6A8; --rule: #2E3033; --rule-strong: #6C7073;
+  --accent: #4CC2AE; --accent-ink: #4CC2AE; --accent-wash: #15302B;
+  --error: #F27A6E; --error-wash: #2E1715; --amber: #F2AA48; --amber-ink: #F2AA48; --amber-wash: #2B2112;
+  --btn: #ECECE8; --on-btn: #111213; --hatch: rgb(242 122 110 / .06); --sel: rgb(76 194 174 / .28);
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scrollbar-color: var(--rule-strong) transparent; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: "Red Hat Text", system-ui, sans-serif; font-size: 14.5px; line-height: 1.45;
+  font-variant-numeric: tabular-nums; caret-color: var(--accent);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+::selection { background: var(--sel); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h1, h2, h3, p { margin: 0; }
+.mono { font-family: "Red Hat Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.icon { width: 1em; height: 1em; fill: currentColor; flex: none; }
+.wrap { max-width: 1520px; margin: 0 auto; padding-inline: 16px; }
+
+/* ---------- Header: title block of the score ---------- */
+.top { display: contents; }
+.title { padding: 20px 16px 12px; max-width: 1520px; margin: 0 auto; }
+.title h1 { font-weight: 700; font-size: 26px; line-height: 1.1; letter-spacing: -.015em; }
+.title p { color: var(--ink-2); margin-top: 6px; text-wrap: pretty; }
+.bar {
+  position: sticky; top: 0; z-index: 20; background: var(--bg); border-block: 1px solid var(--ink);
+  display: grid; grid-template-columns: 1fr auto; grid-template-areas: "state actions" "cost cost"; gap: 10px 12px; align-items: center; padding: 10px 16px;
+}
+.state { grid-area: state; display: flex; flex-direction: column; gap: 0; }
+.plan-state { font-weight: 700; font-size: 16px; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.plan-state::before { content: ""; width: 4px; height: 16px; background: var(--accent); border-radius: 1px; }
+.elapsed { white-space: nowrap; font-family: "Red Hat Mono", monospace; font-size: 20px; font-weight: 500; letter-spacing: -.02em; }
+.elapsed small { font-family: "Red Hat Text", sans-serif; font-size: 13px; color: var(--ink-2); letter-spacing: 0; margin-left: 6px; font-weight: 400; }
+.actions { grid-area: actions; display: flex; gap: 8px; }
+.cost { grid-area: cost; }
+.cost-head { display: flex; justify-content: space-between; font-size: 13px; color: var(--ink-2); }
+.cost-head b { font-family: "Red Hat Mono", monospace; font-weight: 500; color: var(--ink); font-size: 14.5px; }
+.ruler { position: relative; height: 16px; margin-top: 4px; }
+.ruler::before { content: ""; position: absolute; left: 0; right: 0; top: 8px; height: 1px; background: var(--ink-2); }
+.ruler-fill { position: absolute; left: 0; top: 5px; height: 7px; width: 100%; background: var(--ink); transform-origin: left; transform: scaleX(var(--v, .4)); transition: transform 400ms cubic-bezier(.16, 1, .3, 1); }
+.tick { position: absolute; top: 4px; width: 1px; height: 9px; background: var(--ink-2); }
+.tick:last-of-type { width: 2px; height: 14px; top: 1px; background: var(--ink); }
+.tick span { white-space: nowrap; position: absolute; top: 12px; left: 50%; transform: translateX(-50%); font-family: "Red Hat Mono", monospace; font-size: 11px; color: var(--ink-2); display: none; }
+
+.btn {
+  font: inherit; font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
+  min-height: 40px; padding: 0 14px; border-radius: 4px; cursor: pointer;
+  border: 1px solid var(--ink); background: transparent; color: var(--ink);
+  transition: background-color 160ms ease, transform 120ms ease;
+}
+a.btn { text-decoration: none; }
+.btn:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.btn:active { transform: translateY(1px); }
+.btn[disabled] { opacity: .5; cursor: not-allowed; }
+.btn--solid { background: var(--btn); color: var(--on-btn); }
+.btn--solid:hover { background: color-mix(in srgb, var(--btn) 85%, var(--bg)); }
+.icon-btn { width: 40px; padding: 0; justify-content: center; }
+.btn .icon { width: 17px; height: 17px; }
+.theme-dark-icon { display: none; }
+:root[data-resolved="dark"] .theme-dark-icon { display: block; }
+:root[data-resolved="dark"] .theme-light-icon { display: none; }
+.confirm { position: relative; }
+.confirm-pop { position: absolute; right: 0; top: calc(100% + 8px); width: min(320px, calc(100vw - 32px)); z-index: 30; background: var(--surface); border: 1px solid var(--ink); border-radius: 4px; padding: 14px; }
+.confirm-pop p { margin-bottom: 12px; }
+.confirm-pop .row { display: flex; gap: 8px; justify-content: flex-end; }
+
+.reconnect { display: flex; align-items: center; gap: 8px; padding: 8px 16px; color: var(--ink-2); font-size: 13px; max-width: 1520px; margin: 0 auto; }
+.reconnect .icon { width: 15px; height: 15px; }
+
+/* ---------- The score (desktop) ---------- */
+main { padding: 0 0 32px; }
+.score { position: relative; display: grid; grid-template-columns: 86px repeat(5, minmax(0, 1fr)); }
+.head { padding: 12px 14px 12px 12px; border-left: 1px solid var(--rule-strong); border-bottom: 1px solid var(--ink); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.head-g { border-bottom: 1px solid var(--ink); font-size: 12px; color: var(--ink-2); padding: 12px 8px; display: flex; align-items: flex-end; }
+.part-name { font-weight: 700; font-size: 16.5px; display: flex; align-items: center; gap: 8px; }
+.part-name .icon { width: 18px; height: 18px; }
+.pstate { font-size: 13px; color: var(--ink-2); display: inline-flex; gap: 6px; align-items: center; }
+.pstate .icon { width: 15px; height: 15px; }
+.pstate[data-state="working"] { color: var(--accent-ink); font-weight: 500; }
+.pstate[data-state="error"] { color: var(--error); font-weight: 500; }
+.held-glyph { width: 4px; height: 13px; background: var(--accent); border-radius: 1px; }
+.chip { background: var(--accent-wash); border-radius: 3px; padding: 6px 8px; font-size: 13.5px; font-weight: 500; line-height: 1.35; display: grid; gap: 2px; }
+.chip .mono { font-size: 12px; color: var(--accent-ink); font-weight: 400; }
+.note { font-size: 13px; color: var(--ink-2); line-height: 1.4; }
+.warn { font-size: 13px; line-height: 1.4; display: flex; gap: 6px; border-top: 1px dashed var(--rule-strong); padding-top: 6px; }
+.warn .icon { width: 15px; height: 15px; margin-top: 1px; }
+.warn--error { color: var(--error); border-top-color: color-mix(in srgb, var(--error) 60%, transparent); }
+
+.g { border-top: 1px solid var(--rule); padding: 8px 8px 8px 10px; font-size: 13px; color: var(--ink-2); display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.g .num { font-size: 15px; color: var(--ink); }
+.g.is-now .num { color: var(--accent-ink); font-weight: 500; }
+.mark { white-space: nowrap; font-family: "Red Hat Text", sans-serif; font-weight: 700; font-size: 11.5px; color: var(--ink); border: 1.5px solid var(--ink); border-radius: 2px; padding: 1px 4px; line-height: 1.25; }
+.cell { border-top: 1px solid var(--rule); border-left: 1px solid var(--rule-strong); padding: 8px 12px 10px; display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 58px; }
+.cell.after-error { background: var(--hatch); }
+.cell.rest { border-top: 1px solid var(--rule); }
+.rest-line { flex: 1; border-left: 2px dashed var(--rule-strong); margin-left: 4px; min-height: 80px; }
+.rest p { color: var(--ink-2); font-size: 13.5px; }
+.cueband { grid-column: 2 / -1; border-top: 1px solid var(--rule); padding: 6px 0 4px; background-image: linear-gradient(to right, var(--rule-strong) 0 1px, transparent 1px); background-size: 20% 100%; }
+.cell.after-cue { border-top: 1px dotted var(--rule); }
+.g.cue-g { padding-top: 6px; }
+
+.ev { display: grid; grid-template-columns: 2.6rem minmax(0, 1fr); column-gap: 6px; line-height: 1.35; }
+.ev .t { font-family: "Red Hat Mono", monospace; font-size: 11.5px; color: var(--ink-2); padding-top: 1px; }
+.ev .ti { overflow-wrap: anywhere; }
+.ev .d { grid-column: 2; font-family: "Red Hat Mono", monospace; font-size: 11.5px; color: var(--ink-2); }
+.ev .d.err { color: var(--error); font-family: "Red Hat Text", sans-serif; font-size: 12.5px; display: flex; gap: 4px; align-items: center; }
+.ev .d .icon { width: 13px; height: 13px; }
+.ev--status .ti { font-weight: 700; font-style: italic; }
+.ev--error .ti { color: var(--error); font-weight: 700; }
+.ev--end { padding-bottom: 8px; position: relative; }
+.ev--end::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 6px; border-top: 1px solid var(--ink); border-bottom: 3px solid var(--ink); }
+.ev--running .ti { font-weight: 500; }
+.ev--running .t { color: var(--accent-ink); }
+.ev--running .d { color: var(--accent-ink); }
+
+/* Cues: a message drawn from one part to the other. */
+.cue { position: relative; padding: 2px 0 8px; display: flex; align-items: flex-start; }
+.cue-line { position: relative; flex: 1 1 auto; min-width: 28px; height: 1px; background: var(--ink); margin-top: .72em; }
+.cue.is-back { justify-content: flex-end; }
+.cue.is-back .cue-line { margin-right: 6px; }
+.cue:not(.is-back) .cue-line { margin-left: 2px; }
+.cue details[open] { flex: 0 1 auto; }
+.cue-line::after { content: ""; position: absolute; top: -4px; border: 4.5px solid transparent; }
+.cue-line.to-right::after { right: -1px; border-left: 7px solid var(--ink); border-right: 0; }
+.cue-line.to-left::after { left: -1px; border-right: 7px solid var(--ink); border-left: 0; }
+.cue details { position: relative; display: inline-block; max-width: 100%; }
+.cue summary { cursor: pointer; list-style: none; display: inline-flex; align-items: baseline; gap: 6px; background: var(--bg); padding: 0 6px 0 0; font-size: 13.5px; font-weight: 500; border-radius: 2px; }
+.cue summary::-webkit-details-marker { display: none; }
+.cue summary .mono { font-size: 11.5px; color: var(--ink-2); font-weight: 400; }
+.cue summary .icon { width: 12px; height: 12px; color: var(--ink-2); }
+.cue summary:hover .lbl { text-decoration: underline; text-underline-offset: .2em; }
+.cue-text { margin-top: 10px; font-size: 13px; line-height: 1.5; color: var(--ink-2); max-width: 64ch; background: var(--surface); border: 1px solid var(--rule); padding: 8px 10px; border-radius: 3px; }
+
+/* The "adesso" line and the held notes, positioned by script. */
+.overlay { position: absolute; inset: 0; pointer-events: none; }
+.now { position: absolute; left: 0; right: 0; height: 0; border-top: 1.5px solid var(--accent); }
+.now span { position: absolute; right: 8px; top: -9px; background: var(--bg); color: var(--accent-ink); font-family: "Red Hat Mono", monospace; font-size: 11px; padding: 0 4px; }
+.held { position: absolute; width: 4px; background: var(--accent); border-radius: 2px; }
+
+/* ---------- Parts stacked (phone) ---------- */
+.parts { border-top: 1px solid var(--ink); }
+.part { border-bottom: 1px solid var(--ink); }
+.ptoggle { all: unset; box-sizing: border-box; width: 100%; display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 14px 16px 10px; cursor: pointer; }
+.ptoggle:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.chev { width: 16px; height: 16px; color: var(--ink-2); transition: transform 220ms cubic-bezier(.16, 1, .3, 1); }
+.part.is-open .chev { transform: rotate(180deg); }
+.ppeek { padding: 0 16px 14px; }
+.part.is-open .ppeek { display: none; }
+.pbody { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 240ms cubic-bezier(.16, 1, .3, 1); }
+.part.is-open .pbody { grid-template-rows: 1fr; }
+.pbody > div { overflow: hidden; min-height: 0; }
+.pinner { padding: 0 16px 16px; display: grid; gap: 10px; }
+.mgroup { display: grid; grid-template-columns: 2.2rem minmax(0, 1fr); border-top: 1px solid var(--rule); padding-top: 8px; gap: 0 6px; }
+.mgroup .mn { font-family: "Red Hat Mono", monospace; font-size: 14px; }
+.mgroup .evs { display: grid; gap: 8px; }
+.mcue summary { cursor: pointer; list-style: none; font-weight: 500; display: inline-flex; gap: 6px; align-items: baseline; }
+.mcue summary .mono { font-size: 11.5px; color: var(--ink-2); font-weight: 400; display: inline-block; width: 2.6rem; flex: none; }
+.mcue summary .icon { width: 12px; height: 12px; color: var(--ink-2); }
+.mcue summary::-webkit-details-marker { display: none; }
+.mcue .cue-text { margin-top: 6px; }
+/* On the phone the held note lies flat: a bar under the running tool, one pixel per second, up to the full measure. */
+.hbar { grid-column: 2; height: 4px; margin-top: 4px; border-radius: 2px; background: var(--accent); width: min(100%, calc(var(--sec, 0) * 1px)); }
+
+.fresh { animation: arrive 280ms cubic-bezier(.16, 1, .3, 1) both; }
+@keyframes arrive { from { opacity: 0; transform: translateY(4px); } }
+@media (prefers-reduced-motion: reduce) {
+  .fresh { animation-name: fade; animation-duration: 120ms; }
+  .pbody, .chev, .ruler-fill { transition: none; }
+}
+@keyframes fade { from { opacity: 0; } }
+
+/* ---------- Bookings ---------- */
+.bookings { margin-top: 28px; }
+.bookings h2 { font-size: 18px; font-weight: 700; }
+.bookings > p { color: var(--ink-2); margin: 2px 0 12px; }
+.bk-table { border-top: 1px solid var(--ink); }
+.bk-row { display: grid; gap: 10px 16px; padding: 14px 0; border-bottom: 1px solid var(--rule); grid-template-columns: 1fr 1fr; grid-template-areas: "what what" "due when" "price price" "go go"; }
+.bk-what { grid-area: what; }
+.bk-what .k { font-size: 12.5px; color: var(--ink-2); display: flex; gap: 6px; align-items: center; }
+.bk-what .k .icon { width: 15px; height: 15px; }
+.bk-what h3 { font-size: 15.5px; font-weight: 700; margin-top: 2px; }
+.bk-date dt { font-size: 12.5px; color: var(--ink-2); }
+.bk-date dd { margin: 0; font-weight: 700; }
+.bk-date .hint { display: block; font-weight: 400; font-size: 12.5px; color: var(--ink-2); }
+.bk-date.is-due dd, .bk-date.is-due .hint { color: var(--amber-ink); }
+.bk-date.is-due time { text-decoration: underline 3px var(--amber); text-underline-offset: 5px; text-decoration-skip-ink: none; }
+.bk-due { grid-area: due; }
+.bk-when { grid-area: when; }
+.bk-price { grid-area: price; font-size: 13.5px; color: var(--ink-2); }
+.bk-price b { font-family: "Red Hat Mono", monospace; color: var(--ink); font-weight: 500; font-size: 14.5px; }
+.bk-price .st { font-style: italic; color: var(--ink); }
+.bk-go { grid-area: go; }
+.bk-go .btn { width: 100%; justify-content: center; }
+.bk-labels { display: none; }
+
+.proto { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; color: var(--ink-2); font-size: 13px; padding-top: 16px; padding-bottom: 40px; border-top: 1px dashed var(--rule-strong); margin-top: 8px; }
+
+@media (min-width: 1080px) {
+  body { font-size: 14px; }
+  .top { display: grid; position: sticky; top: 0; z-index: 20; background: var(--bg); grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 28px; padding: 18px 24px 12px; border-bottom: 1px solid var(--ink); }
+  .title { padding: 0; margin: 0; max-width: none; }
+  .title h1 { font-size: 30px; }
+  .bar { position: static; border: 0; padding: 0; grid-template-columns: auto minmax(260px, 320px) auto; grid-template-areas: "state cost actions"; gap: 28px; }
+  .state { flex-direction: column; gap: 0; align-items: flex-start; }
+  .elapsed { font-size: 22px; }
+  .tick span { display: block; }
+  .ruler { height: 30px; }
+  .tick:last-of-type span { top: 15px; }
+  .reconnect { padding: 8px 24px; }
+  .wrap { padding-inline: 24px; }
+  .bk-labels { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, .9fr) minmax(0, .9fr) minmax(0, 1.1fr) 230px; gap: 16px; font-size: 12.5px; color: var(--ink-2); padding: 8px 0; border-bottom: 1px solid var(--rule); }
+  .bk-row { grid-template-columns: minmax(0, 1.4fr) minmax(0, .9fr) minmax(0, .9fr) minmax(0, 1.1fr) 230px; grid-template-areas: "what due when price go"; align-items: center; }
+  .bk-date dt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .bk-go { display: flex; justify-content: flex-end; }
+  .bk-go .btn { width: auto; }
+}
+</style>
+</head>
+<body>
+<!-- sprite:start -->
+<!-- Icons: Phosphor Icons v2.1.1 (light), MIT licence, https://github.com/phosphor-icons/core, copied 2026-10-12 -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+<symbol id="i-coord" viewBox="0 0 256 256"><path d="M160,110h48a14,14,0,0,0,14-14V48a14,14,0,0,0-14-14H160a14,14,0,0,0-14,14V66H128a22,22,0,0,0-22,22v34H70V112A14,14,0,0,0,56,98H24a14,14,0,0,0-14,14v32a14,14,0,0,0,14,14H56a14,14,0,0,0,14-14V134h36v34a22,22,0,0,0,22,22h18v18a14,14,0,0,0,14,14h48a14,14,0,0,0,14-14V160a14,14,0,0,0-14-14H160a14,14,0,0,0-14,14v18H128a10,10,0,0,1-10-10V88a10,10,0,0,1,10-10h18V96A14,14,0,0,0,160,110ZM58,144a2,2,0,0,1-2,2H24a2,2,0,0,1-2-2V112a2,2,0,0,1,2-2H56a2,2,0,0,1,2,2Zm100,16a2,2,0,0,1,2-2h48a2,2,0,0,1,2,2v48a2,2,0,0,1-2,2H160a2,2,0,0,1-2-2Zm0-112a2,2,0,0,1,2-2h48a2,2,0,0,1,2,2V96a2,2,0,0,1-2,2H160a2,2,0,0,1-2-2Z"/></symbol>
+<symbol id="i-voli" viewBox="0 0 256 256"><path d="M183,113.65l30.1-28.32.13-.13A30,30,0,0,0,170.8,42.77l-.13.13L142.35,73,58.05,42.35a6,6,0,0,0-6.29,1.39l-24,24A6,6,0,0,0,28.67,77l65.92,43.94L77.52,138H56a6,6,0,0,0-4.24,1.76l-24,24a6,6,0,0,0,2,9.82l37.62,15,15,37.56,0,.12a6,6,0,0,0,7.81,3.27,5.94,5.94,0,0,0,2.07-1.41l23.91-23.91A6,6,0,0,0,118,200V178.48l17.07-17.07L179,227.33a6,6,0,0,0,9.23.91l24-24a6,6,0,0,0,1.39-6.29Zm1.94,100.93L141,148.66a6,6,0,0,0-4.4-2.64l-.59,0a6,6,0,0,0-4.24,1.76l-24,24A6,6,0,0,0,106,176v21.52L90.2,213.32,77.57,181.77a6,6,0,0,0-3.34-3.35L42.68,165.8,58.49,150H80a6,6,0,0,0,4.25-1.76l24-24a6,6,0,0,0-.92-9.23L41.42,71.06,57.54,54.93,142,85.63a6,6,0,0,0,6.42-1.53l31-32.9A18,18,0,0,1,204.8,76.66l-32.9,31a6,6,0,0,0-1.53,6.42l30.7,84.41Z"/></symbol>
+<symbol id="i-alloggio" viewBox="0 0 256 256"><path d="M216,74H30V48a6,6,0,0,0-12,0V208a6,6,0,0,0,12,0V174H242v34a6,6,0,0,0,12,0V112A38,38,0,0,0,216,74ZM30,86h76v76H30Zm88,76V86h98a26,26,0,0,1,26,26v50Z"/></symbol>
+<symbol id="i-attivita" viewBox="0 0 256 256"><path d="M232,102a6,6,0,0,0,6-6V64a14,14,0,0,0-14-14H32A14,14,0,0,0,18,64V96a6,6,0,0,0,6,6,26,26,0,0,1,0,52,6,6,0,0,0-6,6v32a14,14,0,0,0,14,14H224a14,14,0,0,0,14-14V160a6,6,0,0,0-6-6,26,26,0,0,1,0-52ZM30,192V165.53a38,38,0,0,0,0-75.06V64a2,2,0,0,1,2-2H90V194H32A2,2,0,0,1,30,192Zm196-26.47V192a2,2,0,0,1-2,2H102V62H224a2,2,0,0,1,2,2V90.47a38,38,0,0,0,0,75.06Z"/></symbol>
+<symbol id="i-spost" viewBox="0 0 256 256"><path d="M184,50H134V22h34a6,6,0,0,0,0-12H88a6,6,0,0,0,0,12h34V50H72A30,30,0,0,0,42,80V184a30,30,0,0,0,30,30H84L67.2,236.4a6,6,0,1,0,9.6,7.2L99,214h58l22.2,29.6a6,6,0,0,0,9.6-7.2L172,214h12a30,30,0,0,0,30-30V80A30,30,0,0,0,184,50ZM72,62H184a18,18,0,0,1,18,18v42H54V80A18,18,0,0,1,72,62ZM184,202H72a18,18,0,0,1-18-18V134H202v50A18,18,0,0,1,184,202ZM94,172a10,10,0,1,1-10-10A10,10,0,0,1,94,172Zm88,0a10,10,0,1,1-10-10A10,10,0,0,1,182,172Z"/></symbol>
+<symbol id="i-stop" viewBox="0 0 256 256"><path d="M200,42H56A14,14,0,0,0,42,56V200a14,14,0,0,0,14,14H200a14,14,0,0,0,14-14V56A14,14,0,0,0,200,42Zm2,158a2,2,0,0,1-2,2H56a2,2,0,0,1-2-2V56a2,2,0,0,1,2-2H200a2,2,0,0,1,2,2Z"/></symbol>
+<symbol id="i-sun" viewBox="0 0 256 256"><path d="M122,40V16a6,6,0,0,1,12,0V40a6,6,0,0,1-12,0Zm68,88a62,62,0,1,1-62-62A62.07,62.07,0,0,1,190,128Zm-12,0a50,50,0,1,0-50,50A50.06,50.06,0,0,0,178,128ZM59.76,68.24a6,6,0,1,0,8.48-8.48l-16-16a6,6,0,0,0-8.48,8.48Zm0,119.52-16,16a6,6,0,1,0,8.48,8.48l16-16a6,6,0,1,0-8.48-8.48ZM192,70a6,6,0,0,0,4.24-1.76l16-16a6,6,0,0,0-8.48-8.48l-16,16A6,6,0,0,0,192,70Zm4.24,117.76a6,6,0,0,0-8.48,8.48l16,16a6,6,0,0,0,8.48-8.48ZM46,128a6,6,0,0,0-6-6H16a6,6,0,0,0,0,12H40A6,6,0,0,0,46,128Zm82,82a6,6,0,0,0-6,6v24a6,6,0,0,0,12,0V216A6,6,0,0,0,128,210Zm112-88H216a6,6,0,0,0,0,12h24a6,6,0,0,0,0-12Z"/></symbol>
+<symbol id="i-moon" viewBox="0 0 256 256"><path d="M232.13,143.64a6,6,0,0,0-6-1.49A90.07,90.07,0,0,1,113.86,29.85a6,6,0,0,0-7.49-7.48A102.88,102.88,0,0,0,54.48,58.68,102,102,0,0,0,197.32,201.52a102.88,102.88,0,0,0,36.31-51.89A6,6,0,0,0,232.13,143.64Zm-42,48.29a90,90,0,0,1-126-126A90.9,90.9,0,0,1,99.65,37.66,102.06,102.06,0,0,0,218.34,156.35,90.9,90.9,0,0,1,190.1,191.93Z"/></symbol>
+<symbol id="i-warn" viewBox="0 0 256 256"><path d="M235.07,189.09,147.61,37.22h0a22.75,22.75,0,0,0-39.22,0L20.93,189.09a21.53,21.53,0,0,0,0,21.72A22.35,22.35,0,0,0,40.55,222h174.9a22.35,22.35,0,0,0,19.6-11.19A21.53,21.53,0,0,0,235.07,189.09ZM224.66,204.8a10.46,10.46,0,0,1-9.21,5.2H40.55a10.46,10.46,0,0,1-9.21-5.2,9.51,9.51,0,0,1,0-9.72L118.79,43.21a10.75,10.75,0,0,1,18.42,0l87.46,151.87A9.51,9.51,0,0,1,224.66,204.8ZM122,144V104a6,6,0,0,1,12,0v40a6,6,0,0,1-12,0Zm16,36a10,10,0,1,1-10-10A10,10,0,0,1,138,180Z"/></symbol>
+<symbol id="i-reconnect" viewBox="0 0 256 256"><path d="M222,48V96a6,6,0,0,1-6,6H168a6,6,0,0,1,0-12h33.52L183.47,72a81.51,81.51,0,0,0-57.53-24h-.46A81.5,81.5,0,0,0,68.19,71.28a6,6,0,1,1-8.38-8.58,93.38,93.38,0,0,1,65.67-26.76H126a93.45,93.45,0,0,1,66,27.53l18,18V48a6,6,0,0,1,12,0ZM187.81,184.72a81.5,81.5,0,0,1-57.29,23.34h-.46a81.51,81.51,0,0,1-57.53-24L54.48,166H88a6,6,0,0,0,0-12H40a6,6,0,0,0-6,6v48a6,6,0,0,0,12,0V174.48l18,18.05a93.45,93.45,0,0,0,66,27.53h.52a93.38,93.38,0,0,0,65.67-26.76,6,6,0,1,0-8.38-8.58Z"/></symbol>
+<symbol id="i-caret" viewBox="0 0 256 256"><path d="M212.24,100.24l-80,80a6,6,0,0,1-8.48,0l-80-80a6,6,0,0,1,8.48-8.48L128,167.51l75.76-75.75a6,6,0,0,1,8.48,8.48Z"/></symbol>
+<symbol id="i-out" viewBox="0 0 256 256"><path d="M222,104a6,6,0,0,1-12,0V54.49l-69.75,69.75a6,6,0,0,1-8.48-8.48L201.51,46H152a6,6,0,0,1,0-12h64a6,6,0,0,1,6,6Zm-38,26a6,6,0,0,0-6,6v72a2,2,0,0,1-2,2H48a2,2,0,0,1-2-2V80a2,2,0,0,1,2-2h72a6,6,0,0,0,0-12H48A14,14,0,0,0,34,80V208a14,14,0,0,0,14,14H176a14,14,0,0,0,14-14V136A6,6,0,0,0,184,130Z"/></symbol>
+<symbol id="i-err" viewBox="0 0 256 256"><path d="M164.24,100.24,136.48,128l27.76,27.76a6,6,0,1,1-8.48,8.48L128,136.48l-27.76,27.76a6,6,0,0,1-8.48-8.48L119.52,128,91.76,100.24a6,6,0,0,1,8.48-8.48L128,119.52l27.76-27.76a6,6,0,0,1,8.48,8.48ZM230,128A102,102,0,1,1,128,26,102.12,102.12,0,0,1,230,128Zm-12,0a90,90,0,1,0-90,90A90.1,90.1,0,0,0,218,128Z"/></symbol>
+<symbol id="i-done" viewBox="0 0 256 256"><path d="M172.24,99.76a6,6,0,0,1,0,8.48l-56,56a6,6,0,0,1-8.48,0l-24-24a6,6,0,0,1,8.48-8.48L112,151.51l51.76-51.75A6,6,0,0,1,172.24,99.76ZM230,128A102,102,0,1,1,128,26,102.12,102.12,0,0,1,230,128Zm-12,0a90,90,0,1,0-90,90A90.1,90.1,0,0,0,218,128Z"/></symbol>
+<symbol id="i-wait" viewBox="0 0 256 256"><path d="M198,75.64V40a14,14,0,0,0-14-14H72A14,14,0,0,0,58,40V76a14.06,14.06,0,0,0,5.6,11.2L118,128,63.6,168.8A14.06,14.06,0,0,0,58,180v36a14,14,0,0,0,14,14H184a14,14,0,0,0,14-14V180.36a14.08,14.08,0,0,0-5.56-11.17L138,128l54.49-41.19A14.08,14.08,0,0,0,198,75.64ZM70,40a2,2,0,0,1,2-2H184a2,2,0,0,1,2,2V75.64a2,2,0,0,1-.79,1.6L178.9,82H76.67L70.8,77.6A2,2,0,0,1,70,76Zm58,80.49L92.67,94H163Zm58,59.87V216a2,2,0,0,1-2,2H72a2,2,0,0,1-2-2V180a2,2,0,0,1,.8-1.6L122,140v28a6,6,0,0,0,12,0V140.06l51.21,38.7A2,2,0,0,1,186,180.36Z"/></symbol>
+<symbol id="i-msg" viewBox="0 0 256 256"><path d="M220.24,132.24l-72,72a6,6,0,0,1-8.48-8.48L201.51,134H40a6,6,0,0,1,0-12H201.51L139.76,60.24a6,6,0,0,1,8.48-8.48l72,72A6,6,0,0,1,220.24,132.24Z"/></symbol>
+</svg>
+<!-- sprite:end -->
+
+<div class="top">
+  <header class="title">
+    <h1>Lisbona, 14–18 nov</h1>
+    <p>Da Milano, 2 adulti e 2 bambini (8 e 11 anni), budget 2.400&nbsp;€</p>
+  </header>
+  <div class="bar" aria-label="Stato del piano">
+    <div class="state">
+      <span class="plan-state" id="plan-state-label">In corso</span>
+      <span class="elapsed"><span id="elapsed">7:12</span><small>trascorsi</small></span>
+    </div>
+    <div class="cost" role="meter" id="meter" aria-label="Costo della sessione" aria-valuemin="0" aria-valuemax="400" aria-valuenow="162" aria-valuetext="1,62 dollari su un budget di 4,00">
+      <div class="cost-head"><span><b id="cost">1,62 $</b> spesi</span><span>budget <span id="budget">4,00 $</span></span></div>
+      <div class="ruler" aria-hidden="true" id="ruler"><span class="ruler-fill" id="ruler-fill"></span></div>
+    </div>
+    <div class="actions">
+      <div class="confirm">
+        <button class="btn" id="stop-btn" aria-expanded="false" aria-controls="stop-pop"><svg class="icon"><use href="#i-stop"/></svg>Interrompi</button>
+        <div class="confirm-pop" id="stop-pop" hidden>
+          <p>Interrompere il piano? Gli agenti chiudono il passo in corso e quello che hanno trovato resta salvato.</p>
+          <div class="row"><button class="btn" id="stop-cancel">Continua</button><button class="btn btn--solid" id="stop-confirm">Interrompi il piano</button></div>
+        </div>
+      </div>
+      <button class="btn icon-btn" id="theme-btn" aria-label="Cambia tema"><svg class="icon theme-light-icon"><use href="#i-moon"/></svg><svg class="icon theme-dark-icon"><use href="#i-sun"/></svg></button>
+    </div>
+  </div>
+</div>
+
+<div class="reconnect"><svg class="icon" aria-hidden="true"><use href="#i-reconnect"/></svg><span>Stream in riconnessione. Gli eventi persi arrivano da soli.</span></div>
+
+<main>
+  <h2 class="sr-only">Corsie degli agenti</h2>
+  <div id="lanes"></div>
+  <div class="sr-only" aria-live="polite" id="announcer"></div>
+
+  <section class="bookings wrap" aria-labelledby="bk-h">
+    <h2 id="bk-h">Anteprima delle prenotazioni</h2>
+    <p>Così appare ogni prenotazione nel piano finito.</p>
+    <div class="bk-table">
+      <div class="bk-labels" aria-hidden="true"><span>Prenotazione</span><span>Prenota entro</span><span>Quando</span><span>Prezzo e fonte</span><span></span></div>
+      <div id="bookings"></div>
+    </div>
+  </section>
+  <footer class="proto wrap">
+    <span>Direzione 2 di 3, Partitura. Dati di esempio: nessuna sessione reale.</span>
+    <button class="btn" id="sim-btn">Simula i prossimi eventi</button>
+  </footer>
+</main>
+
+<script>
+/* scenario:start */
+/* Synthetic scenario shared by the three directions (same data, different design).
+   A production-profile plan (400 cent session budget) seen 7:12 after it started.
+   Times are seconds since the session started at 10:29:00 Europe/Rome. Event titles follow
+   the backend's one-line Italian UIEvent titles; message bodies are what the agents wrote
+   to each other (English, like their prompts). Prices and names are examples, not data. */
+const SCENARIO = {
+  startClock: 10 * 3600 + 29 * 60,
+  elapsed: 432,
+  costCents: 162,
+  budgetCents: 400,
+  agents: [
+    {
+      id: "coordinator", name: "Coordinatore", short: "coordinatore", icon: "coord",
+      state: "working",
+      current: { title: "Legge results/lodging.json · v2", started: 412 },
+      note: "Ondata 1: alloggio e attività hanno risposto, aspetta i voli per scegliere.",
+      events: [
+        { t: 0, kind: "status", title: "Sessione avviata" },
+        { t: 4, kind: "tool", title: "Legge shared/request.json", dur: 0.3 },
+        { t: 19, kind: "tool", title: "Scrive shared/constraints.json · v1", dur: 0.4 },
+        { t: 26, kind: "message", from: "coordinator", to: "flights", label: "incarico",
+          text: "Find round-trip flights from Milan (MXP or LIN) to Lisbon for 2 adults and 2 children aged 8 and 11, out Sat 14 Nov, back Wed 18 Nov 2026. Direct flights first. Flight budget: 700 EUR in total. Write your options to /workspace/results/flights.json and reply in two lines." },
+        { t: 26, kind: "message", from: "coordinator", to: "lodging", label: "incarico",
+          text: "Find lodging in Lisbon for 2 adults and 2 children, check-in Sat 14 Nov, check-out Wed 18 Nov 2026, in a quiet area near public transport. Lodging budget: 1,100 EUR for 4 nights. Write your options to /workspace/results/lodging.json and reply in two lines." },
+        { t: 27, kind: "message", from: "coordinator", to: "activities", label: "incarico",
+          text: "List child-friendly activities in Lisbon for 15 to 17 Nov 2026, with opening hours and prices, no fixed times yet. Activities budget: 350 EUR. Write them to /workspace/results/activities.json and reply in two lines." },
+        { t: 303, kind: "message", from: "activities", to: "coordinator", label: "esito parziale",
+          text: "Partial result in results/activities.json v1: 9 activities, opening hours missing for 2. web_fetch timed out 3 times on the Museu da Carris site." },
+        { t: 348, kind: "message", from: "lodging", to: "coordinator", label: "esito",
+          text: "4 options in results/lodging.json v2. Best fit: 2-bedroom apartment in Alfama, 1,080 EUR for 4 nights, free cancellation until 7 Nov." },
+        { t: 352, kind: "tool", title: "Legge results/activities.json · v1", dur: 0.2 },
+      ],
+    },
+    {
+      id: "flights", name: "Voli", short: "voli", icon: "voli",
+      state: "working",
+      current: { title: "Expedia · voli MXP→LIS · 14–18 nov", started: 418 },
+      warning: "Kiwi non risponde dopo 2 tentativi. Cerco su Expedia e lastminute.com.",
+      events: [
+        { t: 31, kind: "status", title: "Al lavoro" },
+        { t: 44, kind: "tool", title: "Kiwi · voli MXP→LIS · 14–18 nov", err: "Nessuna risposta in 30 s" },
+        { t: 80, kind: "tool", title: "Kiwi · voli MXP→LIS · 14–18 nov", err: "Nessuna risposta in 30 s" },
+        { t: 112, kind: "tool", title: "lastminute.com · voli MXP→LIS · 14–18 nov", dur: 6.2 },
+        { t: 190, kind: "tool", title: "Cerca sul web: voli diretti Milano Lisbona novembre", dur: 2.1 },
+        { t: 275, kind: "tool", title: "Expedia · voli LIN→LIS · 14–18 nov", dur: 5.8 },
+      ],
+    },
+    {
+      id: "lodging", name: "Alloggio", short: "alloggio", icon: "alloggio",
+      state: "done",
+      summary: "4 opzioni scritte in results/lodging.json · v2.",
+      events: [
+        { t: 30, kind: "status", title: "Al lavoro" },
+        { t: 40, kind: "tool", title: "Expedia · hotel Lisbona · 14–18 nov", dur: 7.4 },
+        { t: 118, kind: "tool", title: "Expedia · offerte hotel · Alfama, 4 ospiti", dur: 4.9 },
+        { t: 210, kind: "tool", title: "Apre la pagina: condizioni di cancellazione", dur: 1.2 },
+        { t: 292, kind: "tool", title: "Scrive results/lodging.json · v2", dur: 0.3 },
+        { t: 349, kind: "status", title: "Finito" },
+      ],
+    },
+    {
+      id: "activities", name: "Attività", short: "attività", icon: "attivita",
+      state: "error",
+      summary: "La ricerca si è fermata. Esito parziale salvato; il coordinatore prosegue con gli altri.",
+      events: [
+        { t: 32, kind: "status", title: "Al lavoro" },
+        { t: 45, kind: "tool", title: "Cerca sul web: Lisbona con bambini a novembre", dur: 1.8 },
+        { t: 100, kind: "tool", title: "Apre la pagina: Oceanário de Lisboa, orari e biglietti", dur: 0.9 },
+        { t: 175, kind: "tool", title: "Cerca sul web: musei di Lisbona per bambini", dur: 2.4 },
+        { t: 250, kind: "tool", title: "Apre la pagina: Museu da Carris", err: "Timeout dopo 3 tentativi" },
+        { t: 298, kind: "tool", title: "Scrive results/activities.json · v1", dur: 0.2 },
+        { t: 304, kind: "error", title: "Errore: ricerca interrotta" },
+      ],
+    },
+    {
+      id: "transport", name: "Spostamenti", short: "spostamenti", icon: "spost",
+      state: "waiting",
+      summary: "Parte dopo la scelta di volo e alloggio.",
+      events: [],
+    },
+  ],
+  bookings: [
+    { kind: "Alloggio", icon: "alloggio", title: "Appartamento con due camere, Alfama",
+      dueLabel: "mer 14 ott, 23:59", dueIso: "2026-10-14T23:59:00+02:00", dueSoon: true, dueHint: "tra 2 giorni",
+      whenLabel: "sab 14 nov, 15:00", whenIso: "2026-11-14T15:00:00+00:00", whenHint: "fino a mer 18 nov",
+      price: "1.080\u00a0€", priceNote: "4 notti", status: "verificato", source: "Expedia", retrieved: "10:31",
+      site: "Expedia" },
+    { kind: "Voli", icon: "voli", title: "Volo diretto Malpensa → Lisbona, andata e ritorno",
+      dueLabel: "ven 30 ott", dueIso: "2026-10-30T23:59:00+01:00", dueSoon: false, dueHint: "tra 18 giorni",
+      whenLabel: "sab 14 nov, 07:05", whenIso: "2026-11-14T07:05:00+01:00", whenHint: "ritorno mer 18 nov",
+      price: "684\u00a0€", priceNote: "per 4", status: "stimato", source: "lastminute.com", retrieved: "10:30",
+      site: "lastminute.com" },
+  ],
+};
+
+/* A message belongs to both parties: mirror the coordinator's messages into the other lane. */
+for (const e of SCENARIO.agents[0].events.filter((x) => x.kind === "message")) {
+  const other = e.from === "coordinator" ? e.to : e.from;
+  SCENARIO.agents.find((a) => a.id === other).events.push({ ...e });
+}
+
+/* The next few events, played by "Simula i prossimi eventi". Each step: wait (ms), then apply. */
+const SIM_STEPS = [
+  { wait: 400, cost: 171, apply: (s) => {
+      const f = lane(s, "flights");
+      f.events.push({ t: s.elapsed, kind: "tool", title: "Expedia · voli MXP→LIS · 14–18 nov", dur: 18.4, fresh: true });
+      f.current = { title: "Scrive results/flights.json · v1", started: s.elapsed };
+      return null; } },
+  { wait: 2600, cost: 178, apply: (s) => {
+      const f = lane(s, "flights"), c = lane(s, "coordinator");
+      f.events.push({ t: s.elapsed, kind: "tool", title: "Scrive results/flights.json · v1", dur: 0.3, fresh: true });
+      const msg = { t: s.elapsed, kind: "message", from: "flights", to: "coordinator", label: "esito", fresh: true,
+        text: "3 options in results/flights.json v1. Best fit: direct MXP-LIS round trip, out 07:05, back 19:40, 684 EUR for 4 (estimated, lastminute.com)." };
+      f.events.push(msg); c.events.push({ ...msg });
+      f.events.push({ t: s.elapsed, kind: "status", title: "Finito", fresh: true });
+      f.current = null; f.state = "done"; f.summary = "3 opzioni scritte in results/flights.json · v1.";
+      return "Voli: finito"; } },
+  { wait: 2600, cost: 183, apply: (s) => {
+      const c = lane(s, "coordinator");
+      c.events.push({ t: s.elapsed, kind: "tool", title: "Legge results/flights.json · v1", dur: 0.2, fresh: true });
+      c.current = { title: "Scrive shared/constraints.json · v2", started: s.elapsed };
+      c.note = "Scelta fatta: volo diretto MXP→LIS e appartamento ad Alfama. Parte l'ondata 2.";
+      return null; } },
+  { wait: 2600, cost: 191, apply: (s) => {
+      const c = lane(s, "coordinator"), t = lane(s, "transport");
+      c.events.push({ t: s.elapsed, kind: "tool", title: "Scrive shared/constraints.json · v2", dur: 0.4, fresh: true });
+      const msg = { t: s.elapsed, kind: "message", from: "coordinator", to: "transport", label: "incarico", fresh: true,
+        text: "Read shared/constraints.json v2. Connect Lisbon airport, the Alfama apartment and the activities in results/activities.json v1 for 2 adults and 2 children, 14 to 18 Nov 2026. Transport budget: 150 EUR. Write to /workspace/results/transport.json and reply in two lines." };
+      c.events.push(msg); t.events.push({ ...msg });
+      c.current = { title: "Aspetta l'ondata 2", started: s.elapsed };
+      t.events.push({ t: s.elapsed, kind: "status", title: "Al lavoro", fresh: true });
+      t.state = "working"; t.summary = null;
+      t.current = { title: "Cerca sul web: Aeroporto di Lisbona → Alfama, metro e taxi", started: s.elapsed };
+      return "Spostamenti: al lavoro"; } },
+];
+
+function lane(s, id) { return s.agents.find((a) => a.id === id); }
+const SHORT = { coordinator: "coordinatore", flights: "voli", lodging: "alloggio", activities: "attività", transport: "spostamenti" };
+const STATE_LABEL = { waiting: "In attesa", working: "Al lavoro", done: "Finito", error: "Errore" };
+function mmss(sec) { sec = Math.max(0, Math.floor(sec)); return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0"); }
+function clock(sec) { const t = SCENARIO.startClock + sec; return String(Math.floor(t / 3600)).padStart(2, "0") + ":" + String(Math.floor(t / 60) % 60).padStart(2, "0") + ":" + String(t % 60).padStart(2, "0"); }
+function dur(d) { return d < 1 ? "meno di 1 s" : d.toLocaleString("it-IT", { maximumFractionDigits: 1 }) + " s"; }
+function usd(cents) { return (cents / 100).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " $"; }
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function msgTitle(e) { return SHORT[e.from] + " → " + SHORT[e.to] + ": " + e.label; }
+function cloneScenario() { return JSON.parse(JSON.stringify(SCENARIO)); }
+/* scenario:end */
+
+const root = document.documentElement;
+const mqDesk = matchMedia("(min-width: 1080px)");
+const mqDark = matchMedia("(prefers-color-scheme: dark)");
+let S = cloneScenario();
+const openLanes = new Set(["flights"]);
+let userToggled = false;
+const MARKS = [{ t: 0, label: "Avvio" }, { t: 26, label: "Ondata 1", cue: true }, { t: 412, label: "Scelta" }];
+let marks = [...MARKS];
+
+function resolvedTheme() { return root.dataset.theme || (mqDark.matches ? "dark" : "light"); }
+function syncTheme() { const r = resolvedTheme(); root.dataset.resolved = r; document.getElementById("theme-btn").setAttribute("aria-label", r === "dark" ? "Passa al tema chiaro" : "Passa al tema scuro"); }
+try { const t = localStorage.getItem("tp-theme"); if (t === "light" || t === "dark") root.dataset.theme = t; } catch (e) {}
+document.getElementById("theme-btn").addEventListener("click", () => {
+  root.dataset.theme = resolvedTheme() === "dark" ? "light" : "dark";
+  try { localStorage.setItem("tp-theme", root.dataset.theme); } catch (e) {}
+  syncTheme(); requestAnimationFrame(placeOverlay);
+});
+mqDark.addEventListener("change", syncTheme);
+syncTheme();
+
+function icon(id) { return `<svg class="icon" aria-hidden="true"><use href="#i-${id}"/></svg>`; }
+function stateHtml(a) {
+  const g = a.state === "working" ? `<span class="held-glyph" aria-hidden="true"></span>` : a.state === "done" ? icon("done") : a.state === "error" ? icon("err") : icon("wait");
+  return `<span class="pstate" data-state="${a.state}">${g}${STATE_LABEL[a.state]}</span>`;
+}
+function chipHtml(a) {
+  if (!a.current) return "";
+  return `<div class="chip"><span>${esc(a.current.title)}</span><span class="mono">dalle ${mmss(a.current.started)}, <span data-since="${a.current.started}">${mmss(S.elapsed - a.current.started)}</span></span></div>`;
+}
+function headExtras(a) {
+  let h = chipHtml(a);
+  if (a.note) h += `<p class="note">${esc(a.note)}</p>`;
+  if (a.warning) h += `<p class="warn">${icon("warn")}<span>${esc(a.warning)}</span></p>`;
+  if (a.state === "error") h += `<p class="warn warn--error">${icon("err")}<span>${esc(a.summary)}</span></p>`;
+  if (a.state === "done") h += `<p class="note">${esc(a.summary)}</p>`;
+  return h;
+}
+function evHtml(e, isLastDone) {
+  const f = e.fresh ? " fresh" : "";
+  if (e.kind === "status") return `<div class="ev ev--status${isLastDone ? " ev--end" : ""}${f}"><span class="t">${mmss(e.t)}</span><span class="ti">${esc(e.title)}</span></div>`;
+  if (e.kind === "error") return `<div class="ev ev--error${f}"><span class="t">${mmss(e.t)}</span><span class="ti">${esc(e.title)}</span></div>`;
+  const d = e.err ? `<span class="d err">${icon("warn")}${esc(e.err)}</span>` : `<span class="d">${dur(e.dur)}</span>`;
+  return `<div class="ev${f}"><span class="t">${mmss(e.t)}</span><span class="ti">${esc(e.title)}</span>${d}</div>`;
+}
+function runningHtml(a, flat) {
+  const bar = flat ? `<span class="hbar" data-hbar="${a.current.started}" style="--sec:${S.elapsed - a.current.started}" aria-hidden="true"></span>` : "";
+  return `<div class="ev ev--running"${flat ? "" : ` data-held="${a.id}"`}><span class="t">${mmss(a.current.started)}</span><span class="ti">${esc(a.current.title)}</span><span class="d">in corso</span>${bar}</div>`;
+}
+function msgDetails(e, cls) {
+  return `<details class="${cls}"><summary><span class="mono">${mmss(e.t)}</span><span class="lbl">${esc(msgTitle(e))}</span>${icon("caret")}</summary><p class="cue-text" lang="en">${esc(e.text)}</p></details>`;
+}
+const ORDER = ["coordinator", "flights", "lodging", "activities", "transport"];
+
+/* Desktop: one grid, a row of cues and a row of events for every minute. */
+function renderScore() {
+  const lastMin = Math.floor(S.elapsed / 60);
+  const cues = lane(S, "coordinator").events.filter((e) => e.kind === "message");
+  let html = `<div class="head-g mono">min</div>`;
+  S.agents.forEach((a) => {
+    html += `<section class="head" aria-labelledby="h-${a.id}"><h3 class="part-name" id="h-${a.id}">${icon(a.icon)}${a.name}</h3>${stateHtml(a)}${headExtras(a)}</section>`;
+  });
+  let row = 2; const rowOf = {};
+  for (let m = 0; m <= lastMin; m++) {
+    const mc = cues.filter((e) => Math.floor(e.t / 60) === m);
+    const mk = marks.filter((k) => Math.floor(k.t / 60) === m);
+    const em = mk.map((k) => `<span class="mark">${k.label}</span>`).join("");
+    html += `<div class="g${m === lastMin ? " is-now" : ""}" style="grid-row:${row} / span ${mc.length ? 2 : 1}" data-min="${m}"><span class="num mono">${m}'</span>${em}</div>`;
+    if (mc.length) {
+      html += `<div class="cueband" style="grid-row:${row}">${mc.map(cueHtml).join("")}</div>`;
+      row++;
+    }
+    rowOf[m] = row;
+    S.agents.forEach((a, i) => {
+      if (!a.events.length && !a.current) return;
+      const evs = a.events.filter((e) => e.kind !== "message" && Math.floor(e.t / 60) === m).sort((x, y) => x.t - y.t);
+      const endT = a.state === "error" ? Math.max(...a.events.filter((e) => e.kind === "error").map((e) => e.t)) : null;
+      const after = endT !== null && m > Math.floor(endT / 60);
+      const lastEv = [...a.events].sort((x, y) => x.t - y.t).at(-1);
+      let inner = evs.map((e) => evHtml(e, a.state === "done" && e === lastEv)).join("");
+      if (a.current && Math.floor(a.current.started / 60) === m) inner += runningHtml(a);
+      html += `<div class="cell${after ? " after-error" : ""}${mc.length ? " after-cue" : ""}" style="grid-row:${row};grid-column:${i + 2}" data-lane="${a.id}" data-min="${m}">${inner}</div>`;
+    });
+    row++;
+  }
+  S.agents.forEach((a, i) => {
+    if (a.events.length || a.current) return;
+    html += `<div class="cell rest" style="grid-row:2 / ${row};grid-column:${i + 2}"><p>${esc(a.summary)}</p><span class="rest-line" aria-hidden="true"></span></div>`;
+  });
+  html += `<div class="overlay" aria-hidden="true" id="overlay"></div>`;
+  const el = document.getElementById("lanes");
+  el.className = "score"; el.innerHTML = html;
+  requestAnimationFrame(placeOverlay);
+}
+function cueHtml(e) {
+  const a = ORDER.indexOf(e.from), b = ORDER.indexOf(e.to);
+  const right = b > a, lo = Math.min(a, b), hi = Math.max(a, b);
+  /* The label sits in the sender's part, the arrow runs to the receiver's part. */
+  const left = `calc(${lo * 20}% + 12px)`, width = right ? `calc(${(hi - lo) * 20}%)` : `calc(${(hi - lo + 1) * 20}% - 24px)`;
+  const line = `<span class="cue-line ${right ? "to-right" : "to-left"}" aria-hidden="true"></span>`;
+  return `<div class="cue${right ? "" : " is-back"}${e.fresh ? " fresh" : ""}" style="margin-left:${left};width:${width}">${right ? "" : line}${msgDetails(e, "")}${right ? line : ""}</div>`;
+}
+/* The "adesso" line sits inside the current bar at the current second; held notes run from
+   their event down to it. Recomputed every second and on resize. */
+function placeOverlay() {
+  const ov = document.getElementById("overlay"); if (!ov) return;
+  const score = ov.parentElement, sb = score.getBoundingClientRect();
+  const nowG = score.querySelector(".g.is-now"); if (!nowG) return;
+  const gb = nowG.getBoundingClientRect();
+  const y = gb.top - sb.top + Math.max(10, (S.elapsed % 60) / 60 * gb.height);
+  let h = `<div class="now" style="top:${y}px"><span>${mmss(S.elapsed)}</span></div>`;
+  score.querySelectorAll("[data-held]").forEach((n) => {
+    const r = n.getBoundingClientRect(), cell = n.closest(".cell").getBoundingClientRect();
+    const top = r.top - sb.top + 3;
+    h += `<div class="held" style="left:${cell.left - sb.left + 3}px;top:${top}px;height:${Math.max(8, y - top)}px"></div>`;
+  });
+  ov.innerHTML = h;
+}
+
+/* Phone: parts stacked, the active one open, events grouped by minute. */
+function renderParts() {
+  let html = "";
+  S.agents.forEach((a) => {
+    const open = openLanes.has(a.id);
+    const evs = [...a.events].sort((x, y) => x.t - y.t);
+    const groups = new Map();
+    evs.forEach((e) => { const m = Math.floor(e.t / 60); if (!groups.has(m)) groups.set(m, []); groups.get(m).push(e); });
+    if (a.current) { const m = Math.floor(a.current.started / 60); if (!groups.has(m)) groups.set(m, []); groups.get(m).push({ running: true }); }
+    let body = headExtrasPhone(a);
+    if (!groups.size) body += `<p class="note">${esc(a.summary)}</p>`;
+    for (const [m, list] of groups) {
+      body += `<div class="mgroup"><span class="mn">${m}'</span><div class="evs">${list.map((e) => e.running ? runningHtml(a, true) : e.kind === "message" ? msgDetails(e, "mcue" + (e.fresh ? " fresh" : "")) : evHtml(e, a.state === "done" && e === evs[evs.length - 1])).join("")}</div></div>`;
+    }
+    const peek = a.current ? chipHtml(a) : `<p class="note">${esc(a.summary || "")}</p>`;
+    html += `<section class="part${open ? " is-open" : ""}" aria-labelledby="h-${a.id}">
+      <h3 id="h-${a.id}"><button class="ptoggle" aria-expanded="${open}" aria-controls="b-${a.id}" data-lane="${a.id}"><span class="part-name">${icon(a.icon)}${a.name}</span>${stateHtml(a)}<svg class="icon chev" aria-hidden="true"><use href="#i-caret"/></svg></button></h3>
+      <div class="ppeek">${peek}</div>
+      <div class="pbody" id="b-${a.id}"><div><div class="pinner">${body}</div></div></div></section>`;
+  });
+  const el = document.getElementById("lanes"); el.className = "parts"; el.innerHTML = html;
+}
+function headExtrasPhone(a) {
+  let h = chipHtml(a);
+  if (a.note) h += `<p class="note">${esc(a.note)}</p>`;
+  if (a.warning) h += `<p class="warn">${icon("warn")}<span>${esc(a.warning)}</span></p>`;
+  if (a.state === "error") h += `<p class="warn warn--error">${icon("err")}<span>${esc(a.summary)}</span></p>`;
+  return h;
+}
+document.getElementById("lanes").addEventListener("click", (ev) => {
+  const b = ev.target.closest("button.ptoggle"); if (!b) return;
+  const part = b.closest(".part"), id = b.dataset.lane; userToggled = true;
+  const open = !part.classList.contains("is-open");
+  part.classList.toggle("is-open", open); b.setAttribute("aria-expanded", open);
+  open ? openLanes.add(id) : openLanes.delete(id);
+});
+document.getElementById("lanes").addEventListener("toggle", () => requestAnimationFrame(placeOverlay), true);
+
+function render() {
+  mqDesk.matches ? renderScore() : renderParts();
+  S.agents.forEach((a) => a.events.forEach((e) => delete e.fresh));
+}
+mqDesk.addEventListener("change", render);
+addEventListener("resize", () => requestAnimationFrame(placeOverlay));
+
+document.getElementById("bookings").innerHTML = S.bookings.map((b) => `
+  <article class="bk-row">
+    <div class="bk-what"><span class="k">${icon(b.icon)}${b.kind}</span><h3>${esc(b.title)}</h3></div>
+    <dl class="bk-date bk-due${b.dueSoon ? " is-due" : ""}" style="margin:0"><dt>Prenota entro</dt><dd><time datetime="${b.dueIso}">${b.dueLabel}</time><span class="hint">${b.dueHint}</span></dd></dl>
+    <dl class="bk-date bk-when" style="margin:0"><dt>Quando</dt><dd><time datetime="${b.whenIso}">${b.whenLabel}</time><span class="hint">${b.whenHint}</span></dd></dl>
+    <p class="bk-price"><b>${b.price}</b> ${b.priceNote}, <span class="st">${b.status}</span><br>${esc(b.source)}, letto alle ${b.retrieved}</p>
+    <div class="bk-go"><a class="btn btn--solid" href="#" target="_blank" rel="noopener noreferrer">Prenota su ${esc(b.site)} ${icon("out")}</a></div>
+  </article>`).join("");
+
+/* Cost ruler: one tick per dollar, the budget is the final bar line. */
+function buildRuler() {
+  const r = document.getElementById("ruler"); r.querySelectorAll(".tick").forEach((t) => t.remove());
+  const n = S.budgetCents / 100;
+  for (let i = 0; i <= n; i++) {
+    const t = document.createElement("span"); t.className = "tick"; t.style.left = `calc(${(i / n) * 100}% - ${i === n ? 2 : i === 0 ? 0 : .5}px)`;
+    t.innerHTML = `<span>${i === n ? i + " $" : i}</span>`; r.appendChild(t);
+  }
+}
+function setCost(c) {
+  document.getElementById("ruler-fill").style.setProperty("--v", Math.min(1, c / S.budgetCents));
+  document.getElementById("cost").textContent = usd(c); document.getElementById("budget").textContent = usd(S.budgetCents);
+  const m = document.getElementById("meter"); m.setAttribute("aria-valuenow", c);
+  m.setAttribute("aria-valuetext", `${usd(c).replace(" $", "")} dollari su un budget di ${usd(S.budgetCents).replace(" $", "")}`);
+}
+function tick() {
+  const before = Math.floor(S.elapsed / 60); S.elapsed += 1;
+  document.getElementById("elapsed").textContent = mmss(S.elapsed);
+  document.querySelectorAll("[data-since]").forEach((n) => { n.textContent = mmss(S.elapsed - Number(n.dataset.since)); });
+  document.querySelectorAll("[data-hbar]").forEach((n) => n.style.setProperty("--sec", S.elapsed - Number(n.dataset.hbar)));
+  if (Math.floor(S.elapsed / 60) !== before && mqDesk.matches) render(); else placeOverlay();
+}
+setInterval(tick, 1000);
+
+const stopBtn = document.getElementById("stop-btn"), pop = document.getElementById("stop-pop");
+function closePop() { pop.hidden = true; stopBtn.setAttribute("aria-expanded", "false"); }
+stopBtn.addEventListener("click", () => { pop.hidden = !pop.hidden; stopBtn.setAttribute("aria-expanded", String(!pop.hidden)); if (!pop.hidden) document.getElementById("stop-cancel").focus(); });
+document.getElementById("stop-cancel").addEventListener("click", () => { closePop(); stopBtn.focus(); });
+document.getElementById("stop-confirm").addEventListener("click", () => { closePop(); stopBtn.disabled = true; document.getElementById("plan-state-label").textContent = "In interruzione"; announce("Piano in interruzione"); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !pop.hidden) { closePop(); stopBtn.focus(); } });
+function announce(t) { const n = document.getElementById("announcer"); n.textContent = ""; setTimeout(() => { n.textContent = t; }, 60); }
+
+const simBtn = document.getElementById("sim-btn"); let simRunning = false, simDone = false;
+simBtn.addEventListener("click", async () => {
+  if (simRunning) return;
+  if (simDone) { S = cloneScenario(); marks = [...MARKS]; openLanes.clear(); openLanes.add("flights"); userToggled = false; render(); setCost(S.costCents); simDone = false; simBtn.textContent = "Simula i prossimi eventi"; return; }
+  simRunning = true; simBtn.disabled = true;
+  for (const [i, step] of SIM_STEPS.entries()) {
+    await new Promise((r) => setTimeout(r, step.wait));
+    const said = step.apply(S);
+    if (i === SIM_STEPS.length - 1) marks.push({ t: S.elapsed, label: "Ondata 2", cue: true });
+    if (said && said.endsWith("al lavoro") && !userToggled) { openLanes.clear(); openLanes.add(S.agents.find((a) => said.startsWith(a.name)).id); }
+    render(); setCost(step.cost); if (said) announce(said);
+  }
+  simRunning = false; simDone = true; simBtn.disabled = false; simBtn.textContent = "Torna all'istantanea";
+});
+
+buildRuler(); render(); setCost(S.costCents);
+</script>
+</body>
+</html>

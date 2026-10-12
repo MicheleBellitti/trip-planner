@@ -1,0 +1,210 @@
+import { AgentRoundel } from "@/components/ui/agent";
+import { LinkButton } from "@/components/ui/button";
+import { Chip } from "@/components/ui/chip";
+import { cx } from "@/components/ui/cx";
+import { Icon } from "@/components/ui/icon";
+import { VisuallyHidden } from "@/components/ui/visually-hidden";
+import type { BookingDeadline } from "@/lib/booking-dates";
+import { formatDateTime, HOME_TIMEZONE } from "@/lib/format";
+import type { LinkCheck } from "@/lib/schemas/api";
+import type { PlanBooking, Price } from "@/lib/schemas/generated/plan";
+
+import { LiveDatePair } from "./live-date-pair";
+import {
+  bookingAction,
+  bookingCategory,
+  bookingLine,
+  CATEGORY_LABELS,
+  formatPrice,
+  hostLabel,
+  safeHttpUrl,
+  type BookingAction,
+} from "./plan-model";
+
+/** A quiet link to another site: ink, underlined, new tab, `rel="noopener noreferrer"`. For
+ * information (a price's source, a stop's page), never for booking. */
+export function QuietExternalLink({ href, children, className }: { href: string; children: string; className?: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={cx(
+        "inline-flex items-baseline gap-1 rounded-xs text-ink underline decoration-rule-strong underline-offset-[0.2em]",
+        "transition-[text-decoration-color] duration-(--duration-hover) hover:decoration-ink [overflow-wrap:anywhere]",
+        className,
+      )}
+    >
+      {children}
+      <Icon name="arrow-square-out" size={12} className="relative top-px self-center" />
+      <VisuallyHidden> (si apre in una nuova scheda)</VisuallyHidden>
+    </a>
+  );
+}
+
+/** "Expedia" when the source is the booking's own allowed site, else its host ("oceanario.pt"). */
+function sourceName(source: URL, check: LinkCheck | null): string {
+  if (check?.allowed && check.label && check.host === source.hostname) return check.label;
+  return hostLabel(source);
+}
+
+/** Price, its status as a word and its provenance: "812,00 € [verificato] Fonte expedia.it,
+ * letto il 12 ott 2026, 12:01". */
+function PriceLine({ price, check }: { price: Price | null; check: LinkCheck | null }) {
+  if (!price) return <p className="mt-1 text-small text-ink-2">Prezzo non indicato</p>;
+  const source = safeHttpUrl(price.source_url);
+  return (
+    <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-small text-ink-2">
+      <span className="font-semibold text-ink">{formatPrice(price)}</span>
+      <Chip>{price.status === "verified" ? "verificato" : "stimato"}</Chip>
+      <span className="min-w-0">
+        Fonte{" "}
+        {source ? (
+          <QuietExternalLink href={price.source_url}>{sourceName(source, check)}</QuietExternalLink>
+        ) : (
+          <span className="[overflow-wrap:anywhere]">{price.source_url}</span>
+        )}
+        , letto il <time dateTime={price.retrieved_at}>{formatDateTime(price.retrieved_at)}</time>
+      </span>
+    </p>
+  );
+}
+
+/** The action side of a booking: "Prenota su <sito>" only when the link passed the backend's
+ * allowlist; otherwise the link is plain text, never an anchor. */
+function ActionSide({
+  action,
+  alternative,
+  vendor,
+  phone,
+  source,
+}: {
+  action: BookingAction;
+  alternative: boolean;
+  vendor: string | null;
+  phone: string | null;
+  /** Where the price was read: the nearest thing to "the supplier's own site" a booking without a
+   * link has. Named as text (the price line above links it for information), never a button. */
+  source: URL | null;
+}) {
+  if (action.kind === "button") {
+    return (
+      <LinkButton
+        href={action.href}
+        external
+        variant={alternative ? "secondary" : "primary"}
+        size={alternative ? "sm" : "md"}
+        className={alternative ? "lg:w-full" : "w-full"}
+      >
+        {alternative ? `Vedi su ${action.site}` : `Prenota su ${action.site}`}
+      </LinkButton>
+    );
+  }
+  if (action.kind === "text") {
+    return (
+      <div className="min-w-0 text-meta text-ink-2" data-link-text="">
+        <p className="font-semibold text-ink">Link non verificato</p>
+        <p>Il sito non è tra quelli controllati, quindi il link resta testo.</p>
+        <p className="mt-1 line-clamp-3 text-micro select-all [overflow-wrap:anywhere]">{action.text}</p>
+      </div>
+    );
+  }
+  return (
+    <div className="min-w-0 text-meta text-ink-2">
+      <p>
+        Nessun link di prenotazione.{" "}
+        {source ? (
+          <>
+            {vendor ? `Prenota sul sito di ${vendor}: ` : "Prenota sul sito: "}
+            <span className="font-semibold text-ink [overflow-wrap:anywhere]">{hostLabel(source)}</span>
+          </>
+        ) : vendor ? (
+          `Prenota direttamente con ${vendor}.`
+        ) : null}
+      </p>
+      {phone ? (
+        <p>
+          Telefono{" "}
+          <a href={`tel:${phone.replace(/[^\d+]/g, "")}`} className="rounded-xs text-ink underline underline-offset-[0.2em]">
+            {phone}
+          </a>
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+interface BookingRowProps {
+  booking: PlanBooking;
+  /** The backend's verdict on `booking.link` (PlanDetail.booking_links / .alternative_links). */
+  check: LinkCheck | null;
+  /** The "Prenota entro" side, decided by the caller (lib/booking-dates `bookingDeadline` for
+   * the plan's bookings, `alternativeDeadline` for alternatives). */
+  deadline: BookingDeadline;
+  /** The trip's time zone (plan.timezone): the clock of "Quando". */
+  timeZone: string;
+  /** The booking starts from home: "Quando" leads with the clock at home (see DatePair). */
+  startsAtHome?: boolean;
+  /** The words after the trip's clock when it is the second line ("a Lisbona"). */
+  tripLabel?: string | null;
+  /** A discarded alternative: compact dates, a secondary "Vedi su <sito>". */
+  alternative?: boolean;
+  id?: string;
+}
+
+/**
+ * One booking as a row of the finished plan (DESIGN.md, Layout): roundel, kind, title, price
+ * with status and source | "Prenota entro" and "Quando" (DatePair, always both, always
+ * labelled) | "Prenota su <sito>". On the phone the three stack; from 1080 px they sit side by
+ * side (1.3fr 1.4fr 240px).
+ */
+export function BookingRow({ booking, check, deadline, timeZone, startsAtHome = false, tripLabel = null, alternative = false, id }: BookingRowProps) {
+  const line = bookingLine(booking, check);
+  const action = bookingAction(booking.link, check);
+  return (
+    <li
+      id={id}
+      className={cx(
+        "grid scroll-mt-24 gap-3 border-t border-rule py-3.5 first:border-t-0",
+        alternative
+          ? "lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1.4fr)_240px] lg:items-start lg:gap-6"
+          : "lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1.4fr)_240px] lg:items-start lg:gap-6 lg:py-5",
+      )}
+    >
+      <div className="flex min-w-0 items-start gap-2.5">
+        <AgentRoundel agent={line} size="sm" className="mt-0.5" />
+        <div className="min-w-0">
+          <p className="text-meta text-ink-2">{CATEGORY_LABELS[bookingCategory(booking, check)]}</p>
+          <h3 className="text-body font-semibold [overflow-wrap:anywhere]">{booking.title}</h3>
+          <PriceLine price={booking.price} check={check} />
+          {booking.notes ? (
+            <p className="mt-1.5 text-meta whitespace-pre-line text-ink-2 [overflow-wrap:anywhere]">{booking.notes}</p>
+          ) : null}
+        </div>
+      </div>
+      <div className="min-w-0">
+        <LiveDatePair
+          deadline={deadline}
+          scheduledFor={booking.scheduled_for}
+          timeZone={timeZone}
+          deadlineTimeZone={HOME_TIMEZONE}
+          startsAtHome={startsAtHome}
+          tripLabel={tripLabel}
+          variant={alternative ? "compact" : "fields"}
+        />
+        {booking.book_by_reason ? (
+          <p className="mt-1.5 text-meta text-ink-2 [overflow-wrap:anywhere]">{booking.book_by_reason}</p>
+        ) : null}
+      </div>
+      <div className="flex min-w-0">
+        <ActionSide
+          action={action}
+          alternative={alternative}
+          vendor={booking.vendor?.trim() || null}
+          phone={booking.phone?.trim() || null}
+          source={safeHttpUrl(booking.price?.source_url)}
+        />
+      </div>
+    </li>
+  );
+}

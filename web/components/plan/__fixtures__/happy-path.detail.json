@@ -1,0 +1,507 @@
+{
+    "id": "646f6139-324b-4817-96b5-d8dd4d392174",
+    "status": "ready",
+    "title": "Lisbona in famiglia, 14-18 aprile 2027",
+    "agent_profile": "development",
+    "created_at": "2026-10-12T11:17:15.993254Z",
+    "updated_at": "2026-10-12T11:17:53.708226Z",
+    "cost_cents": 41,
+    "budget_cents": 60,
+    "failure_reason": null,
+    "submit_attempts": 1,
+    "request": {
+        "dates": {
+            "month": null,
+            "nights": null,
+            "exact_end": "2027-04-18",
+            "exact_start": "2027-04-14"
+        },
+        "origin": "Milano",
+        "travelers": [
+            {
+                "age": null,
+                "kind": "adult"
+            },
+            {
+                "age": null,
+                "kind": "adult"
+            },
+            {
+                "age": 8,
+                "kind": "child"
+            },
+            {
+                "age": 11,
+                "kind": "child"
+            }
+        ],
+        "budget_eur": 2400,
+        "destination": "Lisbona",
+        "preferences": "Quartieri tranquilli",
+        "destination_idea": null,
+        "suggest_destination": false
+    },
+    "plan": {
+        "days": [
+            {
+                "date": "2027-04-14",
+                "stops": [
+                    {
+                        "lat": null,
+                        "lon": null,
+                        "ref": "d1-volo",
+                        "url": null,
+                        "kind": "transfer",
+                        "notes": "Partenza alle 09:40 ora italiana, arrivo alle 11:20 ora di Lisbona.",
+                        "title": "Volo TP827 Milano Malpensa \u2192 Lisbona",
+                        "address": null,
+                        "start_time": "08:40",
+                        "duration_min": 160,
+                        "location_name": "Aeroporto di Milano Malpensa"
+                    },
+                    {
+                        "lat": 38.7742,
+                        "lon": -9.1342,
+                        "ref": "d1-aerobus",
+                        "url": null,
+                        "kind": "transfer",
+                        "notes": null,
+                        "title": "Aerobus dall'aeroporto all'hotel",
+                        "address": null,
+                        "start_time": "11:50",
+                        "duration_min": 35,
+                        "location_name": "Aeroporto Humberto Delgado"
+                    },
+                    {
+                        "lat": 38.7196,
+                        "lon": -9.1455,
+                        "ref": "d1-hotel",
+                        "url": null,
+                        "kind": "rest",
+                        "notes": null,
+                        "title": "Check-in all'Hotel Lisboa Plaza",
+                        "address": "Travessa do Salitre 7, 1269-066 Lisboa",
+                        "start_time": "15:00",
+                        "duration_min": null,
+                        "location_name": "Hotel Lisboa Plaza"
+                    },
+                    {
+                        "lat": 38.7076,
+                        "lon": -9.1365,
+                        "ref": "d1-baixa",
+                        "url": null,
+                        "kind": "activity",
+                        "notes": null,
+                        "title": "Passeggiata in Baixa fino a Pra\u00e7a do Com\u00e9rcio",
+                        "address": null,
+                        "start_time": "16:30",
+                        "duration_min": 120,
+                        "location_name": "Pra\u00e7a do Com\u00e9rcio"
+                    },
+                    {
+                        "lat": 38.7069,
+                        "lon": -9.1458,
+                        "ref": "d1-cena",
+                        "url": null,
+                        "kind": "meal",
+                        "notes": null,
+                        "title": "Cena al Time Out Market",
+                        "address": "Av. 24 de Julho 49, 1200-479 Lisboa",
+                        "start_time": "19:30",
+                        "duration_min": null,
+                        "location_name": "Time Out Market Lisboa"
+                    }
+                ],
+                "title": "Arrivo e Baixa"
+            },
+            {
+                "date": "2027-04-15",
+                "stops": [
+                    {
+                        "lat": 38.7635,
+                        "lon": -9.0937,
+                        "ref": "d2-oceanario",
+                        "url": "https://www.oceanario.pt/",
+                        "kind": "activity",
+                        "notes": "Biglietto famiglia: due adulti e due bambini.",
+                        "title": "Ocean\u00e1rio de Lisboa",
+                        "address": "Esplanada Dom Carlos I, 1990-005 Lisboa",
+                        "start_time": "10:00",
+                        "duration_min": 150,
+                        "location_name": "Ocean\u00e1rio de Lisboa"
+                    },
+                    {
+                        "lat": null,
+                        "lon": null,
+                        "ref": "d2-pranzo",
+                        "url": null,
+                        "kind": "meal",
+                        "notes": null,
+                        "title": "Pranzo sul lungofiume",
+                        "address": null,
+                        "start_time": "13:00",
+                        "duration_min": null,
+                        "location_name": null
+                    },
+                    {
+                        "lat": 38.7646,
+                        "lon": -9.0952,
+                        "ref": "d2-telecabina",
+                        "url": null,
+                        "kind": "activity",
+                        "notes": null,
+                        "title": "Telecabina sul Tago",
+                        "address": null,
+                        "start_time": "15:00",
+                        "duration_min": 40,
+                        "location_name": "Telecabine Lisboa"
+                    }
+                ],
+                "title": "Ocean\u00e1rio e Parque das Na\u00e7\u00f5es"
+            },
+            {
+                "date": "2027-04-16",
+                "stops": [
+                    {
+                        "lat": 38.7141,
+                        "lon": -9.1415,
+                        "ref": "d3-treno",
+                        "url": null,
+                        "kind": "transfer",
+                        "notes": null,
+                        "title": "Treno da Rossio a Sintra",
+                        "address": null,
+                        "start_time": "08:45",
+                        "duration_min": 40,
+                        "location_name": "Esta\u00e7\u00e3o do Rossio"
+                    },
+                    {
+                        "lat": 38.7876,
+                        "lon": -9.3906,
+                        "ref": "d3-pena",
+                        "url": "https://www.parquesdesintra.pt/",
+                        "kind": "activity",
+                        "notes": null,
+                        "title": "Pal\u00e1cio da Pena",
+                        "address": null,
+                        "start_time": "10:30",
+                        "duration_min": 180,
+                        "location_name": "Parque e Pal\u00e1cio Nacional da Pena"
+                    },
+                    {
+                        "lat": null,
+                        "lon": null,
+                        "ref": "d3-pranzo",
+                        "url": null,
+                        "kind": "meal",
+                        "notes": null,
+                        "title": "Pranzo nel centro di Sintra",
+                        "address": null,
+                        "start_time": "13:45",
+                        "duration_min": null,
+                        "location_name": null
+                    },
+                    {
+                        "lat": null,
+                        "lon": null,
+                        "ref": "d3-rientro",
+                        "url": null,
+                        "kind": "transfer",
+                        "notes": null,
+                        "title": "Treno di rientro a Lisbona",
+                        "address": null,
+                        "start_time": "17:00",
+                        "duration_min": 40,
+                        "location_name": null
+                    }
+                ],
+                "title": "Sintra"
+            },
+            {
+                "date": "2027-04-17",
+                "stops": [
+                    {
+                        "lat": 38.6916,
+                        "lon": -9.216,
+                        "ref": "d4-torre",
+                        "url": null,
+                        "kind": "activity",
+                        "notes": null,
+                        "title": "Torre di Bel\u00e9m",
+                        "address": null,
+                        "start_time": "10:00",
+                        "duration_min": 60,
+                        "location_name": "Torre de Bel\u00e9m"
+                    },
+                    {
+                        "lat": null,
+                        "lon": null,
+                        "ref": "d4-pasteis",
+                        "url": null,
+                        "kind": "meal",
+                        "notes": null,
+                        "title": "Merenda ai Past\u00e9is de Bel\u00e9m",
+                        "address": "Rua de Bel\u00e9m 84-92, 1300-085 Lisboa",
+                        "start_time": "11:15",
+                        "duration_min": null,
+                        "location_name": "Past\u00e9is de Bel\u00e9m"
+                    },
+                    {
+                        "lat": 38.6979,
+                        "lon": -9.2068,
+                        "ref": "d4-mosteiro",
+                        "url": null,
+                        "kind": "activity",
+                        "notes": null,
+                        "title": "Mosteiro dos Jer\u00f3nimos",
+                        "address": null,
+                        "start_time": "12:00",
+                        "duration_min": 90,
+                        "location_name": "Mosteiro dos Jer\u00f3nimos"
+                    },
+                    {
+                        "lat": null,
+                        "lon": null,
+                        "ref": "d4-tram",
+                        "url": null,
+                        "kind": "transfer",
+                        "notes": null,
+                        "title": "Tram 15 verso il centro",
+                        "address": null,
+                        "start_time": "16:00",
+                        "duration_min": 25,
+                        "location_name": null
+                    }
+                ],
+                "title": "Bel\u00e9m"
+            },
+            {
+                "date": "2027-04-18",
+                "stops": [
+                    {
+                        "lat": 38.7121,
+                        "lon": -9.1394,
+                        "ref": "d5-elevador",
+                        "url": null,
+                        "kind": "activity",
+                        "notes": null,
+                        "title": "Elevador de Santa Justa",
+                        "address": null,
+                        "start_time": "09:30",
+                        "duration_min": 45,
+                        "location_name": "Elevador de Santa Justa"
+                    },
+                    {
+                        "lat": null,
+                        "lon": null,
+                        "ref": "d5-checkout",
+                        "url": null,
+                        "kind": "rest",
+                        "notes": null,
+                        "title": "Check-out e pranzo leggero",
+                        "address": null,
+                        "start_time": "11:00",
+                        "duration_min": null,
+                        "location_name": null
+                    },
+                    {
+                        "lat": null,
+                        "lon": null,
+                        "ref": "d5-volo",
+                        "url": null,
+                        "kind": "transfer",
+                        "notes": null,
+                        "title": "Volo TP826 Lisbona \u2192 Milano Malpensa",
+                        "address": null,
+                        "start_time": "18:10",
+                        "duration_min": 155,
+                        "location_name": "Aeroporto Humberto Delgado"
+                    }
+                ],
+                "title": "Ultima mattina e rientro"
+            }
+        ],
+        "title": "Lisbona in famiglia, 14-18 aprile 2027",
+        "summary": "Cinque giorni a Lisbona per due adulti e due bambini, con base all'Hotel Lisboa Plaza vicino ad Avenida da Liberdade.\nVoli TAP diretti da Malpensa, Ocean\u00e1rio, Sintra e Bel\u00e9m con ritmi adatti ai bambini.\nCosto stimato: circa 1.690 \u20ac (voli 812 \u20ac, hotel 736 \u20ac, ingressi e trasporti 142 \u20ac).",
+        "bookings": [
+            {
+                "kind": "transport",
+                "link": "https://www.expedia.it/Flights-Search?trip=roundtrip&leg1=from:MXP,to:LIS,departure:2027-04-14TANYT&leg2=from:LIS,to:MXP,departure:2027-04-18TANYT&passengers=adults:2,children:2[9;6],seniors:0,infantinlap:N&options=cabinclass:economy&mode=search",
+                "notes": "Andata TP827 il 14 aprile, ritorno TP826 il 18 aprile. Bagaglio incluso.",
+                "phone": null,
+                "price": {
+                    "status": "verified",
+                    "currency": "EUR",
+                    "source_url": "https://www.expedia.it/Flights-Search?trip=roundtrip&leg1=from:MXP,to:LIS,departure:2027-04-14TANYT&leg2=from:LIS,to:MXP,departure:2027-04-18TANYT&passengers=adults:2,children:2[9;6],seniors:0,infantinlap:N&options=cabinclass:economy&mode=search",
+                    "amount_cents": 81200,
+                    "retrieved_at": "2026-10-12T12:01:34+02:00"
+                },
+                "title": "Volo TAP Milano Malpensa \u21c4 Lisbona",
+                "vendor": "TAP Air Portugal",
+                "book_by": "2027-02-26T20:00:00Z",
+                "stop_ref": "d1-volo",
+                "scheduled_for": "2027-04-14T08:40:00+01:00",
+                "book_by_reason": "Le tariffe per met\u00e0 aprile di solito salgono da marzo."
+            },
+            {
+                "kind": "lodging",
+                "link": "https://www.expedia.it/Lisbona-Hotel-Hotel-Lisboa-Plaza.h524981.Informazioni-Hotel?chkin=2027-04-14&chkout=2027-04-18&rm1=a2:c9:c6",
+                "notes": "Cancellazione gratuita fino all'11 aprile 2027.",
+                "phone": null,
+                "price": {
+                    "status": "verified",
+                    "currency": "EUR",
+                    "source_url": "https://www.expedia.it/Lisbona-Hotel-Hotel-Lisboa-Plaza.h524981.Informazioni-Hotel?chkin=2027-04-14&chkout=2027-04-18&rm1=a2:c9:c6",
+                    "amount_cents": 73600,
+                    "retrieved_at": "2026-10-12T12:02:41+02:00"
+                },
+                "title": "Hotel Lisboa Plaza, camera familiare (4 notti)",
+                "vendor": "Hotel Lisboa Plaza",
+                "book_by": "2027-03-14T20:00:00Z",
+                "stop_ref": "d1-hotel",
+                "scheduled_for": "2027-04-14T15:00:00+01:00",
+                "book_by_reason": "Ad aprile le camere familiari in centro finiscono presto."
+            },
+            {
+                "kind": "ticket",
+                "link": null,
+                "notes": null,
+                "phone": null,
+                "price": {
+                    "status": "estimated",
+                    "currency": "EUR",
+                    "source_url": "https://www.oceanario.pt/",
+                    "amount_cents": 6000,
+                    "retrieved_at": "2026-10-12T12:03:12+02:00"
+                },
+                "title": "Biglietti Ocean\u00e1rio de Lisboa",
+                "vendor": "Ocean\u00e1rio de Lisboa",
+                "book_by": null,
+                "stop_ref": "d2-oceanario",
+                "scheduled_for": "2027-04-15T10:00:00+01:00",
+                "book_by_reason": null
+            },
+            {
+                "kind": "ticket",
+                "link": null,
+                "notes": null,
+                "phone": null,
+                "price": {
+                    "status": "estimated",
+                    "currency": "EUR",
+                    "source_url": "https://www.parquesdesintra.pt/",
+                    "amount_cents": 6400,
+                    "retrieved_at": "2026-10-12T12:03:20+02:00"
+                },
+                "title": "Ingressi Pal\u00e1cio da Pena a orario fisso",
+                "vendor": "Parques de Sintra",
+                "book_by": "2027-04-09T20:00:00+01:00",
+                "stop_ref": "d3-pena",
+                "scheduled_for": "2027-04-16T10:30:00+01:00",
+                "book_by_reason": "Gli ingressi a orario fisso del fine settimana si esauriscono."
+            },
+            {
+                "kind": "transport",
+                "link": null,
+                "notes": null,
+                "phone": null,
+                "price": {
+                    "status": "estimated",
+                    "currency": "EUR",
+                    "source_url": "https://www.aerobus.pt/",
+                    "amount_cents": 1800,
+                    "retrieved_at": "2026-10-12T12:03:55+02:00"
+                },
+                "title": "Aerobus aeroporto \u2192 centro",
+                "vendor": "Aerobus",
+                "book_by": null,
+                "stop_ref": "d1-aerobus",
+                "scheduled_for": "2027-04-14T11:50:00+01:00",
+                "book_by_reason": null
+            }
+        ],
+        "end_date": "2027-04-18",
+        "timezone": "Europe/Lisbon",
+        "warnings": [
+            "I prezzi di Ocean\u00e1rio, Pal\u00e1cio da Pena e Aerobus sono stimati dai siti ufficiali.",
+            "Prezzi di voli e hotel verificati su Expedia il 12 ottobre 2026: possono cambiare."
+        ],
+        "travelers": 4,
+        "start_date": "2027-04-14",
+        "destination": "Lisbona, Portogallo",
+        "alternatives": [
+            {
+                "kind": "transport",
+                "link": "https://www.expedia.it/Flights-Search?trip=roundtrip&leg1=from:MXP,to:LIS,departure:2027-04-14TANYT&leg2=from:LIS,to:MXP,departure:2027-04-18TANYT&passengers=adults:2,children:2[9;6],seniors:0,infantinlap:N&options=cabinclass:economy&mode=search",
+                "notes": "Pi\u00f9 economico ma senza bagaglio in stiva; ritorno alle 12:45.",
+                "phone": null,
+                "price": {
+                    "status": "verified",
+                    "currency": "EUR",
+                    "source_url": "https://www.expedia.it/Flights-Search?trip=roundtrip&leg1=from:MXP,to:LIS,departure:2027-04-14TANYT&leg2=from:LIS,to:MXP,departure:2027-04-18TANYT&passengers=adults:2,children:2[9;6],seniors:0,infantinlap:N&options=cabinclass:economy&mode=search",
+                    "amount_cents": 69800,
+                    "retrieved_at": "2026-10-12T12:01:34+02:00"
+                },
+                "title": "Volo easyJet Milano Malpensa \u21c4 Lisbona",
+                "vendor": "easyJet",
+                "book_by": null,
+                "stop_ref": null,
+                "scheduled_for": "2027-04-14T09:25:00+01:00",
+                "book_by_reason": null
+            },
+            {
+                "kind": "lodging",
+                "link": "https://www.booking.com/searchresults.it.html?ss=Lisbona%2C%20Portogallo&checkin=2027-04-14&checkout=2027-04-18&group_adults=2&group_children=2&age=9&age=6&no_rooms=1&selected_currency=EUR",
+                "notes": null,
+                "phone": null,
+                "price": {
+                    "status": "estimated",
+                    "currency": "EUR",
+                    "source_url": "https://www.martinhal.com/lisbon-chiado/",
+                    "amount_cents": 128000,
+                    "retrieved_at": "2026-10-12T12:02:58+02:00"
+                },
+                "title": "Martinhal Lisbon Chiado, appartamento familiare",
+                "vendor": "Martinhal Lisbon Chiado",
+                "book_by": null,
+                "stop_ref": null,
+                "scheduled_for": "2027-04-14T15:00:00+01:00",
+                "book_by_reason": null
+            }
+        ],
+        "lodging_name": "Hotel Lisboa Plaza",
+        "lodging_address": "Travessa do Salitre 7, 1269-066 Lisboa"
+    },
+    "booking_links": [
+        {
+            "allowed": true,
+            "provider": "expedia",
+            "label": "Expedia",
+            "host": "www.expedia.it"
+        },
+        {
+            "allowed": true,
+            "provider": "expedia",
+            "label": "Expedia",
+            "host": "www.expedia.it"
+        },
+        null,
+        null,
+        null
+    ],
+    "alternative_links": [
+        {
+            "allowed": true,
+            "provider": "expedia",
+            "label": "Expedia",
+            "host": "www.expedia.it"
+        },
+        {
+            "allowed": true,
+            "provider": "booking",
+            "label": "Booking.com",
+            "host": "www.booking.com"
+        }
+    ],
+    "import_url": "http://localhost:3999/import?plan=646f6139-324b-4817-96b5-d8dd4d392174"
+}
