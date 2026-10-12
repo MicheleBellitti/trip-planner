@@ -1,0 +1,442 @@
+{
+  "title": "Edimburgo e Highlands, maggio",
+  "destination": "Edimburgo, Regno Unito",
+  "timezone": "Europe/London",
+  "start_date": "2027-05-13",
+  "end_date": "2027-05-18",
+  "travelers": 3,
+  "lodging_name": "Old Town Residence",
+  "lodging_address": "Blackfriars Street, Edinburgh EH1 1NB",
+  "days": [
+    {
+      "date": "2027-05-13",
+      "title": "Arrivo e Royal Mile",
+      "stops": [
+        {
+          "ref": "d1-s1",
+          "title": "Volo Milano Malpensa → Edimburgo",
+          "kind": "transfer",
+          "start_time": "06:10",
+          "duration_min": 160,
+          "location_name": "Aeroporto di Milano Malpensa",
+          "notes": "Partenza alle 07:10 ora italiana, arrivo alle 08:50 ora di Edimburgo. Volo diretto, solo bagaglio a mano."
+        },
+        {
+          "ref": "d1-s2",
+          "title": "Tram dall'aeroporto al centro",
+          "kind": "transfer",
+          "start_time": "09:30",
+          "duration_min": 35,
+          "location_name": "Edinburgh Airport",
+          "lat": 55.95,
+          "lon": -3.3725,
+          "notes": "Biglietto Airport Single alla macchinetta della fermata; i bambini pagano la tariffa ridotta."
+        },
+        {
+          "ref": "d1-s3",
+          "title": "Bagagli all'appartamento",
+          "kind": "rest",
+          "start_time": "10:15",
+          "duration_min": 15,
+          "location_name": "Old Town Residence",
+          "address": "Blackfriars Street, Edinburgh EH1 1NB",
+          "notes": "Chiedere alla struttura di lasciare i bagagli prima del check-in."
+        },
+        {
+          "ref": "d1-s4",
+          "title": "Passeggiata sul Royal Mile",
+          "kind": "activity",
+          "start_time": "10:45",
+          "duration_min": 90,
+          "location_name": "Royal Mile",
+          "lat": 55.9502,
+          "lon": -3.1875
+        },
+        {
+          "ref": "d1-s5",
+          "title": "Pranzo al Grassmarket",
+          "kind": "meal",
+          "start_time": "12:30",
+          "duration_min": 60,
+          "location_name": "Grassmarket",
+          "lat": 55.9475,
+          "lon": -3.1965
+        },
+        {
+          "ref": "d1-s6",
+          "title": "Check-in e riposo",
+          "kind": "rest",
+          "start_time": "15:00",
+          "duration_min": 90,
+          "location_name": "Old Town Residence",
+          "address": "Blackfriars Street, Edinburgh EH1 1NB"
+        }
+      ]
+    },
+    {
+      "date": "2027-05-14",
+      "title": "Castello e museo",
+      "stops": [
+        {
+          "ref": "d2-s1",
+          "title": "Edinburgh Castle",
+          "kind": "activity",
+          "start_time": "09:30",
+          "duration_min": 120,
+          "location_name": "Edinburgh Castle",
+          "address": "Castlehill, Edinburgh EH1 2NG",
+          "lat": 55.9486,
+          "lon": -3.1999,
+          "url": "https://www.edinburghcastle.scot/",
+          "notes": "Ingresso a orario fisso: arrivare 15 minuti prima. Da non perdere i gioielli della corona di Scozia."
+        },
+        {
+          "ref": "d2-s2",
+          "title": "Pranzo in Victoria Street",
+          "kind": "meal",
+          "start_time": "12:15",
+          "duration_min": 60,
+          "location_name": "Victoria Street"
+        },
+        {
+          "ref": "d2-s3",
+          "title": "National Museum of Scotland",
+          "kind": "activity",
+          "start_time": "13:45",
+          "duration_min": 120,
+          "location_name": "National Museum of Scotland",
+          "address": "Chambers St, Edinburgh EH1 1JF",
+          "lat": 55.9469,
+          "lon": -3.1899,
+          "url": "https://www.nms.ac.uk/",
+          "notes": "Ingresso gratuito. Le sale sugli animali e sulla scienza piacciono ai bambini."
+        },
+        {
+          "ref": "d2-s4",
+          "title": "Cena in Old Town",
+          "kind": "meal",
+          "start_time": "19:30",
+          "duration_min": 90
+        }
+      ]
+    },
+    {
+      "date": "2027-05-15",
+      "title": "Una giornata nelle Highlands",
+      "stops": [
+        {
+          "ref": "d3-s1",
+          "title": "A piedi al punto di ritrovo del tour",
+          "kind": "transfer",
+          "start_time": "07:35",
+          "duration_min": 15,
+          "notes": "L'indirizzo esatto del ritrovo è nella conferma della prenotazione."
+        },
+        {
+          "ref": "d3-s2",
+          "title": "Tour di Loch Ness, Glencoe e Highlands",
+          "kind": "activity",
+          "start_time": "08:00",
+          "duration_min": 720,
+          "notes": "Giornata intera in minibus con soste fotografiche; pranzo libero lungo il percorso."
+        },
+        {
+          "ref": "d3-s3",
+          "title": "Cena al Grassmarket",
+          "kind": "meal",
+          "start_time": "20:30",
+          "duration_min": 90,
+          "location_name": "The Grassmarket Kitchen",
+          "notes": "Vedi la prenotazione collegata."
+        }
+      ]
+    },
+    {
+      "date": "2027-05-16",
+      "title": "Arthur's Seat e Holyrood",
+      "stops": [
+        {
+          "ref": "d4-s1",
+          "title": "Salita ad Arthur's Seat",
+          "kind": "activity",
+          "start_time": "09:30",
+          "duration_min": 150,
+          "location_name": "Arthur's Seat",
+          "lat": 55.9441,
+          "lon": -3.1618,
+          "notes": "Sentiero facile dal lato di Holyrood Park; scarpe comode e una giacca contro il vento."
+        },
+        {
+          "ref": "d4-s2",
+          "title": "Pranzo vicino a Holyrood",
+          "kind": "meal",
+          "start_time": "12:30",
+          "duration_min": 60
+        },
+        {
+          "ref": "d4-s3",
+          "title": "Palace of Holyroodhouse",
+          "kind": "activity",
+          "start_time": "14:00",
+          "duration_min": 90,
+          "location_name": "Palace of Holyroodhouse",
+          "address": "Canongate, Edinburgh EH8 8DX",
+          "lat": 55.9527,
+          "lon": -3.1722,
+          "url": "https://www.rct.uk/"
+        },
+        {
+          "ref": "d4-s4",
+          "title": "Pomeriggio libero",
+          "kind": "rest",
+          "start_time": "16:00",
+          "duration_min": 120,
+          "notes": "Riposo in appartamento dopo la camminata del mattino."
+        }
+      ]
+    },
+    {
+      "date": "2027-05-17",
+      "title": "Leith e Dean Village",
+      "stops": [
+        {
+          "ref": "d5-s1",
+          "title": "Tram per Leith",
+          "kind": "transfer",
+          "start_time": "09:45",
+          "duration_min": 25,
+          "location_name": "Princes Street"
+        },
+        {
+          "ref": "d5-s2",
+          "title": "Royal Yacht Britannia",
+          "kind": "activity",
+          "start_time": "10:15",
+          "duration_min": 120,
+          "location_name": "The Royal Yacht Britannia",
+          "address": "Ocean Terminal, Leith, Edinburgh EH6 6JJ",
+          "lat": 55.9823,
+          "lon": -3.1771,
+          "url": "https://www.royalyachtbritannia.co.uk/"
+        },
+        {
+          "ref": "d5-s3",
+          "title": "Pranzo a The Shore",
+          "kind": "meal",
+          "start_time": "12:45",
+          "duration_min": 75,
+          "location_name": "The Shore, Leith"
+        },
+        {
+          "ref": "d5-s4",
+          "title": "Dean Village e Water of Leith",
+          "kind": "activity",
+          "start_time": "15:30",
+          "duration_min": 90,
+          "location_name": "Dean Village",
+          "lat": 55.9526,
+          "lon": -3.2178,
+          "notes": "Passeggiata lungo il fiume fino a Stockbridge."
+        }
+      ]
+    },
+    {
+      "date": "2027-05-18",
+      "title": "Partenza",
+      "stops": [
+        {
+          "ref": "d6-s1",
+          "title": "Check-out",
+          "kind": "rest",
+          "start_time": "10:00",
+          "duration_min": 15,
+          "location_name": "Old Town Residence",
+          "notes": "Lasciare i bagagli in un deposito vicino alla stazione di Waverley."
+        },
+        {
+          "ref": "d6-s2",
+          "title": "Calton Hill",
+          "kind": "activity",
+          "start_time": "10:45",
+          "duration_min": 75,
+          "location_name": "Calton Hill",
+          "lat": 55.9553,
+          "lon": -3.1826
+        },
+        {
+          "ref": "d6-s3",
+          "title": "Pranzo vicino a Princes Street",
+          "kind": "meal",
+          "start_time": "12:30",
+          "duration_min": 60
+        },
+        {
+          "ref": "d6-s4",
+          "title": "Tram per l'aeroporto",
+          "kind": "transfer",
+          "start_time": "15:30",
+          "duration_min": 35,
+          "location_name": "Princes Street"
+        },
+        {
+          "ref": "d6-s5",
+          "title": "Volo Edimburgo → Milano Malpensa",
+          "kind": "transfer",
+          "start_time": "18:30",
+          "duration_min": 135,
+          "location_name": "Edinburgh Airport",
+          "notes": "Arrivo alle 21:45 ora italiana. In aeroporto almeno 2 ore prima."
+        }
+      ]
+    }
+  ],
+  "bookings": [
+    {
+      "title": "Voli Milano Malpensa ⇄ Edimburgo",
+      "kind": "transport",
+      "vendor": "easyJet",
+      "book_by": "2027-03-20T20:00:00+00:00",
+      "book_by_reason": "Tariffa verificata il 1º marzo; per maggio i prezzi tendono a salire da fine marzo.",
+      "scheduled_for": "2027-05-13T06:10:00+01:00",
+      "link": "https://www.kiwi.com/en/search/results/milan-italy/edinburgh-united-kingdom/2027-05-13/2027-05-18?adults=2&children=1&infants=0",
+      "price": {
+        "amount_cents": 48600,
+        "currency": "EUR",
+        "status": "verified",
+        "source_url": "https://www.kiwi.com/en/search/results/milan-italy/edinburgh-united-kingdom/2027-05-13/2027-05-18?adults=2&children=1&infants=0",
+        "retrieved_at": "2027-03-01T10:15:00+00:00"
+      },
+      "stop_ref": "d1-s1",
+      "notes": "Andata e ritorno per tre persone, voli diretti, solo bagaglio a mano. Ritorno il 18 maggio alle 18:30 ora di Edimburgo."
+    },
+    {
+      "title": "Appartamento in Old Town, 5 notti",
+      "kind": "lodging",
+      "vendor": "Old Town Residence",
+      "book_by": "2027-04-12T20:00:00+01:00",
+      "book_by_reason": "A maggio gli appartamenti per tre persone in Old Town si esauriscono con settimane di anticipo.",
+      "scheduled_for": "2027-05-13T15:00:00+01:00",
+      "link": "https://www.booking.com/searchresults.it.html?ss=Old%20Town%2C%20Edimburgo&checkin=2027-05-13&checkout=2027-05-18&group_adults=2&group_children=1&age=10&no_rooms=1&selected_currency=EUR",
+      "price": {
+        "amount_cents": 114000,
+        "currency": "EUR",
+        "status": "estimated",
+        "source_url": "https://www.booking.com/searchresults.it.html?ss=Old%20Town%2C%20Edimburgo&checkin=2027-05-13&checkout=2027-05-18&group_adults=2&group_children=1&age=10&no_rooms=1&selected_currency=EUR",
+        "retrieved_at": "2027-03-01T10:20:00+00:00"
+      },
+      "stop_ref": "d1-s6",
+      "notes": "Due camere e cucina. Cancellazione gratuita fino al 6 maggio secondo la pagina della struttura."
+    },
+    {
+      "title": "Ingressi a Edinburgh Castle, ore 9:30",
+      "kind": "ticket",
+      "vendor": "Edinburgh Castle",
+      "book_by": "2027-05-07T20:00:00+01:00",
+      "book_by_reason": "Gli ingressi del mattino a orario fisso finiscono nei giorni prima.",
+      "scheduled_for": "2027-05-14T09:30:00+01:00",
+      "link": null,
+      "price": {
+        "amount_cents": 5580,
+        "currency": "GBP",
+        "status": "estimated",
+        "source_url": "https://www.edinburghcastle.scot/",
+        "retrieved_at": "2027-03-01T10:40:00+00:00"
+      },
+      "stop_ref": "d2-s1",
+      "notes": "Due adulti e un bambino. Si prenota sul sito ufficiale, indicato nella tappa."
+    },
+    {
+      "title": "Tour di un giorno: Loch Ness, Glencoe e Highlands",
+      "kind": "activity",
+      "vendor": "Rabbie's",
+      "book_by": "2027-04-30T20:00:00+01:00",
+      "book_by_reason": "I tour del sabato hanno pochi posti.",
+      "scheduled_for": "2027-05-15T08:00:00+01:00",
+      "price": {
+        "amount_cents": 20700,
+        "currency": "GBP",
+        "status": "estimated",
+        "source_url": "https://www.rabbies.com/",
+        "retrieved_at": "2027-03-01T10:45:00+00:00"
+      },
+      "stop_ref": "d3-s2",
+      "notes": "Minibus da 16 posti. Età minima e riduzioni per i bambini da verificare sul sito."
+    },
+    {
+      "title": "Cena del sabato al Grassmarket",
+      "kind": "restaurant",
+      "vendor": "The Grassmarket Kitchen",
+      "book_by": "2027-05-12T20:00:00+01:00",
+      "book_by_reason": "Il sabato sera il locale è spesso pieno.",
+      "scheduled_for": "2027-05-15T20:30:00+01:00",
+      "phone": "+44 131 000 0000",
+      "stop_ref": "d3-s3",
+      "notes": "Tavolo per tre, dopo il rientro dal tour."
+    },
+    {
+      "title": "Ingressi al Royal Yacht Britannia",
+      "kind": "ticket",
+      "vendor": "The Royal Yacht Britannia",
+      "book_by": null,
+      "scheduled_for": "2027-05-17T10:15:00+01:00",
+      "price": {
+        "amount_cents": 4900,
+        "currency": "GBP",
+        "status": "estimated",
+        "source_url": "https://www.royalyachtbritannia.co.uk/",
+        "retrieved_at": "2027-03-01T10:50:00+00:00"
+      },
+      "stop_ref": "d5-s2",
+      "notes": "La fonte non indica una scadenza: si può prenotare anche pochi giorni prima."
+    },
+    {
+      "title": "Assicurazione di viaggio",
+      "kind": "other",
+      "book_by": "2027-05-06T20:00:00+01:00",
+      "book_by_reason": "Va stipulata prima della partenza per coprire l'annullamento.",
+      "notes": "Facoltativa: copre annullamento, spese mediche e bagaglio."
+    }
+  ],
+  "alternatives": [
+    {
+      "title": "Voli Bergamo ⇄ Edimburgo",
+      "kind": "transport",
+      "vendor": "Ryanair",
+      "book_by": "2027-03-20T20:00:00+00:00",
+      "book_by_reason": "Stessa finestra della tariffa scelta.",
+      "scheduled_for": "2027-05-13T07:00:00+01:00",
+      "link": "https://www.lastminute.com/s/flights/search/v2/results?passengers.adults=2&passengers.children=1&passengers.childrenAge[0]=10&itinerary.type=ROUND_TRIP&itinerary.path[0].departure=BGY&itinerary.path[0].arrival=EDI&itinerary.path[0].date=20270513&itinerary.path[1].departure=EDI&itinerary.path[1].arrival=BGY&itinerary.path[1].date=20270518",
+      "price": {
+        "amount_cents": 40200,
+        "currency": "EUR",
+        "status": "verified",
+        "source_url": "https://www.lastminute.com/s/flights/search/v2/results?passengers.adults=2&passengers.children=1&passengers.childrenAge[0]=10&itinerary.type=ROUND_TRIP&itinerary.path[0].departure=BGY&itinerary.path[0].arrival=EDI&itinerary.path[0].date=20270513&itinerary.path[1].departure=EDI&itinerary.path[1].arrival=BGY&itinerary.path[1].date=20270518",
+        "retrieved_at": "2027-03-01T10:18:00+00:00"
+      },
+      "notes": "84 € in meno, ma parte da Orio al Serio e il bagaglio a mano grande si paga a parte."
+    },
+    {
+      "title": "Appartamento a Leith, 5 notti",
+      "kind": "lodging",
+      "vendor": "Airbnb",
+      "book_by": "2027-04-12T20:00:00+01:00",
+      "scheduled_for": "2027-05-13T16:00:00+01:00",
+      "link": "https://www.airbnb.it/s/Leith--Edimburgo/homes?checkin=2027-05-13&checkout=2027-05-18&adults=2&children=1&infants=0&pets=0",
+      "price": {
+        "amount_cents": 96000,
+        "currency": "EUR",
+        "status": "estimated",
+        "source_url": "https://www.airbnb.it/s/Leith--Edimburgo/homes?checkin=2027-05-13&checkout=2027-05-18&adults=2&children=1&infants=0&pets=0",
+        "retrieved_at": "2027-03-01T10:30:00+00:00"
+      },
+      "notes": "180 € in meno e vicino al Britannia, ma a 25 minuti di tram dal centro."
+    }
+  ],
+  "warnings": [
+    "Expedia non ha risposto alla ricerca dei voli: i voli vengono da Kiwi.com e lastminute.com.",
+    "Prezzi stimati: alloggio, castello, tour e Britannia sono letti sui siti e possono cambiare al momento della prenotazione.",
+    "Castello, tour e Britannia costano in sterline: il totale in euro dipende dal cambio del giorno.",
+    "Il tour nelle Highlands dura circa 12 ore: per un bambino di 10 anni è una giornata lunga."
+  ],
+  "summary": "Sei giorni a Edimburgo dal 13 al 18 maggio 2027 per due adulti e un bambino di 10 anni, con una giornata nelle Highlands.\nVoli diretti da Malpensa e appartamento in Old Town a due passi dal Royal Mile.\nTotale stimato circa 1.990 € (1.626 € più 311,80 £), entro il budget di 2.500 €; pasti esclusi."
+}

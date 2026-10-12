@@ -1,0 +1,40 @@
+# Per-profile values for the agent templates in this directory.
+#
+# scripts/render_profiles.py renders agents/<name>.md and agents/environment.yaml once per
+# profile into profiles/<profile>/ (agents/<name>.md, agents/tools/submit_plan.json,
+# environments/cloud.yaml). profiles/** is generated: change the templates or this file, then
+# run `uv run python ../scripts/render_profiles.py` from backend/.
+#
+# Only models and numbers differ between profiles (plus the names that must be unique per
+# workspace). Prompts are the same text in both profiles.
+#
+# Templates use {{ key }} placeholders. Available keys: profile, environment_name,
+# models.<agent>, session_budget_cents, session_budget_usd (derived), web_search_cap,
+# max_follow_ups.
+
+profiles:
+  development:
+    # All code work and every local run. Sessions cost cents.
+    environment_name: trip-planner-development
+    models:
+      coordinator: claude-sonnet-5-5
+      flights: claude-haiku-5-5
+      lodging: claude-haiku-5-5
+      activities: claude-haiku-5-5
+      transport: claude-haiku-5-5
+    session_budget_cents: 60 # SESSION_BUDGET_CENTS default for this profile (US cents)
+    web_search_cap: 5 # web_search calls per agent per session
+    max_follow_ups: 2 # follow-ups the coordinator may send each subagent
+
+  production:
+    # Final checks and real plans only, after evals (deploy-agents.yml).
+    environment_name: trip-planner-production
+    models:
+      coordinator: claude-opus-5-5
+      flights: claude-sonnet-5-5
+      lodging: claude-sonnet-5-5
+      activities: claude-sonnet-5-5
+      transport: claude-sonnet-5-5
+    session_budget_cents: 400
+    web_search_cap: 12
+    max_follow_ups: 2

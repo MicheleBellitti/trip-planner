@@ -1,0 +1,308 @@
+{
+  "$comment": "URL templates for build_link.py, one per provider. Source: docs/research/integrations.md section 1 (each template was opened in a browser on checked_on and the prefilled fields were read back). Every host must stay inside backend/app/links.py PROVIDERS[allowlist] (test_build_link.py checks it). Placeholders: {name} is filled by build_link.py and percent-encoded (characters in 'safe' / 'key_safe' stay as they are); a value that is exactly {name[]} repeats the key once per list item, with {i} in the key replaced by the item's index; a pair is left out when one of its placeholders has no value. 'params' are the only command-line parameters build_link.py accepts for the provider.",
+  "format_version": 1,
+  "checked_on": "2026-10-12",
+  "providers": {
+    "booking": {
+      "label": "Booking.com",
+      "category": "lodging",
+      "host": "www.booking.com",
+      "allowlist": "booking",
+      "status": "verified",
+      "unverified": [],
+      "evidence": "integrations.md 1.2",
+      "url": "https://www.booking.com/searchresults.it.html",
+      "query": [
+        ["ss", "{destination}"],
+        ["checkin", "{checkin}"],
+        ["checkout", "{checkout}"],
+        ["group_adults", "{adults}"],
+        ["group_children", "{children}"],
+        ["age", "{child_ages[]}"],
+        ["no_rooms", "{rooms}"],
+        ["selected_currency", "EUR"]
+      ],
+      "params": {
+        "destination": {"type": "place", "required": true, "help": "Where to search, free text; Italian names work. Most specific first, e.g. 'Alfama, Lisbona'."},
+        "checkin": {"type": "date", "required": true, "help": "Check-in date, YYYY-MM-DD."},
+        "checkout": {"type": "date", "required": true, "after": "checkin", "help": "Check-out date, YYYY-MM-DD, after checkin."},
+        "adults": {"type": "count", "required": true, "min": 1, "max": 9, "help": "Number of adults (18 and over)."},
+        "child-ages": {"type": "ages", "help": "Ages of the children (0-17), comma-separated, e.g. 8,5. Omit when there are none."},
+        "rooms": {"type": "count", "default": 1, "min": 1, "max": 9, "help": "Number of rooms (default 1); at most one room per adult."}
+      },
+      "travellers": "Every child is sent with its age (one 'age' parameter per child, age at check-out)."
+    },
+    "airbnb": {
+      "label": "Airbnb",
+      "category": "lodging",
+      "host": "www.airbnb.it",
+      "allowlist": "airbnb",
+      "status": "verified",
+      "unverified": ["the 2-12 children age band"],
+      "evidence": "integrations.md 1.3",
+      "url": "https://www.airbnb.it/s/{place_slug}/homes",
+      "query": [
+        ["checkin", "{checkin}"],
+        ["checkout", "{checkout}"],
+        ["adults", "{adults}"],
+        ["children", "{children}"],
+        ["infants", "{infants}"],
+        ["pets", "0"]
+      ],
+      "params": {
+        "destination": {"type": "place_parts", "required": true, "help": "City plus province or country, comma-separated, e.g. 'Lisbona, Portogallo' or 'Reggio Emilia, RE'. A bare city name can resolve to the wrong place."},
+        "checkin": {"type": "date", "required": true, "help": "Check-in date, YYYY-MM-DD."},
+        "checkout": {"type": "date", "required": true, "after": "checkin", "help": "Check-out date, YYYY-MM-DD, after checkin."},
+        "adults": {"type": "count", "required": true, "min": 1, "max": 9, "help": "Number of adults (18 and over)."},
+        "child-ages": {"type": "ages", "help": "Ages of the children (0-17), comma-separated, e.g. 8,1. Omit when there are none."}
+      },
+      "travellers": "Airbnb takes no ages: 13-17 are counted as adults, 2-12 as children, under 2 as infants (infants are not guests)."
+    },
+    "google_flights": {
+      "label": "Google Voli",
+      "category": "flights",
+      "host": "www.google.com",
+      "allowlist": "google_flights",
+      "status": "verified",
+      "unverified": ["the wording for infants in q (infants are searched as children)"],
+      "evidence": "integrations.md 1.4",
+      "url": "https://www.google.com/travel/flights",
+      "query": [
+        ["q", "{q}"],
+        ["hl", "it"],
+        ["gl", "IT"],
+        ["curr", "EUR"]
+      ],
+      "params": {
+        "from": {"type": "iata", "required": true, "help": "Departure airport or metropolitan IATA code, upper case, e.g. MXP or MIL."},
+        "to": {"type": "iata", "required": true, "help": "Arrival airport or metropolitan IATA code, upper case, e.g. LIS."},
+        "depart": {"type": "date", "required": true, "help": "Outbound date, YYYY-MM-DD."},
+        "return": {"type": "date", "on_or_after": "depart", "help": "Return date, YYYY-MM-DD; omit for one way."},
+        "adults": {"type": "count", "required": true, "min": 1, "max": 9, "help": "Number of adults (18 and over)."},
+        "child-ages": {"type": "ages", "help": "Ages of the children (0-17), comma-separated. Omit when there are none."}
+      },
+      "travellers": "Ages cannot be sent: 12-17 are counted as adults, 0-11 as children with a seat. At most one child under 2 per adult."
+    },
+    "expedia_hotels": {
+      "label": "Expedia",
+      "category": "lodging",
+      "host": "www.expedia.it",
+      "allowlist": "expedia",
+      "status": "verified",
+      "unverified": [],
+      "evidence": "integrations.md 1.5",
+      "url": "https://www.expedia.it/Hotel-Search",
+      "safe": ",",
+      "query": [
+        ["destination", "{destination}"],
+        ["startDate", "{checkin}"],
+        ["endDate", "{checkout}"],
+        ["rooms", "{rooms}"],
+        ["adults", "{adults_per_room}"],
+        ["children", "{room_children}"]
+      ],
+      "params": {
+        "destination": {"type": "place", "required": true, "help": "Where to search, free text, e.g. 'Lisbona, Portogallo'."},
+        "checkin": {"type": "date", "required": true, "help": "Check-in date, YYYY-MM-DD."},
+        "checkout": {"type": "date", "required": true, "after": "checkin", "help": "Check-out date, YYYY-MM-DD, after checkin."},
+        "adults": {"type": "count", "required": true, "min": 1, "max": 9, "help": "Number of adults (18 and over), all rooms together."},
+        "child-ages": {"type": "ages", "help": "Ages of the children (0-17), comma-separated. Omit when there are none."},
+        "rooms": {"type": "count", "default": 1, "min": 1, "max": 8, "help": "Number of rooms (default 1); at most one room per adult."}
+      },
+      "travellers": "Adults are spread over the rooms as evenly as possible (every room gets an adult); children go to the rooms in turn, each sent as room_age."
+    },
+    "expedia_flights": {
+      "label": "Expedia",
+      "category": "flights",
+      "host": "www.expedia.it",
+      "allowlist": "expedia",
+      "status": "verified",
+      "unverified": [],
+      "evidence": "integrations.md 1.5",
+      "url": "https://www.expedia.it/Flights-Search",
+      "safe": ":,;[]",
+      "query": [
+        ["trip", "{trip}"],
+        ["leg1", "from:{from},to:{to},departure:{depart}TANYT"],
+        ["leg2", "from:{to},to:{from},departure:{return}TANYT"],
+        ["passengers", "adults:{adults},children:{children}{child_age_list},seniors:0,infantinlap:N"],
+        ["options", "cabinclass:economy"],
+        ["mode", "search"]
+      ],
+      "params": {
+        "from": {"type": "iata", "required": true, "help": "Departure airport or metropolitan IATA code, upper case, e.g. MXP."},
+        "to": {"type": "iata", "required": true, "help": "Arrival airport or metropolitan IATA code, upper case, e.g. LIS."},
+        "depart": {"type": "date", "required": true, "help": "Outbound date, YYYY-MM-DD."},
+        "return": {"type": "date", "on_or_after": "depart", "help": "Return date, YYYY-MM-DD; omit for one way."},
+        "adults": {"type": "count", "required": true, "min": 1, "max": 9, "help": "Number of adults (18 and over)."},
+        "child-ages": {"type": "ages", "help": "Ages of the children (0-17), comma-separated. Omit when there are none."}
+      },
+      "travellers": "Every child 0-17 is sent with its age; children under 2 get their own seat (infantinlap:N). At most one child under 2 per adult."
+    },
+    "kiwi": {
+      "label": "Kiwi.com",
+      "category": "flights",
+      "host": "www.kiwi.com",
+      "allowlist": "kiwi",
+      "status": "verified",
+      "unverified": ["airport-level slugs", "the 2-11 children age band"],
+      "evidence": "integrations.md 1.6",
+      "url": "https://www.kiwi.com/en/search/results/{from_slug}/{to_slug}/{depart}/{return_or_no_return}",
+      "query": [
+        ["adults", "{adults}"],
+        ["children", "{children}"],
+        ["infants", "{infants}"]
+      ],
+      "params": {
+        "from": {"type": "city_country_en", "required": true, "help": "Departure city and country in ENGLISH, comma-separated, e.g. 'Milan, Italy' (becomes milan-italy)."},
+        "to": {"type": "city_country_en", "required": true, "help": "Arrival city and country in ENGLISH, e.g. 'Lisbon, Portugal'."},
+        "depart": {"type": "date", "required": true, "help": "Outbound date, YYYY-MM-DD."},
+        "return": {"type": "date", "on_or_after": "depart", "help": "Return date, YYYY-MM-DD; omit for one way."},
+        "adults": {"type": "count", "required": true, "min": 1, "max": 9, "help": "Number of adults (18 and over)."},
+        "child-ages": {"type": "ages", "help": "Ages of the children (0-17), comma-separated. Omit when there are none."}
+      },
+      "travellers": "Kiwi takes no ages: 12-17 are counted as adults, 2-11 as children, under 2 as infants. At most one infant per adult.",
+      "warning": "A slug Kiwi does not know makes it silently restore the user's previous search: prefer the Kiwi MCP and use this link only as a fallback, with English city names."
+    },
+    "lastminute": {
+      "label": "lastminute.com",
+      "category": "flights",
+      "host": "www.lastminute.com",
+      "allowlist": "lastminute",
+      "status": "partly_verified",
+      "unverified": ["one way (itinerary.type=ONE_WAY)", "the child age parameter passengers.childrenAge[i]", "the Italian market host www.it.lastminute.com"],
+      "evidence": "integrations.md 1.7",
+      "url": "https://www.lastminute.com/s/flights/search/v2/results",
+      "key_safe": "[]",
+      "query": [
+        ["passengers.adults", "{adults}"],
+        ["passengers.children", "{children}"],
+        ["passengers.childrenAge[{i}]", "{child_ages[]}"],
+        ["itinerary.type", "{trip_type}"],
+        ["itinerary.path[0].departure", "{from}"],
+        ["itinerary.path[0].arrival", "{to}"],
+        ["itinerary.path[0].date", "{depart}"],
+        ["itinerary.path[1].departure", "{return_from}"],
+        ["itinerary.path[1].arrival", "{return_to}"],
+        ["itinerary.path[1].date", "{return}"]
+      ],
+      "params": {
+        "from": {"type": "iata", "required": true, "help": "Departure airport or metropolitan IATA code, upper case, e.g. MIL."},
+        "to": {"type": "iata", "required": true, "help": "Arrival airport or metropolitan IATA code, upper case, e.g. LIS."},
+        "depart": {"type": "date", "required": true, "help": "Outbound date, YYYY-MM-DD."},
+        "return": {"type": "date", "on_or_after": "depart", "help": "Return date, YYYY-MM-DD; omit for one way (unverified)."},
+        "adults": {"type": "count", "required": true, "min": 1, "max": 9, "help": "Number of adults (18 and over)."},
+        "child-ages": {"type": "ages", "help": "Ages of the children (0-17), comma-separated. Omit when there are none."}
+      },
+      "travellers": "12-17 are counted as adults; children under 12 are sent with their ages. At most one child under 2 per adult.",
+      "warning": "Only a fallback when the lastminute MCP fails: this host shows prices in GBP, one way and child ages are unverified."
+    },
+    "trenitalia": {
+      "label": "Trenitalia",
+      "category": "trains",
+      "host": "www.lefrecce.it",
+      "allowlist": "trenitalia",
+      "status": "verified",
+      "unverified": ["the return date on the second step of a round trip"],
+      "evidence": "integrations.md 1.8",
+      "url": "https://www.lefrecce.it/Channels.Website.WEB/website/auth/handoff",
+      "query": [
+        ["action", "searchTickets"],
+        ["lang", "it"],
+        ["referrer", "www.trenitalia.com"],
+        ["tripType", "on"],
+        ["ynFlexibleDates", "off"],
+        ["selectedTrainType", "tutti"],
+        ["departureStation", "{from}"],
+        ["arrivalStation", "{to}"],
+        ["departureDate", "{depart}"],
+        ["departureTime", "{depart_hour}"],
+        ["returnDate", "{return_date}"],
+        ["isRoundTrip", "{round_trip}"],
+        ["returnTime", "{return_hour}"],
+        ["noOfAdults", "{adults}"],
+        ["noOfChildren", "{children}"]
+      ],
+      "params": {
+        "from": {"type": "station", "required": true, "help": "Official departure station name, e.g. 'Milano Centrale', 'Firenze S. M. Novella'."},
+        "to": {"type": "station", "required": true, "help": "Official arrival station name, e.g. 'Roma Termini'."},
+        "depart": {"type": "date", "required": true, "help": "Outbound date, YYYY-MM-DD."},
+        "time": {"type": "time", "default": "08:00", "help": "Earliest outbound departure, HH:MM (only the hour is used; default 08:00)."},
+        "return": {"type": "date", "on_or_after": "depart", "help": "Return date, YYYY-MM-DD; omit for one way."},
+        "return-time": {"type": "time", "requires": "return", "default": "08:00", "help": "Earliest return departure, HH:MM (only with return; default 08:00)."},
+        "adults": {"type": "count", "required": true, "min": 1, "max": 9, "help": "Number of adults (18 and over)."},
+        "child-ages": {"type": "ages", "help": "Ages of the children (0-17), comma-separated. Omit when there are none."}
+      },
+      "travellers": "15-17 are counted as adults, 0-14 as 'ragazzi' (noOfChildren). Under 4 travel free without a seat on national trains, but the link asks for a seat for every child.",
+      "known_stations": ["Milano Centrale", "Roma Termini", "Firenze S. M. Novella", "Napoli Centrale"]
+    },
+    "italo": {
+      "label": "Italo",
+      "category": "trains",
+      "host": "biglietti.italotreno.com",
+      "allowlist": "italo",
+      "status": "verified",
+      "unverified": ["the 0-2 infant band (inf)"],
+      "evidence": "integrations.md 1.9",
+      "url": "https://biglietti.italotreno.com/it/booking/ricerca-treni",
+      "query": [
+        ["osc", "{from}"],
+        ["dsc", "{to}"],
+        ["jt", "{journey}"],
+        ["od", "{depart}"],
+        ["id", "{return}"],
+        ["adt", "{adults}"],
+        ["yng", "{young}"],
+        ["chd", "{children}"],
+        ["snr", "0"],
+        ["inf", "{infants}"],
+        ["pet", "0"],
+        ["lang", "it"],
+        ["startSearch", "true"]
+      ],
+      "params": {
+        "from": {"type": "italo_station", "required": true, "help": "Departure station: an Italo code or its name from the station table, e.g. MC_ or 'Milano Centrale'."},
+        "to": {"type": "italo_station", "required": true, "help": "Arrival station: an Italo code or its name from the station table, e.g. RMT or 'Roma Termini'."},
+        "depart": {"type": "date", "required": true, "help": "Outbound date, YYYY-MM-DD."},
+        "return": {"type": "date", "on_or_after": "depart", "help": "Return date, YYYY-MM-DD; omit for one way."},
+        "adults": {"type": "count", "required": true, "min": 1, "max": 9, "help": "Number of adults (18 and over)."},
+        "child-ages": {"type": "ages", "help": "Ages of the children (0-17), comma-separated. Omit when there are none."}
+      },
+      "travellers": "Adults are sent as standard adults (their ages are not known); children 14-17 as Giovani (yng), 3-13 as Bambini (chd), 0-2 as infants (inf).",
+      "stations": {
+        "MC_": "Milano Centrale",
+        "MPG": "Milano Porta Garibaldi",
+        "RG_": "Milano Rogoredo",
+        "RRO": "Milano Rho Fiera",
+        "MI0": "Milano (Tutte)",
+        "RMT": "Roma Termini",
+        "RTB": "Roma Tiburtina",
+        "RM0": "Roma (Tutte)",
+        "SMN": "Firenze S.M.Novella",
+        "NAC": "Napoli Centrale",
+        "NAF": "Napoli Afragola",
+        "NA0": "Napoli (Tutte)"
+      }
+    },
+    "omio": {
+      "label": "Omio",
+      "category": "trains",
+      "host": "www.omio.it",
+      "allowlist": "omio",
+      "status": "verified",
+      "unverified": ["route pages for routes Omio does not list (they show a 404 page)"],
+      "evidence": "integrations.md 1.10 (option A, route page)",
+      "url": "https://www.omio.it/treni/{from_slug}/{to_slug}",
+      "query": [
+        ["departure_date", "{depart}"]
+      ],
+      "params": {
+        "from": {"type": "city_it", "required": true, "help": "Departure city, Italian name, e.g. 'Firenze' (becomes firenze)."},
+        "to": {"type": "city_it", "required": true, "help": "Arrival city, Italian name, e.g. 'Venezia'."},
+        "depart": {"type": "date", "required": true, "help": "Departure date, YYYY-MM-DD."}
+      },
+      "travellers": "Omio cannot prefill passengers or a return date: the link opens the search form with one passenger.",
+      "note_it": "Su Omio scegli il numero di passeggeri prima di cercare. Se la pagina non esiste, cerca la tratta da omio.it."
+    }
+  }
+}

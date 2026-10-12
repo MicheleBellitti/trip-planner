@@ -1,0 +1,8 @@
+# The backend's lint and format rules, applied to skills/ (run from backend/:
+# `uv run ruff check ../skills && uv run ruff format --check ../skills`, as ci-backend.yml does).
+# The target is Python 3.10: skill scripts run on the Managed Agents sandbox's Python 3.10, so
+# ruff must not suggest syntax or APIs that need a newer one (datetime.UTC, PEP 695 generics,
+# ...). This file sits in skills/, outside every skill directory, so it is never uploaded.
+extend = "../backend/pyproject.toml"
+target-version = "py310"
+src = ["."]
