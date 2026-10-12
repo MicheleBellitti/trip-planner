@@ -63,7 +63,7 @@ def test_parse_args_defaults_and_limits() -> None:
 
 def test_inputs_come_from_the_development_profile() -> None:
     inputs = ps.load_inputs(REPO_ROOT)
-    assert inputs.session_budget_cents == 60
+    assert inputs.session_budget_cents == 100
     assert inputs.cheap_model == "claude-haiku-5-5"
     assert inputs.models["coordinator"] == "claude-sonnet-5-5"
     assert {s["name"] for s in inputs.flights["mcp_servers"]} == {"expedia", "kiwi", "lastminute"}
@@ -78,7 +78,7 @@ def test_dry_run_prints_the_plan_without_network(no_client: None, tmp_path: Path
     assert "no network" in out
     for probe_id in ps.PROBE_IDS:
         assert f"  {probe_id} " in out
-    assert "each capped at 60 US cents" in out
+    assert "each capped at 100 US cents" in out
     assert not any(tmp_path.iterdir())
 
 

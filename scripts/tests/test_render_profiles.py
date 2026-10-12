@@ -43,7 +43,7 @@ MODELS = {
     "development": ("claude-sonnet-5-5", "claude-haiku-5-5"),
     "production": ("claude-opus-5-5", "claude-sonnet-5-5"),
 }
-NUMBERS = {"development": (60, 3, 4, 3000, 2), "production": (400, 12, 8, 6000, 2)}
+NUMBERS = {"development": (100, 3, 4, 3000, 2), "production": (400, 12, 8, 6000, 2)}
 """session budget (cents), web_search cap, web_fetch cap, web_fetch max_content_tokens,
 follow-ups: the "Cost levers" values of docs/managed-agents-notes.md."""
 EFFORTS = {

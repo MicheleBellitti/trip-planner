@@ -63,9 +63,11 @@ DEFAULT_DEMO_PACE = 1.0
 """DEMO_PACE unset: the scenarios' recorded pace."""
 
 DEFAULT_SESSION_BUDGET_CENTS: Mapping[AgentProfile, int] = MappingProxyType(
-    {"production": 400, "development": 60}
+    {"production": 400, "development": 100}
 )
-"""Spec "Tre livelli di controllo": `max_list_cost` "400" ($4) in production, "60" in sviluppo."""
+"""Spec "Tre livelli di controllo": `max_list_cost` "400" ($4) in production. Development was the
+spec's "60", raised to 100 on 2026-10-12: all five development evals paused at 60 before
+finishing, and the estimate after the cost cuts is ~55-85 (docs/managed-agents-notes.md §5)."""
 
 
 def default_lockfile_path(profile: AgentProfile) -> Path:
@@ -156,7 +158,7 @@ class Settings(BaseSettings):
     agent_profile: AgentProfile = DEFAULT_AGENT_PROFILE
 
     # Per-session Managed Agents budget in US cents; unset = 400 ($4) for the production profile,
-    # 60 for development.
+    # 100 for development.
     session_budget_cents: int = Field(gt=0)
 
     # Monthly spend ceiling across all plans, in cents; POST /plans refuses past it.

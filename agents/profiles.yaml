@@ -36,7 +36,7 @@ profiles:
       lodging: low
       activities: low
       transport: low
-    session_budget_cents: 60 # SESSION_BUDGET_CENTS default for this profile (US cents)
+    session_budget_cents: 100 # SESSION_BUDGET_CENTS default for this profile (US cents; the spec said 60)
     web_search_cap: 3 # web_search calls per agent per session (was 5: ~8k tokens + 1 cent each)
     web_fetch_cap: 4 # web_fetch calls per agent per task (a fetched page is ~3k tokens re-read later)
     web_fetch_max_content_tokens: 3000 # page text per web_fetch call (pages ran 3k-4.5k tokens)

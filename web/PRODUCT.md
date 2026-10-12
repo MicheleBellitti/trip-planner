@@ -83,7 +83,7 @@ domains. It ends in TripTracker, the app Michele already uses to not miss bookin
   and starts spostamenti; the coordinator checks coherence and calls `submit_plan`. A run lasts
   minutes; one still running after 45 minutes is flagged as stuck.
 - **Plan states**: `running`, `ready`, `failed`, `budget_paused`, `blocked`, `interrupted`.
-- **Session budget**: 60¢ in the development profile, 400¢ in production. At the cap the plan
+- **Session budget**: 100¢ in the development profile, 400¢ in production. At the cap the plan
   pauses and offers "Continua con 2 $ in più".
 - **Every state is designed** (spec table): no plan yet is an invitation with a sample request
   already written; session start shows the five lanes waiting, in place, with the clock

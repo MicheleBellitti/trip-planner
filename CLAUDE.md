@@ -178,7 +178,7 @@ Web, from `web/`: `npm ci`, `npm run dev`, `npm run lint`, `npm run typecheck` (
 
 Evals, from `backend/`: `uv run python ../evals/run.py --dry-run` validates the five reference
 requests and prints the spending ceiling for free. `uv run python ../evals/run.py` runs them on
-the development profile (at most $1 for the judge per run, $4 in all) and spends real money: run
+the development profile (at most $1 for the judge per run, $6 in all) and spends real money: run
 it only when asked. `uv run python ../evals/compare.py ../evals/results/<file>.json` checks a
 run against `evals/baseline.json`, which changes only through an explicit commit
 (`--update-baseline`). Details in evals/README.md.
@@ -276,9 +276,9 @@ CI must pass before merge.
   no tool that books, pays or writes outside the sandbox. Probe P5 may bring `limited` back.
 - Two profiles, two agent sets with distinct IDs, one lockfile each. The backend picks one
   with `AGENT_PROFILE` (required when `ENVIRONMENT=production`); `LOCKFILE_PATH` defaults to
-  `backend/claude-lock.<AGENT_PROFILE>.json`, and so does `SESSION_BUDGET_CENTS` (400 or 60):
+  `backend/claude-lock.<AGENT_PROFILE>.json`, and so does `SESSION_BUDGET_CENTS` (400 or 100):
   - `development`: Sonnet 5.5 coordinator (effort medium), Haiku 5.5 subagents (effort low),
-    60¢ session budget, 3 web searches and 4 web fetches per agent, 3000 tokens per fetched
+    100¢ session budget (the spec said 60; every eval paused there), 3 web searches and 4 web fetches per agent, 3000 tokens per fetched
     page. Use it for all code work and always locally.
   - `production`: Opus 5.5 coordinator, Sonnet 5.5 subagents (effort medium for all), 400¢
     budget, 12 searches and 8 fetches per agent, 6000 tokens per fetched page. Use it only for

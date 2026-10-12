@@ -75,8 +75,8 @@ deploy on day 2, step 5 on day 3, steps 6 and the production half of 7 on day 4.
    - Suggested caps: production a little above the planner's own `MONTHLY_LIMIT_CENTS` (5000 =
      $50), for example $60, so the planner refuses new plans first (HTTP 429 with an Italian
      message) and the workspace cap stays the hard stop. Development about $40: one eval run
-     costs up to $4.00 (five sessions at 60 cents plus at most $1 of judge), a manual plan up
-     to $0.60. The organization cap is the sum.
+     costs up to $6.00 (five sessions at 100 cents plus at most $1 of judge), a manual plan up
+     to $1.00. The organization cap is the sum.
    - At a cap you set, the API answers HTTP 400 `invalid_request_error` ("You have reached
      your specified ... API usage limits"); new sessions then fail to start.
 4. **CI access.** Read "Anthropic credentials in CI" right below: today two API keys (the two
@@ -562,7 +562,7 @@ without creating anything new.
 `main`, `force` off, `production_evals` on for the spec's final check (or off and run it
 later). The run:
 
-1. reruns the development evals (up to $4.00);
+1. reruns the development evals (up to $6.00);
 2. waits for your approval in the `production` environment;
 3. applies `profiles/production` with the `production` environment's Anthropic credentials
    (its key, or in federation mode an OIDC token minted after your approval), commits
@@ -636,7 +636,7 @@ Rollback to the previous production deployment.
 
 **Agents.**
 
-- *On a PR* (`evals.yml`): one run costs up to $4.00. Runs of the same PR queue instead of
+- *On a PR* (`evals.yml`): one run costs up to $6.00. Runs of the same PR queue instead of
   cancelling each other, because a cancelled job can't stop its sessions, which would keep
   spending up to their budget. Applies to the shared development workspace run one at a time
   across all PRs and `main`: concurrency group `ant-apply-development` with `queue: max`, so

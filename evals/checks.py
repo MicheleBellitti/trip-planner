@@ -129,9 +129,11 @@ class CostEstimate:
 
 
 COST_ESTIMATES: Mapping[Profile, CostEstimate] = {
-    # Sonnet 5.5 coordinator ~0.26 $ + Haiku 5.5 subagents ~0.08 $ + 20 searches 0.20 $ (5 per
-    # agent) + runtime 0.02 $ = "~0,55 $"; session budget "60".
-    "development": CostEstimate(cost_cents=55, web_search_requests=20, session_budget_cents=60),
+    # The spec said "~0,55 $" with 20 searches and a "60" budget; the 2026-10-12 Lisbon session
+    # cost 62¢ without finishing. After the cost cuts (3 searches per agent, effort, a fetch
+    # page cap) the estimate is ~55-85¢, ~71¢ central (docs/managed-agents-notes.md §5), with a
+    # 100¢ session budget.
+    "development": CostEstimate(cost_cents=71, web_search_requests=15, session_budget_cents=100),
     # Opus 5.5 ~0.52 $ + Sonnet 5.5 subagents ~1.34 $ + 60 searches 0.60 $ + runtime 0.02 $ =
     # "~2,5 $"; session budget "400".
     "production": CostEstimate(cost_cents=250, web_search_requests=60, session_budget_cents=400),

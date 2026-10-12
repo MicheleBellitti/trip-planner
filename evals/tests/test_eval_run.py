@@ -120,12 +120,12 @@ def test_dry_run_spends_nothing(
     monkeypatch.setattr(run, "execute", _forbidden("execution"))
     assert run.main(["--dry-run", "--tags", "train"]) == run.EXIT_OK
     out = capsys.readouterr().out
-    assert "1 request(s), profile development, ceiling 1.60 $" in out
+    assert "1 request(s), profile development, ceiling 2.00 $" in out
     assert "train-trip-florence" in out
 
 
 def test_spending_ceiling() -> None:
-    assert run.spending_ceiling_cents(5, "development", judge_cap_cents=100) == 400
+    assert run.spending_ceiling_cents(5, "development", judge_cap_cents=100) == 600
     assert run.spending_ceiling_cents(5, "production", judge_cap_cents=100) == 2100
 
 

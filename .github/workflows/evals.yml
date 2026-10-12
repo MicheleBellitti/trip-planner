@@ -5,8 +5,8 @@
 # EVALS_INGEST_URL and the secret EVALS_INGEST_TOKEN, the run and its comparison are also sent
 # to Atlas's eval history (evals/upload.py); a failed upload is a warning, never a failure.
 #
-# This SPENDS REAL MONEY in the development workspace: up to five sessions at the 60-cent
-# budget plus at most $1 of judge, so about $4 per run at worst. Drafts are skipped; it runs
+# This SPENDS REAL MONEY in the development workspace: up to five sessions at the 100-cent
+# budget plus at most $1 of judge, so about $6 per run at worst. Drafts are skipped; it runs
 # again when the PR is marked ready for review.
 #
 # Triggers: pull requests that change agents/ (templates), profiles/ (rendered agents),

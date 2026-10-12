@@ -70,11 +70,11 @@ Exit codes of `run.py`: 0 results written (even with failing checks: `compare.py
 
 | Run | Expected (spec estimate) | Ceiling |
 |---|---|---|
-| Development, 5 requests | 5 × ~$0.55 + judge ~$0.25 ≈ **$3** | 5 × $0.60 + $1.00 = **$4.00** |
+| Development, 5 requests | 5 × ~$0.71 + judge ~$0.25 ≈ **$3.80** | 5 × $1.00 + $1.00 = **$6.00** |
 | Production, 5 requests | 5 × ~$2.50 + judge ~$0.25 ≈ **$13** | 5 × $4.00 + $1.00 = **$21.00** |
-| One request (`--ids`) | ~$0.55 + ~$0.05 | $0.60 + $1.00 |
+| One request (`--ids`) | ~$0.71 + ~$0.05 | $1.00 + $1.00 |
 
-Sessions stop at their budget (`SESSION_BUDGET_CENTS`: 60 or 400 US cents). The API can
+Sessions stop at their budget (`SESSION_BUDGET_CENTS`: 100 or 400 US cents). The API can
 overshoot by one model request per running thread. The judge has a **hard $1 cap per run**.
 Before each call it counts the input (`messages.count_tokens`, which is free) and reserves the
 worst case: the input plus 10%, and all of `max_tokens` (6,000) as output, at Sonnet 5.5 list

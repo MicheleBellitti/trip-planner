@@ -110,11 +110,11 @@ def test_development_may_leave_the_agent_profile_unset(bare_env: pytest.MonkeyPa
     settings = Settings(_env_file=None)  # pyright: ignore[reportCallIssue]
 
     assert settings.agent_profile == "development"
-    assert settings.session_budget_cents == 60
+    assert settings.session_budget_cents == 100
     assert settings.lockfile_path == BACKEND_DIR / "claude-lock.development.json"
 
 
-@pytest.mark.parametrize(("profile", "budget"), [("development", 60), ("production", 400)])
+@pytest.mark.parametrize(("profile", "budget"), [("development", 100), ("production", 400)])
 @pytest.mark.parametrize("raw", [None, "", "  "])
 def test_session_budget_defaults_per_profile(
     make_settings: MakeSettings, profile: str, budget: int, raw: str | None
@@ -283,7 +283,7 @@ def test_example_env_file_is_valid(bare_env: pytest.MonkeyPatch) -> None:
     assert settings.environment == "development"
     assert settings.auth_mode == "local"
     assert settings.lockfile_path == default_lockfile_path("development")
-    assert settings.session_budget_cents == 60
+    assert settings.session_budget_cents == 100
     assert settings.trip_schema_url == "https://viaggi.bellittim.com/schema/trip.json"
     assert settings.anthropic_api_key is None
     assert settings.git_sha is None
