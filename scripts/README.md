@@ -9,6 +9,7 @@ the live probes. Run everything from `backend/` with `uv run` (the backend venv 
 | `render_profiles.py` | Renders `profiles/<profile>/**` from the templates in `agents/` and copies `schema/results/*.json` into `skills/travel-research-rules/schemas/`. `--check` fails on anything stale. | none |
 | `bootstrap.py` | The SDK equivalent of `ant apply --lock-file backend/claude-lock.<profile>.json profiles/<profile>`: uploads skills, creates or updates the environment and the agents, writes ant's lockfile. | `--dry-run`: none |
 | `probe_session.py` | The live probe checklist P1..P13 of `docs/managed-agents-notes.md` §4, on the development profile, with a report in `docs/probes/<date>.md`. **Spends money.** | `--dry-run`: none |
+| `session_report.py` | Read-only report on what fills the context of one or more sessions (events of the session and of every thread: requests, context per request, biggest tool results, skill loads, messages), and `--static`: the fixed context of each agent from `profiles/`, `skills/` and `submit_plan.json`. Also the by-hand workflow `session-report.yml`. | `--static`, `--from-raw`: none |
 
 ## Changing a prompt, a model or a number
 
@@ -113,3 +114,19 @@ uv run ruff check --config pyproject.toml ../scripts
 uv run ruff format --config pyproject.toml --check ../scripts
 uv run pyright -p ../scripts
 ```
+
+## Where the context goes: `session_report.py`
+
+```sh
+uv run python ../scripts/session_report.py --static                    # fixed context per agent, no API
+uv run python ../scripts/session_report.py --session sesn_... sesn_... --out report.md
+uv run python ../scripts/session_report.py --session sesn_... --save-raw /tmp/raw   # keep the events
+uv run python ../scripts/session_report.py --session sesn_... --from-raw /tmp/raw   # offline re-run
+```
+
+It only reads (GET listings and one retrieve; costs nothing), with the SDK's own credentials, and
+never prints a key. Sizes are characters of event content and tokens are chars / 4. A tool result
+costs its size times the model requests that come after it ("tokens carried"). `--save-raw` stores
+page text: keep that directory out of the repository. The report goes to `--out` (default
+`session-report.md` in the system temp directory) and to stdout; `--no-history` drops the event
+list. In CI: Actions > session-report > Run workflow.

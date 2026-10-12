@@ -3,6 +3,6 @@
   "typeCheckingMode": "standard",
   "venvPath": "../backend",
   "venv": ".venv",
-  "extraPaths": [".", "tests"],
+  "extraPaths": [".", "tests", "../backend"],
   "include": ["."]
 }

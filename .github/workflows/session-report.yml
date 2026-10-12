@@ -1,0 +1,99 @@
+# What fills the context of a Managed Agents session? By hand only, read-only, costs nothing.
+#
+# Give it one or more session ids (the development evals print them, and so do the eval results
+# in evals/results/). It lists the events of each session and of every thread with
+# scripts/session_report.py, and reports per agent the model requests, the context size of each
+# one, and the biggest tool results, skill loads and messages (tokens carried = size x the later
+# requests that re-read it). It also adds the static estimate of the fixed context of each agent
+# (--static). Nothing is sent to the sessions and no session is created.
+#
+# The report goes to the job's step summary (cut to GitHub's 1 MiB limit) and, whole, to the
+# artifact `session-report` (kept 14 days). It holds page titles, queries and URLs from the
+# sessions (every text capped at 200 characters), never keys: the script redacts anything that
+# looks like one. Only the development environment is offered, like every by-hand check.
+#
+# Authentication is the same dual mode as anthropic-auth-check.yml (docs/deploy.md, "Anthropic
+# credentials in CI"): the job runs in the `development` environment, asks for `id-token: write`
+# and uses ./.github/actions/anthropic-auth, which picks federation or the environment secret.
+name: session-report
+
+on:
+  workflow_dispatch:
+    inputs:
+      session_ids:
+        description: "Session ids (sesn_...), separated by spaces"
+        type: string
+        required: true
+      environment:
+        description: "GitHub environment to authenticate as"
+        type: choice
+        options:
+          - development
+        default: development
+
+permissions: {}
+
+env:
+  UV_VERSION: "0.13.0"
+
+jobs:
+  report:
+    name: session report (${{ inputs.environment }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      # Only to mint the GitHub OIDC token when Anthropic federation is configured (anthropic-auth);
+      # harmless, and unused, in API-key mode.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - id: auth
+        uses: ./.github/actions/anthropic-auth
+        with:
+          federation-rule-id: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
+          organization-id: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
+          workspace-id: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
+          service-account-id: ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}
+          api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Session report
+        working-directory: backend
+        env:
+          # Through the environment, never spliced into the script: the script accepts only
+          # sesn_ ids and rejects anything else.
+          SESSION_IDS: ${{ inputs.session_ids }}
+          REPORT_DIR: ${{ runner.temp }}/session-report
+          MODE: ${{ steps.auth.outputs.mode }}
+        run: |
+          set -euo pipefail
+          uv sync --locked
+          mkdir -p "$REPORT_DIR"
+          read -r -a ids <<< "$SESSION_IDS"
+          echo "Anthropic auth mode: $MODE; ${#ids[@]} session id(s)"
+          uv run python ../scripts/session_report.py \
+            --static \
+            --session "${ids[@]}" \
+            --out "$REPORT_DIR/session-report.md" \
+            --summary-out "$REPORT_DIR/summary.md" \
+            --no-stdout
+          cat "$REPORT_DIR/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          rm "$REPORT_DIR/summary.md"
+          ls -l "$REPORT_DIR"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: session-report
+          path: ${{ runner.temp }}/session-report/session-report.md
+          if-no-files-found: error
+          retention-days: 14
