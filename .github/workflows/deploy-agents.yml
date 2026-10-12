@@ -13,7 +13,7 @@
 # key; the setup for an Individual Organization), or, when the environment's VARIABLES
 # ANTHROPIC_FEDERATION_RULE_ID and ANTHROPIC_ORGANIZATION_ID are set, Workload Identity
 # Federation, whose production rule trusts only the OIDC subject
-# repo:MicheleBellitti/trip-planner:environment:production. Either way only a job running in
+# repo:MicheleBellitti@64275646/trip-planner@1416043486:environment:production. Either way only a job running in
 # that environment gets them. No ANTHROPIC_API_KEY is ever set in a workflow's own `env:`.
 # Only the `production` job can write to the repo.
 #

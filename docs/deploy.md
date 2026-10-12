@@ -168,7 +168,9 @@ What you create, once (the org id and workspace ids are not secrets):
 | Service account | `trip-planner-ci-development`, org role `developer` | `trip-planner-ci-production`, org role `developer` |
 | Member of workspace (role `workspace_developer`) | `trip-planner-development` | `trip-planner-production` |
 | Federation rule name | `trip-planner-github-development` | `trip-planner-github-production` |
-| `match.subject_prefix` (exact: no trailing `*`) | `repo:MicheleBellitti/trip-planner:environment:development` | `repo:MicheleBellitti/trip-planner:environment:production` |
+| `match.subject_prefix` (exact: no trailing `*`) | `repo:MicheleBellitti@64275646/trip-planner@1416043486:environment:development` | `repo:MicheleBellitti@64275646/trip-planner@1416043486:environment:production` |
+
+GitHub's `sub` for this repository embeds the immutable owner and repository ids (`owner@<id>/repo@<id>`), not the plain `owner/repo` form older examples show. Verified on 2026-10-12: a rule with `repo:MicheleBellitti/trip-planner:...` was rejected (401, `match_subject_prefix`). The `anthropic-auth` action prints the token's exact `sub` (`OIDC token ready: sub=...`); copy it from that log line when creating or fixing a rule.
 | `match.audience` | `https://api.anthropic.com` | `https://api.anthropic.com` |
 | `oauth_scope` | `workspace:developer` (needed by `ant apply`; inference-only would not be enough) | `workspace:developer` |
 | Rule enabled for workspace | `trip-planner-development` | `trip-planner-production` |
