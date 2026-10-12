@@ -1,0 +1,63 @@
+# Installs the pinned `ant` CLI (anthropics/anthropic-cli) for the agent workflows: download the
+# release archive, check its sha256, put `ant` on PATH. It replaces anthropics/setup-ant@v1,
+# which GitHub answered with 404 on 2026-10-12 (docs/deploy.md, GitHub step 5).
+#
+# The archive is GoReleaser's `ant_<version>_linux_amd64.tar.gz`, with the `ant` binary at its
+# root next to completions/ and man/ (.goreleaser.yml of v1.40.0); only `ant` is extracted. The
+# default sha256 is the one GitHub records for that asset and the one listed in the release's
+# ant_1.40.0_checksums.txt (both checked 2026-10-12). To upgrade, change `version` and `sha256`
+# together, taking the hash from the new release's checksums file.
+name: Set up ant
+description: Download a pinned anthropic-cli (ant) release for Linux x64, verify its sha256 and add ant to PATH.
+
+inputs:
+  version:
+    description: The ant release to install, without the leading v (ant apply needs 1.30.0 or later).
+    required: false
+    default: "1.40.0"
+  sha256:
+    description: The sha256 of ant_<version>_linux_amd64.tar.gz, from the release's checksums file.
+    required: false
+    default: "9845b2a2d44ff3204b3fdaebb64c9da8e7558ad6b9b4547ce4c0eda36dea6e8f"
+
+outputs:
+  path:
+    description: The directory holding the ant binary (already on PATH for later steps).
+    value: ${{ steps.install.outputs.path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Download, verify and install ant ${{ inputs.version }}
+      id: install
+      shell: bash
+      env:
+        ANT_VERSION: ${{ inputs.version }}
+        ANT_SHA256: ${{ inputs.sha256 }}
+      run: |
+        set -euo pipefail
+        if [ "$RUNNER_OS" != "Linux" ] || [ "$RUNNER_ARCH" != "X64" ]; then
+          echo "::error::setup-ant installs the linux_amd64 build only (this runner: $RUNNER_OS $RUNNER_ARCH)"
+          exit 1
+        fi
+        if ! [[ "$ANT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || ! [[ "$ANT_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+          echo "::error::setup-ant needs a version like 1.40.0 and a 64-character lowercase sha256"
+          exit 1
+        fi
+        archive="ant_${ANT_VERSION}_linux_amd64.tar.gz"
+        url="https://github.com/anthropics/anthropic-cli/releases/download/v${ANT_VERSION}/${archive}"
+        download="$RUNNER_TEMP/$archive"
+        bin_dir="$RUNNER_TEMP/ant-${ANT_VERSION}"
+        curl --fail --silent --show-error --location --retry 3 --proto '=https' --tlsv1.2 \
+          --output "$download" "$url"
+        if ! echo "${ANT_SHA256}  ${download}" | sha256sum --check --strict --status -; then
+          echo "::error::$archive does not match the pinned sha256 ($ANT_SHA256): refusing to install it"
+          exit 1
+        fi
+        mkdir -p "$bin_dir"
+        tar -xzf "$download" -C "$bin_dir" ant
+        chmod 0755 "$bin_dir/ant"
+        rm -f -- "$download"
+        echo "$bin_dir" >> "$GITHUB_PATH"
+        echo "path=$bin_dir" >> "$GITHUB_OUTPUT"
+        echo "Installed ant $ANT_VERSION (sha256 $ANT_SHA256) in $bin_dir"

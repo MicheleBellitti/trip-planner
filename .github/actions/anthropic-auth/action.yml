@@ -1,0 +1,222 @@
+# Authenticates the rest of the job to Anthropic. Two modes, chosen from what the job's GitHub
+# environment provides (docs/deploy.md, "Anthropic credentials in CI"):
+#
+#   federation  federation-rule-id AND organization-id are set. Workload Identity Federation,
+#               no stored key (beta header oidc-federation-2026-04-01). Needs the job to have
+#               `permissions: id-token: write`. Exports no ANTHROPIC_API_KEY.
+#   api-key     the federation ids are not both set and api-key is non-empty (the environment
+#               secret ANTHROPIC_API_KEY). The key is masked, then exported to $GITHUB_ENV as
+#               ANTHROPIC_API_KEY for the rest of the job. The path for an Individual
+#               Organization, which has no federation.
+#
+# Neither: the step fails and names both options. Both: federation wins, the key is not
+# exported, and a notice says so. The chosen mode is printed and set as the `mode` output.
+#
+# Federation mode. The action asks GitHub for an OIDC token with the audience below, writes it
+# to a 0600 file under $RUNNER_TEMP, and exports to $GITHUB_ENV the variables that the
+# Anthropic SDK and `ant` read:
+#
+#   ANTHROPIC_IDENTITY_TOKEN_FILE   the file; both tools re-read it on every token exchange
+#   ANTHROPIC_FEDERATION_RULE_ID    fdrl_...  (a GitHub environment VARIABLE, not a secret)
+#   ANTHROPIC_ORGANIZATION_ID       the organization UUID (a variable)
+#   ANTHROPIC_WORKSPACE_ID          wrkspc_... (a variable), only when given
+#   ANTHROPIC_SERVICE_ACCOUNT_ID    svac_... (a variable), only when given
+#
+# The SDK and `ant` then swap that token for an Anthropic access token (jwt-bearer grant on
+# /v1/oauth/token) on their own. Nothing here is secret: ids are not credentials, and the
+# identity token (a bearer credential for a few minutes) lives only in the file. A static key
+# wins over federation in the SDK and in `ant`, so this mode refuses to run in a job that
+# already has ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN or ANTHROPIC_IDENTITY_TOKEN set.
+#
+# API-key mode. The key comes in through the `api-key` input, which the caller fills with
+# `${{ secrets.ANTHROPIC_API_KEY }}` of the job's environment (one secret of that name in each
+# of `development` and `production`, so the environment decides which key a job gets). The
+# action never prints it, never writes it anywhere but $GITHUB_ENV, and rejects a value that
+# is not a plain token, because $GITHUB_ENV takes one `NAME=value` per line.
+#
+# Long jobs (federation). GitHub's identity token is valid for minutes, and each exchange needs
+# a fresh one: the SDK swaps the file's token again whenever its access token is about to
+# expire, and the issuer may accept an assertion only once (check_jti). So unless
+# refresh-interval-seconds is 0, the action leaves a background process that rewrites the file
+# every refresh-interval-seconds until the job ends (log: $RUNNER_TEMP/anthropic-auth/
+# refresh.log, which never holds a token). The evals job (up to 2 hours) needs it; ant apply
+# (minutes) would not, but pays nothing for it. A static key needs none of this.
+name: Anthropic auth
+description: Authenticate the job to Anthropic through Workload Identity Federation when it is configured, otherwise through the environment's ANTHROPIC_API_KEY secret.
+
+inputs:
+  federation-rule-id:
+    description: The federation rule id (fdrl_...). Pass ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }} from the job's GitHub environment. Empty means no federation.
+    required: false
+    default: ""
+  organization-id:
+    description: The Anthropic organization id (a UUID). Pass ${{ vars.ANTHROPIC_ORGANIZATION_ID }}. Empty means no federation.
+    required: false
+    default: ""
+  workspace-id:
+    description: The workspace id (wrkspc_...) the rule is enabled for (federation only). Optional; pass ${{ vars.ANTHROPIC_WORKSPACE_ID }}. Empty lets Anthropic pick the rule's only workspace.
+    required: false
+    default: ""
+  service-account-id:
+    description: The service account id (svac_...) the rule targets (federation only). Optional; pass ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}. The official GitHub Actions guide sets it.
+    required: false
+    default: ""
+  api-key:
+    description: The static API key, used when federation is not configured. Pass the job's environment secret named ANTHROPIC_API_KEY (the workflows write it with the secrets context). Empty means no key.
+    required: false
+    default: ""
+  audience:
+    description: The `aud` claim of the GitHub token (federation only). It must equal the `audience` of the federation rule.
+    required: false
+    default: https://api.anthropic.com
+  refresh-interval-seconds:
+    description: Seconds between rewrites of the token file by the background refresher (federation only); 0 turns it off.
+    required: false
+    default: "120"
+
+outputs:
+  mode:
+    description: "federation or api-key: how this job authenticates."
+    value: ${{ steps.auth.outputs.mode }}
+
+runs:
+  using: composite
+  steps:
+    - name: Authenticate to Anthropic
+      id: auth
+      shell: bash
+      env:
+        RULE_ID: ${{ inputs.federation-rule-id }}
+        ORG_ID: ${{ inputs.organization-id }}
+        WORKSPACE_ID: ${{ inputs.workspace-id }}
+        SERVICE_ACCOUNT_ID: ${{ inputs.service-account-id }}
+        API_KEY: ${{ inputs.api-key }}
+        ANTHROPIC_OIDC_AUDIENCE: ${{ inputs.audience }}
+        REFRESH_SECONDS: ${{ inputs.refresh-interval-seconds }}
+      run: |
+        set -euo pipefail
+        umask 077
+
+        # Mask first, so that nothing below can leak the key even by mistake.
+        if [ -n "$API_KEY" ]; then
+          while IFS= read -r line; do
+            [ -z "$line" ] || echo "::add-mask::$line"
+          done <<< "$API_KEY"
+        fi
+
+        if [ "$RUNNER_OS" != "Linux" ]; then
+          echo "::error::the anthropic-auth action supports Linux runners only (this runner: $RUNNER_OS)"
+          exit 1
+        fi
+
+        # The key as pasted may carry a trailing newline or spaces.
+        api_key="${API_KEY#"${API_KEY%%[![:space:]]*}"}"
+        api_key="${api_key%"${api_key##*[![:space:]]}"}"
+        if [ -n "$api_key" ] && [ "$api_key" != "$API_KEY" ]; then
+          echo "::add-mask::$api_key"
+        fi
+
+        if [ -n "$RULE_ID" ] && [ -n "$ORG_ID" ]; then
+          mode=federation
+        elif [ -n "$api_key" ]; then
+          mode=api-key
+        else
+          missing=()
+          [ -n "$RULE_ID" ] || missing+=("ANTHROPIC_FEDERATION_RULE_ID")
+          [ -n "$ORG_ID" ] || missing+=("ANTHROPIC_ORGANIZATION_ID")
+          echo "::error::No Anthropic credentials for this job. Configure ONE of two options in the job's GitHub environment (Settings > Environments > the environment named by the job): (1) API key: add the environment SECRET ANTHROPIC_API_KEY; or (2) federation: add the environment VARIABLES ANTHROPIC_FEDERATION_RULE_ID and ANTHROPIC_ORGANIZATION_ID (still missing: ${missing[*]}). Federation needs an organization that supports Workload Identity Federation; an Individual Organization uses the API key. Setup: docs/deploy.md, 'Anthropic credentials in CI'."
+          exit 1
+        fi
+
+        if [ "$mode" = "api-key" ]; then
+          if [ -n "$RULE_ID" ] || [ -n "$ORG_ID" ]; then
+            echo "::warning::Anthropic federation is only partly configured (set: ${RULE_ID:+ANTHROPIC_FEDERATION_RULE_ID }${ORG_ID:+ANTHROPIC_ORGANIZATION_ID}; both are needed), so this job uses the ANTHROPIC_API_KEY secret instead."
+          fi
+          # $GITHUB_ENV takes one NAME=value per line: allow only characters of a plain token.
+          if ! [[ "$api_key" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+            echo "::error::the ANTHROPIC_API_KEY secret is not a plain token (letters, digits, '_', '-', '.'): re-create it from the Console key without quotes or line breaks"
+            exit 1
+          fi
+          # A different static credential would also be read by the SDK.
+          for name in ANTHROPIC_AUTH_TOKEN ANTHROPIC_IDENTITY_TOKEN; do
+            if [ -n "${!name:-}" ]; then
+              echo "::error::$name is set in this job and would compete with the API key. Remove it from the job, workflow or repository settings."
+              exit 1
+            fi
+          done
+          echo "ANTHROPIC_API_KEY=$api_key" >> "$GITHUB_ENV"
+          echo "mode=api-key" >> "$GITHUB_OUTPUT"
+          echo "Anthropic auth mode: api-key (the ANTHROPIC_API_KEY secret of this job's environment; value masked)."
+          exit 0
+        fi
+
+        # ---- federation ----
+        if [ -n "$api_key" ]; then
+          echo "::notice::Both federation and the ANTHROPIC_API_KEY secret are configured: using federation, the key is not exported. Delete the secret once federation works (docs/deploy.md)."
+        fi
+        # The key must not reach the rest of this step, nor the background refresher.
+        unset API_KEY api_key
+
+        # These values go to $GITHUB_ENV: allow only characters that cannot add a variable.
+        id_pattern='^[A-Za-z0-9_-]+$'
+        for pair in "ANTHROPIC_FEDERATION_RULE_ID=$RULE_ID" "ANTHROPIC_ORGANIZATION_ID=$ORG_ID"; do
+          if ! [[ "${pair#*=}" =~ $id_pattern ]]; then
+            echo "::error::${pair%%=*} must contain only letters, digits, '_' and '-'"
+            exit 1
+          fi
+        done
+        if [ -n "$WORKSPACE_ID" ] && ! [[ "$WORKSPACE_ID" =~ $id_pattern ]]; then
+          echo "::error::ANTHROPIC_WORKSPACE_ID must contain only letters, digits, '_' and '-'"
+          exit 1
+        fi
+        if [ -n "$SERVICE_ACCOUNT_ID" ] && ! [[ "$SERVICE_ACCOUNT_ID" =~ $id_pattern ]]; then
+          echo "::error::ANTHROPIC_SERVICE_ACCOUNT_ID must contain only letters, digits, '_' and '-'"
+          exit 1
+        fi
+        if ! [[ "$REFRESH_SECONDS" =~ ^[0-9]+$ ]]; then
+          echo "::error::refresh-interval-seconds must be a whole number of seconds"
+          exit 1
+        fi
+
+        # A static credential would win over the federation variables below.
+        for name in ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_IDENTITY_TOKEN; do
+          if [ -n "${!name:-}" ]; then
+            echo "::error::$name is set in this job, and it takes precedence over (or replaces) federation. Remove it from the job, workflow or repository settings."
+            exit 1
+          fi
+        done
+
+        dir="$RUNNER_TEMP/anthropic-auth"
+        mkdir -p "$dir"
+        chmod 0700 "$dir"
+        export ANTHROPIC_OIDC_FILE="$dir/identity-token"
+
+        "$GITHUB_ACTION_PATH/mint-token.sh" once
+
+        {
+          echo "ANTHROPIC_IDENTITY_TOKEN_FILE=$ANTHROPIC_OIDC_FILE"
+          echo "ANTHROPIC_FEDERATION_RULE_ID=$RULE_ID"
+          echo "ANTHROPIC_ORGANIZATION_ID=$ORG_ID"
+          if [ -n "$WORKSPACE_ID" ]; then
+            echo "ANTHROPIC_WORKSPACE_ID=$WORKSPACE_ID"
+          fi
+          if [ -n "$SERVICE_ACCOUNT_ID" ]; then
+            echo "ANTHROPIC_SERVICE_ACCOUNT_ID=$SERVICE_ACCOUNT_ID"
+          fi
+        } >> "$GITHUB_ENV"
+        echo "mode=federation" >> "$GITHUB_OUTPUT"
+        echo "Anthropic auth mode: federation (rule $RULE_ID; no API key exported)."
+
+        if [ "$REFRESH_SECONDS" -gt 0 ]; then
+          export ANTHROPIC_OIDC_REFRESH_SECONDS="$REFRESH_SECONDS"
+          # Detached from this step's output (the runner waits for the step's pipes to close)
+          # and from its process group; the runner stops it with the rest of the job.
+          if command -v setsid > /dev/null 2>&1; then
+            setsid nohup "$GITHUB_ACTION_PATH/mint-token.sh" loop >> "$dir/refresh.log" 2>&1 < /dev/null &
+          else
+            nohup "$GITHUB_ACTION_PATH/mint-token.sh" loop >> "$dir/refresh.log" 2>&1 < /dev/null &
+          fi
+          echo "$!" > "$dir/refresh.pid"
+          disown || true
+          echo "Token file refreshed every ${REFRESH_SECONDS}s in the background (pid $(cat "$dir/refresh.pid"))."
+        fi

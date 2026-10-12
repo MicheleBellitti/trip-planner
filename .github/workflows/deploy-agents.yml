@@ -1,0 +1,336 @@
+# Promote agents and skills to production (spec "CI/CD e operatività", "Versioning dei
+# prompt"): after a merge that changes them, rerun the development evals on main; when they
+# pass, wait for Michele's approval in the GitHub `production` environment, run `ant apply` on
+# profiles/production with that environment's Anthropic credentials, and commit
+# backend/claude-lock.production.json to main. That commit redeploys the backend on Railway,
+# which then starts new sessions on the new coordinator version (a prompt change is "un ant
+# apply più un deploy").
+#
+# Only push to main and a manual run on main reach here; pull requests never do. The
+# `production` environment allows main only and requires Michele's review. Its Anthropic
+# credentials reach the job through ./.github/actions/anthropic-auth (docs/deploy.md,
+# "Anthropic credentials in CI"): the environment's secret ANTHROPIC_API_KEY (the production
+# key; the setup for an Individual Organization), or, when the environment's VARIABLES
+# ANTHROPIC_FEDERATION_RULE_ID and ANTHROPIC_ORGANIZATION_ID are set, Workload Identity
+# Federation, whose production rule trusts only the OIDC subject
+# repo:MicheleBellitti/trip-planner:environment:production. Either way only a job running in
+# that environment gets them. No ANTHROPIC_API_KEY is ever set in a workflow's own `env:`.
+# Only the `production` job can write to the repo.
+#
+# First production apply and recovery: run this workflow by hand on main (Actions > deploy-agents
+# > Run workflow). `force` passes --force, which overwrites resources edited in the Console.
+name: deploy-agents
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "agents/**"
+      - "profiles/**"
+      - "skills/**"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Pass --force to the production apply (overwrites resources changed outside the files, e.g. in the Console)"
+        type: boolean
+        default: false
+      production_evals:
+        description: "After the apply, run the five eval requests on the production profile (spec day 4 final check; up to about $21)"
+        type: boolean
+        default: false
+
+permissions: {}
+
+# One promotion at a time; a newer merge waits for the running one instead of cancelling it.
+# GitHub keeps one waiting run per group: a third merge replaces the waiting one, which is
+# fine, because main's newer commit carries that change too.
+concurrency:
+  group: deploy-agents
+  cancel-in-progress: false
+
+jobs:
+  evals:
+    name: evals on development
+    uses: ./.github/workflows/evals.yml
+    permissions:
+      contents: read
+      # Only the ceiling for evals.yml's PR-comment job, which never runs on push.
+      pull-requests: write
+      # The ceiling for evals.yml's development jobs, which mint an OIDC token for Anthropic
+      # federation (a called workflow cannot ask for more than its caller allows).
+      id-token: write
+
+  production:
+    name: ant apply (production)
+    needs: evals
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: production
+    permissions:
+      contents: write
+      # Only to mint the GitHub OIDC token when Anthropic federation is configured (anthropic-auth);
+      # harmless, and unused, in API-key mode.
+      id-token: write
+    concurrency:
+      group: ant-apply-production
+      cancel-in-progress: false
+    env:
+      LOCKFILE: backend/claude-lock.production.json
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      # The commit that passed the evals: its profiles/production files are what gets applied.
+      # LOCKFILE_PUSH_TOKEN is optional: set it only when a ruleset on main rejects pushes made
+      # with the workflow's GITHUB_TOKEN (docs/deploy.md, "GitHub"); without it, the push uses
+      # GITHUB_TOKEN with this job's contents: write.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          token: ${{ secrets.LOCKFILE_PUSH_TOKEN || github.token }}
+
+      # The pinned ant release, sha256-checked (anthropics/setup-ant@v1 answered 404 on
+      # 2026-10-12). Local action from the checked-out commit.
+      - uses: ./.github/actions/setup-ant
+
+      - name: ant is at least 1.30.0 (ant apply)
+        run: |
+          version="$(ant --version | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || true)"
+          if [ -z "$version" ]; then
+            echo "::error::cannot read the version from 'ant --version'"
+            exit 1
+          fi
+          if [ "$(printf '%s\n' 1.30.0 "$version" | sort -V | head -n 1)" != "1.30.0" ]; then
+            echo "::error::ant $version is older than 1.30.0, the first release with ant apply"
+            exit 1
+          fi
+          echo "ant $version"
+
+      # main's copy of the production lockfile is the source of truth: only this job writes it,
+      # one run at a time. The copy in github.sha can be older: a run queued behind another
+      # promotion checks out a commit made before that promotion's lockfile commit, and a
+      # re-run reuses its sha. Applied with that older copy, ant would see the production
+      # agents as "changed outside the files" and refuse (notes §2h, "Drift").
+      - name: Take the production lockfile from main
+        id: lockfile
+        run: |
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          if git cat-file -e "origin/main:$LOCKFILE" 2>/dev/null; then
+            git show "origin/main:$LOCKFILE" > "$LOCKFILE"
+            echo "Applying with $LOCKFILE from main at $(git rev-parse --short origin/main)."
+          else
+            rm -f -- "$LOCKFILE"
+            echo "::notice::main has no $LOCKFILE: this apply creates a new set of production agents."
+          fi
+
+      # Anthropic login, after the approval and as late as possible: federation when the
+      # environment's variables are set (the production rule accepts only this job's OIDC
+      # subject, environment:production), else the environment's ANTHROPIC_API_KEY secret.
+      - uses: ./.github/actions/anthropic-auth
+        with:
+          federation-rule-id: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
+          organization-id: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
+          workspace-id: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
+          service-account-id: ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}
+          api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      # Path references pin every subagent and skill to the version applied in this run, and
+      # the coordinator is re-saved in the same run (notes §2h). No --force by default: a
+      # production resource edited outside these files stops the apply for a human decision.
+      - name: Apply profiles/production
+        id: apply
+        env:
+          FORCE: ${{ inputs.force }}
+        run: |
+          args=(apply --yes --lock-file "$LOCKFILE")
+          if [ "$FORCE" = "true" ]; then
+            args+=(--force)
+          fi
+          ant "${args[@]}" profiles/production
+
+      # Kept before the push: production-evals below (which checks out the evaluated commit,
+      # without the lockfile commit) reads it, and it is the copy to commit by hand when the
+      # push fails.
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() && steps.apply.outcome != 'skipped' }}
+        with:
+          name: claude-lock-production
+          path: backend/claude-lock.production.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      # Also after a failed apply: a partial apply still records what it created, and the next
+      # run needs those IDs (ant apply docs, "Run ant apply in CI"). The commit is made on top
+      # of the current main, never rebased: main moves while the job waits for approval, and
+      # the lockfile is the only file this commit changes.
+      - name: Commit the lockfile to main
+        if: ${{ !cancelled() && steps.apply.outcome != 'skipped' }}
+        env:
+          APPLY_OUTCOME: ${{ steps.apply.outcome }}
+        run: |
+          if [ ! -f "$LOCKFILE" ]; then
+            echo "ant wrote no $LOCKFILE: nothing to commit."
+            exit 0
+          fi
+          applied="$RUNNER_TEMP/claude-lock.production.json"
+          cp -- "$LOCKFILE" "$applied"
+          # actions/checkout sets no identity, and a runner cannot guess one.
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for attempt in 1 2 3; do
+            if git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main; then
+              git checkout --quiet --force --detach origin/main
+              cp -- "$applied" "$LOCKFILE"
+              git add -- "$LOCKFILE"
+              if git diff --cached --quiet; then
+                echo "main already has this production lockfile: nothing to commit."
+                exit 0
+              fi
+              git commit --quiet -m "Update production agents lockfile" \
+                -m "ant apply of profiles/production at ${GITHUB_SHA} (apply ${APPLY_OUTCOME}): ${RUN_URL}"
+              if git push origin HEAD:refs/heads/main; then
+                exit 0
+              fi
+            fi
+            sleep $((attempt * 10))
+          done
+          echo "::error::could not push $LOCKFILE to main. The production workspace already has what it records: download this run's claude-lock-production artifact and commit it to main by hand. A re-run would apply with main's older lockfile, and ant would refuse."
+          exit 1
+
+      - name: Summary
+        if: ${{ !cancelled() && steps.apply.outcome != 'skipped' }}
+        env:
+          APPLY_OUTCOME: ${{ steps.apply.outcome }}
+        run: |
+          {
+            echo "### Production agents"
+            echo
+            echo "ant apply: **${APPLY_OUTCOME}** for commit \`${GITHUB_SHA:0:7}\`."
+            echo
+            if [ -f "$LOCKFILE" ]; then
+              echo "| File | Kind | ID | Version |"
+              echo "|---|---|---|---|"
+              jq -r '.resources | to_entries[] | "| `\(.key)` | \(.value.kind) | `\(.value.id)` | \(.value.version // "") |"' "$LOCKFILE" \
+                || echo "| (the lockfile could not be read) | | | |"
+              echo
+            fi
+            echo "Railway redeploys the backend from the lockfile commit; new plans use the new coordinator version once that deploy is live."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+
+  # The spec's single eval run on the production profile before closing (day 4). It needs
+  # production access, which never goes on a laptop (CLAUDE.md), so it runs here, by hand only.
+  # A second approval in the `production` environment starts it. There is no gate: the
+  # baseline is a development run, so the results are reported, not compared.
+  production-evals:
+    name: evals on production (manual final check)
+    needs: production
+    if: github.event_name == 'workflow_dispatch' && inputs.production_evals
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    environment: production
+    permissions:
+      contents: read
+      # Only to mint the GitHub OIDC token when Anthropic federation is configured (anthropic-auth);
+      # harmless, and unused, in API-key mode.
+      id-token: write
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: trip_planner
+          POSTGRES_PASSWORD: trip_planner
+          POSTGRES_DB: trip_planner_evals
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U trip_planner -d trip_planner_evals"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      ENVIRONMENT: development
+      AUTH_MODE: local
+      PLANNER_ALLOWED_EMAILS: evals@example.com
+      AGENT_PROFILE: production
+      DATABASE_URL: postgresql://trip_planner:trip_planner@localhost:5432/trip_planner_evals
+      LOG_LEVEL: INFO
+      GIT_SHA: ${{ github.sha }}
+      EVAL_CONCURRENCY: "5"
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.13.0"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install the locked dependencies
+        run: uv sync --locked
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: claude-lock-production
+          path: backend
+
+      # Up to two hours long: in federation mode the action's background refresher keeps the
+      # token file fresh; an API key needs nothing.
+      - uses: ./.github/actions/anthropic-auth
+        with:
+          federation-rule-id: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
+          organization-id: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
+          workspace-id: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
+          service-account-id: ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}
+          api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Run the reference requests on the production profile
+        id: run
+        continue-on-error: true
+        run: |
+          mkdir -p ../evals/results
+          results="$(realpath ../evals/results)/$(date -u +%F)-${GITHUB_SHA:0:12}-production.json"
+          echo "results=$results" >> "$GITHUB_OUTPUT"
+          uv run python ../evals/run.py --profile production --yes \
+            --concurrency "$EVAL_CONCURRENCY" --output "$results"
+
+      - name: Summary
+        if: ${{ !cancelled() }}
+        env:
+          RESULTS: ${{ steps.run.outputs.results }}
+          RUN_OUTCOME: ${{ steps.run.outcome }}
+        run: |
+          {
+            echo "### Evals: production profile (final check)"
+            echo
+            echo "evals/run.py: **${RUN_OUTCOME}**"
+            echo
+            if [ -n "$RESULTS" ] && [ -s "$RESULTS" ]; then
+              echo "| Summary | Value |"
+              echo "|---|---|"
+              jq -r '.summary | to_entries[] | "| \(.key) | \(.value) |"' "$RESULTS" \
+                || echo "| (the results file could not be read) | |"
+            else
+              echo "No results file was written."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() && steps.run.outputs.results != '' }}
+        with:
+          name: eval-results-production
+          path: ${{ steps.run.outputs.results }}
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Fail when evals/run.py failed
+        if: ${{ !cancelled() && steps.run.outcome != 'success' }}
+        run: |
+          echo "::error::evals/run.py failed on the production profile: see its log"
+          exit 1

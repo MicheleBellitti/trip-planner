@@ -1,0 +1,113 @@
+# Smoke test of the GitHub -> Anthropic credentials, in whichever mode the environment is set
+# up for (docs/deploy.md, "Anthropic credentials in CI"): the secret ANTHROPIC_API_KEY, or
+# Workload Identity Federation. By hand only; it costs nothing: it prints the mode, then lists
+# one model through `ant` and through the Python SDK, and creates no agent, environment or
+# session.
+#
+# Run it from Actions > anthropic-auth-check > Run workflow, once for `development` and once
+# for `production` (the production run waits for Michele's approval and only works on `main`,
+# like the real production job). It proves, per environment:
+#   - the credentials reach the job (the action fails with a message naming both options when
+#     the environment has neither),
+#   - `ant` and the SDK both accept them, and the SDK can build more than one client in a row.
+# In federation mode it also proves:
+#   - the OIDC subject (repo:<owner>/<repo>:environment:<name>) and audience match the rule,
+#   - the rule's service account can act in the workspace,
+#   - the issuer does not enforce single-use tokens (check_jti), which the evals would trip
+#     over: see docs/deploy.md.
+name: anthropic-auth-check
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "GitHub environment to authenticate as"
+        type: choice
+        options:
+          - development
+          - production
+        default: development
+
+permissions: {}
+
+env:
+  UV_VERSION: "0.13.0"
+
+jobs:
+  check:
+    name: auth smoke test (${{ inputs.environment }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      # Only to mint the GitHub OIDC token when Anthropic federation is configured (anthropic-auth);
+      # harmless, and unused, in API-key mode.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - uses: ./.github/actions/setup-ant
+
+      - id: auth
+        uses: ./.github/actions/anthropic-auth
+        with:
+          federation-rule-id: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
+          organization-id: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
+          workspace-id: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
+          service-account-id: ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}
+          api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Which mode
+        env:
+          MODE: ${{ steps.auth.outputs.mode }}
+          ENVIRONMENT_NAME: ${{ inputs.environment }}
+        run: |
+          echo "Anthropic auth mode: $MODE"
+          echo "### Anthropic auth check" >> "$GITHUB_STEP_SUMMARY"
+          echo "Environment \`$ENVIRONMENT_NAME\`, mode **$MODE**." >> "$GITHUB_STEP_SUMMARY"
+
+      # In federation mode a 401 here is almost always a rule mismatch: compare the `sub` and
+      # `aud` the previous step printed with the rule's subject_prefix and audience, and read
+      # the Console's Workload identity page for the rejected exchange. In API-key mode a 401
+      # means the environment's ANTHROPIC_API_KEY secret is wrong or revoked.
+      - name: ant models list
+        run: ant models list --limit 1
+
+      - name: Python SDK, two clients in a row
+        working-directory: backend
+        run: |
+          uv sync --locked
+          uv run python - <<'PY'
+          import os
+          import sys
+
+          import anthropic
+
+          # No api_key argument: the SDK reads ANTHROPIC_API_KEY (API-key mode) or finds the
+          # federation variables the action exported, and each client then exchanges the
+          # token file again.
+          try:
+              for number in (1, 2):
+                  client = anthropic.Anthropic()
+                  page = client.models.list(limit=1)
+                  print(f"client {number}: ok, {len(page.data)} model listed")
+          except anthropic.AnthropicError as error:
+              print(f"::error::{type(error).__name__}: {error}")
+              if os.environ.get("ANTHROPIC_API_KEY"):
+                  print("::error::API-key mode: check the environment's ANTHROPIC_API_KEY secret.")
+              else:
+                  print(
+                      "::error::If the first client worked and the second failed, the issuer "
+                      "rejects a reused token: create it with check_jti=false (docs/deploy.md)."
+                  )
+              sys.exit(1)
+          PY

@@ -1,0 +1,370 @@
+# Evals of the development profile (spec "CI/CD e operatività" and "Eval strutturate"): apply
+# profiles/development to the development workspace, run the five reference requests with
+# evals/run.py, compare the run with evals/baseline.json, post the summary on the PR and fail
+# when the comparison blocks.
+#
+# This SPENDS REAL MONEY in the development workspace: up to five sessions at the 60-cent
+# budget plus at most $1 of judge, so about $4 per run at worst. Drafts are skipped; it runs
+# again when the PR is marked ready for review.
+#
+# Triggers: pull requests that change agents/ (templates), profiles/ (rendered agents),
+# skills/ or the Plan contract; deploy-agents.yml (workflow_call, on main); or by hand.
+#
+# Authentication, two modes (docs/deploy.md, "Anthropic credentials in CI"). The jobs that call
+# Anthropic run in the `development` environment, ask for `id-token: write`, and use
+# ./.github/actions/anthropic-auth. The action uses Workload Identity Federation when the
+# environment's VARIABLES ANTHROPIC_FEDERATION_RULE_ID and ANTHROPIC_ORGANIZATION_ID are set
+# (plus the optional ANTHROPIC_WORKSPACE_ID), otherwise the environment SECRET
+# ANTHROPIC_API_KEY, and fails with a message when it has neither. The key is never set in a
+# workflow's own `env:`, only passed to the action from `secrets` of the job's environment.
+# Nothing production is reachable from here (ci-backend.yml's guard enforces it).
+#
+# The development lockfile: `ant apply` rewrites backend/claude-lock.development.json inside
+# the runner. This workflow never pushes it. The `evals` job uses that copy (it pins the
+# versions just created from this PR's files), it is uploaded as the artifact
+# `claude-lock-development`, and the PR comment says whether it differs from the committed
+# one. Committing it is the PR author's job (docs/deploy.md, "Release paths").
+name: evals
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "agents/**"
+      - "profiles/**"
+      - "skills/**"
+      - "backend/app/plan.py"
+  workflow_call:
+  workflow_dispatch:
+
+permissions: {}
+
+env:
+  UV_VERSION: "0.13.0"
+  LOCKFILE: backend/claude-lock.development.json
+
+jobs:
+  apply:
+    name: ant apply (development)
+    # github.event.pull_request is empty on workflow_call and workflow_dispatch.
+    if: github.event.pull_request.draft != true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: development
+    permissions:
+      contents: read
+      # Only to mint the GitHub OIDC token when Anthropic federation is configured (anthropic-auth);
+      # harmless, and unused, in API-key mode.
+      id-token: write
+    # One apply at a time against the shared development workspace, across every PR and main:
+    # nothing locks the remote resources (notes §2h). `queue: max` lets every waiting apply
+    # wait (up to 100, first in first out). With GitHub's default single slot, a third arrival
+    # would cancel the waiting one: a PR's evals would fail, or deploy-agents' production job
+    # (needs: evals) would be skipped and the promotion silently dropped.
+    concurrency:
+      group: ant-apply-development
+      cancel-in-progress: false
+      queue: max
+    outputs:
+      lockfile_changed: ${{ steps.lockfile.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      # Cheap checks before spending anything: the agents applied must be the rendered ones.
+      - name: schema/ and profiles/ are up to date
+        working-directory: backend
+        run: |
+          uv sync --locked
+          uv run python -m app.schemas --check
+          uv run python ../scripts/render_profiles.py --check
+
+      # The pinned ant release, sha256-checked (anthropics/setup-ant@v1 answered 404 on
+      # 2026-10-12). Local action: it needs the checkout above.
+      - uses: ./.github/actions/setup-ant
+
+      - name: ant is at least 1.30.0 (ant apply)
+        run: |
+          version="$(ant --version | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || true)"
+          if [ -z "$version" ]; then
+            echo "::error::cannot read the version from 'ant --version'"
+            exit 1
+          fi
+          if [ "$(printf '%s\n' 1.30.0 "$version" | sort -V | head -n 1)" != "1.30.0" ]; then
+            echo "::error::ant $version is older than 1.30.0, the first release with ant apply"
+            exit 1
+          fi
+          echo "ant $version"
+
+      - name: Keep the committed lockfile for comparison
+        run: |
+          if [ -f "$LOCKFILE" ]; then
+            cp "$LOCKFILE" "$RUNNER_TEMP/committed-lock.json"
+          else
+            echo "::warning::$LOCKFILE is not committed yet: this apply creates a new set of development agents. Do the first apply by hand and commit it (docs/deploy.md)."
+          fi
+
+      # Anthropic login, as late as possible: the SDK and ant read the variables this action
+      # exports (federation ids and a token file, or ANTHROPIC_API_KEY). The ids are GitHub
+      # environment variables; the key is the environment's secret.
+      - uses: ./.github/actions/anthropic-auth
+        with:
+          federation-rule-id: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
+          organization-id: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
+          workspace-id: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
+          service-account-id: ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}
+          api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      # --force: the development workspace is shared scratch. Other PRs' runs move its agents
+      # to their own versions, so the committed lockfile is always "edited outside these files"
+      # from ant's point of view. Sessions pin versions, so overwriting never disturbs a
+      # running eval. Never use --force against production.
+      - name: Apply profiles/development
+        run: ant apply --yes --force --lock-file "$LOCKFILE" profiles/development
+
+      - name: Compare with the committed lockfile
+        id: lockfile
+        run: |
+          if [ -f "$RUNNER_TEMP/committed-lock.json" ] && cmp -s "$RUNNER_TEMP/committed-lock.json" "$LOCKFILE"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::ant apply changed $LOCKFILE; the run uses the new copy, which is uploaded as the claude-lock-development artifact and never pushed"
+          fi
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: claude-lock-development
+          path: backend/claude-lock.development.json
+          if-no-files-found: error
+          retention-days: 14
+
+  evals:
+    name: reference requests (development)
+    needs: apply
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    environment: development
+    permissions:
+      contents: read
+      # Only to mint the GitHub OIDC token when Anthropic federation is configured (anthropic-auth);
+      # harmless, and unused, in API-key mode.
+      id-token: write
+    # One eval run per PR at a time. A newer push queues behind the running one instead of
+    # cancelling it: a cancelled job cannot stop its Managed Agents sessions, which would keep
+    # spending up to their budget. A queued run that is superseded is dropped by GitHub.
+    concurrency:
+      group: evals-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: false
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: trip_planner
+          POSTGRES_PASSWORD: trip_planner
+          POSTGRES_DB: trip_planner_evals
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U trip_planner -d trip_planner_evals"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      # Backend settings for run.py, which drives the real backend in-process.
+      ENVIRONMENT: development
+      AUTH_MODE: local
+      PLANNER_ALLOWED_EMAILS: evals@example.com
+      AGENT_PROFILE: development
+      DATABASE_URL: postgresql://trip_planner:trip_planner@localhost:5432/trip_planner_evals
+      LOG_LEVEL: INFO
+      GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      # Plans in parallel: the cost is the same, the wall time about one plan (~15 minutes,
+      # 40 at most per plan) instead of five.
+      EVAL_CONCURRENCY: "5"
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install the locked dependencies
+        run: uv sync --locked
+
+      # The lockfile written by this run's apply: it pins the versions built from these files.
+      - uses: actions/download-artifact@v8
+        with:
+          name: claude-lock-development
+          path: backend
+
+      # Anthropic login for the eval run, which lasts up to two hours. In federation mode the
+      # action's background refresher rewrites the token file every two minutes, because each
+      # exchange needs a fresh GitHub token (they live for minutes) and the SDK re-reads the
+      # file on every one. An API key needs nothing.
+      - uses: ./.github/actions/anthropic-auth
+        with:
+          federation-rule-id: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
+          organization-id: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
+          workspace-id: ${{ vars.ANTHROPIC_WORKSPACE_ID }}
+          service-account-id: ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}
+          api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      # run.py creates and migrates its eval database itself (a DATABASE_URL whose name
+      # already contains "eval" is used as is). --yes: there is no terminal to confirm the
+      # spending ceiling it prints. Exit 0 means a results file was written, even when checks
+      # failed: compare.py decides.
+      - name: Run the reference requests
+        id: run
+        continue-on-error: true
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          mkdir -p ../evals/results
+          results="$(realpath ../evals/results)/$(date -u +%F)-${HEAD_SHA:0:12}.json"
+          echo "results=$results" >> "$GITHUB_OUTPUT"
+          uv run python ../evals/run.py --profile development --yes \
+            --concurrency "$EVAL_CONCURRENCY" --output "$results"
+
+      - name: Compare with the baseline
+        id: compare
+        if: ${{ !cancelled() }}
+        env:
+          RESULTS: ${{ steps.run.outputs.results }}
+        run: |
+          if [ -z "$RESULTS" ] || [ ! -s "$RESULTS" ]; then
+            echo "evals/run.py wrote no results file, so there is nothing to compare." > "$RUNNER_TEMP/compare.md"
+            echo "status=missing" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "results=$RESULTS" >> "$GITHUB_OUTPUT"
+          set +e
+          uv run python ../evals/compare.py "$RESULTS" --markdown "$RUNNER_TEMP/compare.md"
+          status=$?
+          set -e
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+
+      - name: Write the summary
+        if: ${{ !cancelled() }}
+        env:
+          RUN_OUTCOME: ${{ steps.run.outcome }}
+          COMPARE_STATUS: ${{ steps.compare.outputs.status }}
+          LOCKFILE_CHANGED: ${{ needs.apply.outputs.lockfile_changed }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ "$RUN_OUTCOME" = "success" ] && [ "$COMPARE_STATUS" = "0" ] && [ ! -f ../evals/baseline.json ]; then
+            verdict="**PASS**: no blocking deterministic check failed (that rule needs no baseline). evals/baseline.json is not committed yet, so the judge and cost rules are report only: commit a baseline (docs/deploy.md) to turn them on."
+          elif [ "$RUN_OUTCOME" = "success" ] && [ "$COMPARE_STATUS" = "0" ]; then
+            verdict="**PASS**: no blocking regression against evals/baseline.json."
+          else
+            verdict="**FAIL**: evals/run.py ${RUN_OUTCOME:-did not run}, evals/compare.py exit status ${COMPARE_STATUS:-none}. This blocks the merge."
+          fi
+          out="$RUNNER_TEMP/evals-comment.md"
+          {
+            echo "### Evals: development profile"
+            echo
+            echo "Commit \`${HEAD_SHA:0:7}\` · [workflow run]($RUN_URL)"
+            echo
+            echo "$verdict"
+            echo
+            cat "$RUNNER_TEMP/compare.md" 2>/dev/null || echo "No comparison output."
+            echo
+            echo "<details><summary>Development resources these sessions ran</summary>"
+            echo
+            echo "| File | Kind | ID | Version |"
+            echo "|---|---|---|---|"
+            jq -r '.resources | to_entries[] | "| `\(.key)` | \(.value.kind) | `\(.value.id)` | \(.value.version // "") |"' claude-lock.development.json \
+              || echo "| (the lockfile could not be read) | | | |"
+            echo
+            echo "</details>"
+            echo
+            if [ "$LOCKFILE_CHANGED" = "true" ]; then
+              echo "**Development lockfile:** this run's \`ant apply\` changed \`backend/claude-lock.development.json\`. CI never pushes it. If this PR changes \`profiles/development/\` or \`skills/\`, commit the lockfile with the PR: download the \`claude-lock-development\` artifact of this run, or run the apply locally (docs/deploy.md). If the PR doesn't, the change only means another branch moved the shared development agents, and nothing needs committing."
+            else
+              echo "**Development lockfile:** unchanged; the committed \`backend/claude-lock.development.json\` matches these files."
+            fi
+          } > "$out"
+          cat "$out" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: evals-comment
+          path: ${{ runner.temp }}/evals-comment.md
+          if-no-files-found: warn
+          retention-days: 14
+
+      # The baseline changes only through an explicit commit: download this file to update it.
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() && steps.compare.outputs.results != '' }}
+        with:
+          name: eval-results
+          path: ${{ steps.compare.outputs.results }}
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Fail when the evals failed or the comparison blocks
+        if: ${{ !cancelled() }}
+        env:
+          RUN_OUTCOME: ${{ steps.run.outcome }}
+          COMPARE_STATUS: ${{ steps.compare.outputs.status }}
+        run: |
+          if [ "$RUN_OUTCOME" != "success" ]; then
+            echo "::error::evals/run.py failed: see its log and the summary"
+            exit 1
+          fi
+          if [ "$COMPARE_STATUS" != "0" ]; then
+            echo "::error::evals/compare.py blocks the merge (status $COMPARE_STATUS): see the summary"
+            exit 1
+          fi
+
+  comment:
+    name: PR comment
+    needs: [apply, evals]
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && needs.apply.result != 'skipped' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: evals-comment
+          path: ${{ runner.temp }}/comment
+
+      - name: Fall back when the evals produced no summary
+        env:
+          APPLY_RESULT: ${{ needs.apply.result }}
+          EVALS_RESULT: ${{ needs.evals.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          file="$RUNNER_TEMP/comment/evals-comment.md"
+          if [ ! -s "$file" ]; then
+            mkdir -p "$(dirname "$file")"
+            {
+              echo "### Evals: development profile"
+              echo
+              echo "**FAIL**: the evals did not complete (apply: $APPLY_RESULT, evals: $EVALS_RESULT). See the [workflow run]($RUN_URL)."
+            } > "$file"
+          fi
+
+      - uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        with:
+          header: evals
+          path: ${{ runner.temp }}/comment/evals-comment.md

@@ -1,0 +1,62 @@
+# Web CI on pull requests (CLAUDE.md "CI must pass before merge"; spec "CI/CD e operatività"):
+# eslint, tsc --noEmit, vitest and next build, plus the check that the Zod/TypeScript code
+# generated from schema/*.json is fresh. Vercel builds its own previews and production.
+name: ci-web
+
+on:
+  pull_request:
+    paths:
+      - "web/**"
+      - "schema/**"
+      - ".github/workflows/ci-web.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-web-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: web
+
+jobs:
+  web:
+    name: lint, types, tests, build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      # NEXT_PUBLIC_* values are inlined at build time; these are the public production ones.
+      NEXT_PUBLIC_API_URL: https://pianifica.api.bellittim.com
+      NEXT_PUBLIC_TRIPTRACKER_URL: https://viaggi.bellittim.com
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: npm ci
+        run: npm ci
+
+      # First, because every later step is misleading when the generated schemas are stale.
+      - name: Generated schemas are up to date
+        run: npm run gen:schemas -- --check
+
+      - name: eslint
+        run: npm run lint
+
+      - name: tsc --noEmit
+        run: npm run typecheck
+
+      - name: vitest
+        run: npm test
+
+      - name: next build
+        run: npm run build
