@@ -43,7 +43,21 @@ MODELS = {
     "development": ("claude-sonnet-5-5", "claude-haiku-5-5"),
     "production": ("claude-opus-5-5", "claude-sonnet-5-5"),
 }
-NUMBERS = {"development": (60, 5, 2), "production": (400, 12, 2)}
+NUMBERS = {"development": (60, 3, 4, 3000, 2), "production": (400, 12, 8, 6000, 2)}
+"""session budget (cents), web_search cap, web_fetch cap, web_fetch max_content_tokens,
+follow-ups: the "Cost levers" values of docs/managed-agents-notes.md."""
+EFFORTS = {
+    "development": {
+        "coordinator": "medium",
+        "flights": "low",
+        "lodging": "low",
+        "activities": "low",
+        "transport": "low",
+    },
+    "production": dict.fromkeys(
+        ("coordinator", "flights", "lodging", "activities", "transport"), "medium"
+    ),
+}
 
 
 def agent_file(profile: str, agent: str) -> tuple[dict[str, Any], str]:
@@ -77,7 +91,10 @@ def test_agent_matches_the_spec_table(profile: str, agent: str) -> None:
     fields, system = agent_file(profile, agent)
     coordinator_model, subagent_model = MODELS[profile]
     assert fields["name"] == agent
-    assert fields["model"] == (coordinator_model if agent == "coordinator" else subagent_model)
+    assert fields["model"] == {
+        "id": coordinator_model if agent == "coordinator" else subagent_model,
+        "effort": EFFORTS[profile][agent],
+    }
     assert fields["metadata"] == {"app": "trip-planner", "profile": profile}
     assert system
     assert "{{" not in system
@@ -89,6 +106,11 @@ def test_agent_matches_the_spec_table(profile: str, agent: str) -> None:
     assert toolsets[0]["default_config"] == {"enabled": False}
     enabled = {c["name"] for c in toolsets[0]["configs"] if c["enabled"]}
     assert enabled == SPEC_TOOLS[agent]
+    # web_fetch caps the page text it puts in the context; web_search has no such knob.
+    fetch = [c for c in toolsets[0]["configs"] if c["name"] == "web_fetch"]
+    assert [c["max_content_tokens"] for c in fetch] == (
+        [NUMBERS[profile][3]] if "web_fetch" in SPEC_TOOLS[agent] else []
+    )
 
     skills = {Path(s).name for s in fields["skills"]}
     assert skills == SPEC_SKILLS[agent]
@@ -148,7 +170,7 @@ def test_mcp_tool_names_are_marked_pending_probe_p4() -> None:
 
 @pytest.mark.parametrize("profile", rp.PROFILE_NAMES)
 def test_prompts_carry_the_profile_numbers(profile: str) -> None:
-    budget_cents, search_cap, follow_ups = NUMBERS[profile]
+    budget_cents, search_cap, fetch_cap, _, follow_ups = NUMBERS[profile]
     _, coordinator = agent_file(profile, "coordinator")
     assert f"At most {follow_ups} follow-ups per subagent" in coordinator
     assert (
@@ -156,12 +178,21 @@ def test_prompts_carry_the_profile_numbers(profile: str) -> None:
     )
     for agent in rp.SUBAGENTS:
         _, system = agent_file(profile, agent)
-        assert f"At most {search_cap} `web_search` calls" in system
+        assert f"At most {search_cap} `web_search` calls" in system or (
+            f"use at most {search_cap} `web_search` calls" in system
+        )
+        assert f"at most {fetch_cap} `web_fetch` calls" in system
 
 
 def test_prompt_bodies_template_only_numbers() -> None:
     """Only numbers vary in the prompt text between profiles (models live in the frontmatter)."""
-    allowed = {"web_search_cap", "max_follow_ups", "session_budget_usd", "session_budget_cents"}
+    allowed = {
+        "web_search_cap",
+        "web_fetch_cap",
+        "max_follow_ups",
+        "session_budget_usd",
+        "session_budget_cents",
+    }
     for agent in rp.AGENTS:
         text = (REPO_ROOT / "agents" / f"{agent}.md").read_text(encoding="utf-8")
         _, body = rp.split_frontmatter(text, source=agent)
@@ -356,8 +387,11 @@ def test_budget_dollars_are_rendered_from_cents() -> None:
     values = {
         "environment_name": "e",
         "models": {},
+        "efforts": {},
         "session_budget_cents": 5,
         "web_search_cap": 1,
+        "web_fetch_cap": 1,
+        "web_fetch_max_content_tokens": 1000,
         "max_follow_ups": 1,
     }
     assert rp.template_context("development", values)["session_budget_usd"] == "0.05"
@@ -398,9 +432,25 @@ def test_a_template_change_reaches_both_profiles(fake_repo: Path) -> None:
 def test_profiles_yaml_is_validated(fake_repo: Path) -> None:
     path = fake_repo / "agents" / "profiles.yaml"
     path.write_text(
-        path.read_text(encoding="utf-8").replace("web_search_cap: 5", "web_search_cap: 0")
+        path.read_text(encoding="utf-8").replace("web_search_cap: 3", "web_search_cap: 0")
     )
     with pytest.raises(rp.RenderError, match="web_search_cap"):
+        rp.build_outputs(fake_repo)
+
+
+def test_profiles_yaml_rejects_an_unknown_effort(fake_repo: Path) -> None:
+    path = fake_repo / "agents" / "profiles.yaml"
+    path.write_text(path.read_text(encoding="utf-8").replace("flights: low", "flights: off"))
+    with pytest.raises(rp.RenderError, match=r"efforts\.flights"):
+        rp.build_outputs(fake_repo)
+
+
+def test_validation_requires_a_web_fetch_content_cap(fake_repo: Path) -> None:
+    template = fake_repo / "agents" / "activities.md"
+    text = template.read_text(encoding="utf-8")
+    text = text.replace(", max_content_tokens: {{ web_fetch_max_content_tokens }}", "")
+    template.write_text(text, encoding="utf-8")
+    with pytest.raises(rp.RenderError, match="max_content_tokens"):
         rp.build_outputs(fake_repo)
 
 
@@ -426,3 +476,23 @@ def test_generated_header_marks_every_text_file() -> None:
         if path.suffix in (".md", ".yaml"):
             text = path.read_text(encoding="utf-8")
             assert re.search(r"^# Generated by scripts/render_profiles.py", text, re.MULTILINE)
+
+
+@pytest.mark.parametrize("profile", rp.PROFILE_NAMES)
+@pytest.mark.parametrize("agent", rp.SUBAGENTS)
+def test_subagent_prompts_carry_the_cost_rules(profile: str, agent: str) -> None:
+    """The cost levers of docs/managed-agents-notes.md that live in the prompts."""
+    _, system = agent_file(profile, agent)
+    assert "# Cost rules" in system
+    assert "reword" in system  # no repeated or reworded searches
+    assert "do not use the rest of the" in system
+    assert "read the file back" in system
+    if agent != "activities":
+        assert "write_result.py" in system
+
+
+@pytest.mark.parametrize("profile", rp.PROFILE_NAMES)
+def test_coordinator_prompt_forbids_re_delegation(profile: str) -> None:
+    _, system = agent_file(profile, "coordinator")
+    assert "No re-delegation" in system
+    assert "read each file once" in system

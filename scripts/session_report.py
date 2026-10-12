@@ -1293,7 +1293,11 @@ def _file_chars(path: Path) -> int:
     return len(path.read_text(encoding="utf-8"))
 
 
-def _skill_files(skill_dir: Path, agent: str) -> list[StaticFile]:
+# References a skill's core tells the coordinator to read while it composes the plan.
+COMPOSING_REFERENCES = frozenset({"plan-fields.md", "bookings.md"})
+
+
+def _skill_files(skill_dir: Path, agent: str, has_bash: bool = True) -> list[StaticFile]:
     files: list[StaticFile] = []
     for path in sorted(skill_dir.rglob("*")):
         rel = path.relative_to(skill_dir)
@@ -1313,13 +1317,26 @@ def _skill_files(skill_dir: Path, agent: str) -> list[StaticFile]:
         if path.name == "SKILL.md" and len(rel.parts) == 1:
             tier = "expected"
         elif rel.parts[0] == "schemas":
-            tier = "expected" if path.stem == agent else "possible"
+            # An agent with bash is validated by write_result.py and reads its schema only on a
+            # rejection it cannot explain; one without bash reads it once, before it writes.
+            tier = "expected" if path.stem == agent and not has_bash else "possible"
+        elif rel.parts[0] == "references" and agent == "coordinator":
+            tier = "expected" if path.name in COMPOSING_REFERENCES else "possible"
         elif path.name == "example.json":
             tier = "expected" if agent == "coordinator" else "possible"
         else:
             tier = "possible"
         files.append(StaticFile(label, chars, tier))
     return files
+
+
+def _model_label(model: Any) -> str:
+    """`claude-haiku-5-5 (low)` for a model object with an effort, else the id string."""
+    if isinstance(model, str):
+        return model or "?"
+    data = as_dict(model)
+    label = str(data.get("id") or "?")
+    return f"{label} ({data['effort']})" if data.get("effort") else label
 
 
 def static_agents(repo: Path, profile: str = "development") -> list[StaticAgent]:
@@ -1365,11 +1382,11 @@ def static_agents(repo: Path, profile: str = "development") -> list[StaticAgent]
             skill_meta, _ = split_frontmatter(skill_md.read_text(encoding="utf-8"))
             text = f"{skill_meta.get('name', '')} {skill_meta.get('description', '')}"
             descriptions.append((skill_dir.name, len(text.strip())))
-            files.extend(_skill_files(skill_dir, name))
+            files.extend(_skill_files(skill_dir, name, "bash" in builtin))
         result.append(
             StaticAgent(
                 name=name,
-                model=str(meta.get("model") or "?"),
+                model=_model_label(meta.get("model")),
                 system_chars=len(body),
                 custom_tools=custom,
                 builtin_tools=builtin,
@@ -1388,8 +1405,9 @@ def render_static(agents: Sequence[StaticAgent], profile: str = "development") -
         "No API call. Characters are those of the files; tokens are chars / 4. **Floor** is what "
         "every model request of the agent re-reads at the very least: system prompt + custom tool "
         "schemas + skill name and description lines. **After skill loads** adds the files the "
-        "agent is expected to read (each referenced skill's SKILL.md; its own "
-        "`schemas/<agent>.json`; `example.json` for the coordinator). **Possible** is every other "
+        "agent is expected to read (each referenced skill's SKILL.md; "
+        "`schemas/<agent>.json` for an agent without bash; for the coordinator `example.json` and "
+        "the composing references). **Possible** is every other "
         "data file or script of the referenced skills, counted only if an agent reads them. "
         "Built-in tool definitions (bash, read, write, web_search, ...) and MCP tool schemas are "
         "not measurable offline: the live report's first-request context includes them.\n"

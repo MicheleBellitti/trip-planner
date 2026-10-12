@@ -9,8 +9,14 @@
 # workspace). Prompts are the same text in both profiles.
 #
 # Templates use {{ key }} placeholders. Available keys: profile, environment_name,
-# models.<agent>, session_budget_cents, session_budget_usd (derived), web_search_cap,
-# max_follow_ups.
+# models.<agent>, efforts.<agent>, session_budget_cents, session_budget_usd (derived),
+# web_search_cap, web_fetch_cap, web_fetch_max_content_tokens, max_follow_ups.
+#
+# Cost levers (docs/managed-agents-notes.md, "Cost levers"): `efforts` is the model's effort
+# level (low, medium, high, xhigh, max), the only thinking control Managed Agents exposes;
+# `web_fetch_max_content_tokens` caps the page text each web_fetch call puts in the context;
+# `web_search_cap` and `web_fetch_cap` are prompt rules (the platform has no max_uses for these
+# tools).
 
 profiles:
   development:
@@ -22,8 +28,18 @@ profiles:
       lodging: claude-haiku-5-5
       activities: claude-haiku-5-5
       transport: claude-haiku-5-5
+    # Haiku 5.5 defaults to medium and Sonnet 5.5 to high; the subagents' work is well specified
+    # (MCP first, then a few pages), so one level lower on each saves thinking tokens.
+    efforts:
+      coordinator: medium
+      flights: low
+      lodging: low
+      activities: low
+      transport: low
     session_budget_cents: 60 # SESSION_BUDGET_CENTS default for this profile (US cents)
-    web_search_cap: 5 # web_search calls per agent per session
+    web_search_cap: 3 # web_search calls per agent per session (was 5: ~8k tokens + 1 cent each)
+    web_fetch_cap: 4 # web_fetch calls per agent per task (a fetched page is ~3k tokens re-read later)
+    web_fetch_max_content_tokens: 3000 # page text per web_fetch call (pages ran 3k-4.5k tokens)
     max_follow_ups: 2 # follow-ups the coordinator may send each subagent
 
   production:
@@ -35,6 +51,16 @@ profiles:
       lodging: claude-sonnet-5-5
       activities: claude-sonnet-5-5
       transport: claude-sonnet-5-5
+    # Opus 5.5 already defaults to medium; Sonnet 5.5 defaults to high and the docs advise medium
+    # for well-specified multistep tool use.
+    efforts:
+      coordinator: medium
+      flights: medium
+      lodging: medium
+      activities: medium
+      transport: medium
     session_budget_cents: 400
     web_search_cap: 12
+    web_fetch_cap: 8
+    web_fetch_max_content_tokens: 6000
     max_follow_ups: 2

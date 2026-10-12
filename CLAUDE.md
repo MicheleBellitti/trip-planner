@@ -38,6 +38,7 @@ backend/                 FastAPI service (uv, Python 3.12). The package is backe
   app/sessions.py          start, interrupt, continue, resume; PlannerServices; the local demo
   app/hub.py               in-memory per-plan pub/sub for SSE
   app/routes.py            every endpoint except /health; SSE; CORS; request body cap
+  app/evals_store.py       the eval history: store a run (POST /evals/runs, bearer token), list, read
   app/auth.py              current_user() via TripTracker get-session; the Origin check
   app/mapping.py           plan_to_trip(): Plan -> TripTracker Trip (pure function)
   app/links.py             check_link(): the booking-link domain allowlist (pure)
@@ -45,7 +46,7 @@ backend/                 FastAPI service (uv, Python 3.12). The package is backe
   app/triptracker_schema.py  TripTracker's trip.json: load, refresh, validate_trip()
   app/lockfile.py          reads backend/claude-lock.<profile>.json into a Roster
   app/jobs.py              python -m app.jobs cleanup | stuck
-  app/cli.py               python -m app.cli run | replay
+  app/cli.py               python -m app.cli run | replay | import-evals (a results file into the history)
   app/schemas.py           python -m app.schemas: writes schema/*.json from the models
   migrations/              Alembic (one revision per PR that changes tables)
   pinned/trip.schema.json  copy of TripTracker's trip.json that production can pin
@@ -57,7 +58,8 @@ backend/                 FastAPI service (uv, Python 3.12). The package is backe
   claude-lock.<profile>.json   one lockfile per profile, written by `ant apply` (not committed
                                yet: the first apply is docs/deploy.md step 7)
 web/                     Next.js 16 (App Router), TypeScript strict, Tailwind 4, Zod 4 (web/README.md)
-  app/                     routes: / (plans), /new (request form), /plans/[id], /dev/ui (dev only)
+  app/                     routes: / (plans), /new (request form), /plans/[id], /evals (eval history),
+                           /evals/[id], /dev/ui (dev only)
   components/ui/           the design system's primitives (DatePair, Timeline, ToolChip, ...)
   lib/                     typed API client, SSE + timeline reducer (lib/plan-events), schemas
   DESIGN.md, PRODUCT.md    design tokens (the authority) and product decisions
@@ -72,7 +74,8 @@ skills/                  shared agent skills (trip-tracker-schema, booking-links
                          travel-research-rules), each with its own tests
 scripts/                 render_profiles.py, bootstrap.py (ant apply over the SDK), probe_session.py
                          (the paid live probes); see scripts/README.md
-evals/                   requests.yaml, checks.py, judge.py + rubric.md, run.py, compare.py,
+evals/                   requests.yaml, checks.py, judge.py + rubric.md, run.py, compare.py (--json),
+                         upload.py (POST a run to the eval history),
                          tests/, results/ (evals/README.md; baseline.json is not committed yet)
 schema/                  generated JSON Schemas (plan.json is the submit_plan input_schema)
 docs/                    spec (Italian), notes, backend-interfaces.md, research/integrations.md,
@@ -274,10 +277,14 @@ CI must pass before merge.
 - Two profiles, two agent sets with distinct IDs, one lockfile each. The backend picks one
   with `AGENT_PROFILE` (required when `ENVIRONMENT=production`); `LOCKFILE_PATH` defaults to
   `backend/claude-lock.<AGENT_PROFILE>.json`, and so does `SESSION_BUDGET_CENTS` (400 or 60):
-  - `development`: Sonnet 5.5 coordinator, Haiku 5.5 subagents, 60¢ session budget, 5 web
-    searches per agent. Use it for all code work and always locally.
-  - `production`: Opus 5.5 coordinator, Sonnet 5.5 subagents, 400¢ budget, 12 searches per
-    agent. Use it only for final checks.
+  - `development`: Sonnet 5.5 coordinator (effort medium), Haiku 5.5 subagents (effort low),
+    60¢ session budget, 3 web searches and 4 web fetches per agent, 3000 tokens per fetched
+    page. Use it for all code work and always locally.
+  - `production`: Opus 5.5 coordinator, Sonnet 5.5 subagents (effort medium for all), 400¢
+    budget, 12 searches and 8 fetches per agent, 6000 tokens per fetched page. Use it only for
+    final checks.
+  The search and fetch caps are prompt rules (the platform has no `max_uses` for them); the
+  effort and the page cap are enforced. Why these numbers: docs/managed-agents-notes.md §5.
   Sessions always pin the coordinator version from the lockfile; `ant apply` pins the
   subagents and skills inside it.
 - A prompt, skill or model change reaches production only through evals: `evals.yml` runs on
@@ -352,7 +359,8 @@ CI must pass before merge.
   Autogenerate it, then review it by hand. Never change production by hand. Railway's
   pre-deploy command runs `alembic upgrade head` before every deploy. `tests/test_db.py` fails
   when `app/db.py` and the migrations drift apart.
-- The tables are `plans`, `events` and `fx_rates`. A plan's status is one of `running`,
+- The tables are `plans`, `events`, `fx_rates` and `eval_runs` (the eval history, written by CI through
+  `POST /evals/runs` with `EVALS_INGEST_TOKEN`, or by `app.cli import-evals`). A plan's status is one of `running`,
   `ready`, `failed`, `budget_paused`, `blocked`, `interrupted`. `events.ma_event_id` is unique,
   so a resumed consumer never stores an event twice (events with an empty API id get a
   deterministic synthetic key, never NULL). `plans` also keeps the session's current budget

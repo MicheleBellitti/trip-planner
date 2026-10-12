@@ -91,12 +91,42 @@ SUPPORT_FILES = {
 }
 
 
+CORE_MAX_CHARS = 6_500
+"""A SKILL.md is read whole by every agent that uses the skill and re-read by every later model
+request (about 4 characters per token): the core stays under roughly 1,600 tokens, and the
+detail lives in references/ files read on demand (docs/managed-agents-notes.md, "Cost levers")."""
+
+
+def reference_files(skill_dir: Path) -> list[Path]:
+    return sorted((skill_dir / "references").glob("*.md"))
+
+
 @pytest.mark.parametrize("skill", SKILLS)
 def test_skill_md_names_only_files_that_exist(skill: str) -> None:
     skill_dir = SKILLS_DIR / skill
     text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    # A support file is named by the core or by one of its references.
+    named_in = text + "".join(p.read_text(encoding="utf-8") for p in reference_files(skill_dir))
     for name in SUPPORT_FILES[skill]:
         assert (skill_dir / name).is_file(), name
-        assert f"`{name}`" in text or f"<skill_dir>/{name}" in text, name
-    for name in re.findall(r"<skill_dir>/([\w./-]+)", text):
+        assert f"`{name}`" in named_in or f"<skill_dir>/{name}" in named_in, name
+    for name in re.findall(r"<skill_dir>/([\w./<>-]+)", text):
+        if "<" in name:  # <skill_dir>/schemas/<agent>.json: a family of generated files
+            assert (skill_dir / name.split("<")[0]).is_dir(), name
+            continue
         assert (skill_dir / name).is_file(), name
+
+
+@pytest.mark.parametrize("skill", SKILLS)
+def test_core_is_short_and_points_at_every_reference(skill: str) -> None:
+    skill_dir = SKILLS_DIR / skill
+    text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    assert len(text) <= CORE_MAX_CHARS, f"{skill}/SKILL.md has {len(text)} characters"
+    references = reference_files(skill_dir)
+    assert references, f"{skill} has no references/: the detail belongs there"
+    for path in references:
+        assert f"<skill_dir>/references/{path.name}" in text, (
+            f"{skill}/SKILL.md must say when to read references/{path.name}"
+        )
+    for name in re.findall(r"<skill_dir>/references/([\w.-]+)", text):
+        assert (skill_dir / "references" / name).is_file(), name

@@ -205,7 +205,7 @@ def test_loader_builds_ants_request_bodies(fake_repo: Path) -> None:
     loader = load(fake_repo)
     coordinator = loader.sources[COORDINATOR_KEY].body
     assert coordinator["system"].startswith("# Role")
-    assert coordinator["model"] == "claude-sonnet-5-5"
+    assert coordinator["model"] == {"id": "claude-sonnet-5-5", "effort": "medium"}
     tool = coordinator["tools"][1]
     assert (tool["type"], tool["name"]) == ("custom", "submit_plan")
     assert "$ref" not in json.dumps(tool)

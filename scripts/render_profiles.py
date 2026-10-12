@@ -106,8 +106,19 @@ class Rendered:
 # --- profiles -----------------------------------------------------------------------------------
 
 PROFILE_KEYS = frozenset(
-    {"environment_name", "models", "session_budget_cents", "web_search_cap", "max_follow_ups"}
+    {
+        "environment_name",
+        "models",
+        "efforts",
+        "session_budget_cents",
+        "web_search_cap",
+        "web_fetch_cap",
+        "web_fetch_max_content_tokens",
+        "max_follow_ups",
+    }
 )
+EFFORT_LEVELS = frozenset({"low", "medium", "high", "xhigh", "max"})
+"""Effort levels of the agent's `model` object (SDK BetaManagedAgentsModelConfigParams.effort)."""
 
 
 def load_profiles(repo_root: Path) -> dict[str, dict[str, Any]]:
@@ -134,7 +145,24 @@ def load_profiles(repo_root: Path) -> dict[str, dict[str, Any]]:
         for agent, model in models.items():
             if not isinstance(model, str) or not re.fullmatch(r"claude-[a-z0-9-]+", model):
                 raise RenderError(f"{where}.models.{agent} is not a model id: {model!r}")
-        for key in ("session_budget_cents", "web_search_cap", "max_follow_ups"):
+        efforts = values["efforts"]
+        if not isinstance(efforts, dict) or set(efforts) != set(AGENTS):
+            raise RenderError(
+                f"{where}.efforts must name an effort for each of {', '.join(AGENTS)}"
+            )
+        for agent, effort in efforts.items():
+            if effort not in EFFORT_LEVELS:
+                raise RenderError(
+                    f"{where}.efforts.{agent} must be one of {', '.join(sorted(EFFORT_LEVELS))}: "
+                    f"{effort!r}"
+                )
+        for key in (
+            "session_budget_cents",
+            "web_search_cap",
+            "web_fetch_cap",
+            "web_fetch_max_content_tokens",
+            "max_follow_ups",
+        ):
             if not isinstance(values[key], int) or isinstance(values[key], bool) or values[key] < 1:
                 raise RenderError(f"{where}.{key} must be a positive integer")
         if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,62}", str(values["environment_name"])):
@@ -151,10 +179,14 @@ def template_context(profile: str, values: Mapping[str, Any]) -> dict[str, str]:
         "session_budget_cents": str(cents),
         "session_budget_usd": f"{cents // 100}.{cents % 100:02d}",
         "web_search_cap": str(values["web_search_cap"]),
+        "web_fetch_cap": str(values["web_fetch_cap"]),
+        "web_fetch_max_content_tokens": str(values["web_fetch_max_content_tokens"]),
         "max_follow_ups": str(values["max_follow_ups"]),
     }
     for agent, model in values["models"].items():
         context[f"models.{agent}"] = str(model)
+    for agent, effort in values["efforts"].items():
+        context[f"efforts.{agent}"] = str(effort)
     return context
 
 
@@ -306,6 +338,13 @@ def parse_agent_file(text: str, *, source: str) -> tuple[dict[str, Any], str]:
     return fields, body.strip()
 
 
+def tools_of(fields: Mapping[str, Any]):
+    """Every per-tool config entry of the agent toolset."""
+    for tool in fields.get("tools") or []:
+        if isinstance(tool, dict) and tool.get("type") == "agent_toolset_20260401":
+            yield from (c for c in tool.get("configs") or [] if isinstance(c, dict))
+
+
 def validate_agent(
     rel_path: Path, text: str, outputs: Mapping[Path, bytes], repo_root: Path, warnings: list[str]
 ) -> None:
@@ -317,8 +356,19 @@ def validate_agent(
         raise RenderError(f"{source}: fields not accepted by POST /v1/agents: {sorted(unknown)}")
     if fields.get("name") != rel_path.stem:
         raise RenderError(f"{source}: `name` must be {rel_path.stem!r} (the backend's lane name)")
-    if not isinstance(fields.get("model"), str):
-        raise RenderError(f"{source}: `model` must be a model id string")
+    model = fields.get("model")
+    if not (
+        isinstance(model, dict)
+        and isinstance(model.get("id"), str)
+        and model.get("effort") in EFFORT_LEVELS
+        and set(model) <= {"id", "effort", "speed", "inference_geo"}
+    ):
+        raise RenderError(f"{source}: `model` must be {{id: <model id>, effort: <level>}}")
+    for entry in tools_of(fields):
+        if entry.get("name") == "web_fetch" and entry.get("enabled"):
+            tokens = entry.get("max_content_tokens")
+            if not isinstance(tokens, int) or isinstance(tokens, bool) or tokens < 1:
+                raise RenderError(f"{source}: web_fetch needs a positive `max_content_tokens`")
     if not system:
         raise RenderError(f"{source}: the Markdown body (the system prompt) is empty")
     if "system" in fields:

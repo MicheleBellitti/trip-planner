@@ -1029,6 +1029,7 @@ Prices: [DOCS pricing].
 
 - **`claude-haiku-5-5` is confirmed** for the development profile: it is in the SDK and in the official multiagent examples [DOCS multiagent-orchestration].
 - **Note:** the cached skill's model table omits Haiku 5.5 and calls `claude-haiku-4-5` the current Haiku [SKILL SKILL.md]. That table is stale.
+- **Observed Haiku 5.5 billing:** in the first dev eval session every Haiku request was priced at the over-100k tier ($0.50 in, $0.625 cache write, $0.05 cache read, $2.50 out) although the prompts were far below 100k tokens: three threads fit within 1c (§5 "What a session costs"). Plan with those rates, not the ≤100k ones.
 - **Spec cost estimate:** the development-profile figures (l.874, about $0.08 for four Haiku 5.5 subagents) match the ≤100k price tier [INFERRED arithmetic].
 - **Budgets need a list price:** a budgeted session is rejected (400) if any roster model lacks a public list price. All four models above have one [DOCS budgets].
 
@@ -1186,3 +1187,91 @@ Expected total under $1 [INFERRED]. Log every raw SSE line to a file. Never run 
 | P11 | Skills | `client.skills.create(files=files_from_dir("skills/booking-links"))`. Record the `id` and `latest_version_id` formats (`skver_…`?). Create an agent with `version: "latest"` and with the pinned id, and read the echoed `version`. Then `versions.create` and check whether a new session of the "latest" agent gets the new version. | Skill pinning semantics |
 | P12 | `ant` CLI (needs your OK to install) | `brew install anthropics/tap/ant`; `ant --version` (≥1.30). `ant apply --dry-run -v --lock-file /tmp/probe-lock.json profiles/development`. Verify kind inference for `environment.yaml` vs `environments/*.yaml`, that `predefined_agents: [./flights.md]` resolves to `{type: agent, id, version}`, and that `- ./tools/submit_plan.json` is spliced in. Dry-run creates nothing, but it uses credentials and contacts the API to read state [INFERRED]. Then, on a throwaway Haiku coordinator: `agents.update` with a *partial* `multiagent` (only `subagents`), `agents.retrieve`, and diff against the complete object sent at create: did `workflows`/`advisor` keep their stored values (merge) or reset (replacement)? | D2, I21; whether `bootstrap.py` is needed; `multiagent` update semantics (§3) |
 | P13 | Usage fields | After P8, `sessions.retrieve(sid).usage`: check whether `list_cost`, `server_tool_use.web_search_requests` and `active_seconds` are populated. `threads.retrieve(tid, session_id=sid).usage.list_cost` per thread. | `cost_cents` source |
+
+---
+
+## 5. Cost levers
+
+Researched 2026-10-12, offline: no API call, no session, no MCP. It answers one question: which settings make a Managed Agents plan cheaper, and what did the first real dev eval run (5 sessions, every one stopped at the 60c budget before wave 2) show about where the money goes. Tags as in the legend; **verified** means read in the SDK or the official docs, **inferred** is my own reasoning.
+
+### What a session costs (measured on the Lisbon session of that run)
+
+Source: the session report of the run (`scripts/session_report.py`, thread `usage` and `list_cost` from the API). I fitted the per-thread `list_cost` to the token counts: the Sonnet 5.5 coordinator matches the published rates to the cent ($2 in, $2.50 5m cache write, $0.10 cache read, $10 out), and the three Haiku 5.5 threads match **only** if every request is priced at Haiku's over-100k tier ($0.625 write, $0.05 read, $2.50 out; activities 19.2c vs 19c reported, flights 15.3c vs 15c, lodging 13.3c vs 13c) [INFERRED from the fit; the ≤100k rates would give 4 to 8c per thread]. Web search is $0.01 each [DOCS https://platform.claude.com/docs/en/managed-agents/budgets], web fetch has no charge [DOCS https://platform.claude.com/docs/en/about-claude/pricing].
+
+| Component | Cents | Share of 62c | What drives it |
+|---|---:|---:|---|
+| Cache writes | 26.1 | 42% | every new tool result and message is written once: each web_search result is 20k to 45k characters |
+| Cache reads | 13.0 | 21% | the whole context is re-read at every request: results stay for the rest of the thread |
+| Output (thinking included) | 12.5 | 20% | Haiku threads 9k to 16k output tokens each; one request wrote 10.6k tokens (a 7.6k-character file after long thinking) |
+| Web search fee | 10.0 | 16% | 10 searches |
+| Runtime | 0.2 | 0.4% | 105 s at $0.08/hour |
+
+One web_search therefore costs about 2c: 1c fee plus about 9k tokens written once and re-read by every later request (10 to 15 requests left in the thread). A 3.3k-token skill file read at the start costs about 0.4c (written once, re-read 9 to 14 times); slimming all the skill loads is worth about 3 to 4c per plan. The bigger levers are the searches, the fetches, the number of requests and the thinking.
+
+### Knobs that exist (verified)
+
+| Knob | Where | Effect | Used |
+|---|---|---|---|
+| `model.effort` (`low`, `medium`, `high`, `xhigh`, `max`) | agent `model: {id, effort}`; in `ant` frontmatter `model: {id: ..., effort: low}` [SDK types/beta/beta_managed_agents_model_config_params.py] [DOCS https://platform.claude.com/docs/en/managed-agents/agent-setup] | The only thinking control: "affects all tokens", thinking included; lower effort also means fewer and terser tool calls. Defaults: Haiku 5.5 and Opus 5.5 `medium`, Sonnet 5.5 `high`. Docs call `low` the choice "such as subagents" [DOCS https://platform.claude.com/docs/en/build-with-claude/effort]. Haiku 5.5 at `low` is "more likely to skip a search, stop early, or skip a check" [DOCS https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-haiku-5-5] | development: coordinator `medium`, subagents `low`; production: all `medium` |
+| `web_fetch.max_content_tokens` | the `web_fetch` entry of `agent_toolset_20260401.configs`, positive integer [SDK types/beta/beta_managed_agents_web_fetch_tool_config_params.py] [DOCS https://platform.claude.com/docs/en/managed-agents/tools-web-restrictions] | Caps the page text one call puts in the context; not for PDFs. In a multiagent session a thread uses its own tool config's value first | development 3,000, production 6,000 (pages in the run were 1.8k to 4.5k tokens, by characters / 4) |
+| `web_search` / `web_fetch` `allowed_domains` or `blocked_domains` (1 to 64 hosts, one of the two) | same entries [DOCS tools-web-restrictions] | Narrows the sources. It does not shorten a result and the trips go everywhere, so a list would cost coverage; not used | no |
+| `web_search.user_location` | same entry | Localises results; the destination changes per request | no |
+| Tool outputs above 100,000 characters (about 25,000 tokens) are written to a file in the sandbox and the model gets a truncated preview | platform behaviour [DOCS https://platform.claude.com/docs/en/managed-agents/tools] | A built-in ceiling per result; the run's biggest result was 37k characters, below it | n/a |
+| `default_config.enabled: false` and per-tool `enabled` | toolset, MCP toolsets | Fewer tool definitions in every request | already used by every template |
+| Per-agent and per-session budget `max_list_cost` | session create [DOCS budgets] | A stop, not a saving; owned by the backend (`SESSION_BUDGET_CENTS`) | profile numbers only |
+
+### Knobs that do not exist (verified absent)
+
+| Wanted | Finding |
+|---|---|
+| `max_uses` on web_search | Not available on the Managed Agents toolset: "`max_uses`, `citations`, and `cache_control` are not available on the toolset" [DOCS tools-web-restrictions]. The SDK type has no such field. **The search cap is a prompt rule** (`web_search_cap`, now also `web_fetch_cap`); nothing enforces it. |
+| A result-count or snippet-length limit for web_search | None in the SDK type [SDK types/beta/beta_managed_agents_web_search_tool_config_params.py] or the docs. |
+| Disabling thinking | The agent `model` object has `effort`, `speed` and `inference_geo` only [SDK types/beta/beta_managed_agents_model_config_params.py]; `agent_create_params` has no `thinking` field. `thinking: {"type": "disabled"}` exists on the Messages API for Haiku 5.5 (at `high` effort or below), but Managed Agents does not expose it. |
+| Compaction or context editing (clearing old tool results) | Automatic only: "The harness supports built-in prompt caching, compaction, and other performance optimizations" [DOCS https://platform.claude.com/docs/en/managed-agents/overview]; the session emits `agent.thread_context_compacted` when history "was compacted to fit the context window" [DOCS https://platform.claude.com/docs/en/managed-agents/reference]. No agent, session or tool parameter configures it, and the SDK's Managed Agents params contain no `context_management` or `compaction` field (grep of `types/beta/agent_*params.py`, `session_*params.py`, `beta_managed_agents_*`). It happens near the context limit, far above the 70k to 140k contexts of these runs, so it does not help. |
+| Cache TTL (5 minutes or 1 hour) | Usage reports cache writes split by TTL [SDK types/beta/beta_managed_agents_cache_creation_usage.py] but no parameter chooses it. |
+| Per-thread or per-subagent budget | One budget per session shared by all threads [DOCS budgets]. |
+
+Changing a thread's effort between requests would invalidate its prompt cache [DOCS effort], so the effort is fixed per agent in the template and never changed in a session.
+
+### What the repository applies
+
+- `agents/profiles.yaml`: development `web_search_cap` 5 to 3, `web_fetch_cap` 4, `web_fetch_max_content_tokens` 3000, `efforts` (coordinator `medium`, subagents `low`); production keeps `web_search_cap` 12 (no tool-level knob makes it cheaper), `web_fetch_cap` 8, `web_fetch_max_content_tokens` 6000, all `medium`. `scripts/render_profiles.py` validates the new keys and the rendered `model` object and `max_content_tokens`.
+- Prompts: each subagent has a "Cost rules" section (MCP first and no web search when it returned enough, one search per question and never a repeat, the time read once, one geocode command for all properties, write the file as soon as there are enough options and do not read it back); the coordinator may not re-delegate for a thin or estimated result and reads each file once; the plan's notes stay short because plan output is the coordinator's biggest cost.
+- Skills: each `SKILL.md` is a core of at most 6,500 characters (about 1,600 tokens) that says when to read which `references/*.md`; the old 12.4k, 8.5k and 16.4k character files were 3.3k, 2.2k and 4k tokens each, loaded whole by every agent at the start and re-read at every request. `schemas/<agent>.json` is read right before writing by the agent without bash and only after a rejection by the others. `skills/test_skill_packaging.py` enforces the size and that every reference is pointed at.
+
+### Measured offline: `session_report.py --static`, profile `development`
+
+Floor = system prompt + custom tool schema + skill descriptions, paid by every request; "after loads" adds the files the agent is expected to read. Built-in tool and MCP schemas are not measurable offline (the live first-request contexts were 7k to 20k tokens).
+
+| agent | floor before | floor after | after loads before | after loads after |
+|---|---:|---:|---:|---:|
+| coordinator | ~7,193 | ~7,398 | ~18,475 | ~16,757 |
+| activities | ~1,532 | ~1,851 | ~6,598 | ~5,385 |
+| flights | ~1,562 | ~1,884 | ~8,648 | ~4,280 |
+| lodging | ~1,675 | ~2,005 | ~8,733 | ~4,400 |
+| transport | ~1,720 | ~2,007 | ~8,650 | ~4,402 |
+
+The floor grows by 200 to 330 tokens per agent (the cost rules); the skill loads shrink by 1.2k (activities) to 4.4k (flights) tokens, 1.7k for the coordinator, and they are re-read at every request. The "after loads" column counts the schema file for the activities agent only (it has no validator) and counts `travel-research-rules/SKILL.md` for the coordinator although its prompt now says it need not read it.
+
+### Per-plan estimate, development profile (inferred, not measured)
+
+Same request as the Lisbon session. Rates as fitted above; web results ~10k tokens written per search and ~3.3k per capped fetch; request counts and outputs from the run, with the contingency in the last column for retries and rewrites. These are my assumptions: a real run is the only measurement.
+
+| Part | Before | After | Assumptions for "after" |
+|---|---:|---:|---|
+| flights | 15c | 5 to 8c | MCPs called in one turn; one search plus one fetch only when they return nothing |
+| lodging | 13c | 5 to 8c | one geocode command; web only if Expedia gave fewer than 3 options |
+| activities, first task | 19c | 9 to 13c | 3 searches and 4 capped fetches instead of 5 and 5; short skill; no read-back |
+| activities, follow-up | 3c | 2 to 3c | no new search |
+| transport | about 13c (not reached) | 8 to 12c | 3 searches and 4 fetches |
+| coordinator | 14c up to wave 1, about 35c in all | 25 to 33c | no re-delegation, medium effort, shorter plan text, skills read late |
+| **Total** | **about 95 to 105c** | **about 55 to 85c, central 71c** | |
+
+So the 60c development budget was too small for a full plan before this change (about 98c) and is still tight after it. The coordinator is the largest line (about 30c): composing the plan is 8k output tokens at Sonnet's $10/MTok plus the files it reads. Two decisions are left to Michele and were not applied: moving the development coordinator to `claude-haiku-5-5` in `agents/profiles.yaml` (about 21c less, total about 50c; plan quality is likely to drop), or raising the development `SESSION_BUDGET_CENTS` to about 90 (backend setting). The eval ceiling in `evals/README.md` (5 plans at 60c) would move with it.
+
+### Risks of these changes
+
+- `effort: low` on Haiku 5.5 can skip a search, stop early or skip a check [DOCS prompting-claude-haiku-5-5]. The subagent prompts say the turn ends only after the file and the two-line reply; the evals will show whether the quality holds. If it does not, set the affected agent to `medium` in `agents/profiles.yaml` and re-render.
+- `max_content_tokens` truncates a long page (the docs do not say where), so a price or an opening day can be lost (a 3,000 cap is below roughly half of the pages seen in the run). The activities prompt asks for a warning when prices and hours were not checked.
+- The search and fetch caps are advisory: Haiku can overshoot them. The measure is the next live report (`web searches` per thread).
+
