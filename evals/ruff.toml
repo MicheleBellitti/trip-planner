@@ -1,0 +1,7 @@
+# The backend's lint and format rules, applied to evals/ (run from backend/:
+# `uv run ruff check ../evals && uv run ruff format --check ../evals`).
+extend = "../backend/pyproject.toml"
+src = [".", "../backend"]
+
+[lint.isort]
+known-first-party = ["app", "checks", "compare", "judge", "run"]

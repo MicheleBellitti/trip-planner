@@ -1,0 +1,208 @@
+{
+  "id": "dd342fa3-92e7-5487-b309-5e2135ab6a3f",
+  "title": "Lisbona, weekend di novembre",
+  "destinationName": "Lisbona, Portogallo",
+  "timezone": "Europe/Lisbon",
+  "startDate": "2027-11-12",
+  "endDate": "2027-11-14",
+  "baseName": "Hotel Lisboa Plaza",
+  "baseAddress": "Travessa do Salitre 7, 1269-066 Lisboa",
+  "coverSeed": 4242,
+  "days": [
+    {
+      "id": "564a4513-ca7c-5739-a477-69aaeea25758",
+      "tripId": "dd342fa3-92e7-5487-b309-5e2135ab6a3f",
+      "date": "2027-11-12",
+      "dayIndex": 0,
+      "title": "Arrivo e Alfama",
+      "stops": [
+        {
+          "id": "00affe81-a915-5fec-b48b-8532c235e2d6",
+          "dayId": "564a4513-ca7c-5739-a477-69aaeea25758",
+          "title": "Volo diretto Milano Malpensa → Lisbona",
+          "kind": "transfer",
+          "startTime": "08:40",
+          "durationMin": 165,
+          "locationName": "Aeroporto di Milano Malpensa",
+          "notes": "Partenza alle 09:40 ora di Milano, arrivo alle 11:25 ora di Lisbona.",
+          "sortOrder": 1000,
+          "state": "planned"
+        },
+        {
+          "id": "bebf5d7d-9c4d-5287-add8-a3b1e0b0d912",
+          "dayId": "564a4513-ca7c-5739-a477-69aaeea25758",
+          "title": "Metro dall'aeroporto all'hotel",
+          "kind": "transfer",
+          "startTime": "12:00",
+          "durationMin": 40,
+          "notes": "Linea rossa fino a Saldanha, poi linea gialla fino a Rato.",
+          "sortOrder": 2000,
+          "state": "planned"
+        },
+        {
+          "id": "b8c291ae-39ac-52a3-af6e-033f576d4317",
+          "dayId": "564a4513-ca7c-5739-a477-69aaeea25758",
+          "title": "Passeggiata ad Alfama e Miradouro de Santa Luzia",
+          "kind": "activity",
+          "startTime": "15:30",
+          "durationMin": 150,
+          "locationName": "Miradouro de Santa Luzia",
+          "lat": 38.7118,
+          "lon": -9.1305,
+          "sortOrder": 3000,
+          "state": "planned"
+        },
+        {
+          "id": "c83b9151-a268-59f3-beaa-5643b91061bf",
+          "dayId": "564a4513-ca7c-5739-a477-69aaeea25758",
+          "title": "Cena di cucina locale in una tasca di Alfama",
+          "kind": "meal",
+          "startTime": "20:00",
+          "durationMin": 90,
+          "locationName": "Taberna Sal Grosso",
+          "address": "Calçada do Forte 22, 1100-256 Lisboa",
+          "notes": "Piatti di pesce e bacalhau; prenotare il tavolo.",
+          "lat": 38.7139,
+          "lon": -9.1257,
+          "sortOrder": 4000,
+          "state": "planned"
+        }
+      ]
+    },
+    {
+      "id": "f3f9cba4-a891-521b-9e70-cbfc0e6cc2bb",
+      "tripId": "dd342fa3-92e7-5487-b309-5e2135ab6a3f",
+      "date": "2027-11-13",
+      "dayIndex": 1,
+      "title": "Belém e musei",
+      "stops": [
+        {
+          "id": "2eaeace3-4129-5eda-984b-5d984f4bce12",
+          "dayId": "f3f9cba4-a891-521b-9e70-cbfc0e6cc2bb",
+          "title": "Visita al Mosteiro dos Jerónimos",
+          "kind": "activity",
+          "startTime": "10:00",
+          "durationMin": 120,
+          "locationName": "Mosteiro dos Jerónimos",
+          "address": "Praça do Império 1400-206 Lisboa",
+          "url": "https://www.museusemonumentos.pt/",
+          "lat": 38.6979,
+          "lon": -9.2068,
+          "sortOrder": 1000,
+          "state": "planned"
+        },
+        {
+          "id": "7293b6bc-e65f-520e-ae9d-5787aeac14ec",
+          "dayId": "f3f9cba4-a891-521b-9e70-cbfc0e6cc2bb",
+          "title": "Pranzo con pastel de nata a Belém",
+          "kind": "meal",
+          "startTime": "12:30",
+          "durationMin": 60,
+          "locationName": "Pastéis de Belém",
+          "address": "Rua de Belém 84-92, 1300-085 Lisboa",
+          "sortOrder": 2000,
+          "state": "planned"
+        },
+        {
+          "id": "90be19d2-ccda-592a-87b2-cd18eb184807",
+          "dayId": "f3f9cba4-a891-521b-9e70-cbfc0e6cc2bb",
+          "title": "Museu Nacional do Azulejo",
+          "kind": "activity",
+          "startTime": "15:30",
+          "durationMin": 120,
+          "locationName": "Museu Nacional do Azulejo",
+          "address": "Rua da Madre de Deus 4, 1900-312 Lisboa",
+          "sortOrder": 3000,
+          "state": "planned"
+        }
+      ]
+    },
+    {
+      "id": "d2017419-b4a2-5f3d-9513-61d6505f6a91",
+      "tripId": "dd342fa3-92e7-5487-b309-5e2135ab6a3f",
+      "date": "2027-11-14",
+      "dayIndex": 2,
+      "title": "Chiado e partenza",
+      "stops": [
+        {
+          "id": "934e14fa-dc5e-56be-851d-579d890a876a",
+          "dayId": "d2017419-b4a2-5f3d-9513-61d6505f6a91",
+          "title": "Passeggiata a Chiado e Bairro Alto",
+          "kind": "activity",
+          "startTime": "10:00",
+          "durationMin": 150,
+          "sortOrder": 1000,
+          "state": "planned"
+        },
+        {
+          "id": "6be36a8c-85bb-5467-b663-92f37de8654e",
+          "dayId": "d2017419-b4a2-5f3d-9513-61d6505f6a91",
+          "title": "Volo diretto Lisbona → Milano Malpensa",
+          "kind": "transfer",
+          "startTime": "17:30",
+          "durationMin": 155,
+          "locationName": "Aeroporto di Lisbona",
+          "sortOrder": 2000,
+          "state": "planned"
+        }
+      ]
+    }
+  ],
+  "bookings": [
+    {
+      "id": "e380b835-6119-5c53-9fd4-9910adec88a3",
+      "tripId": "dd342fa3-92e7-5487-b309-5e2135ab6a3f",
+      "stopId": "00affe81-a915-5fec-b48b-8532c235e2d6",
+      "title": "Volo A/R Milano Malpensa ↔ Lisbona",
+      "vendor": "TAP Air Portugal",
+      "kind": "transport",
+      "status": "to_book",
+      "dueAt": "2027-10-29T20:00:00+01:00",
+      "scheduledFor": "2027-11-12T08:40:00+00:00",
+      "url": "https://www.expedia.it/Flights-Search?flight-type=on&mode=search&trip=roundtrip&leg1=from:MXP,to:LIS,departure:12/11/2027TANYT&leg2=from:LIS,to:MXP,departure:14/11/2027TANYT&passengers=adults:2",
+      "costCents": 31800,
+      "notes": "Andata TP 827 alle 09:40, ritorno TP 832 alle 17:30; bagaglio a mano incluso.\nPrezzo verificato\nFonte del prezzo: https://www.expedia.it/Flights-Search?flight-type=on&mode=search&trip=roundtrip&leg1=from:MXP,to:LIS,departure:12/11/2027TANYT&leg2=from:LIS,to:MXP,departure:14/11/2027TANYT&passengers=adults:2\nPerché entro questa data: Le tariffe dirette salgono nelle due settimane prima della partenza",
+      "sortOrder": 1000
+    },
+    {
+      "id": "c468f4a4-2f9a-568f-8b65-f69b27198ce1",
+      "tripId": "dd342fa3-92e7-5487-b309-5e2135ab6a3f",
+      "title": "Hotel Lisboa Plaza, 2 notti",
+      "vendor": "Hotel Lisboa Plaza",
+      "kind": "lodging",
+      "status": "to_book",
+      "dueAt": "2027-11-05T12:00:00+00:00",
+      "scheduledFor": "2027-11-12T14:00:00+00:00",
+      "url": "https://www.booking.com/searchresults.html?ss=Lisboa&checkin=2027-11-12&checkout=2027-11-14&group_adults=2&no_rooms=1",
+      "costCents": 38000,
+      "notes": "Prezzo stimato\nFonte del prezzo: https://www.booking.com/searchresults.html?ss=Lisboa&checkin=2027-11-12&checkout=2027-11-14&group_adults=2&no_rooms=1\nPerché entro questa data: Cancellazione gratuita fino al 5 novembre",
+      "sortOrder": 2000
+    },
+    {
+      "id": "bbe8b525-a62c-5a21-9d43-7a188bb1c258",
+      "tripId": "dd342fa3-92e7-5487-b309-5e2135ab6a3f",
+      "stopId": "2eaeace3-4129-5eda-984b-5d984f4bce12",
+      "title": "Biglietti Mosteiro dos Jerónimos",
+      "kind": "ticket",
+      "status": "to_book",
+      "dueAt": "2027-11-10T10:00:00+00:00",
+      "scheduledFor": "2027-11-13T10:00:00+00:00",
+      "costCents": 3600,
+      "notes": "Prezzo stimato\nFonte del prezzo: https://www.museusemonumentos.pt/pt/museus-e-monumentos/mosteiro-dos-jeronimos",
+      "sortOrder": 3000
+    },
+    {
+      "id": "cea32c5f-20f5-5f81-99d6-061c67e5a5f6",
+      "tripId": "dd342fa3-92e7-5487-b309-5e2135ab6a3f",
+      "stopId": "c83b9151-a268-59f3-beaa-5643b91061bf",
+      "title": "Cena da Taberna Sal Grosso",
+      "vendor": "Taberna Sal Grosso",
+      "kind": "restaurant",
+      "status": "to_book",
+      "dueAt": "2027-11-10T18:00:00+00:00",
+      "scheduledFor": "2027-11-12T20:00:00+00:00",
+      "phone": "+351 21 887 7024",
+      "sortOrder": 4000
+    }
+  ]
+}

@@ -1,0 +1,193 @@
+{
+  "title": "Lisbona, weekend di novembre",
+  "destination": "Lisbona, Portogallo",
+  "timezone": "Europe/Lisbon",
+  "start_date": "2027-11-12",
+  "end_date": "2027-11-14",
+  "travelers": 2,
+  "lodging_name": "Hotel Lisboa Plaza",
+  "lodging_address": "Travessa do Salitre 7, 1269-066 Lisboa",
+  "days": [
+    {
+      "date": "2027-11-12",
+      "title": "Arrivo e Alfama",
+      "stops": [
+        {
+          "ref": "d1-flight",
+          "title": "Volo diretto Milano Malpensa → Lisbona",
+          "kind": "transfer",
+          "start_time": "08:40",
+          "duration_min": 165,
+          "location_name": "Aeroporto di Milano Malpensa",
+          "notes": "Partenza alle 09:40 ora di Milano, arrivo alle 11:25 ora di Lisbona."
+        },
+        {
+          "ref": "d1-metro",
+          "title": "Metro dall'aeroporto all'hotel",
+          "kind": "transfer",
+          "start_time": "12:00",
+          "duration_min": 40,
+          "notes": "Linea rossa fino a Saldanha, poi linea gialla fino a Rato."
+        },
+        {
+          "ref": "d1-alfama",
+          "title": "Passeggiata ad Alfama e Miradouro de Santa Luzia",
+          "kind": "activity",
+          "start_time": "15:30",
+          "duration_min": 150,
+          "location_name": "Miradouro de Santa Luzia",
+          "lat": 38.7118,
+          "lon": -9.1305
+        },
+        {
+          "ref": "d1-dinner",
+          "title": "Cena di cucina locale in una tasca di Alfama",
+          "kind": "meal",
+          "start_time": "20:00",
+          "duration_min": 90,
+          "location_name": "Taberna Sal Grosso",
+          "address": "Calçada do Forte 22, 1100-256 Lisboa",
+          "lat": 38.7139,
+          "lon": -9.1257,
+          "notes": "Piatti di pesce e bacalhau; prenotare il tavolo."
+        }
+      ]
+    },
+    {
+      "date": "2027-11-13",
+      "title": "Belém e musei",
+      "stops": [
+        {
+          "ref": "d2-jeronimos",
+          "title": "Visita al Mosteiro dos Jerónimos",
+          "kind": "activity",
+          "start_time": "10:00",
+          "duration_min": 120,
+          "location_name": "Mosteiro dos Jerónimos",
+          "address": "Praça do Império 1400-206 Lisboa",
+          "lat": 38.6979,
+          "lon": -9.2068,
+          "url": "https://www.museusemonumentos.pt/"
+        },
+        {
+          "ref": "d2-lunch",
+          "title": "Pranzo con pastel de nata a Belém",
+          "kind": "meal",
+          "start_time": "12:30",
+          "duration_min": 60,
+          "location_name": "Pastéis de Belém",
+          "address": "Rua de Belém 84-92, 1300-085 Lisboa"
+        },
+        {
+          "ref": "d2-azulejo",
+          "title": "Museu Nacional do Azulejo",
+          "kind": "activity",
+          "start_time": "15:30",
+          "duration_min": 120,
+          "location_name": "Museu Nacional do Azulejo",
+          "address": "Rua da Madre de Deus 4, 1900-312 Lisboa"
+        }
+      ]
+    },
+    {
+      "date": "2027-11-14",
+      "title": "Chiado e partenza",
+      "stops": [
+        {
+          "ref": "d3-chiado",
+          "title": "Passeggiata a Chiado e Bairro Alto",
+          "kind": "activity",
+          "start_time": "10:00",
+          "duration_min": 150
+        },
+        {
+          "ref": "d3-flight",
+          "title": "Volo diretto Lisbona → Milano Malpensa",
+          "kind": "transfer",
+          "start_time": "17:30",
+          "duration_min": 155,
+          "location_name": "Aeroporto di Lisbona"
+        }
+      ]
+    }
+  ],
+  "bookings": [
+    {
+      "title": "Volo A/R Milano Malpensa ↔ Lisbona",
+      "kind": "transport",
+      "vendor": "TAP Air Portugal",
+      "book_by": "2027-10-29T20:00:00+01:00",
+      "book_by_reason": "Le tariffe dirette salgono nelle due settimane prima della partenza",
+      "scheduled_for": "2027-11-12T08:40:00+00:00",
+      "link": "https://www.expedia.it/Flights-Search?flight-type=on&mode=search&trip=roundtrip&leg1=from:MXP,to:LIS,departure:12/11/2027TANYT&leg2=from:LIS,to:MXP,departure:14/11/2027TANYT&passengers=adults:2",
+      "price": {
+        "amount_cents": 31800,
+        "currency": "EUR",
+        "status": "verified",
+        "source_url": "https://www.expedia.it/Flights-Search?flight-type=on&mode=search&trip=roundtrip&leg1=from:MXP,to:LIS,departure:12/11/2027TANYT&leg2=from:LIS,to:MXP,departure:14/11/2027TANYT&passengers=adults:2",
+        "retrieved_at": "2026-10-12T15:04:00+02:00"
+      },
+      "stop_ref": "d1-flight",
+      "notes": "Andata TP 827 alle 09:40, ritorno TP 832 alle 17:30; bagaglio a mano incluso."
+    },
+    {
+      "title": "Hotel Lisboa Plaza, 2 notti",
+      "kind": "lodging",
+      "vendor": "Hotel Lisboa Plaza",
+      "book_by": "2027-11-05T12:00:00+00:00",
+      "book_by_reason": "Cancellazione gratuita fino al 5 novembre",
+      "scheduled_for": "2027-11-12T14:00:00+00:00",
+      "link": "https://www.booking.com/searchresults.html?ss=Lisboa&checkin=2027-11-12&checkout=2027-11-14&group_adults=2&no_rooms=1",
+      "price": {
+        "amount_cents": 38000,
+        "currency": "EUR",
+        "status": "estimated",
+        "source_url": "https://www.booking.com/searchresults.html?ss=Lisboa&checkin=2027-11-12&checkout=2027-11-14&group_adults=2&no_rooms=1",
+        "retrieved_at": "2026-10-12T15:04:00+02:00"
+      }
+    },
+    {
+      "title": "Biglietti Mosteiro dos Jerónimos",
+      "kind": "ticket",
+      "scheduled_for": "2027-11-13T10:00:00+00:00",
+      "price": {
+        "amount_cents": 3600,
+        "currency": "EUR",
+        "status": "estimated",
+        "source_url": "https://www.museusemonumentos.pt/pt/museus-e-monumentos/mosteiro-dos-jeronimos",
+        "retrieved_at": "2026-10-12T15:04:00+02:00"
+      },
+      "stop_ref": "d2-jeronimos"
+    },
+    {
+      "title": "Cena da Taberna Sal Grosso",
+      "kind": "restaurant",
+      "vendor": "Taberna Sal Grosso",
+      "book_by": "2027-11-10T18:00:00+00:00",
+      "scheduled_for": "2027-11-12T20:00:00+00:00",
+      "phone": "+351 21 887 7024",
+      "stop_ref": "d1-dinner"
+    }
+  ],
+  "alternatives": [
+    {
+      "title": "Appartamento ad Alfama, 2 notti",
+      "kind": "lodging",
+      "vendor": "Airbnb",
+      "scheduled_for": "2027-11-12T15:00:00+00:00",
+      "link": "https://www.airbnb.it/s/Lisboa/homes?checkin=2027-11-12&checkout=2027-11-14&adults=2",
+      "price": {
+        "amount_cents": 42000,
+        "currency": "EUR",
+        "status": "estimated",
+        "source_url": "https://www.airbnb.it/s/Lisboa/homes?checkin=2027-11-12&checkout=2027-11-14&adults=2",
+        "retrieved_at": "2026-10-12T15:04:00+02:00"
+      },
+      "notes": "Più spazio e cucina, ma 40 € in più e check-in alle 15."
+    }
+  ],
+  "warnings": [
+    "Prezzi dell'hotel e dei biglietti stimati: verificali prima di prenotare."
+  ],
+  "summary": "Tre giorni a Lisbona con voli diretti TAP dopo le 9, hotel a Rato e cucina locale ad Alfama.\nSabato a Belém con il Mosteiro dos Jerónimos e il Museu Nacional do Azulejo.\nCosto stimato totale: 734 € per due persone."
+}

@@ -1,0 +1,167 @@
+# The eval dataset: the reference requests of the spec ("Eval sui piani", "Eval strutturate e
+# versioning dei prompt"). evals/run.py sends each `request` through the real backend and
+# evals/checks.py checks the plan against `expect`. Run a subset with `--tags` (any tag
+# matches) or `--ids`.
+#
+# Rules for every entry (tests/test_eval_requests.py enforces them offline):
+# - `request` is a valid backend app.request.PlanRequest: no personal data, ever (agents only
+#   get cities, dates, travellers' kinds and ages, budget and free-text preferences).
+# - Dates are quoted strings and stay valid until `valid_until`, at least a year after
+#   `authored_on`. When the tests start failing because a date is in the past, move every date
+#   forward by the same amount and refresh both fields.
+# - `expect` repeats the constraints the plan must respect: travellers, budget, dates, the
+#   destination (when the user chose it), keyword groups that must appear in the plan text
+#   (`must_mention`: every group needs one of its keywords) and keywords that must not appear
+#   in any booking (`must_not_book`). Keywords match case- and accent-insensitively at the
+#   start of a word ("bambin" matches "bambini", "volo" does not match "tavolo"); give
+#   generous synonyms, Italian first, because a missing keyword blocks the PR.
+# - The dataset grows: every real plan that goes wrong becomes a new entry (spec).
+
+version: 1
+authored_on: "2026-10-12"
+valid_until: "2027-10-12"
+
+requests:
+  - id: city-weekend-lisbon
+    title: Weekend in città europea
+    tags: [city, weekend, flights, europe, smoke]
+    request:
+      origin: Milano
+      destination: Lisbona
+      dates:
+        exact_start: "2027-11-12"
+        exact_end: "2027-11-14"
+      travelers:
+        - kind: adult
+        - kind: adult
+      budget_eur: 900
+      preferences: >-
+        Voli diretti, niente partenze prima delle 8. Cucina locale e almeno un museo,
+        quartieri da girare a piedi.
+    expect:
+      travelers: 2
+      budget_eur: 900
+      dates:
+        start: "2027-11-12"
+        end: "2027-11-14"
+      destination_any: [lisbona, lisboa, lisbon]
+      must_mention:
+        - [museo, musei, museu, museum, mosteiro, monastero]
+        - [cucina locale, cucina portoghese, tasca, taberna, mercato, pastel, bacalhau, baccala, ristorante tipico]
+      must_not_book: []
+
+  - id: sea-week-family
+    title: Settimana al mare con bambini
+    tags: [sea, family, children, week]
+    request:
+      origin: Milano
+      destination: Sardegna
+      dates:
+        exact_start: "2028-06-24"
+        exact_end: "2028-07-01"
+      travelers:
+        - kind: adult
+        - kind: adult
+        - kind: child
+          age: 4
+        - kind: child
+          age: 8
+      budget_eur: 3200
+      preferences: >-
+        Spiaggia sabbiosa con acqua bassa adatta ai bambini, alloggio con cucina o mezza
+        pensione, spostamenti brevi dall'alloggio. Traghetto con la nostra auto oppure volo più
+        auto a noleggio.
+    expect:
+      travelers: 4
+      budget_eur: 3200
+      dates:
+        start: "2028-06-24"
+        end: "2028-07-01"
+      destination_any: [sardegna, sardinia]
+      must_mention:
+        - [bambin, famiglia, family, figli]
+        - [spiaggia, spiagge, beach, lido, mare]
+      must_not_book: []
+
+  - id: suggest-low-budget
+    title: Suggeriscimi tu, budget basso
+    tags: [suggest, low-budget, weekend, solo]
+    request:
+      origin: Bologna
+      suggest_destination: true
+      destination_idea: >-
+        Una città d'arte raggiungibile in treno o in autobus, con buon cibo e musei economici.
+      dates:
+        exact_start: "2027-11-26"
+        exact_end: "2027-11-28"
+      travelers:
+        - kind: adult
+      budget_eur: 250
+      preferences: Ostello o B&B semplice va bene. Niente auto.
+    expect:
+      travelers: 1
+      budget_eur: 250
+      dates:
+        start: "2027-11-26"
+        end: "2027-11-28"
+      destination_any: []
+      must_mention:
+        - [treno, treni, autobus, bus, pullman, frecciarossa, italo, regionale, flixbus]
+      must_not_book: [noleggio, autonoleggio, car rental, rent a car]
+
+  - id: train-trip-florence
+    title: Viaggio in treno
+    tags: [train, italy, long-weekend]
+    request:
+      origin: Torino
+      destination: Firenze
+      dates:
+        exact_start: "2028-04-21"
+        exact_end: "2028-04-25"
+      travelers:
+        - kind: adult
+        - kind: adult
+      budget_eur: 1100
+      preferences: >-
+        Solo treno, niente aerei e niente auto. Alta velocità con posti vicini. Una gita in
+        giornata in Toscana, sempre in treno.
+    expect:
+      travelers: 2
+      budget_eur: 1100
+      dates:
+        start: "2028-04-21"
+        end: "2028-04-25"
+      destination_any: [firenze, florence]
+      must_mention:
+        - [treno, treni, frecciarossa, italo, trenitalia, alta velocita, regionale]
+      must_not_book: [volo, voli, aereo, flight, noleggio, autonoleggio, car rental]
+
+  - id: flexible-dates-budapest
+    title: Date flessibili
+    tags: [flexible-dates, city, flights, family]
+    request:
+      origin: Venezia
+      destination: Budapest
+      dates:
+        month: "2028-02"
+        nights: 4
+      travelers:
+        - kind: adult
+        - kind: adult
+        - kind: child
+          age: 12
+      budget_eur: 1500
+      preferences: >-
+        Scegliete voi i giorni più convenienti del mese. Terme, cucina ungherese, un giro sul
+        Danubio.
+    expect:
+      travelers: 3
+      budget_eur: 1500
+      dates:
+        month: "2028-02"
+        nights: 4
+      destination_any: [budapest]
+      must_mention:
+        - [terme, termale, bagni, thermal, szechenyi, gellert, furdo, rudas, lukacs]
+        - [danubio, duna, danube]
+      must_not_book: []

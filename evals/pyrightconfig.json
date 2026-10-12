@@ -1,0 +1,9 @@
+{
+  "include": ["."],
+  "exclude": ["results"],
+  "extraPaths": [".", "../backend"],
+  "venvPath": "../backend",
+  "venv": ".venv",
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "standard"
+}
