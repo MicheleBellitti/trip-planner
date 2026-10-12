@@ -1,0 +1,6 @@
+Alembic migrations for the Trip Planner backend (async, asyncpg).
+
+- One migration per PR that changes the tables in app/db.py; never edit production by hand.
+- Create: uv run alembic revision --autogenerate -m "short description", then review the file.
+- Apply: uv run alembic upgrade head (Railway runs it before every deploy).
+- tests/test_db.py fails if app/db.py and the migrations disagree.

@@ -1,0 +1,245 @@
+{
+  "title": "Firenze e Venezia in treno, fine marzo",
+  "destination": "Firenze e Venezia, Italia",
+  "timezone": "Europe/Rome",
+  "start_date": "2027-03-26",
+  "end_date": "2027-03-30",
+  "travelers": 2,
+  "lodging_name": "Hotel Calimala",
+  "lodging_address": "Via Calimala 2, 50123 Firenze FI",
+  "days": [
+    {
+      "date": "2027-03-26",
+      "title": "Roma → Firenze",
+      "stops": [
+        {
+          "ref": "d1-italo",
+          "title": "Italo Roma Termini → Firenze Santa Maria Novella",
+          "kind": "transfer",
+          "start_time": "08:15",
+          "duration_min": 95,
+          "location_name": "Roma Termini"
+        },
+        {
+          "ref": "d1-checkin",
+          "title": "Check-in all'Hotel Calimala",
+          "kind": "rest",
+          "start_time": "14:00",
+          "location_name": "Hotel Calimala",
+          "address": "Via Calimala 2, 50123 Firenze FI",
+          "lat": 43.7709,
+          "lon": 11.2537
+        },
+        {
+          "ref": "d1-walk",
+          "title": "Passeggiata da Ponte Vecchio a Santo Spirito",
+          "kind": "activity",
+          "start_time": "16:00",
+          "duration_min": 150
+        }
+      ]
+    },
+    {
+      "date": "2027-03-27",
+      "title": "Uffizi",
+      "stops": [
+        {
+          "ref": "d2-uffizi",
+          "title": "Galleria degli Uffizi",
+          "kind": "activity",
+          "start_time": "10:00",
+          "duration_min": 180,
+          "location_name": "Gallerie degli Uffizi",
+          "address": "Piazzale degli Uffizi 6, 50122 Firenze FI",
+          "lat": 43.7678,
+          "lon": 11.2553,
+          "url": "https://www.uffizi.it/"
+        }
+      ]
+    },
+    {
+      "date": "2027-03-28",
+      "title": "Firenze → Venezia (si passa all'ora legale)",
+      "stops": [
+        {
+          "ref": "d3-frecciarossa",
+          "title": "Frecciarossa Firenze SMN → Venezia Santa Lucia",
+          "kind": "transfer",
+          "start_time": "09:30",
+          "duration_min": 125,
+          "location_name": "Firenze Santa Maria Novella",
+          "notes": "Nella notte si passa all'ora legale: le lancette vanno avanti di un'ora."
+        },
+        {
+          "ref": "d3-checkin",
+          "title": "Check-in a Cannaregio",
+          "kind": "rest",
+          "start_time": "15:00",
+          "location_name": "Hotel Antico Doge",
+          "address": "Campo Santi Apostoli 5643, 30121 Venezia VE"
+        }
+      ]
+    },
+    {
+      "date": "2027-03-29",
+      "stops": [
+        {
+          "ref": "d4-doge",
+          "title": "Palazzo Ducale",
+          "kind": "activity",
+          "start_time": "09:00",
+          "duration_min": 150,
+          "location_name": "Palazzo Ducale",
+          "lat": 45.4337,
+          "lon": 12.3404
+        },
+        {
+          "ref": "d4-cicchetti",
+          "title": "Giro di bacari e cicchetti",
+          "kind": "meal",
+          "start_time": "18:30",
+          "duration_min": 120
+        }
+      ]
+    },
+    {
+      "date": "2027-03-30",
+      "title": "Rientro a Roma",
+      "stops": [
+        {
+          "ref": "d5-frecciarossa",
+          "title": "Frecciarossa Venezia Santa Lucia → Roma Termini",
+          "kind": "transfer",
+          "start_time": "16:00",
+          "duration_min": 235,
+          "location_name": "Venezia Santa Lucia"
+        }
+      ]
+    }
+  ],
+  "bookings": [
+    {
+      "title": "Italo Roma → Firenze",
+      "kind": "transport",
+      "vendor": "Italo",
+      "scheduled_for": "2027-03-26T08:15:00+01:00",
+      "link": "https://biglietti.italotreno.com/it/booking/ricerca-treni?osc=RMT&dsc=SMN&jt=single&od=26/03/2027&adt=2&yng=0&chd=0&snr=0&inf=0&pet=0&lang=it&startSearch=true",
+      "price": {
+        "amount_cents": 5980,
+        "currency": "EUR",
+        "status": "estimated",
+        "source_url": "https://www.italotreno.com/it/offerte-treno",
+        "retrieved_at": "2026-10-12T11:00:00+02:00"
+      },
+      "stop_ref": "d1-italo"
+    },
+    {
+      "title": "Hotel Calimala, 2 notti",
+      "kind": "lodging",
+      "vendor": "Hotel Calimala",
+      "scheduled_for": "2027-03-26T14:00:00+01:00",
+      "link": "https://www.booking.com/searchresults.it.html?ss=Firenze&checkin=2027-03-26&checkout=2027-03-28&group_adults=2&no_rooms=1&selected_currency=EUR",
+      "price": {
+        "amount_cents": 31000,
+        "currency": "EUR",
+        "status": "estimated",
+        "source_url": "https://www.booking.com/searchresults.it.html?ss=Firenze",
+        "retrieved_at": "2026-10-12T11:05:00+02:00"
+      },
+      "stop_ref": "d1-checkin"
+    },
+    {
+      "title": "Uffizi, ingresso con orario",
+      "kind": "ticket",
+      "vendor": "Gallerie degli Uffizi",
+      "book_by": "2027-03-12T18:00:00+01:00",
+      "book_by_reason": "Nei fine settimana di primavera gli ingressi del mattino finiscono due settimane prima",
+      "scheduled_for": "2027-03-27T10:00:00+01:00",
+      "link": "https://www.uffizi.it/biglietteria",
+      "price": {
+        "amount_cents": 5000,
+        "currency": "EUR",
+        "status": "estimated",
+        "source_url": "https://www.uffizi.it/biglietteria",
+        "retrieved_at": "2026-10-12T11:10:00+02:00"
+      },
+      "stop_ref": "d2-uffizi"
+    },
+    {
+      "title": "Frecciarossa Firenze → Venezia",
+      "kind": "transport",
+      "vendor": "Trenitalia",
+      "scheduled_for": "2027-03-28T09:30:00+02:00",
+      "link": "https://www.lefrecce.it/Channels.Website.WEB/website/auth/handoff?action=searchTickets&lang=it&referrer=www.trenitalia.com&tripType=on&ynFlexibleDates=off&selectedTrainType=tutti&departureStation=Firenze%20S.%20M.%20Novella&arrivalStation=Venezia%20S.%20Lucia&departureDate=28-03-2027&departureTime=09&returnDate=28-03-2027&noOfAdults=2&noOfChildren=0",
+      "price": {
+        "amount_cents": 7980,
+        "currency": "EUR",
+        "status": "estimated",
+        "source_url": "https://www.trenitalia.com/it/offerte_e_servizi/offerte-nazionali.html",
+        "retrieved_at": "2026-10-12T11:15:00+02:00"
+      },
+      "stop_ref": "d3-frecciarossa"
+    },
+    {
+      "title": "Hotel Antico Doge, 2 notti",
+      "kind": "lodging",
+      "vendor": "Hotel Antico Doge",
+      "scheduled_for": "2027-03-28T15:00:00+02:00",
+      "link": "https://www.booking.com/searchresults.it.html?ss=Venezia&checkin=2027-03-28&checkout=2027-03-30&group_adults=2&no_rooms=1&selected_currency=EUR",
+      "price": {
+        "amount_cents": 36000,
+        "currency": "EUR",
+        "status": "estimated",
+        "source_url": "https://www.booking.com/searchresults.it.html?ss=Venezia",
+        "retrieved_at": "2026-10-12T11:20:00+02:00"
+      },
+      "stop_ref": "d3-checkin"
+    },
+    {
+      "title": "Palazzo Ducale, biglietto Musei di San Marco",
+      "kind": "ticket",
+      "vendor": "Fondazione Musei Civici di Venezia",
+      "scheduled_for": "2027-03-29T09:00:00+02:00",
+      "price": {
+        "amount_cents": 6000,
+        "currency": "EUR",
+        "status": "estimated",
+        "source_url": "https://palazzoducale.visitmuve.it/",
+        "retrieved_at": "2026-10-12T11:25:00+02:00"
+      },
+      "stop_ref": "d4-doge"
+    },
+    {
+      "title": "Abbonamento vaporetto ACTV 48 ore",
+      "kind": "ticket",
+      "vendor": "ACTV",
+      "price": {
+        "amount_cents": 7000,
+        "currency": "EUR",
+        "status": "estimated",
+        "source_url": "https://actv.avmspa.it/it/content/titoli-di-viaggio",
+        "retrieved_at": "2026-10-12T11:30:00+02:00"
+      },
+      "notes": "Si attiva alla prima convalida: comprarlo alla stazione di Santa Lucia."
+    },
+    {
+      "title": "Frecciarossa Venezia → Roma",
+      "kind": "transport",
+      "vendor": "Trenitalia",
+      "book_by": "2027-03-14T23:59:00+01:00",
+      "book_by_reason": "Il prezzo Economy del martedì sale nelle ultime due settimane",
+      "scheduled_for": "2027-03-30T16:00:00+02:00",
+      "link": "https://www.lefrecce.it/Channels.Website.WEB/website/auth/handoff?action=searchTickets&lang=it&referrer=www.trenitalia.com&tripType=on&ynFlexibleDates=off&selectedTrainType=tutti&departureStation=Venezia%20S.%20Lucia&arrivalStation=Roma%20Termini&departureDate=30-03-2027&departureTime=16&returnDate=30-03-2027&noOfAdults=2&noOfChildren=0",
+      "price": {
+        "amount_cents": 9980,
+        "currency": "EUR",
+        "status": "estimated",
+        "source_url": "https://www.trenitalia.com/it/offerte_e_servizi/offerte-nazionali.html",
+        "retrieved_at": "2026-10-12T11:35:00+02:00"
+      },
+      "stop_ref": "d5-frecciarossa"
+    }
+  ],
+  "warnings": [],
+  "summary": "Cinque giorni in treno tra Firenze e Venezia, con gli Uffizi e Palazzo Ducale.\nNella notte del 28 marzo si passa all'ora legale: gli orari sono già quelli locali.\nTotale stimato: 1.059 € per due persone."
+}

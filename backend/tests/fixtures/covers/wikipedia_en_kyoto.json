@@ -1,0 +1,18 @@
+{
+  "batchcomplete": true,
+  "query": {
+    "pages": [
+      {
+        "pageid": 37652,
+        "ns": 0,
+        "title": "Kyoto",
+        "original": {
+          "source": "https://upload.wikimedia.org/wikipedia/commons/6/6b/Kyoto%2C_Japan_%2849667780482%29.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=original",
+          "width": 3872,
+          "height": 2581
+        },
+        "pageimage": "Kyoto,_Japan_(49667780482).jpg"
+      }
+    ]
+  }
+}

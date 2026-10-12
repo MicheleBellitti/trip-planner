@@ -1,0 +1,195 @@
+{
+  "$defs": {
+    "DateWindow": {
+      "additionalProperties": false,
+      "description": "When to travel: fixed dates, or a month and a number of nights.",
+      "properties": {
+        "exact_end": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Fixed dates: last day of the trip, YYYY-MM-DD, on or after exact_start (the same day for a day trip)."
+        },
+        "exact_start": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Fixed dates: first day of the trip, YYYY-MM-DD, after today. Set with exact_end; leave month and nights empty."
+        },
+        "month": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Flexible dates: the month to leave in, YYYY-MM (e.g. '2026-11'), this month or later. Set with nights; leave exact_start and exact_end empty."
+        },
+        "nights": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Flexible dates: number of nights, 1 to 119. Set with month."
+        }
+      },
+      "title": "DateWindow",
+      "type": "object"
+    },
+    "Traveler": {
+      "additionalProperties": false,
+      "description": "One person in the party.",
+      "properties": {
+        "age": {
+          "anyOf": [
+            {
+              "maximum": 17,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Age in years, required for a child (0-17); empty for an adult."
+        },
+        "kind": {
+          "description": "adult, or child (under 18).",
+          "enum": [
+            "adult",
+            "child"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "Traveler",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A trip request: where from, where to (or \"suggest one\"), when, who, and the budget.",
+  "properties": {
+    "budget_eur": {
+      "description": "Total budget in whole euro for the whole party: travel, lodging, activities.",
+      "exclusiveMinimum": 0,
+      "type": "integer"
+    },
+    "dates": {
+      "$ref": "#/$defs/DateWindow",
+      "description": "Fixed dates, or a month and a number of nights."
+    },
+    "destination": {
+      "anyOf": [
+        {
+          "maxLength": 200,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Where to go: a city, region or country. Empty when suggest_destination is true."
+    },
+    "destination_idea": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Only with suggest_destination: what the trip should be like, e.g. 'mare a novembre, volo diretto'. Ignored (dropped) when suggest_destination is false."
+    },
+    "origin": {
+      "description": "Where the trip starts: a city or an IATA airport code, e.g. 'Milano', 'MXP'.",
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string"
+    },
+    "preferences": {
+      "anyOf": [
+        {
+          "maxLength": 2000,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Free-text preferences, e.g. 'niente voli prima delle 8, cucina locale'."
+    },
+    "suggest_destination": {
+      "default": false,
+      "description": "True to let the planner choose the destination (up to three candidates, with reasons); destination must then be empty.",
+      "type": "boolean"
+    },
+    "travelers": {
+      "description": "Everyone travelling (1-9 people): at least one adult; children with age.",
+      "items": {
+        "$ref": "#/$defs/Traveler"
+      },
+      "maxItems": 9,
+      "minItems": 1,
+      "type": "array"
+    }
+  },
+  "required": [
+    "origin",
+    "dates",
+    "travelers",
+    "budget_eur"
+  ],
+  "title": "PlanRequest",
+  "type": "object",
+  "x-error-codes": {
+    "adult_age_not_allowed": "age is only for children; leave it empty for adults",
+    "adult_required": "at least one adult must travel",
+    "child_age_required": "a child needs an age (0-17)",
+    "dates_conflict": "choose either fixed dates (exact_start, exact_end) or flexible dates (month, nights), not both",
+    "dates_required": "choose fixed dates (exact_start and exact_end) or flexible dates (month and nights)",
+    "destination_conflict": "give either a destination or suggest_destination, not both",
+    "destination_required": "give a destination, or set suggest_destination to let the planner choose",
+    "end_before_start": "exact_end ({exact_end}) must be on or after exact_start ({exact_start})",
+    "exact_end_required": "exact_end is required with exact_start",
+    "exact_start_required": "exact_start is required with exact_end",
+    "invalid_month": "month '{month}' is not a month: use YYYY-MM with MM 01-12",
+    "month_in_past": "month {month} is in the past: choose {current_month} or later",
+    "month_required": "month is required with nights",
+    "nights_required": "nights is required with month",
+    "start_not_in_future": "exact_start ({exact_start}) must be after today ({today})",
+    "trip_too_long": "the trip can last at most {max_days} days ({max_nights} nights), got {nights} nights"
+  }
+}

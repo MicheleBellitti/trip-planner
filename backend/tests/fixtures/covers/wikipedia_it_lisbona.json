@@ -1,0 +1,29 @@
+{
+  "batchcomplete": true,
+  "query": {
+    "pages": [
+      {
+        "ns": 0,
+        "title": "Lisbona, Portogallo",
+        "missing": true
+      },
+      {
+        "pageid": 691991,
+        "ns": 0,
+        "title": "Lisbona",
+        "original": {
+          "source": "https://upload.wikimedia.org/wikipedia/commons/1/16/Bandeira_municipal_de_Lisboa.png?utm_source=it.wikipedia.org&utm_campaign=api&utm_content=original",
+          "width": 2560,
+          "height": 1707
+        },
+        "pageimage": "Bandeira_municipal_de_Lisboa.png",
+        "langlinks": [
+          {
+            "lang": "en",
+            "title": "Lisbon"
+          }
+        ]
+      }
+    ]
+  }
+}

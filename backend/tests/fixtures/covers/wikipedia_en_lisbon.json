@@ -1,0 +1,28 @@
+{
+  "batchcomplete": true,
+  "query": {
+    "pages": [
+      {
+        "ns": 0,
+        "title": "Lisbona",
+        "missing": true
+      },
+      {
+        "ns": 0,
+        "title": "Lisbona, Portogallo",
+        "missing": true
+      },
+      {
+        "pageid": 18091,
+        "ns": 0,
+        "title": "Lisbon",
+        "original": {
+          "source": "https://upload.wikimedia.org/wikipedia/commons/f/f2/Lisboa_-_Portugal_%2852597836992%29.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=original",
+          "width": 2048,
+          "height": 1313
+        },
+        "pageimage": "Lisboa_-_Portugal_(52597836992).jpg"
+      }
+    ]
+  }
+}

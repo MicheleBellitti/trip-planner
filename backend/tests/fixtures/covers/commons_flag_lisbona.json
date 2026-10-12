@@ -1,0 +1,61 @@
+{
+  "continue": {
+    "iistart": "2020-05-30T16:32:32Z",
+    "continue": "||"
+  },
+  "query": {
+    "pages": [
+      {
+        "pageid": 2955068,
+        "ns": 6,
+        "title": "File:Bandeira municipal de Lisboa.png",
+        "imagerepository": "local",
+        "imageinfo": [
+          {
+            "size": 557599,
+            "width": 2560,
+            "height": 1707,
+            "thumburl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/16/Bandeira_municipal_de_Lisboa.png/1920px-Bandeira_municipal_de_Lisboa.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "thumbwidth": 1920,
+            "thumbheight": 1280,
+            "responsiveUrls": {
+              "2": "https://upload.wikimedia.org/wikipedia/commons/1/16/Bandeira_municipal_de_Lisboa.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled"
+            },
+            "thumbattribs": {
+              "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/16/Bandeira_municipal_de_Lisboa.png/1920px-Bandeira_municipal_de_Lisboa.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+              "decoding": "async",
+              "loading": "lazy",
+              "width": 1920,
+              "height": 1280,
+              "srcset": "https://upload.wikimedia.org/wikipedia/commons/1/16/Bandeira_municipal_de_Lisboa.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled 2x"
+            },
+            "url": "https://upload.wikimedia.org/wikipedia/commons/1/16/Bandeira_municipal_de_Lisboa.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+            "descriptionurl": "https://commons.wikimedia.org/wiki/File:Bandeira_municipal_de_Lisboa.png",
+            "descriptionshorturl": "https://commons.wikimedia.org/w/index.php?curid=2955068",
+            "extmetadata": {
+              "ObjectName": {
+                "value": "Bandeira municipal de Lisboa",
+                "source": "mediawiki-metadata"
+              },
+              "Artist": {
+                "value": "<ul><li>Sérgio Horta, a partir de orginal de Ornellas e outros</li></ul>",
+                "source": "commons-desc-page"
+              },
+              "LicenseShortName": {
+                "value": "Public domain",
+                "source": "commons-desc-page",
+                "hidden": ""
+              },
+              "Restrictions": {
+                "value": "",
+                "source": "commons-desc-page",
+                "hidden": ""
+              }
+            },
+            "mime": "image/png"
+          }
+        ]
+      }
+    ]
+  }
+}

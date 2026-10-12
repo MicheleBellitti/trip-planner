@@ -1,0 +1,21 @@
+{
+  "batchcomplete": true,
+  "query": {
+    "pages": [
+      {
+        "pageid": 2647875,
+        "ns": 0,
+        "title": "Lisbon",
+        "pageprops": {
+          "disambiguation": ""
+        },
+        "langlinks": [
+          {
+            "lang": "en",
+            "title": "Lisbon (disambiguation)"
+          }
+        ]
+      }
+    ]
+  }
+}

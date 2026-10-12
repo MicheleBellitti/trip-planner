@@ -1,0 +1,402 @@
+{
+  "id": "0ce98e8d-ca00-4ab0-8205-cd156818f096",
+  "title": "Lisbona, novembre",
+  "destinationName": "Lisbona, Portogallo",
+  "timezone": "Europe/Lisbon",
+  "startDate": "2026-11-14",
+  "endDate": "2026-11-19",
+  "baseName": "Casa do Largo",
+  "baseAddress": "Alfama, 1100 Lisboa",
+  "coverSeed": 6957,
+  "days": [
+    {
+      "id": "8fd7fa69-0b0b-4cf8-b897-127c005d3def",
+      "tripId": "0ce98e8d-ca00-4ab0-8205-cd156818f096",
+      "date": "2026-11-14",
+      "dayIndex": 0,
+      "title": "Arrivo",
+      "stops": [
+        {
+          "id": "ab3654b5-87f6-47f7-82b0-b3c2d11d625e",
+          "dayId": "8fd7fa69-0b0b-4cf8-b897-127c005d3def",
+          "title": "Volo Milano Malpensa → Lisbona",
+          "kind": "transfer",
+          "startTime": "06:05",
+          "durationMin": 175,
+          "locationName": "Aeroporto di Milano Malpensa",
+          "notes": "Partenza alle 07:05 ora di Milano, arrivo alle 09:00 ora di Lisbona.",
+          "sortOrder": 1000,
+          "state": "planned"
+        },
+        {
+          "id": "64d1fc80-38fa-4c1e-b13e-b833119151cb",
+          "dayId": "8fd7fa69-0b0b-4cf8-b897-127c005d3def",
+          "title": "Metro dall'aeroporto ad Alfama",
+          "kind": "transfer",
+          "startTime": "09:40",
+          "durationMin": 40,
+          "notes": "Linea rossa fino ad Alameda, poi linea verde. Biglietto ricaricabile in stazione.",
+          "sortOrder": 2000,
+          "state": "planned"
+        },
+        {
+          "id": "8e69b948-3adc-4689-abb9-3ad60cdb9329",
+          "dayId": "8fd7fa69-0b0b-4cf8-b897-127c005d3def",
+          "title": "Check-in all'appartamento",
+          "kind": "rest",
+          "startTime": "15:00",
+          "durationMin": 30,
+          "locationName": "Casa do Largo",
+          "address": "Alfama, 1100 Lisboa",
+          "notes": "Lasciare i bagagli al deposito vicino alla stazione se si arriva prima.",
+          "sortOrder": 3000,
+          "state": "planned"
+        }
+      ]
+    },
+    {
+      "id": "3ba58780-8f4c-45fd-a194-7346e37d787b",
+      "tripId": "0ce98e8d-ca00-4ab0-8205-cd156818f096",
+      "date": "2026-11-15",
+      "dayIndex": 1,
+      "title": "Alfama e Baixa",
+      "stops": [
+        {
+          "id": "e7beceaa-8bf0-47ab-9b78-edcb131e2575",
+          "dayId": "3ba58780-8f4c-45fd-a194-7346e37d787b",
+          "title": "Castelo de São Jorge",
+          "kind": "activity",
+          "startTime": "10:30",
+          "durationMin": 90,
+          "locationName": "Castelo de São Jorge",
+          "address": "R. de Santa Cruz do Castelo, 1100-129 Lisboa",
+          "lat": 38.7139,
+          "lon": -9.1334,
+          "notes": "Si sale a piedi dalle scalinate di Alfama. Vista migliore dal camminamento ovest.",
+          "sortOrder": 1000,
+          "state": "planned"
+        },
+        {
+          "id": "1d573d09-6ffc-401a-90d6-c424a7e95989",
+          "dayId": "3ba58780-8f4c-45fd-a194-7346e37d787b",
+          "title": "Tram 28 verso la Baixa",
+          "kind": "transfer",
+          "startTime": "12:15",
+          "durationMin": 25,
+          "sortOrder": 2000,
+          "state": "planned"
+        },
+        {
+          "id": "154b7a42-20b5-4d23-8a24-54dfbc579609",
+          "dayId": "3ba58780-8f4c-45fd-a194-7346e37d787b",
+          "title": "Pranzo in Baixa",
+          "kind": "meal",
+          "startTime": "13:00",
+          "durationMin": 75,
+          "locationName": "Taberna do Largo",
+          "notes": "Vedi prenotazione collegata.",
+          "sortOrder": 3000,
+          "state": "planned"
+        },
+        {
+          "id": "46bfe462-d9fc-4328-97c4-3328e0974de2",
+          "dayId": "3ba58780-8f4c-45fd-a194-7346e37d787b",
+          "title": "Praça do Comércio e Rua Augusta",
+          "kind": "activity",
+          "startTime": "15:00",
+          "locationName": "Praça do Comércio",
+          "lat": 38.7075,
+          "lon": -9.1364,
+          "sortOrder": 4000,
+          "state": "planned"
+        }
+      ]
+    },
+    {
+      "id": "a7329fec-b55d-4b0c-933d-045298498e7c",
+      "tripId": "0ce98e8d-ca00-4ab0-8205-cd156818f096",
+      "date": "2026-11-16",
+      "dayIndex": 2,
+      "title": "Belém",
+      "stops": [
+        {
+          "id": "4a861507-1003-4528-9ea6-9f9b7370ae32",
+          "dayId": "a7329fec-b55d-4b0c-933d-045298498e7c",
+          "title": "Tram 15 verso Belém",
+          "kind": "transfer",
+          "startTime": "10:00",
+          "durationMin": 35,
+          "sortOrder": 1000,
+          "state": "planned"
+        },
+        {
+          "id": "1682084f-1849-48df-bb8b-ebf1b3d4eced",
+          "dayId": "a7329fec-b55d-4b0c-933d-045298498e7c",
+          "title": "Mosteiro dos Jerónimos",
+          "kind": "activity",
+          "startTime": "10:45",
+          "durationMin": 90,
+          "locationName": "Mosteiro dos Jerónimos",
+          "address": "Praça do Império, 1400-206 Lisboa",
+          "lat": 38.6979,
+          "lon": -9.2068,
+          "notes": "Il chiostro chiude la biglietteria un'ora prima: entrare al mattino.",
+          "sortOrder": 2000,
+          "state": "planned"
+        },
+        {
+          "id": "8c8039fb-752f-4a3a-9489-069e6411f939",
+          "dayId": "a7329fec-b55d-4b0c-933d-045298498e7c",
+          "title": "Pastéis de nata a Belém",
+          "kind": "meal",
+          "startTime": "12:30",
+          "durationMin": 30,
+          "sortOrder": 3000,
+          "state": "planned"
+        },
+        {
+          "id": "12618590-5636-48ad-b3ad-1856de3130af",
+          "dayId": "a7329fec-b55d-4b0c-933d-045298498e7c",
+          "title": "Torre de Belém",
+          "kind": "activity",
+          "startTime": "14:00",
+          "durationMin": 60,
+          "locationName": "Torre de Belém",
+          "lat": 38.6916,
+          "lon": -9.216,
+          "sortOrder": 4000,
+          "state": "planned"
+        },
+        {
+          "id": "01721f9d-08ad-4285-9cd3-ef8c4adde52c",
+          "dayId": "a7329fec-b55d-4b0c-933d-045298498e7c",
+          "title": "MAAT e passeggiata sul lungofiume",
+          "kind": "activity",
+          "notes": "Senza orario: si fa se resta luce.",
+          "sortOrder": 5000,
+          "state": "planned"
+        }
+      ]
+    },
+    {
+      "id": "67c5558c-2064-4937-bd12-0c4b4ad991ff",
+      "tripId": "0ce98e8d-ca00-4ab0-8205-cd156818f096",
+      "date": "2026-11-17",
+      "dayIndex": 3,
+      "title": "Sintra",
+      "stops": [
+        {
+          "id": "27557aaa-8749-43a8-91bc-1acd523bc5e0",
+          "dayId": "67c5558c-2064-4937-bd12-0c4b4ad991ff",
+          "title": "Treno da Rossio a Sintra",
+          "kind": "transfer",
+          "startTime": "09:10",
+          "durationMin": 40,
+          "locationName": "Estação do Rossio",
+          "sortOrder": 1000,
+          "state": "planned"
+        },
+        {
+          "id": "e6a58e30-b529-4474-b7a6-8e64691d957a",
+          "dayId": "67c5558c-2064-4937-bd12-0c4b4ad991ff",
+          "title": "Palácio da Pena",
+          "kind": "activity",
+          "startTime": "10:30",
+          "durationMin": 120,
+          "locationName": "Palácio da Pena",
+          "address": "Estrada da Pena, 2710-609 Sintra",
+          "lat": 38.7876,
+          "lon": -9.3906,
+          "url": "https://www.parquesdesintra.pt/",
+          "notes": "Ingresso a fascia oraria: arrivare dieci minuti prima.",
+          "sortOrder": 2000,
+          "state": "planned"
+        },
+        {
+          "id": "806ff69f-d4d3-4fc4-8b3b-9c14130a0ecd",
+          "dayId": "67c5558c-2064-4937-bd12-0c4b4ad991ff",
+          "title": "Pranzo nel centro di Sintra",
+          "kind": "meal",
+          "startTime": "13:00",
+          "durationMin": 75,
+          "sortOrder": 3000,
+          "state": "planned"
+        },
+        {
+          "id": "852e09ea-668f-41a2-a236-b2000a55dc94",
+          "dayId": "67c5558c-2064-4937-bd12-0c4b4ad991ff",
+          "title": "Quinta da Regaleira",
+          "kind": "activity",
+          "startTime": "15:00",
+          "durationMin": 90,
+          "locationName": "Quinta da Regaleira",
+          "lat": 38.7963,
+          "lon": -9.396,
+          "sortOrder": 4000,
+          "state": "planned"
+        },
+        {
+          "id": "f9d77377-b1f2-46fb-815d-8a46f02c1321",
+          "dayId": "67c5558c-2064-4937-bd12-0c4b4ad991ff",
+          "title": "Rientro a Lisbona",
+          "kind": "transfer",
+          "startTime": "17:30",
+          "durationMin": 45,
+          "sortOrder": 5000,
+          "state": "planned"
+        }
+      ]
+    },
+    {
+      "id": "3182ac3f-510f-4fb3-b9ac-f377140ba9d7",
+      "tripId": "0ce98e8d-ca00-4ab0-8205-cd156818f096",
+      "date": "2026-11-18",
+      "dayIndex": 4,
+      "stops": []
+    },
+    {
+      "id": "1b3e1a63-0f8f-4b5a-8a27-61ded31636fe",
+      "tripId": "0ce98e8d-ca00-4ab0-8205-cd156818f096",
+      "date": "2026-11-19",
+      "dayIndex": 5,
+      "title": "Partenza",
+      "stops": [
+        {
+          "id": "0a7303a8-878d-4e1c-ae6f-1dcd5cc242c6",
+          "dayId": "1b3e1a63-0f8f-4b5a-8a27-61ded31636fe",
+          "title": "Check-out",
+          "kind": "rest",
+          "startTime": "10:00",
+          "durationMin": 15,
+          "sortOrder": 1000,
+          "state": "planned"
+        },
+        {
+          "id": "57f64605-2f5e-4232-ba60-9323b4367859",
+          "dayId": "1b3e1a63-0f8f-4b5a-8a27-61ded31636fe",
+          "title": "Volo Lisbona → Milano Malpensa",
+          "kind": "transfer",
+          "startTime": "13:20",
+          "durationMin": 160,
+          "locationName": "Aeroporto di Lisbona",
+          "notes": "Arrivo alle 17:00 ora di Milano.",
+          "sortOrder": 2000,
+          "state": "planned"
+        }
+      ]
+    }
+  ],
+  "bookings": [
+    {
+      "id": "2b217fd0-6983-42aa-a5a9-14dbde5391fb",
+      "tripId": "0ce98e8d-ca00-4ab0-8205-cd156818f096",
+      "stopId": "8e69b948-3adc-4689-abb9-3ad60cdb9329",
+      "title": "Appartamento ad Alfama, 5 notti",
+      "vendor": "Casa do Largo",
+      "kind": "lodging",
+      "status": "to_book",
+      "dueAt": "2026-11-07T15:00:00+00:00",
+      "scheduledFor": "2026-11-14T15:00:00+00:00",
+      "url": "https://www.booking.com/searchresults.html?ss=Alfama%2C+Lisboa&checkin=2026-11-14&checkout=2026-11-19&group_adults=2&no_rooms=1",
+      "costCents": 61500,
+      "notes": "Cancellazione gratuita fino al 10 novembre.\nPrezzo: stimato\nFonte del prezzo: https://www.booking.com/searchresults.html?ss=Alfama%2C+Lisboa",
+      "sortOrder": 1000
+    },
+    {
+      "id": "d4b62afb-7ba6-4765-bbf1-f2e4b966f72f",
+      "tripId": "0ce98e8d-ca00-4ab0-8205-cd156818f096",
+      "stopId": "ab3654b5-87f6-47f7-82b0-b3c2d11d625e",
+      "title": "Volo Milano Malpensa → Lisbona",
+      "vendor": "TAP Air Portugal",
+      "kind": "transport",
+      "status": "to_book",
+      "dueAt": "2026-10-20T20:00:00+01:00",
+      "scheduledFor": "2026-11-14T06:05:00+00:00",
+      "url": "https://www.google.com/travel/flights?q=voli+da+MXP+a+LIS+il+2026-11-14",
+      "costCents": 18900,
+      "notes": "Diretto, bagaglio a mano incluso, due persone.\nPrezzo: verificato\nFonte del prezzo: https://www.expedia.com/\nPerché entro questa data: dopo il 20 ottobre la tariffa supera il budget dei voli.",
+      "sortOrder": 2000
+    },
+    {
+      "id": "6263161c-14c6-4770-9ab8-461930dfed4d",
+      "tripId": "0ce98e8d-ca00-4ab0-8205-cd156818f096",
+      "stopId": "154b7a42-20b5-4d23-8a24-54dfbc579609",
+      "title": "Pranzo di domenica in Baixa",
+      "vendor": "Taberna do Largo",
+      "kind": "restaurant",
+      "status": "to_book",
+      "dueAt": "2026-11-13T13:00:00+00:00",
+      "scheduledFor": "2026-11-15T13:00:00+00:00",
+      "phone": "+351 21 000 0000",
+      "notes": "Domenica a pranzo: meglio telefonare. Alternativa senza prenotazione al mercato della Ribeira.",
+      "sortOrder": 3000
+    },
+    {
+      "id": "173d79f8-8296-4103-9432-264b163ebec5",
+      "tripId": "0ce98e8d-ca00-4ab0-8205-cd156818f096",
+      "stopId": "1682084f-1849-48df-bb8b-ebf1b3d4eced",
+      "title": "Ingresso al Mosteiro dos Jerónimos",
+      "vendor": "Mosteiro dos Jerónimos",
+      "kind": "ticket",
+      "status": "to_book",
+      "dueAt": "2026-11-13T10:45:00+00:00",
+      "scheduledFor": "2026-11-16T10:45:00+00:00",
+      "costCents": 3600,
+      "notes": "Due ingressi interi.\nPrezzo: stimato",
+      "sortOrder": 4000
+    },
+    {
+      "id": "2a1db1ee-db91-47c2-9233-55190701e838",
+      "tripId": "0ce98e8d-ca00-4ab0-8205-cd156818f096",
+      "stopId": "e6a58e30-b529-4474-b7a6-8e64691d957a",
+      "title": "Biglietti per il Palácio da Pena, ingresso alle 10:30",
+      "vendor": "Parques de Sintra",
+      "kind": "ticket",
+      "status": "to_book",
+      "dueAt": "2026-11-10T20:00:00+00:00",
+      "scheduledFor": "2026-11-17T10:30:00+00:00",
+      "url": "https://www.parquesdesintra.pt/",
+      "costCents": 4000,
+      "notes": "Prezzo: stimato\nFonte del prezzo: https://www.parquesdesintra.pt/\nPerché entro questa data: le fasce del mattino a novembre si esauriscono qualche giorno prima.",
+      "sortOrder": 5000
+    },
+    {
+      "id": "43cbcefc-2429-402a-bb14-9b50fb30468f",
+      "tripId": "0ce98e8d-ca00-4ab0-8205-cd156818f096",
+      "stopId": "852e09ea-668f-41a2-a236-b2000a55dc94",
+      "title": "Ingresso alla Quinta da Regaleira",
+      "vendor": "Quinta da Regaleira",
+      "kind": "ticket",
+      "status": "to_book",
+      "dueAt": "2026-11-14T15:00:00+00:00",
+      "scheduledFor": "2026-11-17T15:00:00+00:00",
+      "costCents": 3000,
+      "sortOrder": 6000
+    },
+    {
+      "id": "06164f4b-4188-45e5-b423-c8487896a014",
+      "tripId": "0ce98e8d-ca00-4ab0-8205-cd156818f096",
+      "stopId": "57f64605-2f5e-4232-ba60-9323b4367859",
+      "title": "Volo Lisbona → Milano Malpensa",
+      "vendor": "TAP Air Portugal",
+      "kind": "transport",
+      "status": "to_book",
+      "dueAt": "2026-10-20T20:00:00+01:00",
+      "scheduledFor": "2026-11-19T13:20:00+00:00",
+      "url": "https://www.google.com/travel/flights?q=voli+da+LIS+a+MXP+il+2026-11-19",
+      "costCents": 17400,
+      "notes": "Prezzo: verificato\nFonte del prezzo: https://www.expedia.com/",
+      "sortOrder": 7000
+    },
+    {
+      "id": "38e979c2-2709-43ef-bf24-b824f410b873",
+      "tripId": "0ce98e8d-ca00-4ab0-8205-cd156818f096",
+      "title": "Assicurazione di viaggio",
+      "kind": "other",
+      "status": "to_book",
+      "dueAt": "2026-11-12T20:00:00+00:00",
+      "notes": "Facoltativa. Copre annullamento e bagaglio.",
+      "sortOrder": 8000
+    }
+  ]
+}

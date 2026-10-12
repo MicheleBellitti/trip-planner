@@ -1,0 +1,95 @@
+{
+  "$defs": {
+    "AgentName": {
+      "description": "The agents of a plan's session: the coordinator and its four subagents.",
+      "enum": [
+        "coordinator",
+        "flights",
+        "lodging",
+        "activities",
+        "transport"
+      ],
+      "title": "AgentName",
+      "type": "string"
+    },
+    "EventKind": {
+      "description": "What a UI event is about; the timeline draws each kind differently.",
+      "enum": [
+        "status",
+        "tool",
+        "message",
+        "usage",
+        "error",
+        "plan"
+      ],
+      "title": "EventKind",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One event of a plan's timeline, as stored in `events` and sent over SSE.",
+  "properties": {
+    "agent": {
+      "$ref": "#/$defs/AgentName",
+      "description": "The agent whose lane shows the event."
+    },
+    "cost_cents": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Cumulative session cost in cents at this event, when known."
+    },
+    "detail": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional structured detail: tool name, main parameters and duration, message sender, recipient and text, usage figures. Never the full text of a tool result."
+    },
+    "kind": {
+      "$ref": "#/$defs/EventKind",
+      "description": "What the event is about."
+    },
+    "seq": {
+      "description": "Progressive number of the event within its plan; the SSE id, used with Last-Event-ID to resume.",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "title": {
+      "description": "One line for the timeline, at most 200 characters, e.g. 'Expedia · voli MXP→LIS · 14–18 nov'.",
+      "maxLength": 200,
+      "minLength": 1,
+      "pattern": "^[^\\r\\n]*$",
+      "type": "string"
+    },
+    "ts": {
+      "description": "When the event happened, ISO 8601 with UTC offset.",
+      "format": "date-time",
+      "type": "string"
+    }
+  },
+  "required": [
+    "seq",
+    "ts",
+    "agent",
+    "kind",
+    "title",
+    "detail",
+    "cost_cents"
+  ],
+  "title": "UIEvent",
+  "type": "object"
+}

@@ -1,0 +1,34 @@
+# Build context of backend/Dockerfile (Railway's root directory is backend/).
+# The image needs: pyproject.toml, uv.lock, .python-version, alembic.ini, app/, migrations/,
+# claude-lock.<profile>.json and any pinned file the backend reads at runtime.
+
+# The local virtualenv must never reach the image: it would overwrite the locked /app/.venv.
+.venv/
+
+# Secrets: backend/.env is gitignored, so Railway never sees it, but a local build would.
+.env
+.env.*
+
+# Tests and fixtures stay out of the production image (app.cli replay runs from a checkout).
+tests/
+
+# Caches and build leftovers
+**/__pycache__/
+**/*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.coverage
+.coverage.*
+htmlcov/
+*.egg-info/
+build/
+dist/
+**/.DS_Store
+
+# Deployment config, not runtime input
+Dockerfile
+.dockerignore
+railway.json
+railway.cron.json

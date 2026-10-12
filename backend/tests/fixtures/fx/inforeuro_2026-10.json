@@ -1,0 +1,1218 @@
+[
+  {
+    "country": "Belgium",
+    "currency": "Euro",
+    "isoA3Code": "EUR",
+    "isoA2Code": "BE",
+    "value": 1,
+    "comment": "The euro is the currency of the following countries: Austria (AT), Belgium (BE), Bulgaria (BG), Croatia (HR), Cyprus (CY), Germany (DE), Estonia (EE), Greece (EL), Spain (ES), Finland (FI), France (FR), Ireland (IE), Italy (IT), Luxembourg (LU), Latvia (LV), Lithuania (LT), Malta (MT), The Netherlands (NL), Portugal (PT), Slovenia (SI), Slovakia (SK). It is also in use for Mayotte (YT), Saint Pierre and Miquelon (PM), French Southern Lands (TF), Principality of Monaco (MC), Vatican (VA), San Marino (SM), Ceuta (XC), Melilla (XL), Andorra (AD), Republic of Montenegro (ME), Kosovo (XK, under UN Security Council 1244/99)."
+  },
+  {
+    "country": "Czechia",
+    "currency": "Czech koruna",
+    "isoA3Code": "CZK",
+    "isoA2Code": "CZ",
+    "value": 24.411,
+    "comment": null
+  },
+  {
+    "country": "Denmark",
+    "currency": "Danish krone",
+    "isoA3Code": "DKK",
+    "isoA2Code": "DK",
+    "value": 7.4754,
+    "comment": "Danish krone: Also in use for Faeroe Islands (FO), Greenland (GL)."
+  },
+  {
+    "country": "Hungary",
+    "currency": "Hungarian forint",
+    "isoA3Code": "HUF",
+    "isoA2Code": "HU",
+    "value": 366.38,
+    "comment": null
+  },
+  {
+    "country": "Poland",
+    "currency": "Polish zloty",
+    "isoA3Code": "PLN",
+    "isoA2Code": "PL",
+    "value": 4.3653,
+    "comment": null
+  },
+  {
+    "country": "Romania",
+    "currency": "Romanian Leu",
+    "isoA3Code": "RON",
+    "isoA2Code": "RO",
+    "value": 5.2786,
+    "comment": null
+  },
+  {
+    "country": "Sweden",
+    "currency": "Swedish krona",
+    "isoA3Code": "SEK",
+    "isoA2Code": "SE",
+    "value": 11.321,
+    "comment": null
+  },
+  {
+    "country": "Australia",
+    "currency": "Australian dollar",
+    "isoA3Code": "AUD",
+    "isoA2Code": "AU",
+    "value": 1.6211,
+    "comment": "Australian dollar: Also in use for Christmas Island (CX), Cocos (Keeling) Islands (CC), Kiribati (KI), Nauru (NR), Norfolk Island (NF), Tuvalu (TV)."
+  },
+  {
+    "country": "Brazil",
+    "currency": "Brazilian real",
+    "isoA3Code": "BRL",
+    "isoA2Code": "BR",
+    "value": 5.9177,
+    "comment": "Brazilian real: This currency can not be used to effect international payments of the Commission."
+  },
+  {
+    "country": "Canada",
+    "currency": "Canadian dollar",
+    "isoA3Code": "CAD",
+    "isoA2Code": "CA",
+    "value": 1.6101,
+    "comment": null
+  },
+  {
+    "country": "China",
+    "currency": "Chinese Yuan Renminbi",
+    "isoA3Code": "CNY",
+    "isoA2Code": "CN",
+    "value": 7.6117,
+    "comment": "Chinese yuan: This currency can not be used to effect international payments of the Commission."
+  },
+  {
+    "country": "Hong Kong",
+    "currency": "Hong Kong dollar",
+    "isoA3Code": "HKD",
+    "isoA2Code": "HK",
+    "value": 8.9091,
+    "comment": null
+  },
+  {
+    "country": "Iceland",
+    "currency": "Iceland króna",
+    "isoA3Code": "ISK",
+    "isoA2Code": "IS",
+    "value": 136.8,
+    "comment": null
+  },
+  {
+    "country": "India",
+    "currency": "Indian rupee",
+    "isoA3Code": "INR",
+    "isoA2Code": "IN",
+    "value": 108.991,
+    "comment": null
+  },
+  {
+    "country": "Indonesia",
+    "currency": "Indonesian rupiah",
+    "isoA3Code": "IDR",
+    "isoA2Code": "ID",
+    "value": 20350.09,
+    "comment": null
+  },
+  {
+    "country": "Israel",
+    "currency": "New Israeli shekel",
+    "isoA3Code": "ILS",
+    "isoA2Code": "IL",
+    "value": 3.4702,
+    "comment": null
+  },
+  {
+    "country": "Japan",
+    "currency": "Japanese yen",
+    "isoA3Code": "JPY",
+    "isoA2Code": "JP",
+    "value": 178.41,
+    "comment": null
+  },
+  {
+    "country": "Malaysia",
+    "currency": "Malaysian ringgit",
+    "isoA3Code": "MYR",
+    "isoA2Code": "MY",
+    "value": 4.634,
+    "comment": null
+  },
+  {
+    "country": "Mexico",
+    "currency": "Mexican peso",
+    "isoA3Code": "MXN",
+    "isoA2Code": "MX",
+    "value": 20.3222,
+    "comment": null
+  },
+  {
+    "country": "New Zealand",
+    "currency": "New Zealand dollar",
+    "isoA3Code": "NZD",
+    "isoA2Code": "NZ",
+    "value": 2.0076,
+    "comment": "New Zealand dollar: Also in use for Cook Islands (CK), Niue (NU), Pitcairn Islands (PN), Tokelau (TK)."
+  },
+  {
+    "country": "Norway",
+    "currency": "Norwegian krone",
+    "isoA3Code": "NOK",
+    "isoA2Code": "NO",
+    "value": 10.8735,
+    "comment": "Norwegian krone: Also in use for Bouvet Island (BV), Svalbard and Jan Mayen (SJ)."
+  },
+  {
+    "country": "Philippines",
+    "currency": "Philippine piso",
+    "isoA3Code": "PHP",
+    "isoA2Code": "PH",
+    "value": 71.022,
+    "comment": null
+  },
+  {
+    "country": "Russia",
+    "currency": "Russian ruble",
+    "isoA3Code": "RUB",
+    "isoA2Code": "RU",
+    "value": 96.2499,
+    "comment": "Russian ruble: This currency can not be used to effect international payments of the Commission."
+  },
+  {
+    "country": "Singapore",
+    "currency": "Singapore dollar",
+    "isoA3Code": "SGD",
+    "isoA2Code": "SG",
+    "value": 1.4504,
+    "comment": null
+  },
+  {
+    "country": "South Africa",
+    "currency": "South African rand",
+    "isoA3Code": "ZAR",
+    "isoA2Code": "ZA",
+    "value": 18.5887,
+    "comment": null
+  },
+  {
+    "country": "South Korea",
+    "currency": "South Korean won",
+    "isoA3Code": "KRW",
+    "isoA2Code": "KR",
+    "value": 1536.74,
+    "comment": null
+  },
+  {
+    "country": "Switzerland",
+    "currency": "Swiss franc",
+    "isoA3Code": "CHF",
+    "isoA2Code": "CH",
+    "value": 0.9461,
+    "comment": "Swiss franc: Also in use for Liechtenstein (LI)."
+  },
+  {
+    "country": "Thailand",
+    "currency": "Thai baht",
+    "isoA3Code": "THB",
+    "isoA2Code": "TH",
+    "value": 38.056,
+    "comment": null
+  },
+  {
+    "country": "Turkey",
+    "currency": "Turkish lira",
+    "isoA3Code": "TRY",
+    "isoA2Code": "TR",
+    "value": 55.6398,
+    "comment": null
+  },
+  {
+    "country": "United Kingdom",
+    "currency": "Pound sterling",
+    "isoA3Code": "GBP",
+    "isoA2Code": "GB",
+    "value": 0.85718,
+    "comment": "Pound sterling: Also in use for South Georgia and the South Sandwich Islands (GS)."
+  },
+  {
+    "country": "United States",
+    "currency": "United States dollar",
+    "isoA3Code": "USD",
+    "isoA2Code": "US",
+    "value": 1.1355,
+    "comment": "US dollar: Also in use for American Samoa (AS), Bonaire, Sint Eustatius and Saba (BQ), British Indian Ocean Territory (IO), British Virgin Islands (VG), East Timor (TP), Ecuador (EC), El Salvador (SV), Guam (GU), Marshall Islands (MH), Micronesia (FM), Northern Marianas (MP), Palau (PW), Puerto Rico (PR), Turks and Caicos Islands (TC), United States Minor Outlying Islands (UM), United States Virgin Islands (VI), Zimbabwe (ZW)."
+  },
+  {
+    "country": "Afghanistan",
+    "currency": "Afghan afghani",
+    "isoA3Code": "AFN",
+    "isoA2Code": "AF",
+    "value": 74,
+    "comment": null
+  },
+  {
+    "country": "Albania",
+    "currency": "Albanian lek",
+    "isoA3Code": "ALL",
+    "isoA2Code": "AL",
+    "value": 92.045,
+    "comment": null
+  },
+  {
+    "country": "Algeria",
+    "currency": "Algerian dinar",
+    "isoA3Code": "DZD",
+    "isoA2Code": "DZ",
+    "value": 152.1975,
+    "comment": null
+  },
+  {
+    "country": "Angola",
+    "currency": "Angolan kwanza",
+    "isoA3Code": "AOA",
+    "isoA2Code": "AO",
+    "value": 1045.79,
+    "comment": null
+  },
+  {
+    "country": "Argentina",
+    "currency": "Argentine peso",
+    "isoA3Code": "ARS",
+    "isoA2Code": "AR",
+    "value": 1731.6375,
+    "comment": null
+  },
+  {
+    "country": "Armenia",
+    "currency": "Armenian dram",
+    "isoA3Code": "AMD",
+    "isoA2Code": "AM",
+    "value": 413.5,
+    "comment": null
+  },
+  {
+    "country": "Aruba",
+    "currency": "Aruban florin",
+    "isoA3Code": "AWG",
+    "isoA2Code": "AW",
+    "value": 2.05526,
+    "comment": null
+  },
+  {
+    "country": "Azerbaijan",
+    "currency": "Azerbaijan Manat",
+    "isoA3Code": "AZN",
+    "isoA2Code": "AZ",
+    "value": 1.93035,
+    "comment": null
+  },
+  {
+    "country": "Bahamas (the)",
+    "currency": "Bahamian dollar",
+    "isoA3Code": "BSD",
+    "isoA2Code": "BS",
+    "value": 1.1355,
+    "comment": null
+  },
+  {
+    "country": "Bahrain",
+    "currency": "Bahraini dinar",
+    "isoA3Code": "BHD",
+    "isoA2Code": "BH",
+    "value": 0.42806,
+    "comment": null
+  },
+  {
+    "country": "Bangladesh",
+    "currency": "Bangladeshi taka",
+    "isoA3Code": "BDT",
+    "isoA2Code": "BD",
+    "value": 139.80844,
+    "comment": null
+  },
+  {
+    "country": "Barbados",
+    "currency": "Barbados dollar",
+    "isoA3Code": "BBD",
+    "isoA2Code": "BB",
+    "value": 2.28701,
+    "comment": null
+  },
+  {
+    "country": "Belarus",
+    "currency": "Belarussian rouble",
+    "isoA3Code": "BYN",
+    "isoA2Code": "BY",
+    "value": 3.4404,
+    "comment": null
+  },
+  {
+    "country": "Belize",
+    "currency": "Belize dollar",
+    "isoA3Code": "BZD",
+    "isoA2Code": "BZ",
+    "value": 2.28372,
+    "comment": null
+  },
+  {
+    "country": "Bermuda",
+    "currency": "Bermudian dollar",
+    "isoA3Code": "BMD",
+    "isoA2Code": "BM",
+    "value": 1.1355,
+    "comment": null
+  },
+  {
+    "country": "Bhutan",
+    "currency": "Bhutanese ngultrum",
+    "isoA3Code": "BTN",
+    "isoA2Code": "BT",
+    "value": 108.991,
+    "comment": null
+  },
+  {
+    "country": "Bolivia",
+    "currency": "Bolivian boliviano",
+    "isoA3Code": "BOB",
+    "isoA2Code": "BO",
+    "value": 13.68845,
+    "comment": null
+  },
+  {
+    "country": "Bosnia and Herzegovina",
+    "currency": "Bosnia and Herzegovina convertible mark",
+    "isoA3Code": "BAM",
+    "isoA2Code": "BA",
+    "value": 1.95583,
+    "comment": null
+  },
+  {
+    "country": "Botswana",
+    "currency": "Botswana pula",
+    "isoA3Code": "BWP",
+    "isoA2Code": "BW",
+    "value": 15.49175,
+    "comment": null
+  },
+  {
+    "country": "Brunei",
+    "currency": "Brunei dollar",
+    "isoA3Code": "BND",
+    "isoA2Code": "BN",
+    "value": 1.45225,
+    "comment": null
+  },
+  {
+    "country": "Burundi",
+    "currency": "Burundi franc",
+    "isoA3Code": "BIF",
+    "isoA2Code": "BI",
+    "value": 3407.3895,
+    "comment": null
+  },
+  {
+    "country": "Cambodia",
+    "currency": "Cambodian riel",
+    "isoA3Code": "KHR",
+    "isoA2Code": "KH",
+    "value": 4643,
+    "comment": null
+  },
+  {
+    "country": "Cape Verde",
+    "currency": "Cape Verde escudo",
+    "isoA3Code": "CVE",
+    "isoA2Code": "CV",
+    "value": 110.265,
+    "comment": null
+  },
+  {
+    "country": "Cayman Islands",
+    "currency": "Cayman Islands dollar",
+    "isoA3Code": "KYD",
+    "isoA2Code": "KY",
+    "value": 0.94247,
+    "comment": null
+  },
+  {
+    "country": "Chile",
+    "currency": "Chilean peso",
+    "isoA3Code": "CLP",
+    "isoA2Code": "CL",
+    "value": 1099.58414,
+    "comment": null
+  },
+  {
+    "country": "Colombia",
+    "currency": "Colombian peso",
+    "isoA3Code": "COP",
+    "isoA2Code": "CO",
+    "value": 3827.7705,
+    "comment": "Colombian peso: This currency can not be used to effect international payments of the Commission."
+  },
+  {
+    "country": "Comoros",
+    "currency": "Comorian franc",
+    "isoA3Code": "KMF",
+    "isoA2Code": "KM",
+    "value": 492.615,
+    "comment": null
+  },
+  {
+    "country": "Congo (Democratic Republic of)",
+    "currency": "Congolese franc",
+    "isoA3Code": "CDF",
+    "isoA2Code": "CD",
+    "value": 2628.405,
+    "comment": null
+  },
+  {
+    "country": "Costa Rica",
+    "currency": "Costa Rican colón",
+    "isoA3Code": "CRC",
+    "isoA2Code": "CR",
+    "value": 517.35651,
+    "comment": null
+  },
+  {
+    "country": "Cuba",
+    "currency": "Cuban peso",
+    "isoA3Code": "CUP",
+    "isoA2Code": "CU",
+    "value": 27.2904,
+    "comment": null
+  },
+  {
+    "country": "Curaçao",
+    "currency": "Caribbean Guilder",
+    "isoA3Code": "XCG",
+    "isoA2Code": "CW",
+    "value": 2.03255,
+    "comment": "Caribbean guilder: Also in use for Sint Maarten (Dutch part) (SX)."
+  },
+  {
+    "country": "Djibouti",
+    "currency": "Djibouti franc",
+    "isoA3Code": "DJF",
+    "isoA2Code": "DJ",
+    "value": 202.20416,
+    "comment": null
+  },
+  {
+    "country": "Dominican Republic",
+    "currency": "Dominican peso",
+    "isoA3Code": "DOP",
+    "isoA2Code": "DO",
+    "value": 67.6234,
+    "comment": null
+  },
+  {
+    "country": "Egypt",
+    "currency": "Egyptian pound",
+    "isoA3Code": "EGP",
+    "isoA2Code": "EG",
+    "value": 59.24292,
+    "comment": null
+  },
+  {
+    "country": "Eritrea",
+    "currency": "Eritrean nakfa",
+    "isoA3Code": "ERN",
+    "isoA2Code": "ER",
+    "value": 17.11766,
+    "comment": null
+  },
+  {
+    "country": "Eswatini",
+    "currency": "Swazi lilangeni",
+    "isoA3Code": "SZL",
+    "isoA2Code": "SZ",
+    "value": 18.5887,
+    "comment": null
+  },
+  {
+    "country": "Ethiopia",
+    "currency": "Ethiopian birr",
+    "isoA3Code": "ETB",
+    "isoA2Code": "ET",
+    "value": 184.034,
+    "comment": null
+  },
+  {
+    "country": "Falkland Islands",
+    "currency": "Falkland Islands pound",
+    "isoA3Code": "FKP",
+    "isoA2Code": "FK",
+    "value": 0.85718,
+    "comment": null
+  },
+  {
+    "country": "Fiji",
+    "currency": "Fiji dollar",
+    "isoA3Code": "FJD",
+    "isoA2Code": "FJ",
+    "value": 2.5441,
+    "comment": null
+  },
+  {
+    "country": "Gambia (the)",
+    "currency": "Gambian dalasi",
+    "isoA3Code": "GMD",
+    "isoA2Code": "GM",
+    "value": 84.745,
+    "comment": null
+  },
+  {
+    "country": "Georgia",
+    "currency": "Georgian lari",
+    "isoA3Code": "GEL",
+    "isoA2Code": "GE",
+    "value": 2.9637,
+    "comment": null
+  },
+  {
+    "country": "Ghana",
+    "currency": "Ghana cedi",
+    "isoA3Code": "GHS",
+    "isoA2Code": "GH",
+    "value": 13.2472,
+    "comment": null
+  },
+  {
+    "country": "Gibraltar",
+    "currency": "Gibraltar pound",
+    "isoA3Code": "GIP",
+    "isoA2Code": "GI",
+    "value": 0.85718,
+    "comment": null
+  },
+  {
+    "country": "Guatemala",
+    "currency": "Guatemalan quetzal",
+    "isoA3Code": "GTQ",
+    "isoA2Code": "GT",
+    "value": 8.66954,
+    "comment": null
+  },
+  {
+    "country": "Guinea",
+    "currency": "Guinean franc",
+    "isoA3Code": "GNF",
+    "isoA2Code": "GN",
+    "value": 10000.795,
+    "comment": null
+  },
+  {
+    "country": "Guyana",
+    "currency": "Guyana dollar",
+    "isoA3Code": "GYD",
+    "isoA2Code": "GY",
+    "value": 237.925,
+    "comment": null
+  },
+  {
+    "country": "Haiti",
+    "currency": "Haitian gourde",
+    "isoA3Code": "HTG",
+    "isoA2Code": "HT",
+    "value": 148.60856,
+    "comment": null
+  },
+  {
+    "country": "Honduras",
+    "currency": "Honduran lempira",
+    "isoA3Code": "HNL",
+    "isoA2Code": "HN",
+    "value": 30.48233,
+    "comment": null
+  },
+  {
+    "country": "Iran",
+    "currency": "Iranian rial",
+    "isoA3Code": "IRR",
+    "isoA2Code": "IR",
+    "value": 1560858.3,
+    "comment": "Iranian rial: This currency can not be used to effect international payments of the Commission."
+  },
+  {
+    "country": "Iraq",
+    "currency": "Iraqi dinar",
+    "isoA3Code": "IQD",
+    "isoA2Code": "IQ",
+    "value": 1487.505,
+    "comment": null
+  },
+  {
+    "country": "Jamaica",
+    "currency": "Jamaican dollar",
+    "isoA3Code": "JMD",
+    "isoA2Code": "JM",
+    "value": 180.0144,
+    "comment": null
+  },
+  {
+    "country": "Jordan",
+    "currency": "Jordanian dinar",
+    "isoA3Code": "JOD",
+    "isoA2Code": "JO",
+    "value": 0.80507,
+    "comment": null
+  },
+  {
+    "country": "Kazakhstan",
+    "currency": "Kazakhstani tenge",
+    "isoA3Code": "KZT",
+    "isoA2Code": "KZ",
+    "value": 501.655,
+    "comment": null
+  },
+  {
+    "country": "Kenya",
+    "currency": "Kenyan shilling",
+    "isoA3Code": "KES",
+    "isoA2Code": "KE",
+    "value": 147.54,
+    "comment": null
+  },
+  {
+    "country": "Kuwait",
+    "currency": "Kuwaiti dinar",
+    "isoA3Code": "KWD",
+    "isoA2Code": "KW",
+    "value": 0.34939,
+    "comment": null
+  },
+  {
+    "country": "Kyrgyzstan",
+    "currency": "Kyrgyzstani som",
+    "isoA3Code": "KGS",
+    "isoA2Code": "KG",
+    "value": 99.32826,
+    "comment": null
+  },
+  {
+    "country": "Laos",
+    "currency": "Lao kip",
+    "isoA3Code": "LAK",
+    "isoA2Code": "LA",
+    "value": 25513.69,
+    "comment": null
+  },
+  {
+    "country": "Lebanon",
+    "currency": "Lebanese pound",
+    "isoA3Code": "LBP",
+    "isoA2Code": "LB",
+    "value": 101684.025,
+    "comment": null
+  },
+  {
+    "country": "Lesotho",
+    "currency": "Lesotho loti",
+    "isoA3Code": "LSL",
+    "isoA2Code": "LS",
+    "value": 18.5887,
+    "comment": null
+  },
+  {
+    "country": "Liberia",
+    "currency": "Liberian dollar",
+    "isoA3Code": "LRD",
+    "isoA2Code": "LR",
+    "value": 194.73825,
+    "comment": null
+  },
+  {
+    "country": "Libya",
+    "currency": "Libyan dinar",
+    "isoA3Code": "LYD",
+    "isoA2Code": "LY",
+    "value": 7.2708,
+    "comment": null
+  },
+  {
+    "country": "Macau",
+    "currency": "Macanese pataca",
+    "isoA3Code": "MOP",
+    "isoA2Code": "MO",
+    "value": 9.18052,
+    "comment": null
+  },
+  {
+    "country": "Madagascar",
+    "currency": "Malagasy ariary",
+    "isoA3Code": "MGA",
+    "isoA2Code": "MG",
+    "value": 4989.5,
+    "comment": null
+  },
+  {
+    "country": "Malawi",
+    "currency": "Malawi kwacha",
+    "isoA3Code": "MWK",
+    "isoA2Code": "MW",
+    "value": 1971.74445,
+    "comment": null
+  },
+  {
+    "country": "Maldives",
+    "currency": "Maldivian rufiyaa",
+    "isoA3Code": "MVR",
+    "isoA2Code": "MV",
+    "value": 17.55483,
+    "comment": null
+  },
+  {
+    "country": "Mauritania",
+    "currency": "Mauritanian ouguiya",
+    "isoA3Code": "MRU",
+    "isoA2Code": "MR",
+    "value": 45.7229,
+    "comment": null
+  },
+  {
+    "country": "Mauritius",
+    "currency": "Mauritian rupee",
+    "isoA3Code": "MUR",
+    "isoA2Code": "MU",
+    "value": 53.975,
+    "comment": null
+  },
+  {
+    "country": "Moldova",
+    "currency": "Moldovan leu",
+    "isoA3Code": "MDL",
+    "isoA2Code": "MD",
+    "value": 20.16,
+    "comment": null
+  },
+  {
+    "country": "Mongolia",
+    "currency": "Mongolian Tugrik",
+    "isoA3Code": "MNT",
+    "isoA2Code": "MN",
+    "value": 4085.529,
+    "comment": null
+  },
+  {
+    "country": "Morocco",
+    "currency": "Moroccan dirham",
+    "isoA3Code": "MAD",
+    "isoA2Code": "MA",
+    "value": 10.97075,
+    "comment": null
+  },
+  {
+    "country": "Mozambique",
+    "currency": "Mozambique Metical",
+    "isoA3Code": "MZN",
+    "isoA2Code": "MZ",
+    "value": 72.305,
+    "comment": null
+  },
+  {
+    "country": "Myanmar",
+    "currency": "Myanmar Kyat",
+    "isoA3Code": "MMK",
+    "isoA2Code": "MM",
+    "value": 4524.9675,
+    "comment": null
+  },
+  {
+    "country": "Namibia",
+    "currency": "Namibian dollar",
+    "isoA3Code": "NAD",
+    "isoA2Code": "NA",
+    "value": 18.5887,
+    "comment": null
+  },
+  {
+    "country": "Nepal",
+    "currency": "Nepalese rupee",
+    "isoA3Code": "NPR",
+    "isoA2Code": "NP",
+    "value": 174.63015,
+    "comment": null
+  },
+  {
+    "country": "New Caledonia",
+    "currency": "CFP franc",
+    "isoA3Code": "XPF",
+    "isoA2Code": "NC",
+    "value": 119.355,
+    "comment": "CFP franc: In use for French Polynesia (PF), New Caledonia (NC), Wallis and Futuna (WF)."
+  },
+  {
+    "country": "Nicaragua",
+    "currency": "Nicaraguan córdoba",
+    "isoA3Code": "NIO",
+    "isoA2Code": "NI",
+    "value": 41.7864,
+    "comment": null
+  },
+  {
+    "country": "Nigeria",
+    "currency": "Nigerian naira",
+    "isoA3Code": "NGN",
+    "isoA2Code": "NG",
+    "value": 1528.15,
+    "comment": null
+  },
+  {
+    "country": "North Macedonia",
+    "currency": "Macedonian denar",
+    "isoA3Code": "MKD",
+    "isoA2Code": "MK",
+    "value": 61.61,
+    "comment": null
+  },
+  {
+    "country": "Oman",
+    "currency": "Omani rial",
+    "isoA3Code": "OMR",
+    "isoA2Code": "OM",
+    "value": 0.43717,
+    "comment": null
+  },
+  {
+    "country": "Pakistan",
+    "currency": "Pakistan rupee",
+    "isoA3Code": "PKR",
+    "isoA2Code": "PK",
+    "value": 315.062,
+    "comment": null
+  },
+  {
+    "country": "Panama",
+    "currency": "Panamanian balboa",
+    "isoA3Code": "PAB",
+    "isoA2Code": "PA",
+    "value": 1.1355,
+    "comment": null
+  },
+  {
+    "country": "Papua New Guinea",
+    "currency": "Papua New Guinean kina",
+    "isoA3Code": "PGK",
+    "isoA2Code": "PG",
+    "value": 5.0534,
+    "comment": null
+  },
+  {
+    "country": "Paraguay",
+    "currency": "Paraguayan guaraní",
+    "isoA3Code": "PYG",
+    "isoA2Code": "PY",
+    "value": 6669.35925,
+    "comment": null
+  },
+  {
+    "country": "Peru",
+    "currency": "Peruvian sol",
+    "isoA3Code": "PEN",
+    "isoA2Code": "PE",
+    "value": 3.90618,
+    "comment": null
+  },
+  {
+    "country": "Qatar",
+    "currency": "Qatari riyal",
+    "isoA3Code": "QAR",
+    "isoA2Code": "QA",
+    "value": 4.13322,
+    "comment": null
+  },
+  {
+    "country": "Rwanda",
+    "currency": "Rwandan franc",
+    "isoA3Code": "RWF",
+    "isoA2Code": "RW",
+    "value": 1675.645,
+    "comment": null
+  },
+  {
+    "country": "Saint Helena",
+    "currency": "Saint Helena pound",
+    "isoA3Code": "SHP",
+    "isoA2Code": "SH",
+    "value": 0.85718,
+    "comment": null
+  },
+  {
+    "country": "Samoa",
+    "currency": "Samoan tala",
+    "isoA3Code": "WST",
+    "isoA2Code": "WS",
+    "value": 3.13069,
+    "comment": null
+  },
+  {
+    "country": "Sao Tome and Príncipe",
+    "currency": "São Tomé and Príncipe dobra",
+    "isoA3Code": "STN",
+    "isoA2Code": "ST",
+    "value": 24.5,
+    "comment": null
+  },
+  {
+    "country": "Saudi Arabia",
+    "currency": "Saudi riyal",
+    "isoA3Code": "SAR",
+    "isoA2Code": "SA",
+    "value": 4.26289,
+    "comment": null
+  },
+  {
+    "country": "Serbia (Republic of)",
+    "currency": "Serbian Dinar",
+    "isoA3Code": "RSD",
+    "isoA2Code": "RS",
+    "value": 117.375,
+    "comment": null
+  },
+  {
+    "country": "Seychelles",
+    "currency": "Seychellois rupee",
+    "isoA3Code": "SCR",
+    "isoA2Code": "SC",
+    "value": 15.90745,
+    "comment": null
+  },
+  {
+    "country": "Sierra Leone",
+    "currency": "Sierra Leonean leone",
+    "isoA3Code": "SLE",
+    "isoA2Code": "SL",
+    "value": 27.6928,
+    "comment": "The new currency SLE came into force on 1 April 2022. Three zeros were cut off the SLL rate."
+  },
+  {
+    "country": "Solomon Islands",
+    "currency": "Solomon Islands dollar",
+    "isoA3Code": "SBD",
+    "isoA2Code": "SB",
+    "value": 9.1668,
+    "comment": null
+  },
+  {
+    "country": "Somalia",
+    "currency": "Somali shilling",
+    "isoA3Code": "SOS",
+    "isoA2Code": "SO",
+    "value": 649.855,
+    "comment": null
+  },
+  {
+    "country": "South Sudan",
+    "currency": "South Sudanese pound",
+    "isoA3Code": "SSP",
+    "isoA2Code": "SS",
+    "value": 6552.67879,
+    "comment": null
+  },
+  {
+    "country": "Sri Lanka",
+    "currency": "Sri Lankan rupee",
+    "isoA3Code": "LKR",
+    "isoA2Code": "LK",
+    "value": 376.38,
+    "comment": null
+  },
+  {
+    "country": "Sudan",
+    "currency": "Sudanese Pound",
+    "isoA3Code": "SDG",
+    "isoA2Code": "SD",
+    "value": 5784.9421,
+    "comment": "Sudanese pound: The rate is in use for the exchange operations made by EU Delegation in the country. This currency cannot be used to effect international payments."
+  },
+  {
+    "country": "Suriname",
+    "currency": "Surinam dollar",
+    "isoA3Code": "SRD",
+    "isoA2Code": "SR",
+    "value": 42.82538,
+    "comment": null
+  },
+  {
+    "country": "Syria",
+    "currency": "Syrian pound",
+    "isoA3Code": "SYP",
+    "isoA2Code": "SY",
+    "value": 139.4,
+    "comment": null
+  },
+  {
+    "country": "Taiwan",
+    "currency": "New Taiwan dollar",
+    "isoA3Code": "TWD",
+    "isoA2Code": "TW",
+    "value": 36.14615,
+    "comment": null
+  },
+  {
+    "country": "Tajikistan",
+    "currency": "Tajikistani somoni",
+    "isoA3Code": "TJS",
+    "isoA2Code": "TJ",
+    "value": 10.47499,
+    "comment": null
+  },
+  {
+    "country": "Tanzania",
+    "currency": "Tanzanian shilling",
+    "isoA3Code": "TZS",
+    "isoA2Code": "TZ",
+    "value": 2996.265,
+    "comment": null
+  },
+  {
+    "country": "Tonga",
+    "currency": "Tongan paʻanga",
+    "isoA3Code": "TOP",
+    "isoA2Code": "TO",
+    "value": 2.725,
+    "comment": null
+  },
+  {
+    "country": "Trinidad and Tobago",
+    "currency": "Trinidad and Tobago dollar",
+    "isoA3Code": "TTD",
+    "isoA2Code": "TT",
+    "value": 7.71385,
+    "comment": null
+  },
+  {
+    "country": "Tunisia",
+    "currency": "Tunisian dinar",
+    "isoA3Code": "TND",
+    "isoA2Code": "TN",
+    "value": 3.37965,
+    "comment": null
+  },
+  {
+    "country": "Turkmenistan",
+    "currency": "Turkmenistan manat",
+    "isoA3Code": "TMT",
+    "isoA2Code": "TM",
+    "value": 3.97425,
+    "comment": null
+  },
+  {
+    "country": "Uganda",
+    "currency": "Ugandan shilling",
+    "isoA3Code": "UGX",
+    "isoA2Code": "UG",
+    "value": 4452,
+    "comment": null
+  },
+  {
+    "country": "Ukraine",
+    "currency": "Ukrainian hryvnia",
+    "isoA3Code": "UAH",
+    "isoA2Code": "UA",
+    "value": 51.01115,
+    "comment": null
+  },
+  {
+    "country": "United Arab Emirates",
+    "currency": "United Arab Emirates dirham",
+    "isoA3Code": "AED",
+    "isoA2Code": "AE",
+    "value": 4.17655,
+    "comment": null
+  },
+  {
+    "country": "Uruguay",
+    "currency": "Uruguayan peso",
+    "isoA3Code": "UYU",
+    "isoA2Code": "UY",
+    "value": 45.5222,
+    "comment": null
+  },
+  {
+    "country": "Uzbekistan",
+    "currency": "Uzbekistan sum",
+    "isoA3Code": "UZS",
+    "isoA2Code": "UZ",
+    "value": 13406.81444,
+    "comment": null
+  },
+  {
+    "country": "Vanuatu",
+    "currency": "Vanuatu vatu",
+    "isoA3Code": "VUV",
+    "isoA2Code": "VU",
+    "value": 133.875,
+    "comment": null
+  },
+  {
+    "country": "Venezuela",
+    "currency": "Venezuelan bolivar soberano",
+    "isoA3Code": "VES",
+    "isoA2Code": "VE",
+    "value": 972.91371,
+    "comment": "Venezuelan bolívar soberano: The new currency VES came into force on 20 August 2018. Six zeros were cut off the rate on 01/10/2021. The currency cannot be used to effect international payments. The significant fluctuation of the currency is due to hyperinflation."
+  },
+  {
+    "country": "Vietnam",
+    "currency": "Vietnamese dong",
+    "isoA3Code": "VND",
+    "isoA2Code": "VN",
+    "value": 29494.04475,
+    "comment": null
+  },
+  {
+    "country": "Yemen",
+    "currency": "Yemeni rial",
+    "isoA3Code": "YER",
+    "isoA2Code": "YE",
+    "value": 605.78925,
+    "comment": null
+  },
+  {
+    "country": "Zambia",
+    "currency": "Zambian Kwacha",
+    "isoA3Code": "ZMW",
+    "isoA2Code": "ZM",
+    "value": 22.2019,
+    "comment": null
+  },
+  {
+    "country": "Zimbabwe",
+    "currency": "Zimbabwean gold",
+    "isoA3Code": "ZIG",
+    "isoA2Code": "ZW",
+    "value": 30.48954,
+    "comment": "ZIG is a currency used locally while the official ISO code is ZWG. The rate for ZIG and ZWG is the same."
+  },
+  {
+    "country": "Antigua and Barbuda",
+    "currency": "East Caribbean dollar",
+    "isoA3Code": "XCD",
+    "isoA2Code": "AG",
+    "value": 3.07721,
+    "comment": "East Caribbean dollar: In use for Anguilla (AI), Antigua and Barbuda (AG), Dominica (DM), Grenada (GD), Montserrat (MS), Saint Kitts and Nevis (KN), Saint Lucia (LC), Saint Vincent and the Grenadines (VC)."
+  },
+  {
+    "country": "Benin",
+    "currency": "West African CFA franc",
+    "isoA3Code": "XOF",
+    "isoA2Code": "BJ",
+    "value": 655.957,
+    "comment": "West African CFA franc: In use for Benin (BJ), Burkina Faso (BF), Côte d'Ivoire (CI), Guinea-Bissau (GW), Mali (ML), Niger (NE), Senegal (SN), Togo (TG)."
+  },
+  {
+    "country": "Cameroon",
+    "currency": "Central African CFA franc",
+    "isoA3Code": "XAF",
+    "isoA2Code": "CM",
+    "value": 655.957,
+    "comment": "Central African CFA franc: In use for Cameroon (CM), Central African Republic (CF), Chad (TD), Congo (CG), Equatorial Guinea (GQ), Gabon (GA)."
+  }
+]

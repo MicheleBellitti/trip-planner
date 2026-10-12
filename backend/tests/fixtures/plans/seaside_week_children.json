@@ -1,0 +1,238 @@
+{
+  "title": "Polignano a Mare, una settimana al mare con i bambini",
+  "destination": "Polignano a Mare, Puglia",
+  "timezone": "Europe/Rome",
+  "start_date": "2027-07-10",
+  "end_date": "2027-07-17",
+  "travelers": 4,
+  "lodging_name": "Appartamento vista mare a Polignano",
+  "lodging_address": "Via San Vito 12, 70044 Polignano a Mare BA",
+  "days": [
+    {
+      "date": "2027-07-10",
+      "title": "Viaggio e arrivo",
+      "stops": [
+        {
+          "ref": "d1-train",
+          "title": "Frecciarossa Milano Centrale → Bari Centrale",
+          "kind": "transfer",
+          "start_time": "07:05",
+          "duration_min": 455,
+          "location_name": "Milano Centrale",
+          "notes": "Carrozza con area famiglie: portare merenda e giochi per i bambini."
+        },
+        {
+          "ref": "d1-car",
+          "title": "Ritiro auto a noleggio a Bari",
+          "kind": "transfer",
+          "start_time": "15:00",
+          "duration_min": 45,
+          "location_name": "Bari Centrale"
+        },
+        {
+          "ref": "d1-checkin",
+          "title": "Check-in nell'appartamento",
+          "kind": "rest",
+          "start_time": "16:30",
+          "location_name": "Appartamento vista mare a Polignano",
+          "address": "Via San Vito 12, 70044 Polignano a Mare BA",
+          "lat": 41.0021,
+          "lon": 17.2178
+        }
+      ]
+    },
+    {
+      "date": "2027-07-11",
+      "title": "Primo giorno di spiaggia",
+      "stops": [
+        {
+          "ref": "d2-beach",
+          "title": "Lido con ombrellone e lettini",
+          "kind": "rest",
+          "start_time": "09:30",
+          "duration_min": 240,
+          "location_name": "Lido Cala San Giovanni",
+          "lat": 40.9928,
+          "lon": 17.2259
+        },
+        {
+          "ref": "d2-dinner",
+          "title": "Cena di pesce sul porto",
+          "kind": "meal",
+          "start_time": "19:30",
+          "location_name": "Trattoria del porto"
+        }
+      ]
+    },
+    {
+      "date": "2027-07-13",
+      "title": "Grotte in barca",
+      "stops": [
+        {
+          "ref": "d4-boat",
+          "title": "Giro in barca alle grotte marine",
+          "kind": "activity",
+          "start_time": "10:00",
+          "duration_min": 90,
+          "location_name": "Porto di Cala Ponte",
+          "notes": "Giubbotti salvagente per bambini inclusi; adatto dai 3 anni."
+        }
+      ]
+    },
+    {
+      "date": "2027-07-15",
+      "title": "Zoosafari",
+      "stops": [
+        {
+          "ref": "d6-zoo",
+          "title": "Zoosafari Fasanolandia",
+          "kind": "activity",
+          "start_time": "09:30",
+          "duration_min": 360,
+          "location_name": "Zoosafari Fasanolandia",
+          "address": "Contrada Sant'Elia, 72015 Fasano BR",
+          "lat": 40.8106,
+          "lon": 17.3456,
+          "url": "https://www.zoosafari.it/"
+        }
+      ]
+    },
+    {
+      "date": "2027-07-17",
+      "title": "Rientro",
+      "stops": [
+        {
+          "ref": "d8-checkout",
+          "title": "Check-out e riconsegna auto",
+          "kind": "transfer",
+          "start_time": "10:00",
+          "duration_min": 60
+        },
+        {
+          "ref": "d8-train",
+          "title": "Frecciarossa Bari Centrale → Milano Centrale",
+          "kind": "transfer",
+          "start_time": "12:05",
+          "duration_min": 460,
+          "location_name": "Bari Centrale"
+        }
+      ]
+    }
+  ],
+  "bookings": [
+    {
+      "title": "Frecciarossa Milano → Bari, 2 adulti e 2 ragazzi",
+      "kind": "transport",
+      "vendor": "Trenitalia",
+      "book_by": "2027-05-10T23:59:00+02:00",
+      "book_by_reason": "Le offerte Super Economy per luglio finiscono di solito due mesi prima",
+      "scheduled_for": "2027-07-10T07:05:00+02:00",
+      "link": "https://www.lefrecce.it/Channels.Website.WEB/website/auth/handoff?action=searchTickets&lang=it&referrer=www.trenitalia.com&tripType=on&ynFlexibleDates=off&selectedTrainType=tutti&departureStation=Milano%20Centrale&arrivalStation=Bari%20Centrale&departureDate=10-07-2027&departureTime=07&returnDate=17-07-2027&noOfAdults=2&noOfChildren=2",
+      "price": {
+        "amount_cents": 39960,
+        "currency": "EUR",
+        "status": "estimated",
+        "source_url": "https://www.trenitalia.com/it/offerte_e_servizi/offerte-nazionali.html",
+        "retrieved_at": "2026-10-12T10:05:00+02:00"
+      },
+      "stop_ref": "d1-train"
+    },
+    {
+      "title": "Appartamento vista mare, 7 notti",
+      "kind": "lodging",
+      "vendor": "Airbnb",
+      "book_by": "2027-01-31T23:59:00+01:00",
+      "book_by_reason": "Gli appartamenti per 4 persone sul mare a luglio si esauriscono entro l'inverno",
+      "scheduled_for": "2027-07-10T16:30:00+02:00",
+      "link": "https://www.airbnb.it/s/Polignano-a-Mare--Italia/homes?checkin=2027-07-10&checkout=2027-07-17&adults=2&children=2&infants=0&pets=0",
+      "price": {
+        "amount_cents": 154000,
+        "currency": "EUR",
+        "status": "estimated",
+        "source_url": "https://www.airbnb.it/s/Polignano-a-Mare--Italia/homes",
+        "retrieved_at": "2026-10-12T10:10:00+02:00"
+      },
+      "stop_ref": "d1-checkin",
+      "notes": "Due camere, culla su richiesta, terrazzo con vista mare. Pulizie finali incluse."
+    },
+    {
+      "title": "Auto a noleggio con due seggiolini",
+      "kind": "transport",
+      "vendor": "Noleggio auto a Bari Centrale",
+      "scheduled_for": "2027-07-10T15:00:00+02:00",
+      "link": "https://www.rentalcars.com/it/city/it/bari/",
+      "price": {
+        "amount_cents": 32500,
+        "currency": "EUR",
+        "status": "estimated",
+        "source_url": "https://www.rentalcars.com/it/city/it/bari/",
+        "retrieved_at": "2026-10-12T10:20:00+02:00"
+      },
+      "stop_ref": "d1-car",
+      "notes": "Chiedere due seggiolini (gruppo 1 e gruppo 2/3)."
+    },
+    {
+      "title": "Ombrellone e due lettini per la settimana",
+      "kind": "other",
+      "vendor": "Lido Cala San Giovanni",
+      "scheduled_for": "2027-07-11T09:30:00+02:00",
+      "phone": "+39 080 000 0000",
+      "price": {
+        "amount_cents": 21000,
+        "currency": "EUR",
+        "status": "estimated",
+        "source_url": "https://www.comune.polignanoamare.ba.it/",
+        "retrieved_at": "2026-10-12T10:30:00+02:00"
+      },
+      "stop_ref": "d2-beach"
+    },
+    {
+      "title": "Giro in barca alle grotte",
+      "kind": "activity",
+      "scheduled_for": "2027-07-13T10:00:00+02:00",
+      "book_by_reason": "A luglio le uscite del mattino sono le più richieste",
+      "price": {
+        "amount_cents": 8000,
+        "currency": "EUR",
+        "status": "estimated",
+        "source_url": "https://www.comune.polignanoamare.ba.it/",
+        "retrieved_at": "2026-10-12T10:35:00+02:00"
+      },
+      "stop_ref": "d4-boat"
+    },
+    {
+      "title": "Biglietti Zoosafari Fasanolandia",
+      "kind": "ticket",
+      "vendor": "Zoosafari Fasanolandia",
+      "scheduled_for": "2027-07-15T09:30:00+02:00",
+      "price": {
+        "amount_cents": 8800,
+        "currency": "EUR",
+        "status": "estimated",
+        "source_url": "https://www.zoosafari.it/",
+        "retrieved_at": "2026-10-12T10:40:00+02:00"
+      },
+      "stop_ref": "d6-zoo",
+      "notes": "Ingresso ridotto per i bambini sotto il metro e venti."
+    },
+    {
+      "title": "Frecciarossa Bari → Milano, 2 adulti e 2 ragazzi",
+      "kind": "transport",
+      "vendor": "Trenitalia",
+      "scheduled_for": "2027-07-17T12:05:00+02:00",
+      "link": "https://www.lefrecce.it/Channels.Website.WEB/website/auth/handoff?action=searchTickets&lang=it&referrer=www.trenitalia.com&tripType=on&ynFlexibleDates=off&selectedTrainType=tutti&departureStation=Bari%20Centrale&arrivalStation=Milano%20Centrale&departureDate=17-07-2027&departureTime=12&returnDate=17-07-2027&noOfAdults=2&noOfChildren=2",
+      "price": {
+        "amount_cents": 39960,
+        "currency": "EUR",
+        "status": "estimated",
+        "source_url": "https://www.trenitalia.com/it/offerte_e_servizi/offerte-nazionali.html",
+        "retrieved_at": "2026-10-12T10:06:00+02:00"
+      },
+      "stop_ref": "d8-train"
+    }
+  ],
+  "warnings": [
+    "I prezzi dei treni sono stimati: le vendite per luglio 2027 non sono ancora aperte."
+  ],
+  "summary": "Una settimana a Polignano a Mare per due adulti e due bambini, in appartamento vista mare.\nSpiaggia attrezzata, grotte in barca e una giornata allo Zoosafari, con auto a noleggio.\nTotale stimato: 2.637 € per quattro persone."
+}

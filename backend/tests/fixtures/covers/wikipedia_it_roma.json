@@ -1,0 +1,29 @@
+{
+  "batchcomplete": true,
+  "query": {
+    "pages": [
+      {
+        "ns": 0,
+        "title": "Roma, Italia",
+        "missing": true
+      },
+      {
+        "pageid": 2318427,
+        "ns": 0,
+        "title": "Roma",
+        "original": {
+          "source": "https://upload.wikimedia.org/wikipedia/commons/9/98/Roma-Gonfalone.svg?utm_source=it.wikipedia.org&utm_campaign=api&utm_content=original",
+          "width": 512,
+          "height": 341
+        },
+        "pageimage": "Roma-Gonfalone.svg",
+        "langlinks": [
+          {
+            "lang": "en",
+            "title": "Rome"
+          }
+        ]
+      }
+    ]
+  }
+}

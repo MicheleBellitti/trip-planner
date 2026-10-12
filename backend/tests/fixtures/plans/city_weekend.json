@@ -1,0 +1,233 @@
+{
+  "title": "Vienna, weekend lungo di aprile",
+  "destination": "Vienna, Austria",
+  "timezone": "Europe/Vienna",
+  "start_date": "2027-04-16",
+  "end_date": "2027-04-18",
+  "travelers": 2,
+  "lodging_name": "Hotel Am Konzerthaus Vienna",
+  "lodging_address": "Am Heumarkt 35-37, 1030 Wien",
+  "days": [
+    {
+      "date": "2027-04-16",
+      "title": "Arrivo e Innere Stadt",
+      "stops": [
+        {
+          "ref": "d1-flight",
+          "title": "Volo Milano Malpensa → Vienna",
+          "kind": "transfer",
+          "start_time": "07:10",
+          "duration_min": 95,
+          "location_name": "Aeroporto di Milano Malpensa",
+          "notes": "Arrivo a Vienna alle 08:45. Bagaglio a mano incluso."
+        },
+        {
+          "ref": "d1-cat",
+          "title": "City Airport Train fino a Wien Mitte",
+          "kind": "transfer",
+          "start_time": "09:30",
+          "duration_min": 16,
+          "location_name": "Flughafen Wien",
+          "url": "https://www.cityairporttrain.com/"
+        },
+        {
+          "ref": "d1-checkin",
+          "title": "Check-in in hotel",
+          "kind": "rest",
+          "start_time": "15:00",
+          "duration_min": 30,
+          "location_name": "Hotel Am Konzerthaus Vienna",
+          "address": "Am Heumarkt 35-37, 1030 Wien",
+          "lat": 48.2008,
+          "lon": 16.3787
+        },
+        {
+          "ref": "d1-stephansdom",
+          "title": "Duomo di Santo Stefano e centro storico",
+          "kind": "activity",
+          "start_time": "16:00",
+          "duration_min": 120,
+          "location_name": "Stephansdom",
+          "address": "Stephansplatz 3, 1010 Wien",
+          "lat": 48.2085,
+          "lon": 16.3731,
+          "url": "https://www.stephanskirche.at/"
+        },
+        {
+          "ref": "d1-dinner",
+          "title": "Cena al Figlmüller",
+          "kind": "meal",
+          "start_time": "20:00",
+          "duration_min": 90,
+          "location_name": "Figlmüller Wollzeile",
+          "address": "Wollzeile 5, 1010 Wien",
+          "lat": 48.2089,
+          "lon": 16.3747,
+          "notes": "Specialità: Wiener Schnitzel. Si paga anche con carta."
+        }
+      ]
+    },
+    {
+      "date": "2027-04-17",
+      "title": "Schönbrunn e Musikverein",
+      "stops": [
+        {
+          "ref": "d2-schoenbrunn",
+          "title": "Castello di Schönbrunn, Grand Tour",
+          "kind": "activity",
+          "start_time": "09:30",
+          "duration_min": 150,
+          "location_name": "Schloss Schönbrunn",
+          "address": "Schönbrunner Schloßstraße 47, 1130 Wien",
+          "lat": 48.1849,
+          "lon": 16.3122,
+          "url": "https://www.schoenbrunn.at/"
+        },
+        {
+          "ref": "d2-lunch",
+          "title": "Pranzo al Naschmarkt",
+          "kind": "meal",
+          "start_time": "13:00",
+          "location_name": "Naschmarkt"
+        },
+        {
+          "ref": "d2-rest",
+          "title": "Pomeriggio libero",
+          "kind": "rest"
+        },
+        {
+          "ref": "d2-concert",
+          "title": "Concerto al Musikverein",
+          "kind": "activity",
+          "start_time": "19:30",
+          "duration_min": 120,
+          "location_name": "Wiener Musikverein",
+          "address": "Musikvereinsplatz 1, 1010 Wien",
+          "lat": 48.2006,
+          "lon": 16.3725
+        }
+      ]
+    },
+    {
+      "date": "2027-04-18",
+      "title": "Belvedere e rientro",
+      "stops": [
+        {
+          "ref": "d3-belvedere",
+          "title": "Il Bacio di Klimt al Belvedere Superiore",
+          "kind": "activity",
+          "start_time": "10:00",
+          "duration_min": 120,
+          "location_name": "Oberes Belvedere",
+          "address": "Prinz-Eugen-Straße 27, 1030 Wien",
+          "lat": 48.1915,
+          "lon": 16.3809
+        },
+        {
+          "ref": "d3-flight",
+          "title": "Volo Vienna → Milano Malpensa",
+          "kind": "transfer",
+          "start_time": "18:20",
+          "duration_min": 95,
+          "location_name": "Flughafen Wien"
+        }
+      ]
+    }
+  ],
+  "bookings": [
+    {
+      "title": "Voli Milano Malpensa ⇄ Vienna",
+      "kind": "transport",
+      "vendor": "Austrian Airlines",
+      "book_by": "2027-03-01T23:59:00+01:00",
+      "book_by_reason": "La tariffa Light di andata e ritorno sale dopo l'inizio di marzo",
+      "scheduled_for": "2027-04-16T07:10:00+02:00",
+      "link": "https://www.expedia.it/Flights-Search?trip=roundtrip&leg1=from:MXP,to:VIE,departure:2027-04-16TANYT&leg2=from:VIE,to:MXP,departure:2027-04-18TANYT&passengers=adults:2,children:0,seniors:0,infantinlap:N&options=cabinclass:economy&mode=search",
+      "price": {
+        "amount_cents": 31480,
+        "currency": "EUR",
+        "status": "verified",
+        "source_url": "https://www.expedia.it/Flights-Search?trip=roundtrip&leg1=from:MXP,to:VIE,departure:2027-04-16TANYT",
+        "retrieved_at": "2026-10-12T09:15:00+02:00"
+      },
+      "stop_ref": "d1-flight",
+      "notes": "Andata OS 512 alle 07:10, ritorno OS 517 alle 18:20. Bagaglio a mano da 8 kg incluso."
+    },
+    {
+      "title": "Hotel Am Konzerthaus, 2 notti",
+      "kind": "lodging",
+      "vendor": "Hotel Am Konzerthaus Vienna",
+      "scheduled_for": "2027-04-16T15:00:00+02:00",
+      "link": "https://www.booking.com/searchresults.it.html?ss=Vienna&checkin=2027-04-16&checkout=2027-04-18&group_adults=2&no_rooms=1&selected_currency=EUR",
+      "price": {
+        "amount_cents": 38400,
+        "currency": "EUR",
+        "status": "estimated",
+        "source_url": "https://www.booking.com/searchresults.it.html?ss=Vienna",
+        "retrieved_at": "2026-10-12T09:20:00+02:00"
+      },
+      "stop_ref": "d1-checkin",
+      "notes": "Camera doppia con colazione, cancellazione gratuita fino a 3 giorni prima."
+    },
+    {
+      "title": "Cena al Figlmüller",
+      "kind": "restaurant",
+      "vendor": "Figlmüller Wollzeile",
+      "scheduled_for": "2027-04-16T20:00:00+02:00",
+      "phone": "+43 1 512 6177",
+      "stop_ref": "d1-dinner"
+    },
+    {
+      "title": "Biglietti Schönbrunn Grand Tour",
+      "kind": "ticket",
+      "vendor": "Schloss Schönbrunn",
+      "scheduled_for": "2027-04-17T09:30:00+02:00",
+      "price": {
+        "amount_cents": 5000,
+        "currency": "EUR",
+        "status": "estimated",
+        "source_url": "https://www.schoenbrunn.at/en/plan-your-visit/tickets",
+        "retrieved_at": "2026-10-12T09:40:00+02:00"
+      },
+      "stop_ref": "d2-schoenbrunn"
+    },
+    {
+      "title": "Concerto al Musikverein, 2 posti in platea",
+      "kind": "ticket",
+      "vendor": "Wiener Musikverein",
+      "book_by": "2027-02-15T12:00:00+01:00",
+      "book_by_reason": "I posti in platea per il sabato si esauriscono due mesi prima",
+      "scheduled_for": "2027-04-17T19:30:00+02:00",
+      "link": "https://www.musikverein.at/konzerte",
+      "price": {
+        "amount_cents": 19000,
+        "currency": "EUR",
+        "status": "estimated",
+        "source_url": "https://www.musikverein.at/konzerte",
+        "retrieved_at": "2026-10-12T09:50:00+02:00"
+      },
+      "stop_ref": "d2-concert"
+    }
+  ],
+  "alternatives": [
+    {
+      "title": "Hotel Motto, 2 notti",
+      "kind": "lodging",
+      "vendor": "Hotel Motto",
+      "scheduled_for": "2027-04-16T15:00:00+02:00",
+      "link": "https://www.booking.com/searchresults.it.html?ss=Vienna+Mariahilf",
+      "price": {
+        "amount_cents": 46200,
+        "currency": "EUR",
+        "status": "estimated",
+        "source_url": "https://www.booking.com/searchresults.it.html?ss=Vienna+Mariahilf",
+        "retrieved_at": "2026-10-12T09:22:00+02:00"
+      },
+      "stop_ref": "d1-checkin"
+    }
+  ],
+  "warnings": [
+    "Il prezzo del concerto è stimato dal sito ufficiale: il programma di aprile 2027 non è ancora pubblicato."
+  ],
+  "summary": "Tre giorni a Vienna tra Innere Stadt, Schönbrunn e Belvedere, con un concerto al Musikverein il sabato sera.\nVoli diretti Austrian da Malpensa e hotel a due passi dal Konzerthaus.\nTotale stimato: 1.140 € per due persone."
+}

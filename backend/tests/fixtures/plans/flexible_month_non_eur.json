@@ -1,0 +1,240 @@
+{
+  "title": "Londra, sei notti a maggio",
+  "destination": "Londra, Regno Unito",
+  "timezone": "Europe/London",
+  "start_date": "2027-05-10",
+  "end_date": "2027-05-16",
+  "travelers": 2,
+  "lodging_name": "The Hoxton, Holborn",
+  "lodging_address": "199-206 High Holborn, London WC1V 7BD",
+  "days": [
+    {
+      "date": "2027-05-10",
+      "title": "Arrivo",
+      "stops": [
+        {
+          "ref": "d1-flight",
+          "title": "Volo Milano Linate → London Heathrow",
+          "kind": "transfer",
+          "start_time": "07:05",
+          "duration_min": 125,
+          "location_name": "Aeroporto di Milano Linate",
+          "notes": "Partenza alle 08:05 ora italiana, arrivo alle 09:10 ora di Londra."
+        },
+        {
+          "ref": "d1-express",
+          "title": "Heathrow Express fino a Paddington",
+          "kind": "transfer",
+          "start_time": "10:30",
+          "duration_min": 15,
+          "location_name": "Heathrow Terminal 2 & 3"
+        },
+        {
+          "ref": "d1-checkin",
+          "title": "Check-in al The Hoxton",
+          "kind": "rest",
+          "start_time": "15:00",
+          "location_name": "The Hoxton, Holborn",
+          "address": "199-206 High Holborn, London WC1V 7BD",
+          "lat": 51.5175,
+          "lon": -0.1213
+        }
+      ]
+    },
+    {
+      "date": "2027-05-11",
+      "title": "British Museum e West End",
+      "stops": [
+        {
+          "ref": "d2-museum",
+          "title": "British Museum",
+          "kind": "activity",
+          "start_time": "10:00",
+          "duration_min": 180,
+          "location_name": "British Museum",
+          "address": "Great Russell St, London WC1B 3DG",
+          "lat": 51.5194,
+          "lon": -0.127,
+          "url": "https://www.britishmuseum.org/"
+        },
+        {
+          "ref": "d2-show",
+          "title": "Musical nel West End",
+          "kind": "activity",
+          "start_time": "19:30",
+          "duration_min": 165,
+          "location_name": "Her Majesty's Theatre"
+        }
+      ]
+    },
+    {
+      "date": "2027-05-12",
+      "title": "Harry Potter Studio Tour",
+      "stops": [
+        {
+          "ref": "d3-studio",
+          "title": "Warner Bros. Studio Tour London",
+          "kind": "activity",
+          "start_time": "10:00",
+          "duration_min": 240,
+          "location_name": "Warner Bros. Studio Tour London",
+          "address": "Studio Tour Dr, Leavesden WD25 7LR",
+          "lat": 51.6904
+        }
+      ]
+    },
+    {
+      "date": "2027-05-13",
+      "stops": [
+        {
+          "ref": "d4-market",
+          "title": "Borough Market",
+          "kind": "meal",
+          "start_time": "12:30",
+          "location_name": "Borough Market"
+        },
+        {
+          "ref": "d4-dinner",
+          "title": "Cena da Dishoom Covent Garden",
+          "kind": "meal",
+          "start_time": "19:30",
+          "location_name": "Dishoom Covent Garden",
+          "address": "12 Upper St Martin's Ln, London WC2H 9FB"
+        }
+      ]
+    },
+    {
+      "date": "2027-05-16",
+      "title": "Rientro",
+      "stops": [
+        {
+          "ref": "d7-flight",
+          "title": "Volo London Heathrow → Milano Linate",
+          "kind": "transfer",
+          "start_time": "17:40",
+          "duration_min": 110,
+          "location_name": "Heathrow Terminal 2"
+        }
+      ]
+    }
+  ],
+  "bookings": [
+    {
+      "title": "Voli Milano Linate ⇄ London Heathrow",
+      "kind": "transport",
+      "vendor": "British Airways",
+      "book_by": "2027-02-28T23:59:00+00:00",
+      "book_by_reason": "Tariffa trovata da Kiwi.com: per maggio i prezzi salgono da marzo",
+      "scheduled_for": "2027-05-10T08:05:00+02:00",
+      "link": "https://www.kiwi.com/en/booking?token=EXAMPLE-TOKEN-LIN-LHR-20270510",
+      "price": {
+        "amount_cents": 41200,
+        "currency": "EUR",
+        "status": "verified",
+        "source_url": "https://www.kiwi.com/en/booking?token=EXAMPLE-TOKEN-LIN-LHR-20270510",
+        "retrieved_at": "2026-10-12T08:00:00+02:00"
+      },
+      "stop_ref": "d1-flight"
+    },
+    {
+      "title": "Heathrow Express, 2 biglietti",
+      "kind": "transport",
+      "vendor": "Heathrow Express",
+      "scheduled_for": "2027-05-10T10:30:00+01:00",
+      "link": "https://www.heathrowexpress.com/",
+      "price": {
+        "amount_cents": 5000,
+        "currency": "GBP",
+        "status": "estimated",
+        "source_url": "https://www.heathrowexpress.com/tickets",
+        "retrieved_at": "2026-10-12T09:00:00+02:00"
+      },
+      "stop_ref": "d1-express"
+    },
+    {
+      "title": "The Hoxton Holborn, 6 notti",
+      "kind": "lodging",
+      "vendor": "The Hoxton, Holborn",
+      "scheduled_for": "2027-05-10T15:00:00+01:00",
+      "link": "https://www.lastminute.com/hotels/london/the-hoxton-holborn?checkin=2027-05-10&checkout=2027-05-16&adults=2",
+      "price": {
+        "amount_cents": 98000,
+        "currency": "GBP",
+        "status": "verified",
+        "source_url": "https://www.lastminute.com/hotels/london/the-hoxton-holborn",
+        "retrieved_at": "2026-10-12T09:30:00+02:00"
+      },
+      "stop_ref": "d1-checkin",
+      "notes": "Camera Roomy con colazione leggera; tassa di soggiorno non prevista a Londra."
+    },
+    {
+      "title": "Biglietti per il musical",
+      "kind": "ticket",
+      "vendor": "Her Majesty's Theatre",
+      "book_by": "2027-03-31T23:59:00+01:00",
+      "book_by_reason": "I posti centrali in platea per il martedì si esauriscono un mese e mezzo prima",
+      "scheduled_for": "2027-05-11T19:30:00+01:00",
+      "link": "https://www.londontheatre.co.uk/",
+      "price": {
+        "amount_cents": 15000,
+        "currency": "GBP",
+        "status": "estimated",
+        "source_url": "https://www.londontheatre.co.uk/",
+        "retrieved_at": "2026-10-11T23:30:00+00:00"
+      },
+      "stop_ref": "d2-show"
+    },
+    {
+      "title": "Warner Bros. Studio Tour, ingresso delle 10:00",
+      "kind": "activity",
+      "vendor": "Warner Bros. Studio Tour London",
+      "scheduled_for": "2027-05-12T10:00:00+01:00",
+      "price": {
+        "amount_cents": 11000,
+        "currency": "GBP",
+        "status": "estimated",
+        "source_url": "https://www.wbstudiotour.co.uk/tickets",
+        "retrieved_at": "2026-10-11T20:00:00+02:00"
+      },
+      "stop_ref": "d3-studio"
+    },
+    {
+      "title": "Cena da Dishoom",
+      "kind": "restaurant",
+      "vendor": "Dishoom Covent Garden",
+      "scheduled_for": "2027-05-13T19:30:00+01:00",
+      "stop_ref": "d4-dinner",
+      "notes": "Prenotazione solo per gruppi oltre 6 persone: in due si fa la coda, meglio prima delle 18."
+    },
+    {
+      "title": "eSIM dati Regno Unito, 7 giorni",
+      "kind": "other",
+      "price": {
+        "amount_cents": 1900,
+        "currency": "USD",
+        "status": "estimated",
+        "source_url": "https://www.airalo.com/united-kingdom-esim",
+        "retrieved_at": "2026-10-12T09:45:00+02:00"
+      }
+    }
+  ],
+  "alternatives": [
+    {
+      "title": "Premier Inn London Holborn, 6 notti",
+      "kind": "lodging",
+      "scheduled_for": "2027-05-10T15:00:00+01:00",
+      "price": {
+        "amount_cents": 72000,
+        "currency": "GBP",
+        "status": "verified",
+        "source_url": "https://www.lastminute.com/hotels/london/premier-inn-holborn",
+        "retrieved_at": "2026-10-12T09:31:00+02:00"
+      }
+    }
+  ],
+  "warnings": [
+    "Hai chiesto date flessibili a maggio: ho scelto dal 10 al 16 maggio, la settimana con i voli più economici.",
+    "I prezzi in sterline e dollari sono convertiti in euro al cambio del giorno in cui sono stati letti."
+  ],
+  "summary": "Sei notti a Londra a maggio, scelte nella settimana con i voli più economici.\nBritish Museum, un musical nel West End e lo Studio Tour di Harry Potter.\nTotale stimato: circa 2.000 € per due persone."
+}

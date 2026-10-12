@@ -1,0 +1,39 @@
+{
+  "resultsInfo": {
+    "totalRecords": 3,
+    "timezoneReference": "Dates refer to the Central European Time Zone",
+    "notice": "DISCLAIMER: The exchange rates posted on the foreign exchange rates portal are not provided in real time and there is a lag between the time they are recorded and the time they are published on the portal. Except for the cases provided for by Italian law, the exchange rates are only indicative and are not intended to be used as a financial benchmark under Regulation (EU) 2016/1011. Banca d’Italia is not responsible for any use of the exchange rates for purposes other than those provided for by Italian law and liability for any such use rests solely with the users.Exchange rates for the major currencies vis-à-vis the euro are compiled based on a daily concertation procedure with the other ESCB central banks.In the event of changes in the currency systems, Banca d’Italia will update the exchange rates with effect from the date on which they are recorded and verified, and will provide the pertinent information in the ‘Notices’ section. Banca d’Italia accepts no responsibility for any inaccuracy or error caused for whatever reason.It is recommended that you refer to the ‘Notices’ section before consulting the exchange rates."
+  },
+  "rates": [
+    {
+      "country": "SWITZERLAND",
+      "currency": "Swiss Franc",
+      "isoCode": "CHF",
+      "uicCode": "003",
+      "avgRate": "0.9313",
+      "exchangeConvention": "Foreign currency amount for 1 Euro.",
+      "exchangeConventionCode": "C",
+      "referenceDate": "2026-10-09"
+    },
+    {
+      "country": "UNITED KINGDOM",
+      "currency": "Pound Sterling",
+      "isoCode": "GBP",
+      "uicCode": "002",
+      "avgRate": "0.84763",
+      "exchangeConvention": "Foreign currency amount for 1 Euro.",
+      "exchangeConventionCode": "C",
+      "referenceDate": "2026-10-09"
+    },
+    {
+      "country": "UNITED STATES",
+      "currency": "U.S. Dollar",
+      "isoCode": "USD",
+      "uicCode": "001",
+      "avgRate": "1.1206",
+      "exchangeConvention": "Foreign currency amount for 1 Euro.",
+      "exchangeConventionCode": "C",
+      "referenceDate": "2026-10-09"
+    }
+  ]
+}

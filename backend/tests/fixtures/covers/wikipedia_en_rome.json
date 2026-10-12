@@ -1,0 +1,32 @@
+{
+  "batchcomplete": true,
+  "query": {
+    "redirects": [
+      {
+        "from": "Roma, Italia",
+        "to": "Rome"
+      }
+    ],
+    "pages": [
+      {
+        "pageid": 25458,
+        "ns": 0,
+        "title": "Rome",
+        "original": {
+          "source": "https://upload.wikimedia.org/wikipedia/commons/7/7e/Trevi_Fountain%2C_Rome%2C_Italy_2_-_May_2007.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=original",
+          "width": 3500,
+          "height": 2325
+        },
+        "pageimage": "Trevi_Fountain,_Rome,_Italy_2_-_May_2007.jpg"
+      },
+      {
+        "pageid": 39602,
+        "ns": 0,
+        "title": "Roma",
+        "pageprops": {
+          "disambiguation": ""
+        }
+      }
+    ]
+  }
+}

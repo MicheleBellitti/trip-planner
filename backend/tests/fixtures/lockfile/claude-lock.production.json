@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "origin": {
+    "base_url": "https://api.anthropic.com",
+    "organization_id": "org_fixture",
+    "workspace_id": "wrkspc_production_fixture"
+  },
+  "resources": {
+    "../profiles/production/agents/activities.md": {
+      "kind": "agent",
+      "id": "agent_proactivities02",
+      "version": "2",
+      "hash": "601ea8d8bc0de6f18bb4f1af89b478dc",
+      "remote_hash": "845372cabd93e395a296dd68a43e47ca"
+    },
+    "../profiles/production/agents/coordinator.md": {
+      "kind": "agent",
+      "id": "agent_procoordinator02",
+      "version": "4",
+      "hash": "cb4c1998871f7a2f2efc3e7d9a809079",
+      "remote_hash": "3939a3ffc8674b41f7d80143ea247d2c"
+    },
+    "../profiles/production/agents/flights.md": {
+      "kind": "agent",
+      "id": "agent_proflights02",
+      "version": "2",
+      "hash": "e2a0dff750b782767d1c2cdd5c7e0304",
+      "remote_hash": "a0090fa8ac561ba30bc15ab8d225383a"
+    },
+    "../profiles/production/agents/lodging.md": {
+      "kind": "agent",
+      "id": "agent_prolodging02",
+      "version": "2",
+      "hash": "553531a964e67db6d83ec4eb43f0b41d",
+      "remote_hash": "00e384d3028d3f8b33eb5245c191f0fd"
+    },
+    "../profiles/production/agents/transport.md": {
+      "kind": "agent",
+      "id": "agent_protransport02",
+      "version": "2",
+      "hash": "9ed5115ebb91f5e73f5c6fbda477af7c",
+      "remote_hash": "a4ee0ef5548d2812bbe4698ea5807fc8"
+    },
+    "../profiles/production/environments/cloud.yaml": {
+      "kind": "environment",
+      "id": "env_procloud02",
+      "hash": "e016f54619734911bfe4bd2b2145075b",
+      "remote_hash": "a481e8a949a1f0b38989050add08328d"
+    },
+    "../skills/booking-links": {
+      "kind": "skill",
+      "id": "skill_bookinglinks01",
+      "version": "1759178010641129",
+      "hash": "f73389d6e1bb41ed8c44aafd4f4e2afe"
+    },
+    "../skills/travel-research-rules": {
+      "kind": "skill",
+      "id": "skill_travelresearchrules01",
+      "version": "1759178011902217",
+      "hash": "ac2fa3a9809ad0dfe91531baadd39daa"
+    },
+    "../skills/trip-tracker-schema": {
+      "kind": "skill",
+      "id": "skill_triptrackerschema01",
+      "version": "1759178013377450",
+      "hash": "989a33e96237a6f06bdd98c3635da6f3"
+    }
+  }
+}

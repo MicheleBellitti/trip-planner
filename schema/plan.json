@@ -1,0 +1,484 @@
+{
+  "$defs": {
+    "PlanBooking": {
+      "additionalProperties": false,
+      "description": "Something the user has to book, with two separate dates: when to book it (`book_by`)\nand when it happens (`scheduled_for`).",
+      "properties": {
+        "book_by": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Deadline to book ('Prenota entro'): ISO 8601 with UTC offset in the trip's time zone, e.g. 2026-11-07T18:00:00+01:00. Must be strictly before scheduled_for and not in the past; never copy scheduled_for here. Null lets the backend derive it from scheduled_for minus TripTracker's default lead time for this kind."
+        },
+        "book_by_reason": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Why this deadline, one line in Italian, e.g. 'Tariffa rimborsabile fino al 7 novembre' or 'I posti finiscono presto nel weekend'."
+        },
+        "kind": {
+          "description": "Kind of booking (TripTracker's booking kinds).",
+          "enum": [
+            "restaurant",
+            "wellness",
+            "ticket",
+            "parking",
+            "transport",
+            "lodging",
+            "activity",
+            "other"
+          ],
+          "type": "string"
+        },
+        "link": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Booking URL exactly as returned by an MCP, or as printed by build_link.py. Never write or edit a URL by hand."
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Practical notes in Italian: fare conditions, what is included."
+        },
+        "phone": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Phone number to book, with country code."
+        },
+        "price": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Price"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Price of this booking, if known."
+        },
+        "scheduled_for": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "When the booked thing happens ('Quando'): ISO 8601 with UTC offset in the trip's time zone, e.g. 2026-11-14T07:05:00+01:00 for a departure."
+        },
+        "stop_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ref of the stop this booking belongs to (e.g. the dinner stop of a restaurant booking). Must match a stop ref in days; null if none."
+        },
+        "title": {
+          "description": "What to book, in Italian, e.g. 'Volo Milano Malpensa → Lisbona'.",
+          "maxLength": 120,
+          "minLength": 1,
+          "type": "string"
+        },
+        "vendor": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Who sells it: airline, hotel, restaurant, operator, e.g. 'TAP Air Portugal'."
+        }
+      },
+      "required": [
+        "title",
+        "kind"
+      ],
+      "title": "PlanBooking",
+      "type": "object"
+    },
+    "PlanDay": {
+      "additionalProperties": false,
+      "description": "One calendar day of the trip and its stops.",
+      "properties": {
+        "date": {
+          "description": "The day, YYYY-MM-DD, between start_date and end_date. At most one entry per date; dates without stops may be omitted (TripTracker gets an empty day for them).",
+          "format": "date",
+          "type": "string"
+        },
+        "stops": {
+          "description": "The day's stops, in the order they happen.",
+          "items": {
+            "$ref": "#/$defs/PlanStop"
+          },
+          "type": "array"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Theme of the day in Italian, e.g. 'Arrivo e Alfama'."
+        }
+      },
+      "required": [
+        "date",
+        "stops"
+      ],
+      "title": "PlanDay",
+      "type": "object"
+    },
+    "PlanStop": {
+      "additionalProperties": false,
+      "description": "One stop of a day, in TripTracker's terms: something that happens at a place.",
+      "properties": {
+        "address": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Street address as the source writes it."
+        },
+        "duration_min": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 10080,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Expected duration in minutes."
+        },
+        "kind": {
+          "description": "activity: something to do or see; meal: breakfast, lunch or dinner; transfer: moving between places (flight, train, taxi, walk); rest: free time.",
+          "enum": [
+            "activity",
+            "meal",
+            "transfer",
+            "rest"
+          ],
+          "type": "string"
+        },
+        "lat": {
+          "anyOf": [
+            {
+              "maximum": 90,
+              "minimum": -90,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Latitude in decimal degrees (WGS 84). Coordinates are kept only in pairs."
+        },
+        "location_name": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Name of the place as the source writes it, e.g. 'Time Out Market'."
+        },
+        "lon": {
+          "anyOf": [
+            {
+              "maximum": 180,
+              "minimum": -180,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Longitude in decimal degrees (WGS 84). Coordinates are kept only in pairs."
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Practical notes for the user, in Italian."
+        },
+        "ref": {
+          "description": "Local key of this stop, unique across the whole plan (e.g. 'd1-s2'). PlanBooking.stop_ref points here. Not shown to the user.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "start_time": {
+          "anyOf": [
+            {
+              "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Local start time HH:MM (24h, trip time zone), e.g. '09:30'; null if open."
+        },
+        "title": {
+          "description": "Short title in Italian, e.g. 'Visita al Mosteiro dos Jerónimos'.",
+          "maxLength": 120,
+          "minLength": 1,
+          "type": "string"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Informational page about the place (official site, map): an absolute https:// URL. Booking links go in PlanBooking.link instead."
+        }
+      },
+      "required": [
+        "ref",
+        "title",
+        "kind"
+      ],
+      "title": "PlanStop",
+      "type": "object"
+    },
+    "Price": {
+      "additionalProperties": false,
+      "description": "A price with its provenance. Every price says where it was read and when.",
+      "properties": {
+        "amount_cents": {
+          "description": "Total amount times 100, as an integer, for the whole party: 12.50 EUR is 1250, 3000 JPY is 300000. The backend converts non-EUR amounts to euro.",
+          "maximum": 100000000000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "currency": {
+          "description": "ISO 4217 currency code in upper case, e.g. EUR, USD, GBP.",
+          "pattern": "^[A-Z]{3}$",
+          "type": "string"
+        },
+        "retrieved_at": {
+          "description": "When the price was read: ISO 8601 with UTC offset, e.g. 2026-10-12T15:04:00+02:00.",
+          "format": "date-time",
+          "type": "string"
+        },
+        "source_url": {
+          "description": "Where the price was read: the MCP offer link or the web page URL.",
+          "format": "uri",
+          "maxLength": 2000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "status": {
+          "description": "'verified' only when the price comes from an MCP response (Expedia, Kiwi, lastminute.com); a price read on a web page or estimated is 'estimated'.",
+          "enum": [
+            "verified",
+            "estimated"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "amount_cents",
+        "currency",
+        "status",
+        "source_url",
+        "retrieved_at"
+      ],
+      "title": "Price",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The final trip plan, the input of submit_plan. Call submit_plan once, when research is\ncomplete. Text the user reads (titles, notes, summary, warnings) is in Italian; proper\nnames and addresses stay as the source writes them. Instants always carry a UTC offset,\ndates are YYYY-MM-DD and local times HH:MM.",
+  "properties": {
+    "alternatives": {
+      "description": "Valid options that were not chosen (another flight, another hotel), shown in the planner only; they do not go to TripTracker.",
+      "items": {
+        "$ref": "#/$defs/PlanBooking"
+      },
+      "type": "array"
+    },
+    "bookings": {
+      "description": "Everything the user has to book for the chosen plan.",
+      "items": {
+        "$ref": "#/$defs/PlanBooking"
+      },
+      "type": "array"
+    },
+    "days": {
+      "description": "The itinerary, one entry per date with stops.",
+      "items": {
+        "$ref": "#/$defs/PlanDay"
+      },
+      "maxItems": 120,
+      "type": "array"
+    },
+    "destination": {
+      "description": "Main destination as the user reads it, e.g. 'Lisbona, Portogallo'.",
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string"
+    },
+    "end_date": {
+      "description": "Last day of the trip, YYYY-MM-DD, on or after start_date; the trip spans at most 120 days.",
+      "format": "date",
+      "type": "string"
+    },
+    "lodging_address": {
+      "anyOf": [
+        {
+          "maxLength": 300,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Street address of the main lodging."
+    },
+    "lodging_name": {
+      "anyOf": [
+        {
+          "maxLength": 200,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Name of the main lodging (the trip's base in TripTracker)."
+    },
+    "start_date": {
+      "description": "First day of the trip, YYYY-MM-DD.",
+      "format": "date",
+      "type": "string"
+    },
+    "summary": {
+      "description": "Three-line summary of the plan in Italian, with the estimated total cost.",
+      "maxLength": 4000,
+      "minLength": 1,
+      "type": "string"
+    },
+    "timezone": {
+      "description": "IANA time zone of the destination, e.g. 'Europe/Lisbon'.",
+      "type": "string"
+    },
+    "title": {
+      "description": "Trip title in Italian, e.g. 'Lisbona, weekend lungo di novembre'.",
+      "maxLength": 120,
+      "minLength": 1,
+      "type": "string"
+    },
+    "travelers": {
+      "description": "Number of people travelling, children included.",
+      "exclusiveMinimum": 0,
+      "type": "integer"
+    },
+    "warnings": {
+      "description": "One line each, in Italian: sources that failed, prices that are only estimated, a total over budget, risks the user should know about.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "title",
+    "destination",
+    "timezone",
+    "start_date",
+    "end_date",
+    "travelers",
+    "days",
+    "bookings",
+    "summary"
+  ],
+  "title": "Plan",
+  "type": "object"
+}
