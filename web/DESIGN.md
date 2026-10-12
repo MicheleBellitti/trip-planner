@@ -328,7 +328,8 @@ it decides by itself (the caller cannot force it).
 
 **The One Hue Per Line Rule.** A line colour identifies its agent and nothing else: no line
 colour for status, success, links or emphasis. The five hues avoid orange and yellow so they can
-never be mistaken for the deadline.
+never be mistaken for the deadline. One exception, named: on a finished plan's itinerary (the map
+and the day list) the five hues tell days apart, always beside the day's number (Map).
 
 **The Word Beside The Colour Rule.** No state is carried by colour alone. Lane states are a word
 and a glyph, errors have a cross and a sentence, a due deadline says "In scadenza", the live tool
@@ -450,7 +451,16 @@ layout, not a stretched phone.
   by deadline, one 44 px row each (roundel, underlined title, "entro ven 26 feb"), each a link to
   its row below, with "N in scadenza" in ink when some are due within 72 hours (amber stays
   inside `DatePair`); the warnings; then days as a vertical sequence of stops (never a grid of
-  cards); then bookings as rows **in the same urgency order as the strip** (`roundel | title,
+  cards), **drawn as the trip's line map** (`itinerary.tsx`): each day is its own 5 px line (the
+  lanes' width) in the hue the map gives that day, dashed from the sixth day as on the map; its
+  head is a day badge, a disc in that hue with the day's number in `on-line` (28 px on the phone,
+  32 px from 1280 px, a 3 px `ground` ring so it sits on the line), beside the caption ("Giorno 1,
+  mer 14 apr") and the day's name at headline size; its stops are 13 px rings, 3 px in the day's
+  hue on `ground`. On the phone the days join into one line that changes hue at each badge, like a
+  line changing at an interchange, and so it stays up to 1279 px; from 1280 px each day is a
+  timetable row with its own line (from 1080 px the right cell leaves the list about 600 px, too
+  narrow for a day column beside the stops). The
+  number on the badge is also in the caption, so the hue never carries the day alone; then bookings as rows **in the same urgency order as the strip** (`roundel | title,
   price, source | DatePair | "Prenota su"`; on desktop `1.3fr 1.4fr 240px`, the action column
   left-aligned with full-width buttons; the itinerary keeps the agent's order); discarded
   alternatives in a closed section per kind; the run's timeline closed at the very end. **From
@@ -774,7 +784,9 @@ day-by-day list stays the primary content and says everything the map does.
   get the ordered list). Below zoom 12 the rings are too close to hold a figure and stay plain. A day is a
   line hue in a fixed order: **Giorno 1 blue, 2 green, 3 violet, 4 teal, 5 slate** (`line-flights`,
   `line-lodging`, `line-activities`, `line-transport`, `line-coordinator`), then again from the
-  sixth day with the line **dashed** (so two days of one hue stay distinct). This is the one place
+  sixth day with the line **dashed** (so two days of one hue stay distinct). The day list draws
+  each day in the same hue (its line, stations and badge, Layout, "The finished plan"), so a day is
+  one line on the map and in the list. The itinerary, map and list, is the one place
   line hues stand for something other than an agent (a day, not a status): it extends The One Hue
   Per Line Rule on purpose, because five hues is all the system has and the legend names every
   one ("Giorno 3"), so no meaning rests on colour alone. Amber never appears on the map.
