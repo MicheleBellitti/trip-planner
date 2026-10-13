@@ -1,6 +1,6 @@
 # Coordinates: geocode.py
 
-Read this only if you have bash and an option needs `lat` and `lon` that neither the MCP
+Read this only if an option needs `lat` and `lon` that neither the MCP
 response nor the source page gave. One query per place, never a loop over guesses.
 
 ```
@@ -15,8 +15,7 @@ $ python3 <skill_dir>/geocode.py "Castelo de São Jorge, Lisbon"
 - Check that the `label` is the place you meant before copying `lat` and `lon`.
 - Exit 1: no match (rephrase once); exit 2: bad input or Photon unreachable.
 
-Without bash (activities) you cannot geocode: `web_fetch` refuses a URL you build, so never
-compose a Photon or map query. Copy `lat` and `lon` only from a page you fetched or a search
-result that shows the place's own coordinates, in the text or in a map link such as
-`@38.7139,-9.1334` or `mlat=38.7139&mlon=-9.1334`; otherwise leave both `null` and give a
-precise `location_name` (place and city).
+Activities has bash for this script only (it writes its file with `write`): geocode the kept
+options in one command, one call per place, with `--near` the lodging's coordinates, and never
+compose a map URL for `web_fetch`. No match: leave `lat` and `lon` `null` and give a precise
+`location_name` (place and city).

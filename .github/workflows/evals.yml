@@ -1,12 +1,12 @@
 # Evals of the development profile (spec "CI/CD e operatività" and "Eval strutturate"): apply
-# profiles/development to the development workspace, run the five reference requests with
+# profiles/development to the development workspace, run the six reference requests with
 # evals/run.py, compare the run with evals/baseline.json, post the summary on the PR and fail
 # when the comparison blocks. When the development environment has the variable
 # EVALS_INGEST_URL and the secret EVALS_INGEST_TOKEN, the run and its comparison are also sent
 # to Atlas's eval history (evals/upload.py); a failed upload is a warning, never a failure.
 #
-# This SPENDS REAL MONEY in the development workspace: up to five sessions at the 100-cent
-# budget plus at most $1 of judge, so about $6 per run at worst. Drafts are skipped; it runs
+# This SPENDS REAL MONEY in the development workspace: up to six sessions at the 100-cent
+# budget plus at most $1 of judge, so about $7 per run at worst. Drafts are skipped; it runs
 # again when the PR is marked ready for review.
 #
 # Triggers: pull requests that change agents/ (templates), profiles/ (rendered agents),
@@ -189,8 +189,8 @@ jobs:
       LOG_LEVEL: INFO
       GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       # Plans in parallel: the cost is the same, the wall time about one plan (~15 minutes,
-      # 40 at most per plan) instead of five.
-      EVAL_CONCURRENCY: "5"
+      # 40 at most per plan) instead of six.
+      EVAL_CONCURRENCY: "6"
     defaults:
       run:
         working-directory: backend

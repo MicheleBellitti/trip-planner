@@ -297,9 +297,9 @@ def test_worst_case_uses_every_output_token() -> None:
     )
 
 
-def test_full_run_of_five_plans_fits_the_spec_cap() -> None:
-    """Five plans of ~20k input tokens with the default max_tokens fit in 1 $."""
-    assert 5 * judge.worst_case_cents(20_000, judge.JUDGE_MAX_TOKENS) <= judge.JUDGE_CAP_CENTS
+def test_full_run_of_six_plans_fits_the_spec_cap() -> None:
+    """Six plans of ~20k input tokens with the default max_tokens fit in 1 $."""
+    assert 6 * judge.worst_case_cents(20_000, judge.JUDGE_MAX_TOKENS) <= judge.JUDGE_CAP_CENTS
 
 
 # --- the real client: the backend's credential rule ---------------------------------------------

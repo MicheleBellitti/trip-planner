@@ -35,7 +35,7 @@ on:
         type: boolean
         default: false
       production_evals:
-        description: "After the apply, run the five eval requests on the production profile (spec day 4 final check; up to about $21)"
+        description: "After the apply, run the six eval requests on the production profile (spec day 4 final check; up to about $25)"
         type: boolean
         default: false
 
@@ -256,7 +256,7 @@ jobs:
       DATABASE_URL: postgresql://trip_planner:trip_planner@localhost:5432/trip_planner_evals
       LOG_LEVEL: INFO
       GIT_SHA: ${{ github.sha }}
-      EVAL_CONCURRENCY: "5"
+      EVAL_CONCURRENCY: "6"
     defaults:
       run:
         working-directory: backend

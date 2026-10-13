@@ -54,8 +54,8 @@ COMPARISON_KIND = "trip-planner-eval-comparison"
 COMPARISON_FORMAT = 1
 
 MAX_INGEST_BYTES = 5 * 1024 * 1024
-"""Largest `POST /evals/runs` body (and `import-evals` file): the five reference requests with
-their plans and Trips are about 35 KB today, so this is generous."""
+"""Largest `POST /evals/runs` body (and `import-evals` file): the six reference requests with
+their plans and Trips are about 40 KB today, so this is generous."""
 MAX_URL_LENGTH = 2000
 """TripTracker's URL cap (LIMITE), reused for the workflow run link."""
 DEFAULT_LIST_LIMIT = 50

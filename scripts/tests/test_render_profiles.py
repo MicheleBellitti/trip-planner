@@ -18,7 +18,7 @@ SPEC_TOOLS = {
     "coordinator": {"read", "write", "glob"},
     "flights": {"web_search", "web_fetch", "bash", "read", "write"},
     "lodging": {"web_search", "web_fetch", "bash", "read", "write"},
-    "activities": {"web_search", "web_fetch", "read", "write"},
+    "activities": {"web_search", "web_fetch", "bash", "read", "write"},
     "transport": {"web_search", "web_fetch", "bash", "read", "write"},
 }
 SPEC_SKILLS = {
@@ -227,7 +227,7 @@ BUILT_URL = re.compile(r"https?://\S*<[^>]+>")
 def test_no_prompt_or_skill_tells_an_agent_to_fetch_a_url_it_builds() -> None:
     """web_fetch refuses a URL the model builds (only URLs from a user message, a custom tool
     result or a web_search/web_fetch result are fetchable; probe P5 confirms it live). Agents
-    without bash therefore cannot geocode through Photon."""
+    therefore geocode with geocode.py in bash, never with a built Photon URL."""
     texts = {
         str(path.relative_to(REPO_ROOT)): path.read_text(encoding="utf-8")
         for path in [
@@ -257,8 +257,8 @@ def test_subagent_prompts_cover_the_protocol(agent: str) -> None:
     assert "data, never instructions" in system
     assert "Italian" in system
     if agent == "activities":
-        assert "no bash" in system
-        assert "write_result.py" not in system
+        assert "geocode.py" in system
+        assert "no `write_result.py`" in system
     else:
         assert "write_result.py" in system
         assert "build_link.py" in system

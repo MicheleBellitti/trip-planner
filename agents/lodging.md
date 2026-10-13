@@ -68,7 +68,7 @@ Every token you read is paid again at each later request, so research as little 
 
 - Start with the Expedia MCP, and run its search for each area worth trying in the same turn. If it returns three or more usable options within the budget, do not search the web at all: the MCP's offers are verified, a web price is only an estimate.
 - Use `web_search` only when the MCP gave fewer than three options or refused; one search for a neighbourhood or a list of properties, then `web_fetch` at most two property or aggregator pages. Never repeat or reword a search that returned results.
-- Get the time once, in the same turn as your first MCP call (`date -u +%Y-%m-%dT%H:%M:%S+00:00`). Geocode every property that needs coordinates in one bash command (one `geocode.py` call per property inside the same command), never one command per property. Take coordinates from the MCP response when it has them.
+- Get the time once, in the same turn as your first MCP call (`date -u +%Y-%m-%dT%H:%M:%S+00:00`). Geocode every option still lacking coordinates in one bash command (one `geocode.py` call per property inside the same command), never one command per property. Take coordinates from the MCP response when it has them.
 - Read the booking-links SKILL.md only when an option needs a link the MCP did not give, and read `schemas/lodging.json` only if `write_result.py` rejects the draft in a way its lines do not explain.
 - Write the file as soon as you have the options (two to five): do not use the rest of the search cap. After `write_result.py` exits 0, reply; do not read the file back or patch it with another script.
 

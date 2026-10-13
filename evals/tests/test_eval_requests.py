@@ -1,4 +1,4 @@
-"""evals/requests.yaml: five PlanRequests whose dates are relative to the run date (valid on
+"""evals/requests.yaml: six PlanRequests whose dates are relative to the run date (valid on
 any day, trips a few weeks ahead), with consistent expectations and no personal data."""
 
 from __future__ import annotations
@@ -24,9 +24,9 @@ def frozen_at(day: dt.date):
     return lambda: instant
 
 
-def test_five_reference_requests() -> None:
-    assert len(DATASET.cases) == 5
-    assert len(CASES) == 5
+def test_six_reference_requests() -> None:
+    assert len(DATASET.cases) == 6
+    assert len(CASES) == 6
 
 
 def test_the_spec_categories_are_covered() -> None:
@@ -128,6 +128,7 @@ def test_the_dates_resolve_for_the_reference_run_date(monkeypatch: pytest.Monkey
         "suggest-low-budget": {"exact_start": "2026-11-20", "exact_end": "2026-11-22"},
         "train-trip-florence": {"exact_start": "2026-12-04", "exact_end": "2026-12-08"},
         "flexible-dates-budapest": {"month": "2026-12", "nights": 4},
+        "suggest-direct-flight-solo": {"exact_start": "2026-12-04", "exact_end": "2026-12-08"},
     }
 
 

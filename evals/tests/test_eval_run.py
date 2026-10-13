@@ -161,8 +161,8 @@ def test_a_run_date_in_the_past_is_refused(
 
 
 def test_spending_ceiling() -> None:
-    assert run.spending_ceiling_cents(5, "development", judge_cap_cents=100) == 600
-    assert run.spending_ceiling_cents(5, "production", judge_cap_cents=100) == 2100
+    assert run.spending_ceiling_cents(6, "development", judge_cap_cents=100) == 700
+    assert run.spending_ceiling_cents(6, "production", judge_cap_cents=100) == 2500
 
 
 # --- database and files -------------------------------------------------------------------------

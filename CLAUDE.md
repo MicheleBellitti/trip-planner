@@ -176,9 +176,9 @@ uv run python ../scripts/probe_session.py --dry-run                      # probe
 Web, from `web/`: `npm ci`, `npm run dev`, `npm run lint`, `npm run typecheck` (`tsc --noEmit`),
 `npm test` (vitest), `npm run build`, `npm run gen:schemas` (`-- --check` in CI).
 
-Evals, from `backend/`: `uv run python ../evals/run.py --dry-run` validates the five reference
+Evals, from `backend/`: `uv run python ../evals/run.py --dry-run` validates the six reference
 requests and prints the spending ceiling for free. `uv run python ../evals/run.py` runs them on
-the development profile (at most $1 for the judge per run, $6 in all) and spends real money: run
+the development profile (at most $1 for the judge per run, $7 in all) and spends real money: run
 it only when asked. `uv run python ../evals/compare.py ../evals/results/<file>.json` checks a
 run against `evals/baseline.json`, which changes only through an explicit commit
 (`--update-baseline`). Details in evals/README.md.

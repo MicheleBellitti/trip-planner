@@ -1,7 +1,7 @@
 # Evals
 
 Every change to a prompt, a skill or a model goes through these evals before it reaches
-production (spec: "Eval sui piani", "Eval strutturate e versioning dei prompt"). Five
+production (spec: "Eval sui piani", "Eval strutturate e versioning dei prompt"). Six
 reference requests run through the real backend, each plan gets deterministic checks and an
 LLM judge, and the run is compared with a committed baseline.
 
@@ -10,7 +10,7 @@ PR. The tests in `evals/tests/` are offline and free.
 
 | File | What it is |
 |---|---|
-| `requests.yaml` | The dataset: five `PlanRequest`s with expected constraints and tags |
+| `requests.yaml` | The dataset: six `PlanRequest`s with expected constraints and tags |
 | `checks.py` | Deterministic checks: pure functions over (request, plan, trip, metadata) |
 | `rubric.md` | The judge's rubric (its system prompt), five criteria scored 1 to 5 |
 | `judge.py` | The LLM judge: `claude-sonnet-5-5`, structured JSON output, $1 cap per run |
@@ -31,7 +31,7 @@ repository root, or by `scripts/bootstrap.py --profile development`):
 cd backend
 uv run python ../evals/run.py --dry-run                 # validate, show the resolved dates and the ceiling: free
 uv run python ../evals/run.py --dry-run --run-date 2026-10-13   # dates as resolved on that day
-uv run python ../evals/run.py                           # all five, development, asks first
+uv run python ../evals/run.py                           # all six, development, asks first
 uv run python ../evals/run.py --tags train,smoke        # requests with any of these tags
 uv run python ../evals/run.py --ids sea-week-family --no-judge
 uv run python ../evals/run.py --yes --concurrency 5     # no prompt, plans in parallel (CI)
@@ -71,8 +71,8 @@ Exit codes of `run.py`: 0 results written (even with failing checks: `compare.py
 
 | Run | Expected (spec estimate) | Ceiling |
 |---|---|---|
-| Development, 5 requests | 5 × ~$0.71 + judge ~$0.25 ≈ **$3.80** | 5 × $1.00 + $1.00 = **$6.00** |
-| Production, 5 requests | 5 × ~$2.50 + judge ~$0.25 ≈ **$13** | 5 × $4.00 + $1.00 = **$21.00** |
+| Development, 6 requests | 6 × ~$0.71 + judge ~$0.30 ≈ **$4.55** | 6 × $1.00 + $1.00 = **$7.00** |
+| Production, 6 requests | 6 × ~$2.50 + judge ~$0.30 ≈ **$15** | 6 × $4.00 + $1.00 = **$25.00** |
 | One request (`--ids`) | ~$0.71 + ~$0.05 | $1.00 + $1.00 |
 
 Sessions stop at their budget (`SESSION_BUDGET_CENTS`: 100 or 400 US cents). The API can
@@ -164,11 +164,11 @@ reason in the message, so the reviewer sees exactly what level was accepted.
 
 ## Coordinator comparison: Opus 5.5 vs Sonnet 5.5 (spec decision 3)
 
-Decision 3: after the first evals, the two production coordinators are compared on the five
+Decision 3: after the first evals, the two production coordinators are compared on the six
 requests. With the same number of valid plans and no more warnings, the production profile
 switches its coordinator to Sonnet 5.5. A valid plan is `ready` with no blocking check
-failure. This is a one-off procedure that costs about two production runs (about $26, ceiling
-$42), so Michele has to agree to it first. It needs the production key, which never sits on
+failure. This is a one-off procedure that costs about two production runs (about $30, ceiling
+$50), so Michele has to agree to it first. It needs the production key, which never sits on
 a developer machine: run steps 1 and 3 in the GitHub `production` environment.
 
 1. **Opus baseline.** Run the production profile as committed:

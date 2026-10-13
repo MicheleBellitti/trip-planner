@@ -11,10 +11,10 @@ as late as possible: every later model request re-reads everything you have read
 
 | When | Read |
 |---|---|
-| Right before writing without bash (activities); with bash only if `write_result.py`'s lines do not explain a rejection | `<skill_dir>/schemas/<agent>.json` |
+| Right before writing without `write_result.py` (activities); with bash only if `write_result.py`'s lines do not explain a rejection | `<skill_dir>/schemas/<agent>.json` |
 | You need a field's exact name or shape | `<skill_dir>/references/option-fields.md` |
 | You need the blackboard rules (writers, versions, atomic writes) | `<skill_dir>/references/blackboard.md` |
-| An option needs `lat` and `lon` no source gave (bash agents) | `<skill_dir>/references/coordinates.md` |
+| An option needs `lat` and `lon` no source gave (bash agents; activities uses bash for geocoding only) | `<skill_dir>/references/coordinates.md` |
 
 ## 1. Sources and search discipline
 
@@ -90,7 +90,7 @@ schema, `lat` and `lon` together or not at all. You are your file's only writer.
    do not read the file back. Exit 1 lists every problem, one line each: fix them all in the
    draft and run it once more. Exit 2: the draft is not valid JSON or names another agent.
 
-**Without bash** (activities): read `schemas/activities.json` once, now. Read the current
+**Without `write_result.py`** (activities; its bash only geocodes): read `schemas/activities.json` once, now. Read the current
 result file if it exists (`version` is its version + 1, otherwise 1), then write the complete
 file in one `write` call straight to `/workspace/results/activities.json`: never a partial
 file, never an append. `updated_at` is today's date from your task at `T00:00:00+00:00`.

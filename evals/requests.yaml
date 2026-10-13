@@ -160,3 +160,26 @@ requests:
         - [terme, termale, bagni, thermal, szechenyi, gellert, furdo, rudas, lukacs]
         - [danubio, duna, danube]
       must_not_book: []
+
+  - id: suggest-direct-flight-solo
+    title: Suggeriscimi tu, volo diretto e paesaggi
+    tags: [suggest, flights, solo, long-weekend]
+    request:
+      origin: Bologna
+      suggest_destination: true
+      destination_idea: Volo diretto, paesaggi mozzafiato facilmente accessibili.
+      dates:
+        exact_start: {in_weeks: 7, weekday: friday}
+        nights: 4
+      travelers:
+        - kind: adult
+      budget_eur: 700
+      preferences: Niente voli prima delle 9, cibo locale sublime.
+    expect:
+      travelers: 1
+      budget_eur: 700
+      destination_any: []
+      must_mention:
+        - [cucina locale, piatti tipici, specialità, ristorante tipico, mercato, guachinche, trattoria, taverna]
+        - [parco, sentiero, belvedere, vulcano, montagna, costa, scogliere, panorama, escursione]
+      must_not_book: []

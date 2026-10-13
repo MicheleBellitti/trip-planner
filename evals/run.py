@@ -1,7 +1,7 @@
 """Run the eval dataset through the real backend, in-process. IT SPENDS REAL MONEY.
 
     cd backend
-    uv run python ../evals/run.py                       # all five requests, development
+    uv run python ../evals/run.py                       # all six requests, development
     uv run python ../evals/run.py --tags train,smoke    # requests with any of these tags
     uv run python ../evals/run.py --ids sea-week-family --no-judge
     uv run python ../evals/run.py --dry-run             # validate and print, spend nothing
