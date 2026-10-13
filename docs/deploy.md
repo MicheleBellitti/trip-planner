@@ -443,11 +443,12 @@ clear error.
    | `TRIP_SCHEMA_URL` | **`file:///app/pinned/trip.schema.json`** until TripTracker serves `/schema/trip.json`, then unset | yes | | the pinned copy `backend/pinned/trip.schema.json` ships in the image (`tests/` doesn't) and equals the test fixture (a backend test checks it); production never falls back on its own: without this setting POST /plans answers 503 until TripTracker serves the schema |
    | `EVALS_INGEST_TOKEN` | a random token ("Eval history" below) | yes | | sealed; optional. Empty (the default) disables `POST /evals/runs` (404); the same value goes in both GitHub environments |
    | `LOG_LEVEL` | `INFO` | yes | yes | |
+   | `WIKIMEDIA_CONTACT_URL` | an https page or `mailto:` where Wikimedia can reach you | yes | | optional; empty = `FRONTEND_ORIGIN` (Wikimedia's User-Agent policy for the cover photos) |
    | `AUTH_MODE`, `LOCKFILE_PATH`, `GIT_SHA` | leave unset | | | `triptracker`; `backend/claude-lock.<AGENT_PROFILE>.json`; Railway sets `RAILWAY_GIT_COMMIT_SHA` |
    | `PORT`, `FORWARDED_ALLOW_IPS` | leave unset | | | Railway injects `PORT`; the image sets `FORWARDED_ALLOW_IPS=*` |
 
    To try the deployed backend on the cheap roster before day 4, set `AGENT_PROFILE=development`,
-   a development key and `SESSION_BUDGET_CENTS=60` (the development lockfile ships in the
+   a development key and `SESSION_BUDGET_CENTS=100` (the development lockfile ships in the
    image too). Switch back before real use.
 6. **Domain**: `backend` > Settings > Networking > Custom domain
    `pianifica.api.bellittim.com`. Railway shows a CNAME target and, if it asks, a TXT
