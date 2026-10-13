@@ -6,61 +6,61 @@
   "resources": {
     "../profiles/development/agents/activities.md": {
       "kind": "agent",
-      "id": "agent_01NaQ9sYvmaopb42W31EhiEw",
-      "version": "3",
-      "hash": "15fe300983593442ba4ac8e065dfbd98",
-      "remote_hash": "34bbcf7564c54359ec036df72f7bcde5"
+      "id": "agent_01Q73JuxL4KCvZ6LyEdkCGz3",
+      "version": "2",
+      "hash": "cceacbe112c06989e322d5b1aca73a4b",
+      "remote_hash": "c251efea49c320b051f8ce40622fc55f"
     },
     "../profiles/development/agents/coordinator.md": {
       "kind": "agent",
-      "id": "agent_01JznpMrk3fnHyBcuf2RCc8i",
-      "version": "4",
-      "hash": "8ea3ff2f6e0a2c750837674d4c1461ac",
-      "remote_hash": "8c0017cea9636140f09a4fbb7d3d7201"
+      "id": "agent_01UvMx7ctxbF2VW51kqqwM7Q",
+      "version": "2",
+      "hash": "3bcc04c9a5220f8b548607bf69c8e00b",
+      "remote_hash": "68a2dece1fcba89dc8202aec9907202a"
     },
     "../profiles/development/agents/flights.md": {
       "kind": "agent",
-      "id": "agent_01JfcnhW1Ao6cdZT4yVpjNMv",
-      "version": "3",
-      "hash": "b6907b7d4c371b91828781d13382cc21",
-      "remote_hash": "c681ab78e914f7ff141adc54d43b07c7"
+      "id": "agent_0165Nkj1DZxvYSuKkgKtGYyz",
+      "version": "2",
+      "hash": "db71653db327e4a9c11736ca406ef2f3",
+      "remote_hash": "692729cd3a0797c9fbd51c25e3479ba3"
     },
     "../profiles/development/agents/lodging.md": {
       "kind": "agent",
-      "id": "agent_014r5YWJg6poR7a86PYWF4Go",
-      "version": "4",
-      "hash": "7b34d70788461a4f047803dd1aaa64d7",
-      "remote_hash": "62823062276a27c9110ab97e124fe92f"
+      "id": "agent_01LeW5bAodscQeU12RJZNPoJ",
+      "version": "2",
+      "hash": "7d01102ac36373f7fc1c7db81da80d60",
+      "remote_hash": "caee92b95db5c59756cf470e242339d0"
     },
     "../profiles/development/agents/transport.md": {
       "kind": "agent",
-      "id": "agent_01TvCecHjHfChmMirz5Dfqew",
-      "version": "4",
-      "hash": "a8319cc1f5b80d4788891ab32f22d3e0",
-      "remote_hash": "1a64901173c798200b40158460914438"
+      "id": "agent_01CzTDNaH8WQTygwnp4QbKpv",
+      "version": "2",
+      "hash": "553c819af9f938f381983c38f54a76ab",
+      "remote_hash": "370bded195033dc2ccbf25a2d358ddac"
     },
     "../profiles/development/environments/cloud.yaml": {
       "kind": "environment",
-      "id": "env_01Gy43EyAD4AwPiA5SrCm7vm",
+      "id": "env_01TwVa7h7UzaoFT67NMQbXpN",
       "hash": "7939e13819bbdd21a161dcbbb8fda53f",
       "remote_hash": "113ad22fa7c16186809b72d742ed775a"
     },
     "../skills/booking-links": {
       "kind": "skill",
-      "id": "skill_01W9ke5J7RYC6DKDFYiY9sHj",
-      "version": "skver_01PP2VUnH4Nt3ma46edsZy1h",
+      "id": "skill_01BaiukdtagJqeyJwHybJfuC",
+      "version": "skver_014qsg26WD2oCLcY41ZD5Sqn",
       "hash": "b78f0c1699c1cb53e4fcd15eb8674313"
     },
     "../skills/travel-research-rules": {
       "kind": "skill",
-      "id": "skill_01Sqw9CZUP8yZqCYd3FtHe6W",
-      "version": "skver_01JtVkBtRfsy3183GgKgoRJu",
+      "id": "skill_01TyL38enZ6SGU8jiHnPG4us",
+      "version": "skver_01UiNHzSiXmDhRMx4Xed8E83",
       "hash": "a98c3a030de1106703e17a9387b98e00"
     },
     "../skills/trip-tracker-schema": {
       "kind": "skill",
-      "id": "skill_012cmKsRcRG9dCo276DzqDmE",
-      "version": "skver_01GEeY5fmXjg8dRAU6beXFHh",
+      "id": "skill_01JAtDdSWgzbq6RC2mkBFj38",
+      "version": "skver_016L82XuZtbkRJuPiPSMMhSA",
       "hash": "ce7bb1c8b6e8e3cb7cd06e37bca3fbe6"
     }
   }
