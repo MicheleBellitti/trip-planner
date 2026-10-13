@@ -14,9 +14,9 @@
     "../profiles/development/agents/coordinator.md": {
       "kind": "agent",
       "id": "agent_01JznpMrk3fnHyBcuf2RCc8i",
-      "version": "2",
-      "hash": "76681c0c2f17a40dbd55a85900965dff",
-      "remote_hash": "725f9ced540a86e56ec5d565879785bd"
+      "version": "3",
+      "hash": "61d7c53f199d9355854ccf317a21407b",
+      "remote_hash": "22e658056adc887d45815f86eaa3e789"
     },
     "../profiles/development/agents/flights.md": {
       "kind": "agent",
@@ -28,16 +28,16 @@
     "../profiles/development/agents/lodging.md": {
       "kind": "agent",
       "id": "agent_014r5YWJg6poR7a86PYWF4Go",
-      "version": "2",
-      "hash": "85a9460f008718c7488ff0a3ad01c945",
-      "remote_hash": "5116e3ad82622d08ddc5bc5e9b81ef15"
+      "version": "3",
+      "hash": "260fdb7a757dee0a2dca46775abc651f",
+      "remote_hash": "718061e4447325763b59daa6a5eb96b0"
     },
     "../profiles/development/agents/transport.md": {
       "kind": "agent",
       "id": "agent_01TvCecHjHfChmMirz5Dfqew",
-      "version": "2",
-      "hash": "8d16b16859a909eb6a57bf8f9312332b",
-      "remote_hash": "640cc0f86eed980c9304513b13bc69c2"
+      "version": "3",
+      "hash": "afa0d5421792234c574e56d6daf69ddf",
+      "remote_hash": "c3f7c46cbd518e3cb65efefcd337ec13"
     },
     "../profiles/development/environments/cloud.yaml": {
       "kind": "environment",
