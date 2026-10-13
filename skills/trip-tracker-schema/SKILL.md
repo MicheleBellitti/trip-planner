@@ -64,8 +64,8 @@ the error reference only if they do not explain it.
 - [ ] Every `book_by` is before its `scheduled_for`, not in the past, or null; never equal.
 - [ ] Every `book_by` and `scheduled_for` has the offset of the trip's zone on its date.
 - [ ] Caps respected (rule 3); prices copied unchanged; booking links only from the sites above.
-- [ ] Warnings cover failures, estimated or foreign-currency prices and any budget overrun
-      (the word "budget", the total and the overrun).
+- [ ] At most 6 short warnings, each changing a decision: estimated prices, any budget overrun
+      (the word "budget", the total and the overrun), booking risks; no tool or error names.
 - [ ] User-facing text in Italian, no personal data.
 
 `Plan accepted.` (or `Plan already accepted.`) means done: end your turn with one short

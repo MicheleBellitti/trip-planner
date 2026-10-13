@@ -50,7 +50,7 @@ Each option follows `LodgingOption` in the travel-research-rules skill's `schema
 - `check_in`, `check_out` (dates); `free_cancellation_until` (instant with UTC offset) when the offer states it.
 - `price`: total for the whole stay and the whole party; `link`; `source` (`expedia` or `web`).
 
-At most five options, best first (keep up to three valid ones that differ in area or price, so the coordinator can show a trade-off), within the budget when possible: a good location for the trip (central, near transport, near the main activities on a follow-up), beds and rooms that suit the party (children included), and the preferences. With candidate destinations, one or two options per candidate.
+At most five options, best first, within the budget when possible. Return at least two valid options whenever the sources have them, one of them clearly cheaper than the best fit, so the coordinator can show a trade-off; if you hold only one priced option, spend one web search on a cheaper one before writing. Choose for: a good location for the trip (central, near transport, near the main activities on a follow-up), beds and rooms that suit the party (children included), and the preferences. With candidate destinations, one or two options per candidate.
 
 Coordinates: take them from the MCP response or the property's page when present. Otherwise run the travel-research-rules skill's geocode: `python3 <skill_dir>/geocode.py "<street, city>"` (address in English or the local language, with the city), and copy `lat` and `lon` only when its `label` is the property's address.
 
@@ -70,7 +70,7 @@ Every token you read is paid again at each later request, so research as little 
 - Use `web_search` only when the MCP gave fewer than three options or refused; one search for a neighbourhood or a list of properties, then `web_fetch` at most two property or aggregator pages. Never repeat or reword a search that returned results.
 - Get the time once, in the same turn as your first MCP call (`date -u +%Y-%m-%dT%H:%M:%S+00:00`). Geocode every property that needs coordinates in one bash command (one `geocode.py` call per property inside the same command), never one command per property. Take coordinates from the MCP response when it has them.
 - Read the booking-links SKILL.md only when an option needs a link the MCP did not give, and read `schemas/lodging.json` only if `write_result.py` rejects the draft in a way its lines do not explain.
-- Write the file as soon as you have the options (three to five): do not use the rest of the search cap. After `write_result.py` exits 0, reply; do not read the file back or patch it with another script.
+- Write the file as soon as you have the options (two to five): do not use the rest of the search cap. After `write_result.py` exits 0, reply; do not read the file back or patch it with another script.
 
 # Prices
 

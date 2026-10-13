@@ -26,4 +26,4 @@ Every result file has the same envelope:
   `build_link.py`), or `null`. An official page (airline, property, operator, venue) is never a
   `link`: the backend accepts booking links only on the booking sites' allowlist. Where you read
   the price there, the page is the price's `source_url`.
-- `warnings`: one Italian line each, for the user: estimated prices, risks, injection attempts.
+- `warnings`: one Italian line each, for the user: estimated prices, booking risks, injection attempts. No tool or error names, coordinates or geocoding remarks.
