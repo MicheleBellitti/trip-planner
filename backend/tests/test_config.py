@@ -385,3 +385,14 @@ def test_the_eval_upload_token_is_read_from_the_environment(
     bare_env.setenv("EVALS_INGEST_TOKEN", "from-env")
 
     assert Settings(_env_file=None).evals_ingest_token.get_secret_value() == "from-env"  # pyright: ignore[reportCallIssue]
+
+
+def test_log_lines_carry_the_event_as_message_for_railway() -> None:
+    """Railway shows a JSON line's `message`: without it every line of ours is blank there."""
+    from app.config import add_message_key
+
+    line = add_message_key(None, "info", {"event": "session_create_failed", "status_code": 404})
+    assert line["message"] == "session_create_failed"
+    assert line["event"] == "session_create_failed"
+    kept = add_message_key(None, "info", {"event": "x", "message": "already set"})
+    assert kept["message"] == "already set"

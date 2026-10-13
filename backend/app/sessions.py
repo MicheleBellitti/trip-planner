@@ -555,7 +555,13 @@ async def _create_and_start(
             title=f"plan {plan_id}",
         )
     except ManagedAgentsError as exc:
-        bound.error("session_create_failed", status_code=exc.status_code, error_type=exc.error_type)
+        # The message is the seam's: call, status, error type and request id, never a body.
+        bound.error(
+            "session_create_failed",
+            status_code=exc.status_code,
+            error_type=exc.error_type,
+            error=str(exc),
+        )
         await _mark_start_failed(services, plan_id)
         raise
     session_id = info.id

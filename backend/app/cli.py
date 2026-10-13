@@ -51,7 +51,7 @@ from pydantic import ValidationError
 
 from app import clock, evals_store, sessions
 from app.auth import CurrentUser
-from app.config import BACKEND_DIR, Settings, add_plan_log_keys, get_settings
+from app.config import BACKEND_DIR, Settings, add_message_key, add_plan_log_keys, get_settings
 from app.consumer import StatusChange, load_events_after, set_plan_status
 from app.db import PlanRecord, PlanStatus, create_engine, create_session_factory
 from app.events import AgentName, EventKind, UIEvent, format_usd
@@ -648,6 +648,7 @@ def _configure_logging() -> None:
             structlog.processors.add_log_level,
             structlog.processors.TimeStamper(fmt="iso", utc=True),
             structlog.processors.format_exc_info,
+            add_message_key,
             structlog.processors.JSONRenderer(),
         ],
         wrapper_class=structlog.make_filtering_bound_logger(logging.WARNING),

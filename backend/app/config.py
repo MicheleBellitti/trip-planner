@@ -57,6 +57,17 @@ def add_plan_log_keys(
     return event_dict
 
 
+def add_message_key(
+    _logger: object, _method_name: str, event_dict: MutableMapping[str, Any]
+) -> MutableMapping[str, Any]:
+    """structlog processor, placed right before the JSON renderer: copies `event` into `message`.
+    Railway reads a JSON log line's text from `message` (or `msg`), so without it every line of
+    ours shows up blank in its log viewer and in exported logs. `event` stays for local tools."""
+    if "message" not in event_dict and "event" in event_dict:
+        event_dict["message"] = event_dict["event"]
+    return event_dict
+
+
 DEFAULT_AGENT_PROFILE: AgentProfile = "development"
 
 DEFAULT_DEMO_PACE = 1.0

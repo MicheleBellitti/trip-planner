@@ -37,7 +37,7 @@ from pydantic import ValidationError
 from sqlalchemy import delete, select
 
 from app import clock, sessions
-from app.config import LogLevel, Settings, add_plan_log_keys, get_settings
+from app.config import LogLevel, Settings, add_message_key, add_plan_log_keys, get_settings
 from app.consumer import EventSink, StatusChange, record_session_cost, set_plan_status
 from app.db import (
     FxRateRecord,
@@ -406,6 +406,7 @@ def _configure_logging(level: LogLevel) -> None:
             structlog.processors.add_log_level,
             structlog.processors.TimeStamper(fmt="iso", utc=True),
             structlog.processors.format_exc_info,
+            add_message_key,
             structlog.processors.JSONRenderer(),
         ],
         wrapper_class=structlog.make_filtering_bound_logger(logging.getLevelNamesMapping()[level]),

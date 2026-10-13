@@ -41,7 +41,7 @@ from starlette.responses import Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app import jobs, routes, sessions
-from app.config import LogLevel, Settings, add_plan_log_keys, get_settings
+from app.config import LogLevel, Settings, add_message_key, add_plan_log_keys, get_settings
 from app.db import create_engine, create_session_factory
 
 log = structlog.get_logger(__name__)
@@ -183,6 +183,7 @@ def configure_logging(level: LogLevel) -> None:
             structlog.processors.TimeStamper(fmt="iso", utc=True),
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
+            add_message_key,
             structlog.processors.JSONRenderer(),
         ],
         wrapper_class=structlog.make_filtering_bound_logger(logging.getLevelNamesMapping()[level]),
