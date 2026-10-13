@@ -7,37 +7,37 @@
     "../profiles/development/agents/activities.md": {
       "kind": "agent",
       "id": "agent_01Q73JuxL4KCvZ6LyEdkCGz3",
-      "version": "2",
-      "hash": "cceacbe112c06989e322d5b1aca73a4b",
-      "remote_hash": "c251efea49c320b051f8ce40622fc55f"
+      "version": "3",
+      "hash": "f711545049e17142a76632507f27c4bd",
+      "remote_hash": "6e03535d4e11babbdf354bbe9976df70"
     },
     "../profiles/development/agents/coordinator.md": {
       "kind": "agent",
       "id": "agent_01UvMx7ctxbF2VW51kqqwM7Q",
-      "version": "2",
-      "hash": "3bcc04c9a5220f8b548607bf69c8e00b",
-      "remote_hash": "68a2dece1fcba89dc8202aec9907202a"
+      "version": "3",
+      "hash": "031bade75946c0908cdabc0951543472",
+      "remote_hash": "e5e53222d01944f286e5fe60336348e7"
     },
     "../profiles/development/agents/flights.md": {
       "kind": "agent",
       "id": "agent_0165Nkj1DZxvYSuKkgKtGYyz",
-      "version": "2",
-      "hash": "db71653db327e4a9c11736ca406ef2f3",
-      "remote_hash": "692729cd3a0797c9fbd51c25e3479ba3"
+      "version": "3",
+      "hash": "5fb6deaf16378030a935be8322c78094",
+      "remote_hash": "995b3dbca5a2d1a3f26349cd5e1615c4"
     },
     "../profiles/development/agents/lodging.md": {
       "kind": "agent",
       "id": "agent_01LeW5bAodscQeU12RJZNPoJ",
-      "version": "2",
-      "hash": "7d01102ac36373f7fc1c7db81da80d60",
-      "remote_hash": "caee92b95db5c59756cf470e242339d0"
+      "version": "3",
+      "hash": "3974a91df433f13220d12ad088bb9155",
+      "remote_hash": "74ba6caa1ed7ae2578835670f55400f5"
     },
     "../profiles/development/agents/transport.md": {
       "kind": "agent",
       "id": "agent_01CzTDNaH8WQTygwnp4QbKpv",
-      "version": "2",
-      "hash": "553c819af9f938f381983c38f54a76ab",
-      "remote_hash": "370bded195033dc2ccbf25a2d358ddac"
+      "version": "3",
+      "hash": "ec09d062a2fe59bfd97657c6857f48b7",
+      "remote_hash": "033c141c9d7fdca809272221629990b3"
     },
     "../profiles/development/environments/cloud.yaml": {
       "kind": "environment",
@@ -54,8 +54,8 @@
     "../skills/travel-research-rules": {
       "kind": "skill",
       "id": "skill_01TyL38enZ6SGU8jiHnPG4us",
-      "version": "skver_01UiNHzSiXmDhRMx4Xed8E83",
-      "hash": "a98c3a030de1106703e17a9387b98e00"
+      "version": "skver_01PRbHFmHatfymq25XuxYch3",
+      "hash": "dfbf71dd36b835b10fdcc3208619f85e"
     },
     "../skills/trip-tracker-schema": {
       "kind": "skill",
