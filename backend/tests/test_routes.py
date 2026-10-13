@@ -48,7 +48,7 @@ from app.sessions import PlannerServices
 from app.triptracker_schema import TripSchemaUnavailableError
 from tests.conftest import AppFactory, PlanRows, StubPlanner
 
-FRONTEND = "https://pianifica.bellittim.com"
+FRONTEND = "https://atlas.bellittim.com"
 TRIPTRACKER = "https://viaggi.bellittim.com"
 USER = "test@example.com"
 POST_HEADERS = {"Origin": FRONTEND}

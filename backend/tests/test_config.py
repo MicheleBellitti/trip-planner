@@ -87,7 +87,7 @@ def test_defaults_are_production_safe(bare_env: pytest.MonkeyPatch) -> None:
     assert settings.session_budget_cents == 400
     assert settings.monthly_limit_cents == 5000
     assert settings.planner_allowed_emails == []
-    assert settings.frontend_origin == "https://pianifica.bellittim.com"
+    assert settings.frontend_origin == "https://atlas.bellittim.com"
     assert settings.triptracker_origin == "https://viaggi.bellittim.com"
     assert settings.trip_schema_url == "https://viaggi.bellittim.com/schema/trip.json"
     assert settings.lockfile_path == BACKEND_DIR / "claude-lock.production.json"
@@ -234,7 +234,7 @@ def test_origins_lose_the_trailing_slash(make_settings: MakeSettings) -> None:
 
 
 @pytest.mark.parametrize(
-    "origin", ["pianifica.bellittim.com", "ftp://host", "https://host/path", "https://host?x=1"]
+    "origin", ["atlas.bellittim.com", "ftp://host", "https://host/path", "https://host?x=1"]
 )
 def test_invalid_origins_are_rejected(make_settings: MakeSettings, origin: str) -> None:
     with pytest.raises(ValidationError, match="origin"):
@@ -350,7 +350,7 @@ def test_test_settings_match_the_test_environment(settings: Settings) -> None:
     assert settings.environment == "development"
     assert settings.auth_mode == "local"
     assert settings.local_user_email == "test@example.com"
-    assert settings.frontend_origin == "https://pianifica.bellittim.com"
+    assert settings.frontend_origin == "https://atlas.bellittim.com"
     assert settings.triptracker_origin == "https://viaggi.bellittim.com"
     assert settings.anthropic_api_key is None
 

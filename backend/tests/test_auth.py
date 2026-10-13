@@ -51,7 +51,7 @@ from app.auth import (
 from app.config import Settings
 
 TRIPTRACKER = "https://viaggi.bellittim.com"
-FRONTEND = "https://pianifica.bellittim.com"
+FRONTEND = "https://atlas.bellittim.com"
 GET_SESSION_URL = f"{TRIPTRACKER}{GET_SESSION_PATH}?disableRefresh=true"
 SECURE_COOKIE = "__Secure-better-auth.session_token"
 PLAIN_COOKIE = "better-auth.session_token"
@@ -201,16 +201,16 @@ def test_auth_errors_use_the_api_envelope() -> None:
     [
         (FRONTEND, True),
         (f"{FRONTEND}/", True),  # normalized like config.normalize_origin
-        ("https://PIANIFICA.bellittim.com", True),
+        ("https://ATLAS.bellittim.com", True),
         (None, False),
         ("", False),
         ("null", False),
-        ("http://pianifica.bellittim.com", False),
-        ("https://pianifica.bellittim.com:8443", False),
+        ("http://atlas.bellittim.com", False),
+        ("https://atlas.bellittim.com:8443", False),
         ("https://evil.bellittim.com", False),
         (TRIPTRACKER, False),
-        ("https://pianifica.bellittim.com.evil.example", False),
-        ("https://pianifica.bellittim.com/path", False),
+        ("https://atlas.bellittim.com.evil.example", False),
+        ("https://atlas.bellittim.com/path", False),
         ("not an origin", False),
     ],
 )

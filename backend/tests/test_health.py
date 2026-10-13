@@ -20,7 +20,7 @@ from structlog.typing import EventDict
 from app import main, routes
 from app.config import PLAN_LOG_KEYS, LogLevel, Settings
 
-FRONTEND = "https://pianifica.bellittim.com"  # conftest's FRONTEND_ORIGIN
+FRONTEND = "https://atlas.bellittim.com"  # conftest's FRONTEND_ORIGIN
 TRIPTRACKER = "https://viaggi.bellittim.com"  # conftest's TRIPTRACKER_ORIGIN
 
 

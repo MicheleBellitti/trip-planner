@@ -29,7 +29,7 @@ jobs:
     env:
       NEXT_TELEMETRY_DISABLED: "1"
       # NEXT_PUBLIC_* values are inlined at build time; these are the public production ones.
-      NEXT_PUBLIC_API_URL: https://pianifica.api.bellittim.com
+      NEXT_PUBLIC_API_URL: https://atlas.api.bellittim.com
       NEXT_PUBLIC_TRIPTRACKER_URL: https://viaggi.bellittim.com
     steps:
       - uses: actions/checkout@v7

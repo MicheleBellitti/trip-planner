@@ -3,8 +3,8 @@
 Turns a trip request into a complete, bookable plan. A coordinator and four subagents (flights,
 lodging, activities, transport) run in one Managed Agents session per plan. The browser watches
 the session live and the finished trip is imported into TripTracker in one click. The product
-is called **Atlas** on screen (`web/lib/brand.ts`); the repository, the spec and the domain
-(`pianifica`) keep their names.
+is called **Atlas** on screen (`web/lib/brand.ts`); the repository and the spec keep
+their names. The domains are `atlas.bellittim.com` (web) and `atlas.api.bellittim.com` (API).
 
 The spec is `docs/spec/implementation-doc.it.md` (Italian). Read the relevant section before
 changing behaviour. Verified research overrides it where they disagree:

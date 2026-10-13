@@ -110,6 +110,9 @@ describe("PlanList", () => {
   });
 
   it("tells plans of the same trip apart by their creation time, in the meta line and not on the title", async () => {
+    // The same day as the plans: "Oggi, 11:18" (the clock is frozen, so the test never depends on today).
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.parse("2026-10-12T17:00:00Z"));
     mocks.listPlans.mockResolvedValue([
       { ...PLANS[0]!, id: "11111111-3b4d-4e5f-8a9b-0c1d2e3f4a5b", created_at: "2026-10-12T09:18:41Z" },
       { ...PLANS[0]!, id: "22222222-3b4d-4e5f-8a9b-0c1d2e3f4a5b", created_at: "2026-10-12T14:02:00Z" },

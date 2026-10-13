@@ -2,7 +2,7 @@
  * Typed client of the planner backend (backend/app/routes.py), for the browser.
  *
  * - Every call sends the TripTracker session cookie (`credentials: "include"`); the backend
- *   lives on another origin (pianifica.api.bellittim.com), so nothing else carries the user.
+ *   lives on another origin (atlas.api.bellittim.com), so nothing else carries the user.
  * - Every response is validated with Zod; a 2xx body that does not match the contract is an
  *   `ApiError` of kind `invalid_response`, never data the UI trusts.
  * - Errors use the envelope `{"detail": {"code", "message", "data"}}` with an Italian `message`,

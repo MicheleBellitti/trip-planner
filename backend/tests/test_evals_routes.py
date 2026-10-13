@@ -22,7 +22,7 @@ from tests.test_evals_store import comparison, entry, make_results, real_results
 
 TOKEN = "t0ken-for-tests-" + "x" * 24
 BEARER = {"Authorization": f"Bearer {TOKEN}"}
-FRONTEND = "https://pianifica.bellittim.com"
+FRONTEND = "https://atlas.bellittim.com"
 
 
 @dataclass

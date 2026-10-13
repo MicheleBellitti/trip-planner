@@ -7,10 +7,10 @@ operatività" (`docs/spec/implementation-doc.it.md`). Verified research override
 
 | Where | What runs | Domain | Deploys when |
 |---|---|---|---|
-| Railway, service `backend` | FastAPI (`backend/Dockerfile`), one process, one replica | `pianifica.api.bellittim.com` | every push to `main` that touches `backend/` |
+| Railway, service `backend` | FastAPI (`backend/Dockerfile`), one process, one replica | `atlas.api.bellittim.com` | every push to `main` that touches `backend/` |
 | Railway, service `cleanup` | same image, `python -m app.jobs cleanup` | none | same; runs nightly on a cron |
 | Railway, `Postgres` | plans, events, fx_rates | private network only | never (managed) |
-| Vercel, new project | Next.js app in `web/` | `pianifica.bellittim.com` | preview per PR, production on `main` |
+| Vercel, new project | Next.js app in `web/` | `atlas.bellittim.com` | preview per PR, production on `main` |
 | Vercel, existing project | TripTracker | `viaggi.bellittim.com` | unchanged; three variables to set (step 6) |
 | Anthropic | agents, environment, skills (two workspaces) | n/a | `ant apply`: evals on PRs, `deploy-agents.yml` for production |
 
@@ -394,7 +394,7 @@ clear error.
    | Serverless (app sleeping) | **off** | a sleeping container would stop the consumers of running plans |
    | Overlap / draining | 0 s / 30 s | uvicorn closes open SSE streams after 20 s, then the lifespan stops the consumers |
    | Wait for CI | off | `deploy-agents.yml` waits for a human approval; Railway would hold the backend deploy (and skip it after 2 h) |
-   | Networking | custom domain `pianifica.api.bellittim.com` | step 6 below |
+   | Networking | custom domain `atlas.api.bellittim.com` | step 6 below |
 
    The image runs as uid 10001, without access logs (they carry client IPs: the app logs
    structlog JSON instead), trusts Railway's proxy headers (`FORWARDED_ALLOW_IPS=*`, so the
@@ -438,7 +438,7 @@ clear error.
    | `SESSION_BUDGET_CENTS` | `400` | yes | | US cents per session; empty = the profile's default (400) |
    | `MONTHLY_LIMIT_CENTS` | `5000` | yes | | POST /plans refuses new plans at or above it |
    | `PLANNER_ALLOWED_EMAILS` | your TripTracker login email | yes | | empty means nobody; never commit it |
-   | `FRONTEND_ORIGIN` | `https://pianifica.bellittim.com` | yes | | the only CORS origin and the required `Origin` on POST |
+   | `FRONTEND_ORIGIN` | `https://atlas.bellittim.com` | yes | | the only CORS origin and the required `Origin` on POST |
    | `TRIPTRACKER_ORIGIN` | `https://viaggi.bellittim.com` | yes | | session check, `trip.json`, CORS of `GET /plans/{id}/trip` |
    | `TRIP_SCHEMA_URL` | **`file:///app/pinned/trip.schema.json`** until TripTracker serves `/schema/trip.json`, then unset | yes | | the pinned copy `backend/pinned/trip.schema.json` ships in the image (`tests/` doesn't) and equals the test fixture (a backend test checks it); production never falls back on its own: without this setting POST /plans answers 503 until TripTracker serves the schema |
    | `EVALS_INGEST_TOKEN` | a random token ("Eval history" below) | yes | | sealed; optional. Empty (the default) disables `POST /evals/runs` (404); the same value goes in both GitHub environments |
@@ -451,12 +451,12 @@ clear error.
    a development key and `SESSION_BUDGET_CENTS=100` (the development lockfile ships in the
    image too). Switch back before real use.
 6. **Domain**: `backend` > Settings > Networking > Custom domain
-   `pianifica.api.bellittim.com`. Railway shows a CNAME target and, if it asks, a TXT
+   `atlas.api.bellittim.com`. Railway shows a CNAME target and, if it asks, a TXT
    verification record: add both in Cloudflare (step 4). Railway issues the certificate once
    the record resolves.
 7. **First deploy and checks** (day 2, after the variables):
    - The deploy log shows the pre-deploy `alembic upgrade head`, then the healthcheck.
-   - `curl -s https://pianifica.api.bellittim.com/health` answers `{"status":"ok"}`.
+   - `curl -s https://atlas.api.bellittim.com/health` answers `{"status":"ok"}`.
    - `/docs` answers 404 (interactive docs are development only).
    - Until `backend/claude-lock.production.json` exists (step 7), POST /plans answers 503
      `planner_unavailable` while `/health` stays green. That is expected.
@@ -470,12 +470,12 @@ All records **DNS only** (grey cloud), TTL auto:
 
 | Name | Type | Target | Notes |
 |---|---|---|---|
-| `pianifica.api` | CNAME | the target Railway shows (`….up.railway.app`) | |
+| `atlas.api` | CNAME | the target Railway shows (`….up.railway.app`) | |
 | the name Railway shows (`_railway-verify…`), only if asked | TXT | the value Railway shows | domain verification |
-| `pianifica` | CNAME | the target Vercel shows | |
+| `atlas` | CNAME | the target Vercel shows | |
 | `viaggi` | unchanged | TripTracker on Vercel | already done |
 
-Why the proxy stays off: for `pianifica.api` it is essential (spec), because Cloudflare's
+Why the proxy stays off: for `atlas.api` it is essential (spec), because Cloudflare's
 proxy closes idle connections and breaks the SSE stream. With DNS only, Railway and Vercel
 also issue and renew their own certificates without interference.
 
@@ -487,18 +487,18 @@ also issue and renew their own certificates without interference.
 
    | Variable | Value |
    |---|---|
-   | `NEXT_PUBLIC_API_URL` | `https://pianifica.api.bellittim.com` |
+   | `NEXT_PUBLIC_API_URL` | `https://atlas.api.bellittim.com` |
    | `NEXT_PUBLIC_TRIPTRACKER_URL` | `https://viaggi.bellittim.com` |
 
    `NEXT_PUBLIC_*` values are inlined into the public bundle at build time: never a secret
    there. Changing one needs a redeploy.
-3. Domains: add `pianifica.bellittim.com`; Vercel shows the CNAME target for Cloudflare.
+3. Domains: add `atlas.bellittim.com`; Vercel shows the CNAME target for Cloudflare.
 4. Git: production branch `main`, a preview for every PR (spec). Settings > Git > Ignored
    Build Step, custom command `git diff --quiet HEAD^ HEAD -- . ../schema` skips builds when
    neither `web/` nor `schema/` changed.
 5. Previews can't use the production API: CORS allows only `FRONTEND_ORIGIN`, and the
    TripTracker session cookie is scoped to `bellittim.com`, not `*.vercel.app`. Use previews
-   for visual review; the live flow works only on `pianifica.bellittim.com` (and locally).
+   for visual review; the live flow works only on `atlas.bellittim.com` (and locally).
 
 ## 6. TripTracker
 
@@ -508,15 +508,15 @@ Variables (Production):
 
 | Variable | Value | Effect |
 |---|---|---|
-| `COOKIE_DOMAIN` | `bellittim.com` | new: turns on Better Auth's cross-subdomain cookie, so `pianifica.api` receives the session |
-| `ORIGINI_FIDATE` | `https://trip-tracker-nu-ivory.vercel.app,https://pianifica.bellittim.com` | existing, add the planner: keeps the old PWA origin (trusted origins, allowed `returnTo` targets) |
-| `NEXT_PUBLIC_PLANNER_API_URL` | `https://pianifica.api.bellittim.com` | new: where `/import` downloads the Trip (`GET /plans/{id}/trip` with the shared cookie). Unset, `/import` says the planner isn't configured and "Apri in TripTracker" can't import |
+| `COOKIE_DOMAIN` | `bellittim.com` | new: turns on Better Auth's cross-subdomain cookie, so `atlas.api` receives the session |
+| `ORIGINI_FIDATE` | `https://trip-tracker-nu-ivory.vercel.app,https://atlas.bellittim.com` | existing, add the planner: keeps the old PWA origin (trusted origins, allowed `returnTo` targets) |
+| `NEXT_PUBLIC_PLANNER_API_URL` | `https://atlas.api.bellittim.com` | new: where `/import` downloads the Trip (`GET /plans/{id}/trip` with the shared cookie). Unset, `/import` says the planner isn't configured and "Apri in TripTracker" can't import |
 
 `NEXT_PUBLIC_PLANNER_API_URL` is inlined into TripTracker's bundle at build time, so set it
 before the build and redeploy after any change (`docs/triptracker/pr/README.md`, "Environment
 variables"). Then redeploy TripTracker: Vercel applies variables only to new deployments. Existing
 sessions keep a host-only cookie until Better Auth refreshes it (daily) or you sign in again:
-sign out and back in once on `viaggi.bellittim.com`, then open `pianifica.bellittim.com`; it
+sign out and back in once on `viaggi.bellittim.com`, then open `atlas.bellittim.com`; it
 should load without a redirect to `/accedi`. Once TripTracker serves `/schema/trip.json`,
 unset `TRIP_SCHEMA_URL` on Railway (the backend then downloads it from `TRIPTRACKER_ORIGIN`
 and refreshes it every 10 minutes). A later backend PR can then delete `backend/pinned/` and
@@ -734,9 +734,9 @@ eval history rows. It is as exposed as `ANTHROPIC_API_KEY` in the `development` 
    - Secret `EVALS_INGEST_TOKEN`: the same value. From a terminal, `gh secret set
      EVALS_INGEST_TOKEN --env development` asks for it on the prompt (do not pass it with
      `--body`, which lands in the shell history); repeat with `--env production`.
-   - Variable `EVALS_INGEST_URL`: the backend's origin, `https://pianifica.api.bellittim.com`
+   - Variable `EVALS_INGEST_URL`: the backend's origin, `https://atlas.api.bellittim.com`
      (no trailing path), a plain variable, not a secret: `gh variable set EVALS_INGEST_URL
-     --env development --body https://pianifica.api.bellittim.com`, and the same with
+     --env development --body https://atlas.api.bellittim.com`, and the same with
      `--env production`.
 4. Check: run the `evals` workflow by hand (Actions > evals > Run workflow). The step prints
    `Eval run created in the history: <id>` (or `updated`), and the run appears in Atlas. A
@@ -760,7 +760,7 @@ uv run python ../evals/compare.py ../evals/results/<date>-<sha>.json --json comp
 # To a deployed backend instead (a past run, an artifact of an earlier CI run): the token is
 # read from the prompt, never typed in the command line.
 read -rs EVALS_INGEST_TOKEN && export EVALS_INGEST_TOKEN
-EVALS_INGEST_URL=https://pianifica.api.bellittim.com \
+EVALS_INGEST_URL=https://atlas.api.bellittim.com \
   uv run python ../evals/upload.py ../evals/results/<date>-<sha>.json --strict
 unset EVALS_INGEST_TOKEN
 ```

@@ -6,7 +6,7 @@
 
 The URL and the token come from the environment, never from the command line (a command line
 shows up in process lists and logs): EVALS_INGEST_URL (the backend's origin, for example
-https://pianifica.api.bellittim.com) and EVALS_INGEST_TOKEN (the bearer token the backend
+https://atlas.api.bellittim.com) and EVALS_INGEST_TOKEN (the bearer token the backend
 checks against its own EVALS_INGEST_TOKEN setting). `--url` overrides the first, for local use.
 
 The body is {"results": <evals/run.py JSON>, "comparison": <evals/compare.py --json or null>,

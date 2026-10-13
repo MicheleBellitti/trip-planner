@@ -45,7 +45,7 @@ from app.db import DestinationCoverRecord, PlanStatus
 from tests.conftest import AppFactory, PlanRows, StubPlanner
 
 FIXTURES = Path(__file__).parent / "fixtures" / "covers"
-USER_AGENT = "AtlasTripPlanner/1.0 (https://pianifica.bellittim.com; personal trip planner)"
+USER_AGENT = "AtlasTripPlanner/1.0 (https://atlas.bellittim.com; personal trip planner)"
 SessionFactory = async_sessionmaker[AsyncSession]
 
 
@@ -1012,10 +1012,10 @@ async def test_the_frontend_may_read_the_cover_across_origins(
     record = await plan_rows.add_plan(request={"destination": "Lisbona"})
 
     response = await api.client.get(
-        f"/plans/{record.id}/cover", headers={"Origin": "https://pianifica.bellittim.com"}
+        f"/plans/{record.id}/cover", headers={"Origin": "https://atlas.bellittim.com"}
     )
 
-    assert response.headers["access-control-allow-origin"] == "https://pianifica.bellittim.com"
+    assert response.headers["access-control-allow-origin"] == "https://atlas.bellittim.com"
     assert response.headers["access-control-allow-credentials"] == "true"
 
 

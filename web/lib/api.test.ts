@@ -15,7 +15,7 @@ import {
 import { APP_ERROR_CODES, COVER_UNAVAILABLE_CODE, PLAN_ERROR_CODES } from "./schemas/api";
 
 const PLAN_ID = happyPath.plan_id;
-const CURRENT_PAGE = "https://pianifica.bellittim.com/plans/6f1c2a7e-3b4d-4e5f-8a9b-0c1d2e3f4a5b?tab=piano#giorno-2";
+const CURRENT_PAGE = "https://atlas.bellittim.com/plans/6f1c2a7e-3b4d-4e5f-8a9b-0c1d2e3f4a5b?tab=piano#giorno-2";
 
 function json(status: number, body: unknown): Response {
   return new Response(body === undefined ? null : JSON.stringify(body), {
@@ -32,7 +32,7 @@ function client(response: Response | (() => Promise<Response>), extra: ApiClient
   const fetchMock = vi.fn<typeof fetch>(async () => (typeof response === "function" ? response() : response));
   const onUnauthorized = vi.fn();
   const api = createApiClient({
-    baseUrl: "https://pianifica.api.test/",
+    baseUrl: "https://atlas.api.test/",
     triptrackerUrl: "https://viaggi.test",
     fetch: fetchMock,
     currentUrl: () => CURRENT_PAGE,
@@ -66,7 +66,7 @@ describe("requests", () => {
     await expect(api.createPlan(request)).resolves.toEqual({ id: PLAN_ID });
 
     const [url, init] = fetchMock.mock.calls[0] ?? [];
-    expect(url).toBe("https://pianifica.api.test/plans");
+    expect(url).toBe("https://atlas.api.test/plans");
     expect(init?.method).toBe("POST");
     expect(init?.credentials).toBe("include");
     expect(init?.headers).toMatchObject({ "Content-Type": "application/json", Accept: "application/json" });
@@ -82,10 +82,10 @@ describe("requests", () => {
     await api.createPlan({} as never, { demoScenario: null });
 
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
-      "https://pianifica.api.test/plans?demo_scenario=budget_reached",
-      "https://pianifica.api.test/plans?demo_scenario=a%26b",
-      "https://pianifica.api.test/plans",
-      "https://pianifica.api.test/plans",
+      "https://atlas.api.test/plans?demo_scenario=budget_reached",
+      "https://atlas.api.test/plans?demo_scenario=a%26b",
+      "https://atlas.api.test/plans",
+      "https://atlas.api.test/plans",
     ]);
   });
 
@@ -95,7 +95,7 @@ describe("requests", () => {
     await expect(api.listPlans()).resolves.toEqual([]);
 
     const [url, init] = fetchMock.mock.calls[0] ?? [];
-    expect(url).toBe("https://pianifica.api.test/plans");
+    expect(url).toBe("https://atlas.api.test/plans");
     expect(init?.method).toBe("GET");
     expect(init?.body).toBeUndefined();
     expect(init?.headers).not.toHaveProperty("Content-Type");
@@ -107,7 +107,7 @@ describe("requests", () => {
 
     const detail = await api.getPlan(PLAN_ID);
 
-    expect(fetchMock.mock.calls[0]?.[0]).toBe(`https://pianifica.api.test/plans/${PLAN_ID}`);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`https://atlas.api.test/plans/${PLAN_ID}`);
     expect(detail.status).toBe("running");
     expect(detail.budget_cents).toBe(60);
     expect(detail.plan).toBeNull();
@@ -116,16 +116,16 @@ describe("requests", () => {
   it("covers interrupt, continue, trip and health", async () => {
     const interrupt = client(json(202, { id: PLAN_ID, status: "running" }));
     await expect(interrupt.api.interruptPlan(PLAN_ID)).resolves.toEqual({ id: PLAN_ID, status: "running" });
-    expect(interrupt.fetchMock.mock.calls[0]?.[0]).toBe(`https://pianifica.api.test/plans/${PLAN_ID}/interrupt`);
+    expect(interrupt.fetchMock.mock.calls[0]?.[0]).toBe(`https://atlas.api.test/plans/${PLAN_ID}/interrupt`);
     expect(interrupt.fetchMock.mock.calls[0]?.[1]?.method).toBe("POST");
 
     const resume = client(json(202, { id: PLAN_ID, status: "running", budget_cents: 261 }));
     await expect(resume.api.continuePlan(PLAN_ID)).resolves.toMatchObject({ budget_cents: 261 });
-    expect(resume.fetchMock.mock.calls[0]?.[0]).toBe(`https://pianifica.api.test/plans/${PLAN_ID}/continue`);
+    expect(resume.fetchMock.mock.calls[0]?.[0]).toBe(`https://atlas.api.test/plans/${PLAN_ID}/continue`);
 
     const trip = client(json(200, { id: "trip", days: [] }));
     await expect(trip.api.getTrip(PLAN_ID)).resolves.toEqual({ id: "trip", days: [] });
-    expect(trip.fetchMock.mock.calls[0]?.[0]).toBe(`https://pianifica.api.test/plans/${PLAN_ID}/trip`);
+    expect(trip.fetchMock.mock.calls[0]?.[0]).toBe(`https://atlas.api.test/plans/${PLAN_ID}/trip`);
 
     const health = client(json(200, { status: "ok" }));
     await expect(health.api.health()).resolves.toEqual({ status: "ok" });
@@ -134,10 +134,10 @@ describe("requests", () => {
   it("builds the SSE URL, with ?after= to resume", () => {
     const { api } = client(json(200, {}));
 
-    expect(api.eventsUrl(PLAN_ID)).toBe(`https://pianifica.api.test/plans/${PLAN_ID}/events`);
-    expect(api.eventsUrl(PLAN_ID, null)).toBe(`https://pianifica.api.test/plans/${PLAN_ID}/events`);
-    expect(api.eventsUrl(PLAN_ID, 0)).toBe(`https://pianifica.api.test/plans/${PLAN_ID}/events?after=0`);
-    expect(api.eventsUrl(PLAN_ID, 41)).toBe(`https://pianifica.api.test/plans/${PLAN_ID}/events?after=41`);
+    expect(api.eventsUrl(PLAN_ID)).toBe(`https://atlas.api.test/plans/${PLAN_ID}/events`);
+    expect(api.eventsUrl(PLAN_ID, null)).toBe(`https://atlas.api.test/plans/${PLAN_ID}/events`);
+    expect(api.eventsUrl(PLAN_ID, 0)).toBe(`https://atlas.api.test/plans/${PLAN_ID}/events?after=0`);
+    expect(api.eventsUrl(PLAN_ID, 41)).toBe(`https://atlas.api.test/plans/${PLAN_ID}/events?after=41`);
   });
 });
 
@@ -158,7 +158,7 @@ describe("getCover", () => {
 
     await expect(api.getCover(PLAN_ID)).resolves.toEqual(COVER_BODY);
 
-    expect(fetchMock.mock.calls[0]?.[0]).toBe(`https://pianifica.api.test/plans/${PLAN_ID}/cover`);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`https://atlas.api.test/plans/${PLAN_ID}/cover`);
     const init = fetchMock.mock.calls[0]?.[1];
     expect(init?.credentials).toBe("include");
     // The backend sends Cache-Control: private, max-age=3600; the other calls opt out of caching.
@@ -214,7 +214,7 @@ describe("errors", () => {
     expect(error.kind).toBe("unauthorized");
     expect((error as UnauthorizedError).loginUrl).toBe(expected);
     expect(onUnauthorized).toHaveBeenCalledWith(expected);
-    expect(expected).toContain("returnTo=https%3A%2F%2Fpianifica.bellittim.com%2Fplans%2F");
+    expect(expected).toContain("returnTo=https%3A%2F%2Fatlas.bellittim.com%2Fplans%2F");
     expect(expected).toContain("%3Ftab%3Dpiano%23giorno-2");
   });
 
@@ -232,7 +232,7 @@ describe("errors", () => {
     const assign = vi.fn();
     vi.stubGlobal("location", { ...window.location, href: CURRENT_PAGE, assign });
     const api = createApiClient({
-      baseUrl: "https://pianifica.api.test",
+      baseUrl: "https://atlas.api.test",
       triptrackerUrl: "https://viaggi.test/",
       fetch: async () => json(401, envelope("not_authenticated", "Accedi.")),
     });
@@ -379,8 +379,8 @@ describe("errors", () => {
 
 describe("loginUrl", () => {
   it("encodes the return URL and tolerates a trailing slash", () => {
-    expect(loginUrl("https://viaggi.bellittim.com/", "https://pianifica.bellittim.com/new?x=1&y=2")).toBe(
-      "https://viaggi.bellittim.com/accedi?returnTo=https%3A%2F%2Fpianifica.bellittim.com%2Fnew%3Fx%3D1%26y%3D2",
+    expect(loginUrl("https://viaggi.bellittim.com/", "https://atlas.bellittim.com/new?x=1&y=2")).toBe(
+      "https://viaggi.bellittim.com/accedi?returnTo=https%3A%2F%2Fatlas.bellittim.com%2Fnew%3Fx%3D1%26y%3D2",
     );
   });
 });
@@ -391,7 +391,7 @@ describe("the eval history", () => {
 
     const runs = await api.listEvalRuns({ limit: 20 });
 
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://pianifica.api.test/evals/runs?limit=20");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://atlas.api.test/evals/runs?limit=20");
     expect(fetchMock.mock.calls[0]?.[1]?.credentials).toBe("include");
     expect(runs.map((run) => run.id)).toEqual(evalList.map((run) => run.id));
     expect(runs[0]).toMatchObject({ compare_status: null, requests_total: 5, total_cost_cents: 309 });
@@ -402,7 +402,7 @@ describe("the eval history", () => {
 
     await expect(api.listEvalRuns()).resolves.toEqual([]);
 
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://pianifica.api.test/evals/runs");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://atlas.api.test/evals/runs");
   });
 
   it("GET /evals/runs/{id} parses the stored results and comparison", async () => {
@@ -410,7 +410,7 @@ describe("the eval history", () => {
 
     const run = await api.getEvalRun(evalRun.id);
 
-    expect(fetchMock.mock.calls[0]?.[0]).toBe(`https://pianifica.api.test/evals/runs/${evalRun.id}`);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`https://atlas.api.test/evals/runs/${evalRun.id}`);
     expect(run.compare_status).toBe("blocked");
     expect(run.results.requests).toHaveLength(5);
     expect(run.comparison?.findings.filter((finding) => finding.blocking)).toHaveLength(3);

@@ -18,7 +18,7 @@ import upload
 Json = dict[str, Any]
 
 TOKEN = "s3cr3t-ingest-token-value"
-URL = "https://pianifica.example.test"
+URL = "https://atlas.example.test"
 RUN_URL = "https://github.com/o/r/actions/runs/42"
 
 RESULTS: Json = {

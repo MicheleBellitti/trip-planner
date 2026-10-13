@@ -17,7 +17,7 @@ web
 
 Pinned by the spec, not chosen here: Next.js 16 (App Router), TypeScript, Tailwind 4, Zod to
 validate every incoming SSE event. Mobile first at 393 px. Deployed on Vercel at
-`pianifica.bellittim.com`; the API is `pianifica.api.bellittim.com`.
+`atlas.bellittim.com`; the API is `atlas.api.bellittim.com`.
 
 ## Users
 
@@ -130,7 +130,7 @@ Taken by Michele on 2026-10-12. They replace the first pass's open questions.
 
 - **Name on screen: "Atlas".** It is the product's name in the header wordmark and in the page
   titles ("I tuoi piani · Atlas"). It lives in one constant, `BRAND_NAME` in `web/lib/brand.ts`;
-  nothing else spells it. The repository, the spec and the domain (`pianifica`) keep their names.
+  nothing else spells it. The repository and the spec keep their names; the domains are `atlas.bellittim.com` and `atlas.api.bellittim.com` (renamed from `pianifica` on 2026-10-13).
 - **Due soon means `dueAt` within 72 hours**, TripTracker's own rule (its "In scadenza" group,
   `EXPIRING_WINDOW_HOURS = 72`): a booking whose "Prenota entro" is at most 72 hours from now,
   or already past, is due soon and gets the amber treatment. A booking without a `dueAt` ("Da

@@ -51,7 +51,7 @@ TEST_ENV: dict[str, str] = {
     "ENVIRONMENT": "development",
     "AUTH_MODE": "local",
     "PLANNER_ALLOWED_EMAILS": "test@example.com",
-    "FRONTEND_ORIGIN": "https://pianifica.bellittim.com",
+    "FRONTEND_ORIGIN": "https://atlas.bellittim.com",
     "TRIPTRACKER_ORIGIN": "https://viaggi.bellittim.com",
     "TRIP_SCHEMA_URL": "https://viaggi.bellittim.com/schema/trip.json",
     "DATABASE_URL": TEST_DATABASE_URL,

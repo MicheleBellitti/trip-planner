@@ -168,7 +168,7 @@ class Settings(BaseSettings):
     planner_allowed_emails: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
     # The planner web app: CORS allow-origin and the Origin check on state-changing requests.
-    frontend_origin: str = "https://pianifica.bellittim.com"
+    frontend_origin: str = "https://atlas.bellittim.com"
 
     # TripTracker: session verification, trip.json schema and CORS for GET /plans/{id}/trip.
     triptracker_origin: str = "https://viaggi.bellittim.com"

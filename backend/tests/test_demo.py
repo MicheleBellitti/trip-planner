@@ -51,7 +51,7 @@ from tests.test_e2e_offline import (  # noqa: F401 (fixture)
 )
 
 DEMO_PACE = 0.01
-FRONTEND = "https://pianifica.bellittim.com"
+FRONTEND = "https://atlas.bellittim.com"
 REQUEST: dict[str, Any] = {
     "origin": "Milano",
     "destination": "Lisbona",
