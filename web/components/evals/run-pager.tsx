@@ -11,63 +11,56 @@ import { pageCount, pageHref, pageItems } from "./eval-model";
  * 640 px the page numbers between them, the current one a filled ink disc (the line's "you are
  * here"). Plain links (`?pagina=N`), so the back button, a reload and a shared address all land on
  * the same page; a click keeps the scroll (the dashboard above keeps its height, so the list stays
- * where it was). With `total` null (a backend that does not count the runs) only the two ends
- * show, the older one while the page came back full.
+ * where it was). It needs `total`: a backend that does not send it also ignores the offset, so
+ * the list draws no pager for it (EvalRunList).
  */
 export function RunPager({
   page,
   total,
   pageSize,
-  shown,
   className,
 }: {
   page: number;
-  /** Every stored run; null when the backend did not say. */
-  total: number | null;
+  /** Every stored run. */
+  total: number;
   pageSize: number;
-  /** Runs on this page. */
-  shown: number;
   className?: string;
 }) {
-  const count = total === null ? null : pageCount(total, pageSize);
+  const count = pageCount(total, pageSize);
   const hasNewer = page > 1;
-  const hasOlder = count === null ? shown === pageSize : page < count;
+  const hasOlder = page < count;
   if (!hasNewer && !hasOlder) return null;
   return (
     <nav aria-label="Pagine delle valutazioni" className={cx("flex items-center justify-between gap-3", className)}>
       <End href={hasNewer ? pageHref(page - 1) : null} direction="newer" />
-      {count !== null ? (
-        <>
-          <p className="text-meta text-ink-2 sm:hidden">
-            Pagina {page} di {count}
-          </p>
-          <ol className="hidden items-center gap-1 sm:flex">
-            {pageItems(page, count).map((item, index) =>
-              item === "gap" ? (
-                <li key={`gap-${index}`} aria-hidden="true" className="w-6 text-center text-meta text-ink-2">
-                  …
-                </li>
-              ) : (
-                <li key={item}>
-                  <Link
-                    href={pageHref(item)}
-                    scroll={false}
-                    aria-current={item === page ? "page" : undefined}
-                    aria-label={`Pagina ${item}`}
-                    className={cx(
-                      "grid size-8 place-items-center rounded-full text-meta font-semibold no-underline",
-                      "transition-[background-color,color] duration-(--duration-hover) ease-out pointer-coarse:size-11",
-                      item === page ? "bg-action text-on-action" : "text-ink hover:bg-notice-wash",
-                    )}
-                  >
-                    {item}
-                  </Link>
-                </li>
-              ),
-            )}
-          </ol>
-        </>
-      ) : null}
+      <p className="text-meta text-ink-2 sm:hidden">
+        Pagina {page} di {count}
+      </p>
+      <ol className="hidden items-center gap-1 sm:flex">
+        {pageItems(page, count).map((item, index) =>
+          item === "gap" ? (
+            <li key={`gap-${index}`} aria-hidden="true" className="w-6 text-center text-meta text-ink-2">
+              …
+            </li>
+          ) : (
+            <li key={item}>
+              <Link
+                href={pageHref(item)}
+                scroll={false}
+                aria-current={item === page ? "page" : undefined}
+                aria-label={`Pagina ${item}`}
+                className={cx(
+                  "grid size-8 place-items-center rounded-full text-meta font-semibold no-underline",
+                  "transition-[background-color,color] duration-(--duration-hover) ease-out pointer-coarse:size-11",
+                  item === page ? "bg-action text-on-action" : "text-ink hover:bg-notice-wash",
+                )}
+              >
+                {item}
+              </Link>
+            </li>
+          ),
+        )}
+      </ol>
       <End href={hasOlder ? pageHref(page + 1) : null} direction="older" />
     </nav>
   );

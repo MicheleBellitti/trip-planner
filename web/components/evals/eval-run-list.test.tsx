@@ -94,13 +94,19 @@ describe("EvalRunList", () => {
     expect(pager()).toBeNull();
   });
 
-  it("only goes back and forth with a backend that does not count the runs", async () => {
+  it("offers no pages with a backend older than the pages (it ignores the offset and counts nothing)", async () => {
+    mocks.listEvalRuns.mockResolvedValue(answer(manyRuns(10), null));
+    await renderList();
+    expect(screen.getAllByRole("link").filter((link) => link.getAttribute("href")?.startsWith("/evals/"))).toHaveLength(10);
+    expect(pager()).toBeNull();
+  });
+
+  it("never shows the newest runs again as a later page of such a backend", async () => {
     mocks.listEvalRuns.mockResolvedValue(answer(manyRuns(10), null));
     await renderList(2);
-    const nav = pager()!;
-    expect(within(nav).queryByRole("link", { name: "Pagina 1" })).toBeNull();
-    expect(within(nav).getByRole("link", { name: /Più recenti/ }).getAttribute("href")).toBe("/evals");
-    expect(within(nav).getByRole("link", { name: /Più vecchie/ }).getAttribute("href")).toBe("/evals?pagina=3");
+    expect(screen.queryAllByRole("link").filter((link) => link.getAttribute("href")?.startsWith("/evals/"))).toHaveLength(0);
+    expect(screen.getByText("Le pagine non sono ancora disponibili")).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Vai alle più recenti/ }).getAttribute("href")).toBe("/evals");
   });
 
   it("sends a page past the end back to the last one", async () => {

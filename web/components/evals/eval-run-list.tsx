@@ -102,8 +102,27 @@ export function EvalRunList({ page, className }: { page: number; className?: str
 
   if (state.runs.length === 0 && state.page === 1) return <EvalEmptyInvitation className={className} />;
 
+  // A backend older than the pages sends no total and ignores the offset: a later page would show
+  // the newest runs again under another number, so it says so instead.
+  if (state.total === null && state.page > 1) {
+    return (
+      <Notice
+        tone="info"
+        title="Le pagine non sono ancora disponibili"
+        className={className}
+        action={
+          <LinkButton href={pageHref(1)} size="sm" variant="quiet" icon="arrow-left">
+            Vai alle più recenti
+          </LinkButton>
+        }
+      >
+        Il planner non divide ancora le valutazioni in pagine: si aggiorna con il prossimo rilascio.
+      </Notice>
+    );
+  }
+
   if (state.runs.length === 0) {
-    const last = state.total === null ? state.page - 1 : pageCount(state.total, PAGE_SIZE);
+    const last = pageCount(state.total ?? 0, PAGE_SIZE);
     return (
       <Notice
         tone="info"
@@ -156,7 +175,9 @@ export function EvalRunList({ page, className }: { page: number; className?: str
           ))}
         </ul>
       </div>
-      <RunPager page={state.page} total={state.total} pageSize={PAGE_SIZE} shown={state.runs.length} className="mt-3" />
+      {state.total !== null ? (
+        <RunPager page={state.page} total={state.total} pageSize={PAGE_SIZE} className="mt-3" />
+      ) : null}
       <p className="mt-3 max-w-prose text-meta text-ink-2">
         {pages !== null && pages > 1
           ? `Valutazioni da ${first} a ${first + state.runs.length - 1} di ${state.total}. `
