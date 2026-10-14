@@ -4,9 +4,8 @@ import { useLayoutEffect, useSyncExternalStore } from "react";
 
 import { cx } from "./cx";
 import { Icon } from "./icon";
-import { isThemeName, THEME_STORAGE_KEY, type ThemeName } from "./theme";
+import { DEFAULT_THEME, isThemeName, THEME_COLORS, THEME_STORAGE_KEY, type ThemeName } from "./theme";
 
-const DARK_QUERY = "(prefers-color-scheme: dark)";
 const THEME_EVENT = "atlas-theme-change";
 
 function readStored(): ThemeName | null {
@@ -18,25 +17,24 @@ function readStored(): ThemeName | null {
   }
 }
 
-/** The theme on screen: the pinned one, else the system's. */
+/** The theme on screen: the pinned one, else the dark default. */
 function resolvedTheme(): ThemeName {
   const pinned = document.documentElement.getAttribute("data-theme");
-  if (isThemeName(pinned)) return pinned;
-  return window.matchMedia(DARK_QUERY).matches ? "dark" : "light";
+  return isThemeName(pinned) ? pinned : DEFAULT_THEME;
 }
 
 function subscribe(onChange: () => void): () => void {
-  const media = window.matchMedia(DARK_QUERY);
-  media.addEventListener("change", onChange);
   window.addEventListener(THEME_EVENT, onChange);
-  return () => {
-    media.removeEventListener("change", onChange);
-    window.removeEventListener(THEME_EVENT, onChange);
-  };
+  return () => window.removeEventListener(THEME_EVENT, onChange);
+}
+
+/** The browser chrome (iOS status bar, Android toolbar) follows the theme on screen. */
+function syncThemeColor(theme: ThemeName) {
+  document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute("content", THEME_COLORS[theme]);
 }
 
 /**
- * The theme toggle: a round icon button that pins the opposite of the theme on screen and
+ * The theme toggle: a round icon button that pins the other theme (dark is the default) and
  * remembers it (localStorage, read before paint by ThemeScript). The glyph is chosen by CSS
  * (inherited --show-in-light / --show-in-dark), so it is right on the first paint; only the
  * accessible name waits for the client.
@@ -52,11 +50,13 @@ export function ThemeToggle({ className }: { className?: string }) {
       document.documentElement.setAttribute("data-theme", stored);
       window.dispatchEvent(new Event(THEME_EVENT));
     }
+    syncThemeColor(resolvedTheme());
   }, []);
 
   function toggle() {
     const next: ThemeName = resolvedTheme() === "dark" ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", next);
+    syncThemeColor(next);
     try {
       localStorage.setItem(THEME_STORAGE_KEY, next);
     } catch {

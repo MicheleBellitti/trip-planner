@@ -1,6 +1,6 @@
 /**
  * The design tokens keep their promises: web/DESIGN.md (the authority) and app/globals.css (the
- * implementation) agree on every colour, the system-dark and pinned-dark blocks are identical,
+ * implementation) agree on every colour, dark is the default and follows no system preference,
  * and every pair DESIGN.md lists under "Measured contrast" still meets WCAG 2.x on its real
  * background.
  */
@@ -10,6 +10,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
+
+import { THEME_COLORS } from "./theme";
 
 const webDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const css = readFileSync(path.join(webDir, "app/globals.css"), "utf8");
@@ -29,9 +31,9 @@ function hexTokens(selector: string): Tokens {
   return tokens;
 }
 
-const light = hexTokens(':root,\n[data-theme="light"]');
-const systemDark = hexTokens('  :root:not([data-theme="light"])');
-const dark = hexTokens('\n[data-theme="dark"]');
+// Dark ("Carta notturna") is the default on :root; light ("Carta di giorno") only where pinned.
+const dark = hexTokens(':root,\n[data-theme="dark"]');
+const light = hexTokens('\n[data-theme="light"]');
 
 function channel(value: number): number {
   const c = value / 255;
@@ -98,8 +100,13 @@ describe("design tokens", () => {
     expect(Object.keys(dark)).toEqual(Object.keys(light));
   });
 
-  it("keeps the system-dark block identical to the pinned-dark block", () => {
-    expect(systemDark).toEqual(dark);
+  it("is dark by default: no block follows the system preference", () => {
+    expect(css).not.toMatch(/prefers-color-scheme/);
+  });
+
+  it("keeps the browser chrome's colour on each theme's ground", () => {
+    expect(THEME_COLORS.dark).toBe(dark.ground);
+    expect(THEME_COLORS.light).toBe(light.ground);
   });
 
   it("matches the colours of DESIGN.md's frontmatter, the authority", () => {

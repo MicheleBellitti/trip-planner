@@ -1,50 +1,55 @@
 ---
 name: Atlas
-description: The run drawn as a transit line diagram, one line per agent, calm enough to watch for minutes.
+description: A printed night transit map, one line per agent, ink and cream, never neon.
 colors:
-  ground: "#F2F4F7"
-  surface: "#FBFCFD"
-  ink: "#0F1A2A"
-  ink-2: "#4B5768"
-  rule: "#D5DBE3"
-  rule-strong: "#7A8597"
+  ground: "#F4EFE4"
+  surface: "#FBF8F1"
+  ink: "#1B2230"
+  ink-2: "#5B5E66"
+  rule: "#DDD5C5"
+  rule-strong: "#8A8473"
   line-coordinator: "#33404F"
   line-flights: "#1F55C4"
   line-lodging: "#0F7348"
   line-activities: "#6D3FC0"
   line-transport: "#08707F"
-  on-line: "#FBFCFD"
+  on-line: "#FBF8F1"
   error: "#B3261E"
-  error-wash: "#FBEAE8"
-  notice-wash: "#E8ECF2"
-  amber: "#C47A0B"
+  error-wash: "#F8E3DF"
+  notice-wash: "#EBE5D8"
+  amber: "#A86400"
   amber-ink: "#8A4A00"
-  amber-wash: "#FBEFD9"
-  action: "#0F1A2A"
-  on-action: "#FBFCFD"
-  focus: "#0F1A2A"
-  ground-dark: "#0C121B"
-  surface-dark: "#131B26"
-  ink-dark: "#E6EBF2"
-  ink-2-dark: "#9BA7B8"
-  rule-dark: "#263241"
-  rule-strong-dark: "#5F6C7E"
-  line-coordinator-dark: "#A9B6C7"
-  line-flights-dark: "#7AA2F7"
-  line-lodging-dark: "#43C08A"
-  line-activities-dark: "#B497F5"
-  line-transport-dark: "#3FC0D3"
-  on-line-dark: "#0C121B"
+  amber-wash: "#F6DCA8"
+  action: "#1B2230"
+  on-action: "#FBF8F1"
+  focus: "#1B2230"
+  ground-dark: "#1B2230"
+  surface-dark: "#222A39"
+  ink-dark: "#EFE8D8"
+  ink-2-dark: "#AAA596"
+  rule-dark: "#313A4A"
+  rule-strong-dark: "#6B7384"
+  line-coordinator-dark: "#A3ABB6"
+  line-flights-dark: "#6E8FE0"
+  line-lodging-dark: "#4FA77B"
+  line-activities-dark: "#9C84D6"
+  line-transport-dark: "#4AA8B6"
+  on-line-dark: "#1B2230"
   error-dark: "#F2766B"
-  error-wash-dark: "#2A1516"
-  notice-wash-dark: "#1A2431"
+  error-wash-dark: "#36211F"
+  notice-wash-dark: "#283141"
   amber-dark: "#F3A845"
   amber-ink-dark: "#F3A845"
-  amber-wash-dark: "#2A2112"
-  action-dark: "#E6EBF2"
-  on-action-dark: "#0C121B"
-  focus-dark: "#E6EBF2"
+  amber-wash-dark: "#33291A"
+  action-dark: "#EFE8D8"
+  on-action-dark: "#1B2230"
+  focus-dark: "#EFE8D8"
 typography:
+  hero:
+    fontFamily: "Barlow Semi Condensed, Barlow, system-ui, sans-serif"
+    fontSize: "44px"
+    fontWeight: 700
+    lineHeight: 1
   display:
     fontFamily: "Barlow Semi Condensed, Barlow, system-ui, sans-serif"
     fontSize: "24px"
@@ -247,16 +252,18 @@ carries everything else. Both are drawn for reading in motion, which is what wat
 
 ## Colors
 
-A cool neutral ground with ink for text and actions, five line hues for the agents, one red for
-failures and one amber that belongs to deadlines alone. Values are the frontmatter's; the dark
-theme's are the `-dark` keys. Light is the default, dark follows `prefers-color-scheme`, and the
-toggle pins either one on `<html data-theme>`.
+"Carta notturna": a flat ink ground with a paper grain, cream text, five matte line inks for the
+agents, one red for failures and one amber that belongs to deadlines alone. Values are the
+frontmatter's: the plain keys are "Carta di giorno" (light), the `-dark` keys "Carta notturna".
+**Dark is the default** everywhere. The system preference does not decide, and the toggle pins
+light (or dark again) on `<html data-theme>`.
 
 ### Primary
 
 - **Ink** (`ink`, `action`, `focus`): text, primary buttons (ink pill with `on-action` text), the
-  focus ring, the cost meter, the interchange lozenge and the wave stations. In dark the ink is
-  the near-white `ink-dark` and primary buttons invert to a light pill with dark text.
+  focus ring, the cost meter, the interchange lozenge and the wave stations. In dark, the default,
+  the ink is the cream `ink-dark` and primary buttons are a cream pill with ink text. In light they
+  are an ink pill with cream text.
 
 ### Secondary: the five lines
 
@@ -286,36 +293,43 @@ else is drawn in a line colour.
 - **Rule strong** (`rule-strong`): control borders (icon buttons, chips, inputs, steppers), the
   dashed edge of a source warning, the cost meter's track. At least 3:1 on ground and surface.
 - **Notice wash** (`notice-wash`): note backgrounds and the hover wash of quiet controls.
-- **Browser surfaces**: selection is `rgb(31 85 196 / .18)` light and `rgb(122 162 247 / .3)`
-  dark; the scrollbar is `rule-strong` on transparent; the caret is ink; the scrim under a sheet is
-  `rgb(15 26 42 / .4)` light and `rgb(3 6 10 / .62)` dark.
+- **Browser surfaces**: selection is `rgb(31 85 196 / .18)` light and `rgb(110 143 224 / .3)` dark;
+  the scrollbar is `rule-strong` on transparent; the caret is ink; the scrim under a sheet is
+  `rgb(27 34 48 / .4)` light and `rgb(3 6 10 / .62)` dark; `<meta name="theme-color">` is each
+  theme's ground (`THEME_COLORS`, repainted by the toggle).
+- **Paper grain** (`--grain`): one still `feTurbulence` tile on the page ground (`html` and any
+  `[data-theme]` subtree), cream specks at 6 % on dark, ink specks at 5 % on light. It is the one
+  texture in the product: never animated, never on surfaces, inputs or plates.
 
 ### Measured contrast
 
-WCAG 2.x ratios, measured on the background each element actually sits on (2026-10-12; text needs
+WCAG 2.x ratios, measured on the background each element actually sits on (2026-10-14; text needs
 4.5:1, large text and non-text 3:1). `components/ui/tokens.test.ts` recomputes every pair from
 `globals.css` on each `npm test`, and fails if the frontmatter above and `globals.css` disagree.
 
 | Pair | Light | Dark | Needs |
 | --- | --- | --- | --- |
-| ink on ground / surface | 15.86 / 17.02 | 15.68 / 14.46 | 4.5 |
-| ink on notice-wash / error-wash / amber-wash | 14.74 / 15.01 / 15.36 | 13.08 / 14.40 / 13.23 | 4.5 |
-| ink-2 on ground / surface | 6.66 / 7.14 | 7.70 / 7.10 | 4.5 |
-| ink-2 on notice-wash / error-wash / amber-wash | 6.19 / 6.30 / 6.45 | 6.42 / 7.08 / 6.50 | 4.5 |
-| error on surface / ground / error-wash | 6.36 / 5.93 / 5.61 | 6.25 / 6.78 / 6.23 | 4.5 |
-| on-line on coordinatore / voli / alloggio / attività / spostamenti | 10.29 / 6.48 / 5.73 / 6.55 / 5.63 | 9.13 / 7.46 / 8.18 / 7.77 / 8.67 | 4.5 |
-| on-line at 92 % on the plate (worst: spostamenti) | 5.03 | 6.67 (voli) | 4.5 |
-| line strokes on surface (worst) | 5.63 (spostamenti) | 6.88 (voli) | 3 |
-| line strokes on ground (worst) | 5.24 (spostamenti) | 7.46 (voli) | 3 |
-| amber-ink on amber-wash / surface | 6.03 / 6.68 | 7.92 / 8.66 | 4.5 |
-| amber stroke on surface / amber-wash | 3.33 / 3.01 | 8.66 / 7.92 | 3 |
-| on-action on action (primary button) / its hover | 17.02 / 11.45 | 15.68 / 11.71 | 4.5 |
-| rule-strong on ground / surface (control borders) | 3.39 / 3.63 | 3.52 / 3.24 | 3 |
-| focus ring (ink) on ground / surface | 15.86 / 17.02 | 15.68 / 14.46 | 3 |
+| ink on ground / surface | 13.89 / 15.02 | 13.05 / 11.80 | 4.5 |
+| ink on notice-wash / error-wash / amber-wash | 12.69 / 12.93 / 11.93 | 10.71 / 12.34 / 11.68 | 4.5 |
+| ink-2 on ground / surface | 5.66 / 6.12 | 6.47 / 5.85 | 4.5 |
+| ink-2 on notice-wash / error-wash / amber-wash | 5.17 / 5.26 / 4.86 | 5.31 / 6.12 / 5.79 | 4.5 |
+| error on surface / ground / error-wash | 6.16 / 5.70 / 5.31 | 5.20 / 5.75 / 5.44 | 4.5 |
+| on-line on coordinatore / voli / alloggio / attività / spostamenti | 9.96 / 6.28 / 5.55 / 6.34 / 5.45 | 6.87 / 5.06 / 5.42 / 5.07 / 5.74 | 4.5 |
+| on-line at 92 % on the plate (worst) | 4.87 (spostamenti) | 4.51 (voli) | 4.5 |
+| line strokes on surface (worst) | 5.45 (spostamenti) | 4.57 (voli) | 3 |
+| line strokes on ground (worst) | 5.04 (spostamenti) | 5.06 (voli) | 3 |
+| amber-ink on amber-wash / surface | 5.14 / 6.47 | 7.13 / 7.20 | 4.5 |
+| amber stroke on surface / amber-wash | 4.41 / 3.50 | 7.20 / 7.13 | 3 |
+| on-action on action (primary button) / its hover | 15.02 / 10.01 | 13.05 / 9.98 | 4.5 |
+| rule-strong on ground / surface (control borders) | 3.25 / 3.52 | 3.35 / 3.02 | 3 |
+| focus ring (ink) on ground / surface | 13.89 / 15.02 | 13.05 / 11.80 | 3 |
 
-Decorative only (no minimum, never the sole carrier of meaning): `rule` on surface 1.36 / 1.33,
-surface against ground 1.07 / 1.08, the error notice's 55 % edge 2.56 / 2.80, `rule-strong` as the
-dashed edge of a warning on notice-wash 3.15 / 2.93 (the glyph and the sentence carry it).
+Decorative only (no minimum, never the sole carrier of meaning): `rule` on surface 1.38 / 1.26,
+surface against ground 1.08 / 1.11, the error notice's 55 % edge on error-wash 2.49 / 2.64,
+`rule-strong` as the dashed edge of a warning on notice-wash 2.97 / 2.75 (the glyph and the
+sentence carry it). On the cream light ground `amber-wash` is only 1.16:1 from `ground`: a due
+deadline is carried by the amber stroke (4.41 on surface) and the words "In scadenza", never by the
+wash alone.
 
 ### Named Rules
 
@@ -339,6 +353,7 @@ says "in corso da".
 
 **Display Font:** Barlow Semi Condensed 600 (with Barlow, system-ui)
 **Body Font:** Barlow 400, 500, 600 (with system-ui)
+**Hero Font:** Barlow Semi Condensed 700, the landing and demo headings only (`font-hero`).
 
 **Character:** both families come from highway-sign lettering: open, slightly condensed, made to
 be read at a glance while things move. The condensed cut names things (plan titles, lane names,
@@ -348,12 +363,14 @@ Both are self-hosted by `next/font/google` (`display: swap` with size-adjusted f
 is no layout shift and no request to Google from the browser). Only the latin subset is preloaded,
 four files of about 16 KB: Barlow 400, 500, 600 and Barlow Semi Condensed 600. Latin covers Italian
 and the Portuguese, Spanish and French names a trip meets; the latin-ext files load by
-`unicode-range` only when a name needs them. There is no bold 700 and no italic.
+`unicode-range` only when a name needs them. Barlow Semi Condensed 700 is a separate, non-preloaded
+face: its file loads only on the pages that use `font-hero`. There is no other bold and no italic.
 
 ### Hierarchy
 
 | Role | Token | Face | Size / line height | Where |
 | --- | --- | --- | --- | --- |
+| Hero | `font-hero font-bold text-hero`, `lg:text-hero-lg` | Semi Condensed 700 | 44 / 1.0, 66 / 0.98 from 1080 px | the landing and demo headings only |
 | Display | `text-display`, `lg:text-display-lg`, `xl:text-display-xl` | Semi Condensed 600 | 24 / 1.15, 30 from 1080 px, 32 from 1280 px | the page title ("Lisbona, 14–18 nov") |
 | Headline | `text-heading` | Semi Condensed 600 | 20 / 1.2 | section headings, sheet titles |
 | Title | `text-title` | Semi Condensed 600 | 18 / 1.2 | lane names, plan state in the header, closed sections, wordmark |
@@ -529,10 +546,10 @@ layout, not a stretched phone.
 Flat by default. Depth comes from tone (surface on ground), hairlines and the line glyphs, not from
 shadows. Two shadows exist, both soft and offset downward, both tinted from ink (black in dark):
 
-- **Plate** (`shadow-plate`: `0 1px 2px rgb(15 26 42 / .06), 0 10px 28px -14px rgb(15 26 42 /
+- **Plate** (`shadow-plate`: `0 1px 2px rgb(27 34 48 / .06), 0 10px 28px -14px rgb(27 34 48 /
   .22)`; dark `0 1px 2px rgb(0 0 0 / .4), 0 10px 28px -14px rgb(0 0 0 / .7)`): the live tool plate
   only. It lifts "you are here" off the line.
-- **Pop** (`shadow-pop`: `0 1px 2px rgb(15 26 42 / .08), 0 16px 32px -18px rgb(15 26 42 / .32)`;
+- **Pop** (`shadow-pop`: `0 1px 2px rgb(27 34 48 / .08), 0 16px 32px -18px rgb(27 34 48 / .32)`;
   dark `0 1px 2px rgb(0 0 0 / .45), 0 18px 36px -16px rgb(0 0 0 / .75)`): sheets and toasts.
 
 The sticky control bar is the one translucent surface: ground at 92 % with an 8 px backdrop blur,
