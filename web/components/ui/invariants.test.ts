@@ -32,6 +32,11 @@ const componentFiles = sources(path.join(webDir, "components"));
  * the variable itself. Comments that name the rule ("never amber") do not match. */
 const AMBER_USE = /\b(?:bg|text|border|ring|inset-ring|outline|fill|stroke|decoration|shadow|from|via|to)-amber\b|var\(--amber/;
 
+/** AI chrome (DESIGN.md, "The No AI Chrome Rule"): glow, spotlight gradients and gradient text, spelled
+ * as raw CSS or as Tailwind utilities. The sticky bar's `backdrop-blur` is glass, checked apart. */
+const CHROME =
+  /drop-shadow|text-shadow|(?<!backdrop-)\bblur-|blur\(|\bbg-radial|\bbg-conic|radial-gradient|conic-gradient|bg-clip-text|background-clip:\s*text/;
+
 describe("design invariants", () => {
   it("scans the design system's sources", () => {
     expect(files.length).toBeGreaterThan(15);
@@ -74,10 +79,30 @@ describe("design invariants", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("recognises AI chrome in raw CSS and in Tailwind's own utilities, but not the sticky bar's glass", () => {
+    for (const glow of [
+      "filter: drop-shadow(0 0 4px red)",
+      "filter: blur(8px)",
+      "background: radial-gradient(circle, #fff, transparent)",
+      "background: conic-gradient(red, blue)",
+      "background-clip: text",
+      'className="bg-clip-text"',
+      'className="drop-shadow-lg"',
+      'className="bg-radial from-ink"',
+      'className="bg-conic/oklch"',
+      'className="blur-2xl"',
+      'className="text-shadow-lg"',
+    ]) {
+      expect(CHROME.test(glow), glow).toBe(true);
+    }
+    for (const allowed of ['className="backdrop-blur-[8px]"', 'className="lg:backdrop-blur-none"', "box-shadow: var(--elevation-pop)"]) {
+      expect(CHROME.test(allowed), allowed).toBe(false);
+    }
+  });
+
   it("keeps the No AI Chrome Rule: no glow, spotlight or gradient text, and glass only on the sticky live bar", () => {
     const all = [...sources(path.join(webDir, "components")), ...sources(path.join(webDir, "app"))];
     const relative = (file: string) => path.relative(webDir, file);
-    const CHROME = /drop-shadow|blur\(|radial-gradient|conic-gradient|bg-clip-text|background-clip:\s*text/;
     expect(all.filter((file) => CHROME.test(readFileSync(file, "utf8"))).map(relative)).toEqual([]);
     const GLASS = /backdrop-blur|backdrop-filter/;
     expect(all.filter((file) => GLASS.test(readFileSync(file, "utf8"))).map(relative).sort()).toEqual([

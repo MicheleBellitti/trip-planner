@@ -296,8 +296,9 @@ read CSS variables use `NIGHT`, the night values, which a test keeps equal to `g
 - floating blurred shapes
 - sparkle iconography
 
-`components/ui/invariants.test.ts` enforces the mechanical part. The texture of the product is the
-paper grain, and nothing else.
+`components/ui/invariants.test.ts` enforces the mechanical part, in raw CSS and in Tailwind's own
+utilities (`bg-radial`, `bg-conic`, `blur-*`, `drop-shadow-*`, `text-shadow-*`, `bg-clip-text`). The
+texture of the product is the paper grain, and nothing else.
 
 ## Colors
 
