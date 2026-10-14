@@ -675,8 +675,9 @@ or shape (there is no class merging, on purpose: see JavaScript weight below).
   (the most important tap of the page is not its smallest control); 40 px from `sm` up.
 - **Primary:** ink fill, `on-action` text. One per view: "Pianifica il viaggio", "Prenota su
   <sito>", "Continua con 2 $ in più".
-- **Secondary:** ink outline on transparent; hover fills with `notice-wash`, and so does
-  `aria-current="page"` (a link to the page you are on: the header's "Nuovo piano" on the form). "Interrompi", "Apri in
+- **Secondary:** ink outline on transparent; hover fills with `notice-wash`. `aria-current="page"`
+  (a link to the page you are on: the header's "Nuovo piano" on the form) thickens the ink edge to
+  3 px, like the current station. "Interrompi", "Apri in
   TripTracker", "Nuovo piano" where a primary already exists.
 - **Quiet:** no edge until hover; inside notices and footers ("Riprova", "Annulla").
 - **States:** hover in 160 ms; press scales to 0.98 in 120 ms (none with reduced motion); focus is
@@ -724,13 +725,13 @@ or shape (there is no class merging, on purpose: see JavaScript weight below).
   - "Nuovo piano", **always the last item**, so the corner never changes meaning from page to
     page. It is always the *secondary* button, so each view keeps its single primary; on the
     phone a ringed 40 px "+" icon link named "Nuovo piano". On the form itself it stays in place
-    with `aria-current="page"` (the secondary and icon buttons draw that state as the notice wash),
-    so nothing shifts.
+    with `aria-current="page"`, drawn as the current station is (a 3 px ink edge: the 1.5 px border
+    plus a 1.5 px inset ring), so nothing shifts.
 - At most 72 px tall, one line, no menu drawer at 393 px, 44 px targets (under a finger the 40 px
   icon controls grow to 44 px, `pointer-coarse:size-11`).
 - On the live screen the header is the compact `AppHeaderBar` (`components/nav/app-header-bar.tsx`):
-  the slim top row (56 px) above the sticky control bar, which keeps the theme toggle and stays the
-  only sticky, translucent surface. The bar imports no toggle, so the plan page ships one copy;
+  the slim top row (56 px) above the sticky control bar, which keeps the theme toggle (bare there
+  too, so it never sits as a twin of the ringed "+") and stays the only sticky, translucent surface. The bar imports no toggle, so the plan page ships one copy;
   `AppHeader` is the bar with the toggle at its end. The plan page's error boundary shows the lockup
   alone (JS budget, README).
 - Links between pages read `ROUTES` (`web/lib/routes.ts`), never a hand-written path.

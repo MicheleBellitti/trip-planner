@@ -24,8 +24,11 @@ const VARIANTS: Record<ButtonVariant, string> = {
     "border-action bg-action text-on-action " +
     "not-disabled:hover:border-[color-mix(in_srgb,var(--action)_86%,var(--ground))] " +
     "not-disabled:hover:bg-[color-mix(in_srgb,var(--action)_86%,var(--ground))]",
-  // aria-current="page": a link to the page you are on (the header's "Nuovo piano" on the form).
-  secondary: "border-ink bg-transparent text-ink not-disabled:hover:bg-notice-wash aria-[current=page]:bg-notice-wash",
+  // aria-current="page": a link to the page you are on (the header's "Nuovo piano" on the form),
+  // drawn as the current station is: a 3 px ink edge (the 1.5 px border plus a 1.5 px inset ring).
+  secondary:
+    "border-ink bg-transparent text-ink not-disabled:hover:bg-notice-wash " +
+    "aria-[current=page]:inset-ring-[1.5px] aria-[current=page]:inset-ring-ink",
   quiet: "border-transparent bg-transparent text-ink underline-offset-[0.2em] not-disabled:hover:bg-notice-wash",
 };
 

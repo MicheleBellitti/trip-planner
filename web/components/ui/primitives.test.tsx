@@ -106,6 +106,18 @@ describe("Button and LinkButton", () => {
     expect(link.getAttribute("target")).toBe("_blank");
     expect(link.getAttribute("rel")).toBe("noopener noreferrer");
   });
+
+  it("draws a link to the current page with a 3 px ink edge, like the current station, not the hover wash", () => {
+    render(
+      <LinkButton href="/new" aria-current="page">
+        Nuovo piano
+      </LinkButton>,
+    );
+    const classes = screen.getByRole("link", { name: "Nuovo piano" }).className;
+    expect(classes).toMatch(/aria-\[current=page\]:inset-ring-\[1\.5px\]/);
+    expect(classes).toMatch(/aria-\[current=page\]:inset-ring-ink/);
+    expect(classes).not.toMatch(/aria-\[current=page\]:bg-notice-wash/);
+  });
 });
 
 describe("Field", () => {
