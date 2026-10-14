@@ -337,6 +337,24 @@ async def test_list_returns_the_runs_newest_first(evals_api: EvalsApi) -> None:
     assert len(limited.json()["runs"]) == 2
 
 
+async def test_list_pages_with_offset_and_says_how_many_runs_there_are(
+    evals_api: EvalsApi,
+) -> None:
+    for day in (11, 13, 12):
+        await evals_api.client.post(
+            "/evals/runs",
+            json={"results": make_results(started_at=f"2026-10-{day}T09:00:00+02:00")},
+            headers=BEARER,
+        )
+
+    response = await evals_api.client.get("/evals/runs", params={"limit": 2, "offset": 2})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [run["started_at"][:10] for run in body["runs"]] == ["2026-10-11"]
+    assert body["total"] == 3
+
+
 async def test_list_items_have_exactly_the_contract_fields(evals_api: EvalsApi) -> None:
     await evals_api.client.post(
         "/evals/runs",
@@ -365,6 +383,9 @@ async def test_list_items_have_exactly_the_contract_fields(evals_api: EvalsApi) 
         "web_search_requests",
         "judge_mean",
         "compare_status",
+        "reference_judge_mean",
+        "reference_cost_per_plan_cents",
+        "blocking_findings",
         "workflow_run_url",
     }
     assert run["requests_total"] == 5
@@ -377,12 +398,19 @@ async def test_list_is_empty_before_any_upload(evals_api: EvalsApi) -> None:
     response = await evals_api.client.get("/evals/runs")
 
     assert response.status_code == 200
-    assert response.json() == {"runs": []}
+    assert response.json() == {"runs": [], "total": 0}
 
 
 @pytest.mark.parametrize("limit", ["0", "-1", "201", "abc"])
 async def test_list_limit_is_bounded(evals_api: EvalsApi, limit: str) -> None:
     response = await evals_api.client.get("/evals/runs", params={"limit": limit})
+
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize("offset", ["-1", "abc", "1000001"])
+async def test_list_offset_is_bounded(evals_api: EvalsApi, offset: str) -> None:
+    response = await evals_api.client.get("/evals/runs", params={"offset": offset})
 
     assert response.status_code == 422
 
@@ -429,6 +457,26 @@ async def test_get_returns_the_list_fields_results_and_comparison(evals_api: Eva
     assert run["comparison"] == comparison()
     listed = (await evals_api.client.get("/evals/runs")).json()["runs"][0]
     assert {key: run[key] for key in listed} == listed
+    # Alone in the history: no run before it, none after.
+    assert run["previous_run"] is None
+    assert run["next_run"] is None
+
+
+async def test_get_gives_the_neighbouring_runs_as_list_rows(evals_api: EvalsApi) -> None:
+    ids = {}
+    for day in (11, 12):
+        created = await evals_api.client.post(
+            "/evals/runs",
+            json={"results": make_results(started_at=f"2026-10-{day}T09:00:00+02:00")},
+            headers=BEARER,
+        )
+        ids[day] = created.json()["id"]
+
+    newest = (await evals_api.client.get(f"/evals/runs/{ids[12]}")).json()
+
+    listed = (await evals_api.client.get("/evals/runs")).json()["runs"]
+    assert newest["previous_run"] == listed[1]
+    assert newest["next_run"] is None
 
 
 async def test_get_without_comparison_is_null(evals_api: EvalsApi) -> None:

@@ -16,6 +16,8 @@ colors:
   on-line: "#FBF8F1"
   error: "#B3261E"
   error-wash: "#F8E3DF"
+  success: "#4B7300"
+  success-wash: "#EAF0DB"
   notice-wash: "#EBE5D8"
   amber: "#A86400"
   amber-ink: "#8A4A00"
@@ -37,6 +39,8 @@ colors:
   on-line-dark: "#1B2230"
   error-dark: "#F2766B"
   error-wash-dark: "#36211F"
+  success-dark: "#9CCC65"
+  success-wash-dark: "#26301F"
   notice-wash-dark: "#283141"
   amber-dark: "#F3A845"
   amber-ink-dark: "#F3A845"
@@ -237,7 +241,8 @@ found it.
 The line map is printed at night: **"Carta notturna"**. A flat ink ground with a paper grain, cream
 type, five matte line inks, the way a transit map looks on good paper under a street lamp. It is
 crafted and alive, and never neon: colour is spent on identity (one hue per agent), on failure (one
-red) and on deadlines (one amber). Everything else is cream or ink on the ground. Motion reports a
+red), on deadlines (one amber) and, in the eval history only, on a passed check (one green).
+Everything else is cream or ink on the ground. Motion reports a
 change and stops: a new station draws its segment down, the live node sends a slow halo, nothing
 loops for decoration. Density is medium: stations are spaced like a printed line map (about 40 px a
 row), with tabular figures so times and costs line up.
@@ -303,7 +308,8 @@ texture of the product is the paper grain, and nothing else.
 ## Colors
 
 "Carta notturna": a flat ink ground with a paper grain, cream text, five matte line inks for the
-agents, one red for failures and one amber that belongs to deadlines alone. Values are the
+agents, one red for failures, one amber that belongs to deadlines alone and one green that belongs
+to a passed eval. Values are the
 frontmatter's: the plain keys are "Carta di giorno" (light), the `-dark` keys "Carta notturna".
 **Dark is the default** everywhere. The system preference does not decide, and the toggle pins
 light (or dark again) on `<html data-theme>`.
@@ -327,10 +333,14 @@ else is drawn in a line colour.
 - **Spostamenti** (`line-transport`): teal.
 - **On line** (`on-line`): text and icons on a line colour (plates, roundels).
 
-### Tertiary: failure and deadline
+### Tertiary: failure, success and deadline
 
 - **Error** (`error`, `error-wash`): a failed tool's ring, an agent in error, error notices, form
   errors. Always with a cross or a warning glyph and a sentence.
+- **Success** (`success`, `success-wash`): **reserved for the eval history** (`/evals`). A passed run
+  or check, a judge score of 4 or 5, a figure that improved since the previous run. Always with a
+  check glyph or a sign and a word. A leaf green, yellower and lighter than the lodging line, so the
+  two never read as one; the eval screens draw no line colour.
 - **Amber** (`amber` stroke, `amber-ink` text, `amber-wash` fill): **reserved**. Only the "Prenota
   entro" side of a booking whose `dueAt` is within 72 hours (or past), drawn by `DatePair`.
 
@@ -365,6 +375,8 @@ WCAG 2.x ratios, measured on the background each element actually sits on (2026-
 | ink-2 on ground / surface | 5.66 / 6.12 | 6.47 / 5.85 | 4.5 |
 | ink-2 on notice-wash / error-wash / amber-wash | 5.17 / 5.26 / 4.86 | 5.31 / 6.12 / 5.79 | 4.5 |
 | error on surface / ground / error-wash | 6.16 / 5.70 / 5.31 | 5.20 / 5.75 / 5.44 | 4.5 |
+| success on surface / ground / success-wash | 5.28 / 4.88 / 4.79 | 7.71 / 8.53 / 7.37 | 4.5 |
+| ink / ink-2 on success-wash | 13.65 / 5.55 | 11.28 / 5.59 | 4.5 |
 | on-line on coordinatore / voli / alloggio / attività / spostamenti | 9.96 / 6.28 / 5.55 / 6.34 / 5.45 | 6.87 / 5.49 / 5.42 / 5.37 / 5.74 | 4.5 |
 | on-line at 92 % on the plate, blended on 8-bit channels (worst) | 4.87 (spostamenti) | 4.77 (attività) | 4.5 |
 | line strokes on surface (worst) | 5.45 (spostamenti) | 4.85 (attività) | 3 |
@@ -378,7 +390,8 @@ WCAG 2.x ratios, measured on the background each element actually sits on (2026-
 Decorative only (no minimum, never the sole carrier of meaning): `rule` on surface 1.38 / 1.26,
 surface against ground 1.08 / 1.11, the error notice's 55 % edge on error-wash 2.50 / 2.64,
 `rule-strong` as the dashed edge of a warning on notice-wash 2.97 / 2.75 (the glyph and the
-sentence carry it). On the cream light ground `amber-wash` is only 1.16:1 from `ground`: a due
+sentence carry it), `success-wash` against ground 1.02 / 1.16 (the glyph and the word carry a
+passed state). On the cream light ground `amber-wash` is only 1.16:1 from `ground`: a due
 deadline is carried by the amber stroke (4.41 on surface) and the words "In scadenza", never by the
 wash alone.
 
@@ -395,6 +408,11 @@ it decides by itself (the caller cannot force it).
 colour for status, success, links or emphasis. The five hues avoid orange and yellow so they can
 never be mistaken for the deadline. One exception, named: on a finished plan's itinerary (the map
 and the day list) the five hues tell days apart, always beside the day's number (Map).
+
+**The Green Means Passed Rule.** Green says one thing, only in the eval history: this passed, or
+this got better. A passed run's verdict and its station, a passed check, a judge score of 4 or 5, a
+delta that moved the right way. Never on a button, a link, a heading, a plan or a booking, and never
+a line colour: the lodging line's green is the agent's, this green is the verdict's.
 
 **The Word Beside The Colour Rule.** No state is carried by colour alone. Lane states are a word
 and a glyph, errors have a cross and a sentence, a due deadline says "In scadenza", the live tool
@@ -588,6 +606,28 @@ layout, not a stretched phone.
   17:36", "Ieri, 21:40", "8 ott", the year only when it is not the current one); the full date and
   time are in the element's `title`. The clock is read in the fetch callbacks, never in render
   (Cache Components prerenders the route: a `Date.now()` in render is frozen into the shell).
+- **The eval history** (`/evals`) is a dashboard over a line. On top, "Ultima valutazione": the
+  newest run's verdict as a pill on its wash (green passed, red blocked, the notice wash otherwise),
+  what it means, why it stopped (its first two blocking findings, the rule in Italian, the request
+  linked to its open row, compare.py's sentence), and four figures (piani accettati, richieste
+  senza blocchi, voto medio, costo) each with how it moved since the run before, a signed change
+  in green when it is good news and in red when it is not ("invariato" in ink-2), and the run it
+  is measured against named once under them. Then "Andamento" over the twenty newest runs, one
+  card: the "Esito" line across it (every run a station carrying its verdict's glyph in its
+  colour), then three figures side by side from 1080 px with hairlines between them (voto medio,
+  costo a piano, piani accettati). On the figures the stations are plain ink rings, the newest one
+  larger, so colour never competes with the figure; the line breaks where a run has no figure;
+  the baseline the gate measures against is a dashed `rule-strong` hairline labelled
+  "riferimento 4,1"; the axis is named only by its bounds (the judge and the cost per plan on
+  tight clean bounds, the plans from zero) and its two ends' days. One tab stop per chart (arrows,
+  Home, End, Enter opens the run), the reading in the caption (never a floating box), each key
+  move said once, the values in a table for screen readers. The charts wait for the third run.
+  Then "Tutte le valutazioni", the rail list, ten runs a page with numbered pages (`?pagina=N`,
+  the scroll kept). A run's page steps to its neighbours ("Più recente" to the left, "Più
+  vecchia" to the right, as the list reads), gives its figures with their changes since the run
+  before, and lists its reference requests as closed rows (glyph and colour, title, plan, checks,
+  score, cost, and the blocking check and the low scores named), the failing ones first; a row
+  opens the deep dive, and `#richiesta-<id>` opens one.
 - **Layers**: the sticky bar is `z-20`, the lanes' sticky heads `z-10` (above the lanes' own
   marks, below the bar), the floating "Vai all'ultimo" `z-10`, the toast region `z-40`, sheets are
   in the browser's top layer (native `<dialog>`). No other z-index.

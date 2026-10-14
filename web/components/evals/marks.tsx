@@ -22,38 +22,36 @@ const VERDICT_GLYPHS: Record<Exclude<RunVerdict, "unknown">, IconName> = {
 };
 
 /** A run verdict's glyph alone: a check, a prohibition sign, an info mark, a stop, or the dashed
- * ring of a run nobody compared. The word goes beside it (RunVerdictBadge) or elsewhere on the row. */
+ * ring of a run nobody compared. The word goes beside it (RunVerdictPill) or elsewhere on the row. */
 export function RunVerdictGlyph({ verdict, size = 15 }: { verdict: RunVerdict; size?: number }) {
   return verdict === "unknown" ? <DashedRing size={size} /> : <Icon name={VERDICT_GLYPHS[verdict]} size={size} />;
 }
 
-/** The ink for a verdict: only a blocked run is red, and it always has its word and its glyph. */
+/** The ink for a verdict: a passed run is green, a blocked one red (The Green Means Passed Rule),
+ * the rest quiet; each always has its word and its glyph. */
 export function verdictTone(verdict: RunVerdict): string {
-  return verdict === "blocked" ? "text-error" : verdict === "passed" ? "text-ink" : "text-ink-2";
+  return verdict === "blocked" ? "text-error" : verdict === "passed" ? "text-success" : "text-ink-2";
 }
 
-/** A run's verdict as a word and a glyph (never colour alone): Superato, Bloccato, Solo report,
- * Interrotto, Senza confronto. `lg` is the page header's condensed title size. */
-export function RunVerdictBadge({
-  verdict,
-  size = "md",
-  className,
-}: {
-  verdict: RunVerdict;
-  size?: "md" | "lg";
-  className?: string;
-}) {
+/** The wash under a verdict's pill: green, red, or the quiet notice wash. */
+function verdictWash(verdict: RunVerdict): string {
+  return verdict === "blocked" ? "bg-error-wash" : verdict === "passed" ? "bg-success-wash" : "bg-notice-wash";
+}
+
+/** A run's verdict as a pill: the word and the glyph on its wash, at title size in the dashboard
+ * and the run's header, where the verdict is the first thing read. */
+export function RunVerdictPill({ verdict, className }: { verdict: RunVerdict; className?: string }) {
   return (
     <span
       data-verdict={verdict}
       className={cx(
-        "inline-flex items-center",
-        size === "lg" ? "gap-2 font-cond text-title font-semibold" : "gap-1.5 text-meta font-medium",
+        "inline-flex items-center gap-2 rounded-full py-1 pr-3.5 pl-2.5 font-cond text-title font-semibold",
+        verdictWash(verdict),
         verdictTone(verdict),
         className,
       )}
     >
-      <RunVerdictGlyph verdict={verdict} size={size === "lg" ? 18 : 15} />
+      <RunVerdictGlyph verdict={verdict} size={18} />
       {RUN_VERDICT_LABELS[verdict]}
     </span>
   );
@@ -66,11 +64,17 @@ const CHECK_GLYPHS: Record<Exclude<CheckKind, "skip">, IconName> = {
   error: "x-circle",
 };
 
-/** The ink of a check's status: failures in error red (always with a cross and a word), warnings
- * in ink, passes and skips quiet. */
+/** The ink of a check's status: failures in error red (always with a cross and a word), passes
+ * green (with a check), warnings in ink (with a warning sign), skips quiet (a dashed ring). */
 export function checkTone(status: string): string {
   const kind = checkKind(status);
-  return kind === "fail" || kind === "error" ? "text-error" : kind === "warn" ? "text-ink" : "text-ink-2";
+  return kind === "fail" || kind === "error"
+    ? "text-error"
+    : kind === "pass"
+      ? "text-success"
+      : kind === "warn"
+        ? "text-ink"
+        : "text-ink-2";
 }
 
 /** A check's status glyph: check (Superato), warning (Avviso), cross (Non superato, Errore), dashed
@@ -80,16 +84,21 @@ export function CheckGlyph({ status, size = 15 }: { status: string; size?: numbe
   return kind === "skip" ? <DashedRing size={size} /> : <Icon name={CHECK_GLYPHS[kind]} size={size} />;
 }
 
+/** The ink of a judge score: 4 and 5 green (Buono, Ottimo), 1 and 2 red (Inutilizzabile,
+ * Scarso), 3 plain ink. */
+export function scoreTone(score: number): string {
+  return score >= 4 ? "border-success text-success" : score <= 2 ? "border-error text-error" : "border-ink text-ink";
+}
+
 /** A judge score as a roundel with the number in it: the number is the information, the ring is
- * only its station. Low scores (1 and 2) take the error red, with the number and the word beside. */
+ * only its station, in the score's ink; the word is written beside it. */
 export function ScoreRoundel({ score, className }: { score: number; className?: string }) {
-  const low = score <= 2;
   return (
     <span
       data-score={score}
       className={cx(
         "grid size-7 shrink-0 place-items-center rounded-full border-[2.5px] font-cond text-small font-semibold",
-        low ? "border-error text-error" : "border-ink text-ink",
+        scoreTone(score),
         className,
       )}
     >

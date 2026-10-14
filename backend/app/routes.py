@@ -1005,10 +1005,15 @@ async def list_eval_runs(
     limit: Annotated[
         int, Query(ge=1, le=evals_store.MAX_LIST_LIMIT)
     ] = evals_store.DEFAULT_LIST_LIMIT,
+    offset: Annotated[int, Query(ge=0, le=evals_store.MAX_LIST_OFFSET)] = 0,
 ) -> evals_store.EvalRunListResponse:
     """The eval history, newest first: the counts and the verdict of each run, never its
-    documents. Any allowed user sees every run (they belong to the project, not to a user)."""
-    return evals_store.EvalRunListResponse(runs=await evals_store.list_eval_runs(db, limit=limit))
+    documents; `offset` skips the newest runs and `total` counts them all, for the list's pages.
+    Any allowed user sees every run (they belong to the project, not to a user)."""
+    return evals_store.EvalRunListResponse(
+        runs=await evals_store.list_eval_runs(db, limit=limit, offset=offset),
+        total=await evals_store.count_eval_runs(db),
+    )
 
 
 @evals_router.get("/runs/{run_id}", responses=_ERRORS)

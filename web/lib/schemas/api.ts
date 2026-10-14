@@ -196,13 +196,34 @@ export const EvalRunSummarySchema = z.object({
   /** Mean of every judge score of the run, 1 to 5; null when nothing was scored. */
   judge_mean: NullableNumber,
   compare_status: z._default(z.nullable(EvalCompareStatusSchema), null),
+  /** The baseline the comparison measured against: the mean of its criteria's means, and its mean
+   * cost per plan in US cents; null without a baseline (and from a backend older than them). */
+  reference_judge_mean: NullableNumber,
+  reference_cost_per_plan_cents: NullableNumber,
+  /** Why the comparison blocked: its first findings that block (at most 3); `message` is English. */
+  blocking_findings: z._default(
+    z.array(
+      z.object({
+        rule: z._default(z.string(), ""),
+        message: z._default(z.string(), ""),
+        request_id: NullableString,
+        request_title: NullableString,
+      }),
+    ),
+    () => [],
+  ),
   /** The GitHub Actions run that produced it, when CI uploaded it. */
   workflow_run_url: NullableString,
 });
 export type EvalRunSummary = z.output<typeof EvalRunSummarySchema>;
+export type EvalBlockingFinding = EvalRunSummary["blocking_findings"][number];
 
-/** GET /evals/runs: newest first. */
-export const EvalRunListResponseSchema = z.object({ runs: z.array(EvalRunSummarySchema) });
+/** GET /evals/runs: newest first. `total` counts every stored run, for the list's pages; null from
+ * a backend older than the pages, which did not send it. */
+export const EvalRunListResponseSchema = z.object({
+  runs: z.array(EvalRunSummarySchema),
+  total: z._default(z.nullable(Count), null),
+});
 export type EvalRunListResponse = z.output<typeof EvalRunListResponseSchema>;
 
 /** A check of `evals/checks.py`: pass, warn, fail, error or skip. Unknown statuses are kept. */
@@ -375,11 +396,16 @@ export const EvalComparisonSchema = z.object({
 });
 export type EvalComparison = z.output<typeof EvalComparisonSchema>;
 
-/** GET /evals/runs/{id}: the list fields, the stored results and the stored comparison. */
+/** GET /evals/runs/{id}: the list fields, the stored results and the stored comparison, and the
+ * neighbouring runs. */
 export const EvalRunDetailSchema = z.object({
   ...EvalRunSummarySchema.shape,
   results: EvalResultsSchema,
   comparison: z._default(z.nullable(EvalComparisonSchema), null),
+  /** The runs just before (older) and after (newer) it in the list, as list rows; null at the ends
+   * and from a backend older than them. */
+  previous_run: z._default(z.nullable(EvalRunSummarySchema), null),
+  next_run: z._default(z.nullable(EvalRunSummarySchema), null),
 });
 export type EvalRunDetail = z.output<typeof EvalRunDetailSchema>;
 

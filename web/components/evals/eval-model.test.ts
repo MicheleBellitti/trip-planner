@@ -7,6 +7,7 @@ import accepted from "./__fixtures__/run-accepted.json";
 import real from "./__fixtures__/run-real.json";
 import {
   acceptedLabel,
+  axisDay,
   checkBlocks,
   checkLabel,
   checkKind,
@@ -20,12 +21,17 @@ import {
   judgeOutcome,
   meanAgainstBaseline,
   orderedFindings,
+  pageCount,
+  pageHref,
+  pageItems,
+  parsePage,
   planDigest,
   profileLabel,
   requestAnchor,
   requestJudgeMean,
   requestStatusLabel,
   RUN_VERDICT_LABELS,
+  runDelta,
   runSeconds,
   runVerdict,
   runVerdictExplanation,
@@ -33,6 +39,9 @@ import {
   scoreWord,
   shortSha,
   sortChecks,
+  trendDomain,
+  trendReference,
+  trendSeries,
 } from "./eval-model";
 
 const acceptedRun = EvalRunDetailSchema.parse(accepted);
@@ -296,5 +305,135 @@ describe("the comparison", () => {
     expect(meanAgainstBaseline(null, 4)).toBe("nessun voto (era 4,0)");
     expect(costAgainstBaseline(55, 50)).toBe("0,55 $ (era 0,50 $)");
     expect(costAgainstBaseline(null, 50)).toBe("costo non registrato");
+  });
+});
+
+describe("the dashboard", () => {
+  const runs = list.map((row) => EvalRunSummarySchema.parse(row));
+  const [newest, second] = runs as [(typeof runs)[number], (typeof runs)[number]];
+
+  it("says how a figure moved since the previous run, and whether that is better", () => {
+    expect(runDelta("accepted", { ...newest, requests_accepted: 5 }, { ...second, requests_accepted: 2 })).toEqual({
+      text: "+3",
+      trend: "better",
+    });
+    expect(runDelta("checks", { ...newest, checks_passed: 1 }, { ...second, checks_passed: 4 })).toEqual({
+      text: "\u22123",
+      trend: "worse",
+    });
+    expect(runDelta("judge", { ...newest, judge_mean: 4.4 }, { ...second, judge_mean: 4.2 })).toEqual({
+      text: "+0,2",
+      trend: "better",
+    });
+  });
+
+  it("counts a cheaper run as better, in dollars", () => {
+    expect(runDelta("cost", { ...newest, total_cost_cents: 271 }, { ...second, total_cost_cents: 288 })).toEqual({
+      text: "\u22120,17 $",
+      trend: "better",
+    });
+    expect(runDelta("cost", { ...newest, total_cost_cents: 300 }, { ...second, total_cost_cents: 288 })).toEqual({
+      text: "+0,12 $",
+      trend: "worse",
+    });
+  });
+
+  it("calls a change that rounds to nothing unchanged, and has no delta without both figures", () => {
+    expect(runDelta("judge", { ...newest, judge_mean: 4.24 }, { ...second, judge_mean: 4.2 })).toEqual({
+      text: "invariato",
+      trend: "same",
+    });
+    expect(runDelta("judge", { ...newest, judge_mean: 4.2 }, { ...second, judge_mean: null })).toBeNull();
+    expect(runDelta("accepted", newest, null)).toBeNull();
+  });
+
+  it("draws a metric over the runs oldest first, with each run's verdict and a gap where it has no value", () => {
+    const series = trendSeries(runs, "judge");
+    expect(series.map((point) => point.id)).toEqual([...runs].reverse().map((run) => run.id));
+    expect(series.map((point) => point.value)).toEqual([4.55, null, 4.2, 4.0, null]);
+    expect(series.map((point) => point.verdict)).toEqual(["report_only", "aborted", "passed", "blocked", "unknown"]);
+    expect(series[2]?.label).toBe("4,2");
+    expect(trendSeries(runs, "cost")[0]?.label).toBe("12,64 $");
+    expect(trendSeries(runs, "accepted")[0]).toMatchObject({ value: 4, label: "4/5" });
+  });
+
+  it("scales each chart on clean bounds: the judge's whole points around its means, every request, the next whole dollar", () => {
+    // Means 4,55, 4,2 and 4,0: between 4 and 5, so a move of a few tenths shows.
+    expect(trendDomain(runs, "judge")).toEqual([4, 5]);
+    expect(trendDomain([{ ...newest, judge_mean: 4 }], "judge")).toEqual([3, 5]);
+    expect(trendDomain([{ ...newest, judge_mean: 1.2 }, { ...second, judge_mean: 1.4 }], "judge")).toEqual([1, 2]);
+    expect(trendDomain([{ ...newest, judge_mean: null }], "judge")).toEqual([1, 5]);
+    expect(trendDomain(runs, "accepted")).toEqual([0, 5]);
+    expect(trendDomain(runs, "cost")).toEqual([0, 1300]);
+    expect(trendDomain([{ ...newest, total_cost_cents: 0 }], "cost")).toEqual([0, 100]);
+  });
+
+  it("names a chart's ends by the day, without the time", () => {
+    const now = Date.parse("2026-10-12T21:00:00Z");
+    expect(axisDay("2026-10-12T20:12:04+02:00", now)).toBe("Oggi");
+    expect(axisDay("2026-10-11T11:04:55+02:00", now)).toBe("Ieri");
+    expect(axisDay("2026-10-08T08:15:00+02:00", now)).toBe("8 ott");
+    expect(axisDay("2025-12-30T08:15:00+01:00", now)).toBe("30 dic 2025");
+  });
+
+  it("draws the cost per plan, so runs with more or fewer requests compare", () => {
+    const series = trendSeries(runs, "cost_per_plan");
+    expect(series.map((point) => point.label)).toEqual(["2,53 $", "0,32 $", "0,54 $", "0,58 $", "0,62 $"]);
+    expect(trendSeries([{ ...newest, requests_total: 0 }], "cost_per_plan")[0]?.value).toBeNull();
+  });
+
+  it("takes the reference from the newest run that has one, and only for the judge and the cost per plan", () => {
+    const withBaselines = [
+      { ...newest, reference_judge_mean: 4.1, reference_cost_per_plan_cents: null },
+      { ...second, reference_judge_mean: 3.9, reference_cost_per_plan_cents: 52.5 },
+    ];
+    expect(trendReference(withBaselines, "judge")).toEqual({ value: 4.1, label: "riferimento 4,1" });
+    expect(trendReference(withBaselines, "cost_per_plan")).toEqual({ value: 52.5, label: "riferimento 0,53 $" });
+    expect(trendReference(withBaselines, "accepted")).toBeNull();
+    expect(trendReference(runs, "judge")).toBeNull();
+  });
+
+  it("scales the cost per plan tightly on ten cents, the reference included", () => {
+    expect(trendDomain(runs, "cost_per_plan")).toEqual([30, 260]);
+    const two = [
+      { ...newest, total_cost_cents: 309 },
+      { ...second, total_cost_cents: 288 },
+    ];
+    expect(trendDomain(two, "cost_per_plan")).toEqual([50, 70]);
+    expect(trendDomain(two, "cost_per_plan", 40)).toEqual([40, 70]);
+    expect(trendDomain([{ ...newest, total_cost_cents: 300, requests_total: 5 }], "cost_per_plan")).toEqual([60, 70]);
+    expect(trendDomain([{ ...newest, judge_mean: 4.2 }], "judge", 3.4)).toEqual([3, 5]);
+  });
+
+  it("keeps the newest runs when there are more than the chart holds", () => {
+    const series = trendSeries(runs, "cost", 3);
+    expect(series.map((point) => point.id)).toEqual(runs.slice(0, 3).reverse().map((run) => run.id));
+  });
+});
+
+describe("the list's pages", () => {
+  it("reads the page from the address, the first one for anything that is not a page", () => {
+    expect(parsePage("3")).toBe(3);
+    expect(parsePage(["2", "5"])).toBe(2);
+    for (const value of [undefined, "", "0", "-1", "1.5", "abc", "2x"]) expect(parsePage(value)).toBe(1);
+  });
+
+  it("links the first page to the bare list and the others by number", () => {
+    expect(pageHref(1)).toBe("/evals");
+    expect(pageHref(4)).toBe("/evals?pagina=4");
+  });
+
+  it("counts the pages, at least one", () => {
+    expect(pageCount(0, 10)).toBe(1);
+    expect(pageCount(10, 10)).toBe(1);
+    expect(pageCount(11, 10)).toBe(2);
+  });
+
+  it("numbers every page when they are few, and folds the far ones into gaps when they are many", () => {
+    expect(pageItems(2, 5)).toEqual([1, 2, 3, 4, 5]);
+    expect(pageItems(1, 12)).toEqual([1, 2, 3, "gap", 12]);
+    expect(pageItems(6, 12)).toEqual([1, "gap", 5, 6, 7, "gap", 12]);
+    expect(pageItems(12, 12)).toEqual([1, "gap", 10, 11, 12]);
+    expect(pageItems(3, 12)).toEqual([1, 2, 3, 4, "gap", 12]);
   });
 });

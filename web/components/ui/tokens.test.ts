@@ -70,7 +70,7 @@ const LINES = ["line-coordinator", "line-flights", "line-lodging", "line-activit
 const TEXT = 4.5;
 const NON_TEXT = 3;
 const PAIRS: [string, string, number][] = [
-  ...["ground", "surface", "notice-wash", "error-wash", "amber-wash"].flatMap(
+  ...["ground", "surface", "notice-wash", "error-wash", "success-wash", "amber-wash"].flatMap(
     (bg): [string, string, number][] => [
       ["ink", bg, TEXT],
       ["ink-2", bg, TEXT],
@@ -79,6 +79,9 @@ const PAIRS: [string, string, number][] = [
   ["error", "surface", TEXT],
   ["error", "ground", TEXT],
   ["error", "error-wash", TEXT],
+  ["success", "surface", TEXT],
+  ["success", "ground", TEXT],
+  ["success", "success-wash", TEXT],
   ...LINES.flatMap((line): [string, string, number][] => [
     ["on-line", line, TEXT],
     [line, "surface", NON_TEXT],

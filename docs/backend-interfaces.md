@@ -923,8 +923,15 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
     the photo (CC BY / CC BY-SA require it).
 35. Eval history (`app/evals_store.py`, table `eval_runs`, migration `a3f5b8c1d7e2`). CI
     uploads each paid eval run with `POST /evals/runs` and the web app reads it back with
-    `GET /evals/runs` (`{"runs": [...]}`, newest first, `limit` 1-200, default 50) and `GET
-    /evals/runs/{id}` (the list fields plus `results` and `comparison`). The write side is a
+    `GET /evals/runs` (`{"runs": [...], "total"}`, newest first, `limit` 1-200, default 50,
+    `offset` 0-1,000,000 for the list's pages, `total` the number of stored runs) and `GET
+    /evals/runs/{id}` (the list fields plus `results` and `comparison`, and `previous_run` /
+    `next_run`, the neighbouring list rows in the list's order, null at the ends). The list
+    fields include what the comparison measured against and why it blocked, computed at ingest
+    and again when a repeat brings a new comparison: `reference_judge_mean` (the mean of the
+    criteria's baseline means), `reference_cost_per_plan_cents`, and `blocking_findings` (the
+    first 3 findings that block, `{rule, message, request_id, request_title}`). A summary stored
+    before these fields reads as no baseline and no findings. The write side is a
     machine endpoint: `Authorization: Bearer <EVALS_INGEST_TOKEN>`, no cookie, no Origin check,
     no CORS; 404 `evals_ingest_disabled` while the token is empty (the default), 401
     `invalid_ingest_token` for a wrong one (compared as SHA-256 digests with

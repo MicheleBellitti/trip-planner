@@ -2,8 +2,10 @@
 
 /**
  * "/evals/[id]": one eval run (GET /evals/runs/{id}). The header with the run's facts and its
- * verdict, the comparison with the baseline, an index of the requests, one section per request
- * and the agent versions closed at the end. Fetched in the browser (the cookie), like the plans.
+ * verdict, the comparison with the baseline, the requests as closed rows (the deep dive behind
+ * each, the ones that stopped the gate first) and the agent versions closed at the end. A link to
+ * `#richiesta-<id>` opens that request; "Più recente" and "Più vecchia" step to the neighbouring
+ * runs. Fetched in the browser (the cookie), like the plans.
  */
 
 import Link from "next/link";
@@ -19,11 +21,11 @@ import type { EvalRunDetail } from "@/lib/schemas/api";
 
 import { AgentVersions } from "./agent-versions";
 import { ComparisonSection } from "./comparison-section";
-import { checksSummary, failingFirst, formatJudgeMean, requestAnchor, requestJudgeMean, requestStatusLabel, requestsLabel, runVerdict } from "./eval-model";
+import { failingFirst, requestsLabel, runVerdict } from "./eval-model";
 import { EvalRunSkeleton } from "./eval-run-skeleton";
-import { CheckGlyph } from "./marks";
-import { RequestSection } from "./request-section";
+import { RequestRow } from "./request-row";
 import { RunHeader } from "./run-header";
+import { StepLink } from "./run-pager";
 
 type ScreenState =
   | { kind: "loading" }
@@ -123,14 +125,45 @@ function BackLink() {
   );
 }
 
+/** Opens the request row the address points to (`#richiesta-<id>`), on arrival and on every
+ * later jump (a comparison finding's link), brings it into view and gives its summary the focus. */
+function useOpenLinkedRequest() {
+  useEffect(() => {
+    const reveal = () => {
+      const id = decodeURIComponent(window.location.hash.slice(1));
+      const target = id ? document.getElementById(id) : null;
+      if (!(target instanceof HTMLDetailsElement)) return;
+      target.open = true;
+      target.scrollIntoView?.({ block: "start" });
+      // The keyboard and the screen reader land where the eye does.
+      target.querySelector("summary")?.focus({ preventScroll: true });
+    };
+    reveal();
+    window.addEventListener("hashchange", reveal);
+    return () => window.removeEventListener("hashchange", reveal);
+  }, []);
+}
+
 function RunPage({ run }: { run: EvalRunDetail }) {
   const verdict = runVerdict(run);
   const requests = failingFirst(run.results.requests);
+  useOpenLinkedRequest();
   return (
     <>
       <AppHeader current="evals" />
       <main className="mx-auto max-w-page px-4 pt-5 pb-16 lg:px-7 lg:pt-7">
-        <BackLink />
+        <div className="flex max-w-[64rem] flex-wrap items-center justify-between gap-x-4">
+          <BackLink />
+          {/* The neighbours, in the list's direction: newer to the left, older to the right. */}
+          <nav aria-label="Valutazioni vicine" className="flex items-center gap-4">
+            <StepLink href={run.next_run ? `/evals/${run.next_run.id}` : null} direction="newer">
+              Più recente
+            </StepLink>
+            <StepLink href={run.previous_run ? `/evals/${run.previous_run.id}` : null} direction="older">
+              Più vecchia
+            </StepLink>
+          </nav>
+        </div>
         <div className="mt-2 max-w-[64rem]">
           <RunHeader run={run} />
           <ComparisonSection
@@ -142,42 +175,19 @@ function RunPage({ run }: { run: EvalRunDetail }) {
 
           {requests.length > 0 ? (
             <section aria-labelledby="richieste" className="mt-9">
-              <h2 id="richieste" className="font-cond text-heading font-semibold">
-                Richieste
-                <span className="ml-2 font-sans text-meta font-normal text-ink-2">{requestsLabel(requests.length)}</span>
-              </h2>
-              <ul className="mt-2 divide-y divide-rule rounded-md border border-rule bg-surface">
-                {requests.map((request) => {
-                  const mean = formatJudgeMean(requestJudgeMean(request.judge));
-                  return (
-                    <li key={request.id}>
-                      <a
-                        href={`#${requestAnchor(request.id)}`}
-                        className="grid grid-cols-[1.0625rem_minmax(0,1fr)] gap-x-2.5 px-3 py-2.5 no-underline transition-[background-color] duration-(--duration-hover) ease-out first:rounded-t-md last:rounded-b-md hover:bg-notice-wash focus-visible:-outline-offset-2"
-                      >
-                        <span className={request.checks_passed ? "mt-px text-ink-2" : "mt-px text-error"}>
-                          <CheckGlyph status={request.checks_passed ? "pass" : "fail"} size={17} />
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block text-small font-medium text-ink">{request.title || request.id}</span>
-                          <span className="mt-0.5 block text-meta text-ink-2">
-                            {requestStatusLabel(request.status)}, {checksSummary(request.checks).toLocaleLowerCase("it")}
-                            {mean ? `, voto ${mean}` : ""}
-                          </span>
-                        </span>
-                      </a>
-                    </li>
-                  );
-                })}
-              </ul>
+              <div className="flex flex-wrap items-baseline gap-x-2">
+                <h2 id="richieste" className="font-cond text-heading font-semibold">
+                  Richieste
+                </h2>
+                <p className="text-meta text-ink-2">{requestsLabel(requests.length)}, apri una per i dettagli</p>
+              </div>
+              <div className="mt-2 divide-y divide-rule overflow-hidden rounded-md border border-rule bg-surface">
+                {requests.map((request) => (
+                  <RequestRow key={request.id} request={request} />
+                ))}
+              </div>
             </section>
           ) : null}
-
-          <div className="mt-9 grid gap-8">
-            {requests.map((request) => (
-              <RequestSection key={request.id} request={request} />
-            ))}
-          </div>
 
           <AgentVersions versions={run.results.agent_versions} className="mt-10" />
         </div>

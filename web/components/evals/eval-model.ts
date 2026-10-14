@@ -8,8 +8,9 @@
  * statuses, rules) and show the files' own sentences as they are, marked `lang="en"`.
  */
 
-import { formatUsd } from "@/lib/format";
+import { formatCreated, formatUsd } from "@/lib/format";
 import { PLAN_STATUS_LABELS } from "@/lib/plan-events/labels";
+import { ROUTES } from "@/lib/routes";
 import type {
   EvalCheck,
   EvalComparison,
@@ -349,4 +350,203 @@ export function costAgainstBaseline(current: number | null, baseline: number | n
   const was = formatRunCost(baseline);
   if (now === null) return "costo non registrato";
   return was === null ? now : `${now} (era ${was})`;
+}
+
+// --- the dashboard ----------------------------------------------------------------------------
+
+/** The figures the dashboard follows from run to run. `cost` is the run's total, `cost_per_plan`
+ * that total over its requests (what the baseline measures, and comparable when the dataset
+ * grows). */
+export type RunMetric = "accepted" | "checks" | "judge" | "cost" | "cost_per_plan";
+
+/** How many runs the trend charts draw: the newest ones. */
+export const TREND_RUNS = 20;
+
+const MINUS = "−";
+
+function metricValue(run: EvalRunSummary, metric: RunMetric): number | null {
+  const value =
+    metric === "accepted"
+      ? run.requests_accepted
+      : metric === "checks"
+        ? run.checks_passed
+        : metric === "judge"
+          ? run.judge_mean
+          : metric === "cost"
+            ? run.total_cost_cents
+            : run.requests_total > 0
+              ? run.total_cost_cents / run.requests_total
+              : null;
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/** A figure as the dashboard writes it: "4/5" plans, "4,2" for the judge, "2,88 $". */
+function metricLabel(run: EvalRunSummary, metric: RunMetric, value: number): string {
+  if (metric === "accepted") return `${value}/${run.requests_total}`;
+  if (metric === "checks") return `${value}/${run.requests_total}`;
+  if (metric === "judge") return formatJudgeMean(value) ?? "";
+  return formatUsd(Math.round(value));
+}
+
+export interface RunDelta {
+  /** "+3", "−0,2", "−0,17 $", or "invariato". */
+  text: string;
+  trend: "better" | "worse" | "same";
+}
+
+/** How `metric` moved from the previous run to the latest one, signed with a true minus, and
+ * whether that is good news: more plans, checks and judge points are better, a higher cost is
+ * worse. A change that rounds to nothing as written is "invariato". Null without both figures. */
+export function runDelta(metric: RunMetric, latest: EvalRunSummary, previous: EvalRunSummary | null): RunDelta | null {
+  if (!previous) return null;
+  const now = metricValue(latest, metric);
+  const was = metricValue(previous, metric);
+  if (now === null || was === null) return null;
+  const change = metric === "judge" ? Math.round((now - was) * 10 + 1e-9 * Math.sign(now - was)) / 10 : now - was;
+  if (change === 0) return { text: "invariato", trend: "same" };
+  const size = Math.abs(change);
+  const written = metric === "judge" ? (formatJudgeMean(size) ?? "") : metric === "cost" ? formatUsd(size) : `${size}`;
+  const up = change > 0;
+  return {
+    text: `${up ? "+" : MINUS}${written}`,
+    trend: up === (metric !== "cost") ? "better" : "worse",
+  };
+}
+
+export interface TrendPoint {
+  id: string;
+  startedAt: string;
+  verdict: RunVerdict;
+  /** Null where the run has no such figure (no judge mean): the line breaks there. */
+  value: number | null;
+  label: string | null;
+}
+
+/** One metric over the newest `limit` runs, oldest first (time runs left to right). `runs` is the
+ * list as the API returns it, newest first. */
+export function trendSeries(runs: readonly EvalRunSummary[], metric: RunMetric, limit = TREND_RUNS): TrendPoint[] {
+  return runs
+    .slice(0, limit)
+    .reverse()
+    .map((run) => {
+      const value = metricValue(run, metric);
+      return {
+        id: run.id,
+        startedAt: run.started_at,
+        verdict: runVerdict(run),
+        value,
+        label: value === null ? null : metricLabel(run, metric, value),
+      };
+    });
+}
+
+/** The verdicts over the newest `limit` runs, oldest first, for the "Esito" line: every run is a
+ * station (value 0), its label the verdict's word. */
+export function verdictSeries(runs: readonly EvalRunSummary[], limit = TREND_RUNS): TrendPoint[] {
+  return runs
+    .slice(0, limit)
+    .reverse()
+    .map((run) => {
+      const verdict = runVerdict(run);
+      return { id: run.id, startedAt: run.started_at, verdict, value: 0, label: RUN_VERDICT_LABELS[verdict] };
+    });
+}
+
+/** The vertical bounds of a metric's chart, on clean numbers, with the reference inside them: for
+ * the judge, the whole points around its means (at least one point apart, inside 1 to 5); for the
+ * cost per plan, the ten cents around it (at least ten apart), so a move of a few tenths or a few
+ * cents shows on both; zero to the most requests a run had; zero to the next whole dollar above
+ * the dearest run. */
+export function trendDomain(
+  runs: readonly EvalRunSummary[],
+  metric: RunMetric,
+  reference: number | null = null,
+): [number, number] {
+  const values = [
+    ...runs.map((run) => metricValue(run, metric)).filter((value): value is number => value !== null),
+    ...(reference === null ? [] : [reference]),
+  ];
+  if (metric === "cost_per_plan") {
+    if (values.length === 0) return [0, 100];
+    const low = Math.floor(Math.min(...values) / 10) * 10;
+    const high = Math.ceil(Math.max(...values) / 10) * 10;
+    return [low, Math.max(high, low + 10)];
+  }
+  if (metric === "judge") {
+    if (values.length === 0) return [1, 5];
+    const low = Math.max(1, Math.floor(Math.min(...values)));
+    const high = Math.min(5, Math.ceil(Math.max(...values)));
+    return low < high ? [low, high] : [Math.max(1, low - 1), Math.min(5, high + 1)];
+  }
+  if (metric === "cost") {
+    const dearest = Math.max(0, ...runs.map((run) => metricValue(run, "cost") ?? 0));
+    return [0, Math.max(100, Math.ceil(dearest / 100) * 100)];
+  }
+  return [0, Math.max(1, ...runs.map((run) => run.requests_total))];
+}
+
+export interface TrendReference {
+  value: number;
+  /** "riferimento 4,1", "riferimento 0,53 $". */
+  label: string;
+}
+
+/** The baseline a chart is read against: the newest run's that has one (the gate measures each run
+ * against the baseline of its day), for the judge's mean and the cost per plan only. */
+export function trendReference(runs: readonly EvalRunSummary[], metric: RunMetric): TrendReference | null {
+  if (metric !== "judge" && metric !== "cost_per_plan") return null;
+  for (const run of runs) {
+    const value = metric === "judge" ? run.reference_judge_mean : run.reference_cost_per_plan_cents;
+    if (typeof value === "number" && Number.isFinite(value)) {
+      const written = metric === "judge" ? formatJudgeMean(value) : formatUsd(Math.round(value));
+      return { value, label: `riferimento ${written}` };
+    }
+  }
+  return null;
+}
+
+/** A chart's end named by its day: "Oggi", "Ieri", "8 ott", "30 dic 2025" (the list's own words,
+ * without the time). For the browser only (Intl), like formatCreated. */
+export function axisDay(iso: string, nowMs: number): string {
+  return formatCreated(iso, nowMs).split(",")[0] ?? iso;
+}
+
+// --- the list's pages -------------------------------------------------------------------------
+
+/** Runs per page of the list. */
+export const PAGE_SIZE = 10;
+
+/** `?pagina=` as a page number: a positive whole number, else the first page. */
+export function parsePage(value: string | string[] | undefined): number {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (!raw || !/^\d+$/.test(raw)) return 1;
+  const page = Number(raw);
+  return page >= 1 && Number.isSafeInteger(page) ? page : 1;
+}
+
+/** How many pages `total` runs fill; at least one, so an empty history still has its page. */
+export function pageCount(total: number, size = PAGE_SIZE): number {
+  return Math.max(1, Math.ceil(total / size));
+}
+
+/** The pager's items: every page when there are at most seven, else the first, the last and three
+ * around the current one, with a gap for each run of hidden pages (a gap never hides one page
+ * alone: that page is shown instead). */
+export function pageItems(current: number, count: number): (number | "gap")[] {
+  if (count <= 7) return Array.from({ length: count }, (_, index) => index + 1);
+  const start = Math.min(Math.max(current - 1, 1), count - 2);
+  const shown = [...new Set([1, start, start + 1, start + 2, count])].sort((a, b) => a - b);
+  const items: (number | "gap")[] = [];
+  for (const page of shown) {
+    const last = items.at(-1);
+    if (typeof last === "number" && page - last === 2) items.push(last + 1);
+    else if (typeof last === "number" && page - last > 2) items.push("gap");
+    items.push(page);
+  }
+  return items;
+}
+
+/** A page of the list: the bare list for the first, `?pagina=N` for the others. */
+export function pageHref(page: number): string {
+  return page <= 1 ? ROUTES.evals : `${ROUTES.evals}?pagina=${page}`;
 }
