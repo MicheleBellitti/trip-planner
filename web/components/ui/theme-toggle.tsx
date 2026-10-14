@@ -35,11 +35,11 @@ function syncThemeColor(theme: ThemeName) {
 
 /**
  * The theme toggle: a round icon button that pins the other theme (dark is the default) and
- * remembers it (localStorage, read before paint by ThemeScript). The glyph is chosen by CSS
+ * remembers it (localStorage, read before paint by ThemeScript). `bare` drops the ring. The glyph is chosen by CSS
  * (inherited --show-in-light / --show-in-dark), so it is right on the first paint; only the
  * accessible name waits for the client.
  */
-export function ThemeToggle({ className }: { className?: string }) {
+export function ThemeToggle({ className, variant = "outline" }: { className?: string; variant?: "outline" | "bare" }) {
   const theme = useSyncExternalStore<ThemeName | null>(subscribe, resolvedTheme, () => null);
 
   // React's Strict Mode remount in development resets <html>'s attributes: re-apply the pinned
@@ -75,7 +75,10 @@ export function ThemeToggle({ className }: { className?: string }) {
       aria-label={label}
       title={label}
       className={cx(
-        "inline-grid size-10 shrink-0 place-items-center rounded-full border-[1.5px] border-rule-strong bg-transparent text-ink",
+        "inline-grid size-10 shrink-0 place-items-center rounded-full border-[1.5px] bg-transparent text-ink",
+        // `bare`: no ring, beside another round control (the header's "Nuovo piano"), so the two
+        // never read as twins.
+        variant === "outline" ? "border-rule-strong" : "border-transparent",
         "transition-[background-color,scale] duration-(--duration-hover) ease-out hover:bg-notice-wash",
         "active:scale-[0.96] active:duration-(--duration-press) motion-reduce:active:scale-100",
         className,

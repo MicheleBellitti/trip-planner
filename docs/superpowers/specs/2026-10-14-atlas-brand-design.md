@@ -50,9 +50,9 @@ re-measures every pair.
 | `rule` (decorative) | `#313a4a` | `#ddd5c5` |
 | `rule-strong` (control borders) | `#6b7384` | `#8a8473` |
 | `line-coordinator` | `#a3abb6` | `#33404F` (unchanged) |
-| `line-flights` | `#6e8fe0` | `#1F55C4` (unchanged) |
+| `line-flights` | `#7696e3` | `#1F55C4` (unchanged) |
 | `line-lodging` | `#4fa77b` | `#0F7348` (unchanged) |
-| `line-activities` | `#9c84d6` | `#6D3FC0` (unchanged) |
+| `line-activities` | `#a089d9` | `#6D3FC0` (unchanged) |
 | `line-transport` | `#4aa8b6` | `#08707F` (unchanged) |
 | `on-line` (text on a line fill) | `#1b2230` | `#fbf8f1` |
 | `error` / `error-wash` | `#f2766b` / `#36211f` | `#B3261E` / `#f8e3df` |
@@ -66,8 +66,8 @@ These ratios were measured in brainstorming. They are WCAG 2.x, and the threshol
 - **Dark theme:**
   - ink on ground and surface: 13.05 and 11.80
   - ink-2 on ground and surface: 6.47 and 5.85
-  - every line stroke on surface: at least 4.57
-  - `on-line` on every line fill: at least 5.06
+  - every line stroke on surface: at least 4.85
+  - `on-line` on every line fill: at least 5.37, and at least 4.77 at 92 % on the plate (blended on 8-bit channels, as the browser does; the first values, `#6e8fe0` and `#9c84d6`, fell to 4.496 there)
   - rule-strong on ground and surface: 3.35 and 3.02
   - error on surface: 5.20
   - amber on amber-wash: 7.13

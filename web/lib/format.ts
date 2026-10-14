@@ -105,8 +105,8 @@ const MONTHS_SHORT = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "s
 const epochDay = (date: string) => Math.floor(Date.UTC(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10))) / 86_400_000);
 
 /**
- * When a plan was created, the way a list reads it: "Oggi, 17:36", "Ieri, 21:40", "8 ott" and,
- * only when the year is not the current one, "8 ott 2025". Days are Michele's (Rome). For the
+ * When a plan was created, the way a list reads it: "Oggi, 17:36", "Ieri, 21:40", "8 ott, 09:15"
+ * and, only when the year is not the current one, "8 ott 2025, 09:15". Days are Michele's (Rome). For the
  * browser only (Intl), like formatDateTime.
  */
 export function formatCreated(iso: string, nowMs: number, timeZone = HOME_TIMEZONE): string {
@@ -118,5 +118,7 @@ export function formatCreated(iso: string, nowMs: number, timeZone = HOME_TIMEZO
   if (ago === 0) return `Oggi, ${then.time}`;
   if (ago === 1) return `Ieri, ${then.time}`;
   const day = `${Number(then.date.slice(8, 10))} ${MONTHS_SHORT[Number(then.date.slice(5, 7)) - 1]}`;
-  return then.date.slice(0, 4) === today.date.slice(0, 4) ? day : `${day} ${then.date.slice(0, 4)}`;
+  // The time stays on older days too: two plans of one title and one day differ only by it.
+  const date = then.date.slice(0, 4) === today.date.slice(0, 4) ? day : `${day} ${then.date.slice(0, 4)}`;
+  return `${date}, ${then.time}`;
 }

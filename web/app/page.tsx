@@ -7,7 +7,7 @@ import { BRAND_NAME } from "@/lib/brand";
 /** Absolute: the root layout's "%s · Atlas" template skips the page of its own segment. */
 export const metadata: Metadata = { title: { absolute: `I tuoi piani · ${BRAND_NAME}` } };
 
-/** "/": the latest plans with status, cost and date, ; "Nuovo piano" is in the
+/** "/": the latest plans with status, cost and date; "Nuovo piano" is in the
  * header. The list is fetched in the browser, which carries the TripTracker cookie. */
 export default function HomePage() {
   return (

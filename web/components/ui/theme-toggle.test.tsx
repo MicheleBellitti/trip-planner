@@ -52,6 +52,14 @@ describe("ThemeToggle", () => {
     expect(screen.getByRole("button", { name: "Passa al tema scuro" })).toBeTruthy();
   });
 
+  it("drops its ring when bare, beside another round control", () => {
+    const { unmount } = render(<ThemeToggle />);
+    expect(screen.getByRole("button").className).toMatch(/\bborder-rule-strong\b/);
+    unmount();
+    render(<ThemeToggle variant="bare" />);
+    expect(screen.getByRole("button").className).not.toMatch(/\bborder-rule-strong\b/);
+  });
+
   it("still switches for the session when storage is blocked", () => {
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
       throw new Error("blocked");

@@ -50,11 +50,12 @@ function rgb(hex: string): [number, number, number] {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
-/** `fg` at `alpha` over `bg`, as the browser blends opacity and color-mix in sRGB. */
+/** `fg` at `alpha` over `bg`, as the browser blends opacity and color-mix in sRGB: on 8-bit
+ * channels, so the result is rounded (the unrounded blend overstated the plate's line by 0.02). */
 function over(fg: string, bg: string, alpha: number): [number, number, number] {
   const f = rgb(fg);
   const b = rgb(bg);
-  return [0, 1, 2].map((i) => alpha * f[i]! + (1 - alpha) * b[i]!) as [number, number, number];
+  return [0, 1, 2].map((i) => Math.round(alpha * f[i]! + (1 - alpha) * b[i]!)) as [number, number, number];
 }
 
 function contrast(a: string | [number, number, number], b: string | [number, number, number]): number {

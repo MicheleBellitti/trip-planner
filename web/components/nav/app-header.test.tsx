@@ -11,8 +11,8 @@ import { AppHeader } from "./app-header";
 import { AppHeaderBar } from "./app-header-bar";
 
 vi.mock("@/components/ui/theme-toggle", () => ({
-  ThemeToggle: ({ className }: { className?: string }) => (
-    <button type="button" className={className}>
+  ThemeToggle: ({ className, variant }: { className?: string; variant?: string }) => (
+    <button type="button" className={className} data-variant={variant ?? "outline"}>
       Tema
     </button>
   ),
@@ -57,9 +57,30 @@ describe("AppHeader", () => {
     expect(screen.getByRole("button", { name: "Tema" }).className).toMatch(/\bpointer-coarse:size-11\b/);
   });
 
-  it("drops the new-plan action on the form itself", () => {
+  it("keeps the new-plan action in its place on the form itself, marked as the current page", () => {
     render(<AppHeader current="new" />);
-    expect(screen.queryByRole("link", { name: "Nuovo piano" })).toBeNull();
+    const links = screen.getAllByRole("link", { name: "Nuovo piano" });
+    expect(links).toHaveLength(2);
+    for (const link of links) expect(link.getAttribute("aria-current")).toBe("page");
+  });
+
+  it("ends every header with \"Nuovo piano\", after a quiet ring-less theme toggle", () => {
+    const { container } = render(<AppHeader current="plans" />);
+    const controls = [...container.querySelectorAll("header a, header button")];
+    expect(controls.at(-1)?.getAttribute("aria-label")).toBe("Nuovo piano");
+    const toggle = screen.getByRole("button", { name: "Tema" });
+    expect(controls.indexOf(toggle)).toBeLessThan(controls.length - 2);
+    expect(toggle.getAttribute("data-variant")).toBe("bare");
+  });
+
+  it("draws the line past the outer stations and the current one as the larger ring", () => {
+    render(<AppHeader current="evals" />);
+    const items = [...screen.getByRole("navigation", { name: "Sezioni" }).querySelectorAll("li")];
+    for (const item of items) expect(item.querySelectorAll("[data-line]")).toHaveLength(2);
+    const current = within(screen.getByRole("link", { name: "Valutazioni" })).getByTestId("station");
+    const other = within(screen.getByRole("link", { name: "Piani" })).getByTestId("station");
+    expect(current.getAttribute("data-current")).toBe("true");
+    expect(other.getAttribute("data-current")).toBe("false");
   });
 
   it("leaves the theme toggle to the live screen's bar in the compact bar", () => {

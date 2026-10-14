@@ -30,9 +30,9 @@ colors:
   rule-dark: "#313A4A"
   rule-strong-dark: "#6B7384"
   line-coordinator-dark: "#A3ABB6"
-  line-flights-dark: "#6E8FE0"
+  line-flights-dark: "#7696E3"
   line-lodging-dark: "#4FA77B"
-  line-activities-dark: "#9C84D6"
+  line-activities-dark: "#A089D9"
   line-transport-dark: "#4AA8B6"
   on-line-dark: "#1B2230"
   error-dark: "#F2766B"
@@ -342,7 +342,7 @@ else is drawn in a line colour.
 - **Rule strong** (`rule-strong`): control borders (icon buttons, chips, inputs, steppers), the
   dashed edge of a source warning, the cost meter's track. At least 3:1 on ground and surface.
 - **Notice wash** (`notice-wash`): note backgrounds and the hover wash of quiet controls.
-- **Browser surfaces**: selection is `rgb(31 85 196 / .18)` light and `rgb(110 143 224 / .3)` dark;
+- **Browser surfaces**: selection is `rgb(31 85 196 / .18)` light and `rgb(118 150 227 / .3)` dark;
   the scrollbar is `rule-strong` on transparent; the caret is ink; the scrim under a sheet is
   `rgb(27 34 48 / .4)` light and `rgb(3 6 10 / .62)` dark; `<meta name="theme-color">` is each
   theme's ground (`THEME_COLORS`, repainted by the toggle).
@@ -363,18 +363,18 @@ WCAG 2.x ratios, measured on the background each element actually sits on (2026-
 | ink-2 on ground / surface | 5.66 / 6.12 | 6.47 / 5.85 | 4.5 |
 | ink-2 on notice-wash / error-wash / amber-wash | 5.17 / 5.26 / 4.86 | 5.31 / 6.12 / 5.79 | 4.5 |
 | error on surface / ground / error-wash | 6.16 / 5.70 / 5.31 | 5.20 / 5.75 / 5.44 | 4.5 |
-| on-line on coordinatore / voli / alloggio / attività / spostamenti | 9.96 / 6.28 / 5.55 / 6.34 / 5.45 | 6.87 / 5.06 / 5.42 / 5.07 / 5.74 | 4.5 |
-| on-line at 92 % on the plate (worst) | 4.87 (spostamenti) | 4.51 (voli) | 4.5 |
-| line strokes on surface (worst) | 5.45 (spostamenti) | 4.57 (voli) | 3 |
-| line strokes on ground (worst) | 5.04 (spostamenti) | 5.06 (voli) | 3 |
+| on-line on coordinatore / voli / alloggio / attività / spostamenti | 9.96 / 6.28 / 5.55 / 6.34 / 5.45 | 6.87 / 5.49 / 5.42 / 5.37 / 5.74 | 4.5 |
+| on-line at 92 % on the plate, blended on 8-bit channels (worst) | 4.87 (spostamenti) | 4.77 (attività) | 4.5 |
+| line strokes on surface (worst) | 5.45 (spostamenti) | 4.85 (attività) | 3 |
+| line strokes on ground (worst) | 5.04 (spostamenti) | 5.37 (attività) | 3 |
 | amber-ink on amber-wash / surface | 5.14 / 6.47 | 7.13 / 7.20 | 4.5 |
 | amber stroke on surface / amber-wash | 4.41 / 3.50 | 7.20 / 7.13 | 3 |
-| on-action on action (primary button) / its hover | 15.02 / 10.01 | 13.05 / 9.98 | 4.5 |
+| on-action on action (primary button) / its hover | 15.02 / 9.99 | 13.05 / 9.95 | 4.5 |
 | rule-strong on ground / surface (control borders) | 3.25 / 3.52 | 3.35 / 3.02 | 3 |
 | focus ring (ink) on ground / surface | 13.89 / 15.02 | 13.05 / 11.80 | 3 |
 
 Decorative only (no minimum, never the sole carrier of meaning): `rule` on surface 1.38 / 1.26,
-surface against ground 1.08 / 1.11, the error notice's 55 % edge on error-wash 2.49 / 2.64,
+surface against ground 1.08 / 1.11, the error notice's 55 % edge on error-wash 2.50 / 2.64,
 `rule-strong` as the dashed edge of a warning on notice-wash 2.97 / 2.75 (the glyph and the
 sentence carry it). On the cream light ground `amber-wash` is only 1.16:1 from `ground`: a due
 deadline is carried by the amber stroke (4.41 on surface) and the words "In scadenza", never by the
@@ -675,7 +675,8 @@ or shape (there is no class merging, on purpose: see JavaScript weight below).
   (the most important tap of the page is not its smallest control); 40 px from `sm` up.
 - **Primary:** ink fill, `on-action` text. One per view: "Pianifica il viaggio", "Prenota su
   <sito>", "Continua con 2 $ in più".
-- **Secondary:** ink outline on transparent; hover fills with `notice-wash`. "Interrompi", "Apri in
+- **Secondary:** ink outline on transparent; hover fills with `notice-wash`, and so does
+  `aria-current="page"` (a link to the page you are on: the header's "Nuovo piano" on the form). "Interrompi", "Apri in
   TripTracker", "Nuovo piano" where a primary already exists.
 - **Quiet:** no edge until hover; inside notices and footers ("Riprova", "Annulla").
 - **States:** hover in 160 ms; press scales to 0.98 in 120 ms (none with reduced motion); focus is
@@ -713,13 +714,18 @@ or shape (there is no class merging, on purpose: see JavaScript weight below).
 
 ### Navigation
 
-- **One header on every signed-in page** (`AppHeader`):
+- **One header on every signed-in page** (`AppHeader`), in this order:
   - the lockup, the link to the plans (`ROUTES.plans`)
-  - the sections "Piani" and "Valutazioni" as **stations on one line**: the current one has a
-    filled ink node and `aria-current="page"`, the others a hollow node that fills on hover
-  - "Nuovo piano", always the *secondary* button so each view keeps its single primary. On the
-    phone it is a 40 px "+" icon link named "Nuovo piano". It is hidden on the form itself.
-  - the theme toggle
+  - the sections "Piani" and "Valutazioni" as **stations on one line**. The line runs past the
+    outer stations, a route that goes on beyond the map's edge, so the pair never reads as a
+    two-step progress bar. The current station is the larger "you are here" ring (11 px, 3 px ink
+    edge) with `aria-current="page"`; the others are 9 px hollow nodes that fill on hover.
+  - the theme toggle, **bare** (no ring), so it never reads as a twin of the button after it
+  - "Nuovo piano", **always the last item**, so the corner never changes meaning from page to
+    page. It is always the *secondary* button, so each view keeps its single primary; on the
+    phone a ringed 40 px "+" icon link named "Nuovo piano". On the form itself it stays in place
+    with `aria-current="page"` (the secondary and icon buttons draw that state as the notice wash),
+    so nothing shifts.
 - At most 72 px tall, one line, no menu drawer at 393 px, 44 px targets (under a finger the 40 px
   icon controls grow to 44 px, `pointer-coarse:size-11`).
 - On the live screen the header is the compact `AppHeaderBar` (`components/nav/app-header-bar.tsx`):

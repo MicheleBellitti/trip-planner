@@ -15,6 +15,7 @@ export function iconButtonClasses(size: keyof typeof SIZES = "md", variant: "out
     "inline-grid shrink-0 place-items-center rounded-full border-[1.5px] bg-transparent text-ink",
     variant === "outline" ? "border-rule-strong" : "border-transparent",
     "transition-[background-color,scale] duration-(--duration-hover) ease-out not-disabled:hover:bg-notice-wash",
+    "aria-[current=page]:bg-notice-wash",
     "active:scale-[0.96] active:duration-(--duration-press) motion-reduce:active:scale-100",
     "disabled:cursor-not-allowed disabled:opacity-55",
     SIZES[size].box,

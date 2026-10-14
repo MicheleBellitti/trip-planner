@@ -29,9 +29,9 @@
   --rule: #313a4a;
   --rule-strong: #6b7384;
   --line-coordinator: #a3abb6;
-  --line-flights: #6e8fe0;
+  --line-flights: #7696e3;
   --line-lodging: #4fa77b;
-  --line-activities: #9c84d6;
+  --line-activities: #a089d9;
   --line-transport: #4aa8b6;
   --on-line: #1b2230;
   --error: #f2766b;
@@ -44,7 +44,7 @@
   --action: #efe8d8;
   --on-action: #1b2230;
   --focus: #efe8d8;
-  --selection: rgb(110 143 224 / 0.3);
+  --selection: rgb(118 150 227 / 0.3);
   --scrim: rgb(3 6 10 / 0.62);
   --elevation-plate: 0 1px 2px rgb(0 0 0 / 0.4), 0 10px 28px -14px rgb(0 0 0 / 0.7);
   --elevation-pop: 0 1px 2px rgb(0 0 0 / 0.45), 0 18px 36px -16px rgb(0 0 0 / 0.75);

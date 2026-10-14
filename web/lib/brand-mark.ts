@@ -20,9 +20,9 @@ export const NIGHT = {
   ground: "#1b2230",
   ink: "#efe8d8",
   coordinator: "#a3abb6",
-  flights: "#6e8fe0",
+  flights: "#7696e3",
   lodging: "#4fa77b",
-  activities: "#9c84d6",
+  activities: "#a089d9",
   transport: "#4aa8b6",
 } as const;
 
