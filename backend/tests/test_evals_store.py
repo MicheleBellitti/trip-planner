@@ -87,6 +87,9 @@ def test_the_real_run_summarizes_like_run_py() -> None:
         "web_search_requests": results["summary"]["total_web_search_requests"],
         "judge_mean": None,
         "compare_status": None,
+        "reference_judge_mean": None,
+        "reference_cost_per_plan_cents": None,
+        "blocking_findings": [],
     }
     assert (metrics.total_cost_cents, metrics.web_search_requests) == (309, 59)
 
@@ -109,6 +112,68 @@ def test_summary_counts_accepted_checked_and_scored_requests() -> None:
     assert metrics.web_search_requests == 18
     assert metrics.judge_mean == pytest.approx((4 + 5 + 4 + 5 + 2) / 5, abs=1e-3)
     assert metrics.compare_status == "blocked"
+
+
+def test_summary_keeps_the_baseline_the_gate_measured_against() -> None:
+    document = comparison(
+        criteria=[
+            {"criterion": "time_coherence", "baseline_mean": 4.0, "current_mean": 3.0},
+            {"criterion": "summary_clarity", "baseline_mean": 3.5, "current_mean": 4.0},
+            {"criterion": "alternatives_quality", "baseline_mean": None, "current_mean": 4.0},
+        ],
+        cost={"baseline_mean_cents": 52.5, "current_mean_cents": 60.0},
+    )
+
+    metrics = evals_store.summarize_run([entry()], document)
+
+    assert metrics.reference_judge_mean == pytest.approx(3.75)
+    assert metrics.reference_cost_per_plan_cents == pytest.approx(52.5)
+    assert evals_store.summarize_run([entry()], comparison()).reference_judge_mean is None
+    assert evals_store.summarize_run([entry()], None).reference_cost_per_plan_cents is None
+
+
+def finding(
+    rule: str, message: str, request_id: str | None = None, **flags: bool
+) -> dict[str, Any]:
+    return {"rule": rule, "message": message, "request_id": request_id, **flags}
+
+
+def test_summary_keeps_the_first_blocking_findings_with_their_request_titles() -> None:
+    requests = [
+        entry(id="sea-week-family", title="Settimana al mare con bambini"),
+        entry(id="city-weekend-lisbon", title="Weekend in città europea"),
+    ]
+    document = comparison(
+        status="blocked",
+        blocked=True,
+        findings=[
+            finding("mean cost per plan", "cost up", blocking=False),
+            finding("deterministic checks", "a", "sea-week-family", blocking=True, blocks=True),
+            # A blocking rule that does not block this comparison (no baseline): not a reason.
+            finding("judge criteria", "b", blocking=True, blocks=False),
+            finding("run", "c", blocking=True),
+            finding("deterministic checks", "d", "unknown-id", blocking=True),
+            finding("deterministic checks", "e", "city-weekend-lisbon", blocking=True),
+        ],
+    )
+
+    findings = evals_store.summarize_run(requests, document).blocking_findings
+
+    assert [item.model_dump() for item in findings] == [
+        {
+            "rule": "deterministic checks",
+            "message": "a",
+            "request_id": "sea-week-family",
+            "request_title": "Settimana al mare con bambini",
+        },
+        {"rule": "run", "message": "c", "request_id": None, "request_title": None},
+        {
+            "rule": "deterministic checks",
+            "message": "d",
+            "request_id": "unknown-id",
+            "request_title": None,
+        },
+    ]
 
 
 @pytest.mark.parametrize(
@@ -311,7 +376,12 @@ async def test_a_repeat_updates_the_comparison_and_the_link_but_never_erases_the
     await evals_store.store_eval_run(
         db_session,
         results=results,
-        comparison=comparison(status="blocked", blocked=True),
+        comparison=comparison(
+            status="blocked",
+            blocked=True,
+            findings=[{"rule": "run", "blocking": True, "message": "late", "request_id": None}],
+            cost={"baseline_mean_cents": 35.0, "current_mean_cents": 40.0},
+        ),
         workflow_run_url="https://github.com/o/r/actions/runs/1",
     )
     record = await db_session.get_one(EvalRunRecord, first.id)
@@ -319,6 +389,9 @@ async def test_a_repeat_updates_the_comparison_and_the_link_but_never_erases_the
     assert record.comparison is not None
     assert record.comparison["status"] == "blocked"
     assert record.summary["compare_status"] == "blocked"
+    # What the new comparison brings (its baseline, its blocking findings) joins the summary.
+    assert record.summary["reference_cost_per_plan_cents"] == 35.0
+    assert [finding["message"] for finding in record.summary["blocking_findings"]] == ["late"]
     assert record.summary["requests_total"] == 1  # the rest of the summary is kept
     assert record.workflow_run_url == "https://github.com/o/r/actions/runs/1"
 
@@ -428,6 +501,18 @@ async def test_list_is_newest_first_and_limited(db_session: AsyncSession) -> Non
     assert [run.started_at.day for run in limited] == [13, 12]
 
 
+async def test_list_skips_offset_runs_and_counts_them_all(db_session: AsyncSession) -> None:
+    for day in (11, 13, 12, 14):
+        await evals_store.store_eval_run(
+            db_session, results=make_results(started_at=f"2026-10-{day}T09:00:00+02:00")
+        )
+
+    page = await evals_store.list_eval_runs(db_session, limit=2, offset=2)
+    assert [run.started_at.day for run in page] == [12, 11]
+    assert await evals_store.list_eval_runs(db_session, limit=2, offset=4) == []
+    assert await evals_store.count_eval_runs(db_session) == 4
+
+
 async def test_list_items_carry_the_contract_fields(db_session: AsyncSession) -> None:
     stored = await evals_store.store_eval_run(
         db_session,
@@ -453,6 +538,9 @@ async def test_list_items_carry_the_contract_fields(db_session: AsyncSession) ->
         "web_search_requests": 59,
         "judge_mean": None,
         "compare_status": "blocked",
+        "reference_judge_mean": None,
+        "reference_cost_per_plan_cents": None,
+        "blocking_findings": [],
         "workflow_run_url": "https://github.com/o/r/actions/runs/9",
     }
 
@@ -469,3 +557,30 @@ async def test_get_returns_the_stored_documents(db_session: AsyncSession) -> Non
     assert run.comparison == comparison()
     assert run.requests_total == 5
     assert await evals_store.get_eval_run(db_session, uuid.uuid4()) is None
+
+
+async def test_get_gives_the_runs_before_and_after_in_the_list_order(
+    db_session: AsyncSession,
+) -> None:
+    stored = {
+        day: await evals_store.store_eval_run(
+            db_session, results=make_results(started_at=f"2026-10-{day}T09:00:00+02:00")
+        )
+        for day in (11, 13, 12)
+    }
+
+    middle = await evals_store.get_eval_run(db_session, stored[12].id)
+    newest = await evals_store.get_eval_run(db_session, stored[13].id)
+    oldest = await evals_store.get_eval_run(db_session, stored[11].id)
+
+    assert middle is not None
+    assert newest is not None
+    assert oldest is not None
+    assert middle.previous_run is not None
+    assert middle.previous_run.id == stored[11].id
+    assert middle.next_run is not None
+    assert middle.next_run.id == stored[13].id
+    assert newest.next_run is None
+    assert oldest.previous_run is None
+    assert oldest.next_run is not None
+    assert oldest.next_run.started_at.day == 12

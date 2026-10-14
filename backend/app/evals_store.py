@@ -42,7 +42,7 @@ from pydantic import (
     ValidationError,
     field_validator,
 )
-from sqlalchemy import select
+from sqlalchemy import func, literal, select, tuple_
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -60,6 +60,11 @@ MAX_URL_LENGTH = 2000
 """TripTracker's URL cap (LIMITE), reused for the workflow run link."""
 DEFAULT_LIST_LIMIT = 50
 MAX_LIST_LIMIT = 200
+MAX_LIST_OFFSET = 1_000_000
+MAX_BLOCKING_FINDINGS = 3
+"""How many of a comparison's blocking findings the list keeps: enough to say why a run stopped."""
+MAX_FINDING_MESSAGE = 500
+"""Far beyond any history, and well inside Postgres's bigint."""
 
 CompareStatus = Literal["passed", "blocked", "report_only"]
 COMPARE_STATUSES: tuple[CompareStatus, ...] = ("passed", "blocked", "report_only")
@@ -83,8 +88,20 @@ def _invalid(field: str, reason: str) -> InvalidEvalResultsError:
 # --- models -------------------------------------------------------------------------------------
 
 
+class BlockingFinding(BaseModel):
+    """A reason the gate stopped a run, kept in the summary so the list can say it."""
+
+    rule: str = Field(description="compare.py's rule: deterministic checks, judge criteria, ...")
+    message: str = Field(description="compare.py's own sentence (English).")
+    request_id: str | None = Field(default=None, description="The request it is about, if any.")
+    request_title: str | None = Field(
+        default=None, description="That request's title in the results, when it has one."
+    )
+
+
 class RunMetrics(BaseModel):
-    """The list fields computed from the documents (`eval_runs.summary`)."""
+    """The list fields computed from the documents (`eval_runs.summary`). The last three were
+    added later: a summary stored before them reads as no baseline and no findings."""
 
     requests_total: int = Field(description="Requests of the run.")
     requests_accepted: int = Field(description="Requests whose plan ended `ready`.")
@@ -97,6 +114,17 @@ class RunMetrics(BaseModel):
     )
     compare_status: CompareStatus | None = Field(
         default=None, description="The comparison's verdict; None when the run was not compared."
+    )
+    reference_judge_mean: float | None = Field(
+        default=None,
+        description="The baseline's judge mean (the mean of its criteria means); None without one.",
+    )
+    reference_cost_per_plan_cents: float | None = Field(
+        default=None, description="The baseline's mean cost per plan, US cents; None without one."
+    )
+    blocking_findings: list[BlockingFinding] = Field(
+        default_factory=list[BlockingFinding],
+        description=f"The comparison's first {MAX_BLOCKING_FINDINGS} findings that block it.",
     )
 
 
@@ -115,16 +143,23 @@ class EvalRunSummary(RunMetrics):
 
 
 class EvalRunDetail(EvalRunSummary):
-    """A run with its stored documents."""
+    """A run with its stored documents, and its neighbours in the list's order."""
 
     results: dict[str, Any] = Field(description="The JSON written by evals/run.py, as uploaded.")
     comparison: dict[str, Any] | None = Field(
         default=None, description="evals/compare.py --json, when the run was compared."
     )
+    previous_run: EvalRunSummary | None = Field(
+        default=None, description="The run just before it (older), as a list row; None if first."
+    )
+    next_run: EvalRunSummary | None = Field(
+        default=None, description="The run just after it (newer), as a list row; None if newest."
+    )
 
 
 class EvalRunListResponse(BaseModel):
     runs: list[EvalRunSummary] = Field(description="Newest first.")
+    total: int = Field(description="Runs in the history, for the pages of the list.")
 
 
 class EvalRunCreated(BaseModel):
@@ -305,13 +340,67 @@ def comparison_status(comparison: Mapping[str, Any] | None) -> CompareStatus | N
     return None
 
 
+def _sequence(value: object) -> Sequence[Any]:
+    return cast(Sequence[Any], value) if isinstance(value, list) else []
+
+
+def comparison_reference(comparison: Mapping[str, Any] | None) -> tuple[float | None, float | None]:
+    """The baseline a comparison measured against: its judge mean (the mean of the criteria's
+    baseline means) and its mean cost per plan in cents; (None, None) without a baseline."""
+    if comparison is None:
+        return None, None
+    means = [
+        mean
+        for criterion in _sequence(comparison.get("criteria"))
+        if (mean := _number(_mapping(criterion).get("baseline_mean"))) is not None
+    ]
+    judge = round(sum(means) / len(means), 3) if means else None
+    cost = _number(_mapping(comparison.get("cost")).get("baseline_mean_cents"))
+    return judge, cost
+
+
+def blocking_findings(
+    requests: Sequence[Mapping[str, Any]], comparison: Mapping[str, Any] | None
+) -> list[BlockingFinding]:
+    """The comparison's first findings that block it, each with its request's title. A finding
+    blocks when its `blocks` says so; older documents have only `blocking`."""
+    if comparison is None:
+        return []
+    titles = {
+        str(entry.get("id")): title
+        for entry in requests
+        if isinstance(title := entry.get("title"), str) and title.strip()
+    }
+    found: list[BlockingFinding] = []
+    for item in _sequence(comparison.get("findings")):
+        finding = _mapping(item)
+        blocks = finding.get("blocks")
+        if not (blocks is True or (blocks is None and finding.get("blocking") is True)):
+            continue
+        request_id = finding.get("request_id")
+        request_id = request_id if isinstance(request_id, str) and request_id else None
+        found.append(
+            BlockingFinding(
+                rule=str(finding.get("rule") or ""),
+                message=str(finding.get("message") or "")[:MAX_FINDING_MESSAGE],
+                request_id=request_id,
+                request_title=titles.get(request_id) if request_id else None,
+            )
+        )
+        if len(found) == MAX_BLOCKING_FINDINGS:
+            break
+    return found
+
+
 def summarize_run(
     requests: Sequence[Mapping[str, Any]], comparison: Mapping[str, Any] | None
 ) -> RunMetrics:
-    """The list fields of a run, computed as `evals/run.py`'s `summarize` does."""
+    """The list fields of a run, computed as `evals/run.py`'s `summarize` does, plus what the
+    comparison measured against and why it blocked."""
     costs = 0.0
     searches = 0.0
     scores: list[float] = []
+    reference_judge, reference_cost = comparison_reference(comparison)
     for entry in requests:
         costs += _number(entry.get("cost_cents")) or 0.0
         searches += _number(entry.get("web_search_requests")) or 0.0
@@ -332,6 +421,9 @@ def summarize_run(
         web_search_requests=round(searches),
         judge_mean=round(sum(scores) / len(scores), 3) if scores else None,
         compare_status=comparison_status(comparison),
+        reference_judge_mean=reference_judge,
+        reference_cost_per_plan_cents=reference_cost,
+        blocking_findings=blocking_findings(requests, comparison),
     )
 
 
@@ -393,9 +485,19 @@ async def store_eval_run(
         )
     if comparison_doc is not None:
         record.comparison = comparison_doc
+        # What comes from the comparison is recomputed against the stored requests (titles).
+        derived = summarize_run(_sequence(_mapping(record.results).get("requests")), comparison_doc)
         record.summary = {
             **record.summary,
-            "compare_status": comparison_status(comparison_doc),
+            **derived.model_dump(
+                mode="json",
+                include={
+                    "compare_status",
+                    "reference_judge_mean",
+                    "reference_cost_per_plan_cents",
+                    "blocking_findings",
+                },
+            ),
         }
     if link is not None:
         record.workflow_run_url = link
@@ -428,10 +530,10 @@ def _summary_of(
 
 
 async def list_eval_runs(
-    db: AsyncSession, *, limit: int = DEFAULT_LIST_LIMIT
+    db: AsyncSession, *, limit: int = DEFAULT_LIST_LIMIT, offset: int = 0
 ) -> list[EvalRunSummary]:
-    """The `limit` most recent runs, newest first. Reads the columns and the summary only,
-    never the stored documents."""
+    """The `limit` most recent runs after the newest `offset`, newest first. Reads the columns
+    and the summary only, never the stored documents."""
     rows = await db.execute(
         select(
             EvalRunRecord.id,
@@ -444,6 +546,7 @@ async def list_eval_runs(
             EvalRunRecord.workflow_run_url,
         )
         .order_by(EvalRunRecord.started_at.desc(), EvalRunRecord.created_at.desc())
+        .offset(offset)
         .limit(limit)
     )
     return [
@@ -461,21 +564,77 @@ async def list_eval_runs(
     ]
 
 
+async def count_eval_runs(db: AsyncSession) -> int:
+    """How many runs the history holds."""
+    return (await db.execute(select(func.count()).select_from(EvalRunRecord))).scalar_one()
+
+
+_SUMMARY_COLUMNS = (
+    EvalRunRecord.id,
+    EvalRunRecord.profile,
+    EvalRunRecord.git_sha,
+    EvalRunRecord.started_at,
+    EvalRunRecord.finished_at,
+    EvalRunRecord.aborted,
+    EvalRunRecord.summary,
+    EvalRunRecord.workflow_run_url,
+)
+
+
+def _summary_row(row: Any) -> EvalRunSummary:
+    run_id, profile, git_sha, started_at, finished_at, aborted, metrics, link = row
+    return _summary_of(
+        run_id=run_id,
+        profile=profile,
+        git_sha=git_sha,
+        started_at=started_at,
+        finished_at=finished_at,
+        aborted=aborted,
+        metrics=metrics,
+        workflow_run_url=link,
+    )
+
+
 async def get_eval_run(db: AsyncSession, run_id: uuid.UUID) -> EvalRunDetail | None:
-    """A run with its stored results and comparison, or None."""
+    """A run with its stored results and comparison, and the runs just before and after it in
+    the list's order (started_at, then created_at), or None."""
     record = await db.get(EvalRunRecord, run_id)
     if record is None:
         return None
-    summary = _summary_of(
-        run_id=record.id,
-        profile=record.profile,
-        git_sha=record.git_sha,
-        started_at=record.started_at,
-        finished_at=record.finished_at,
-        aborted=record.aborted,
-        metrics=record.summary,
-        workflow_run_url=record.workflow_run_url,
+    position = tuple_(EvalRunRecord.started_at, EvalRunRecord.created_at)
+    here = tuple_(literal(record.started_at), literal(record.created_at))
+    before = (
+        await db.execute(
+            select(*_SUMMARY_COLUMNS)
+            .where(position < here)
+            .order_by(EvalRunRecord.started_at.desc(), EvalRunRecord.created_at.desc())
+            .limit(1)
+        )
+    ).first()
+    after = (
+        await db.execute(
+            select(*_SUMMARY_COLUMNS)
+            .where(position > here)
+            .order_by(EvalRunRecord.started_at.asc(), EvalRunRecord.created_at.asc())
+            .limit(1)
+        )
+    ).first()
+    summary = _summary_row(
+        (
+            record.id,
+            record.profile,
+            record.git_sha,
+            record.started_at,
+            record.finished_at,
+            record.aborted,
+            record.summary,
+            record.workflow_run_url,
+        )
     )
     return EvalRunDetail(
-        **summary.model_dump(), results=record.results, comparison=record.comparison
+        **summary.model_dump(),
+        results=record.results,
+        comparison=record.comparison,
+        previous_run=_summary_row(before) if before is not None else None,
+        next_run=_summary_row(after) if after is not None else None,
     )
