@@ -11,6 +11,7 @@ import { Disclosure } from "@/components/ui/disclosure";
 import { Icon } from "@/components/ui/icon";
 import { IconButton } from "@/components/ui/icon-button";
 import { ICON_PATHS, type IconName } from "@/components/ui/icons";
+import { Mark } from "@/components/ui/mark";
 import { InlineStatus, Notice } from "@/components/ui/notice";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PlanStatusBadge, StatusBadge } from "@/components/ui/status-badge";
@@ -26,9 +27,11 @@ import {
 import { Toaster } from "@/components/ui/toast";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { Wordmark } from "@/components/ui/wordmark";
+import { BRAND_TAGLINE } from "@/lib/brand";
 import { AGENTS, AGENT_LABELS } from "@/lib/plan-events/labels";
 import type { LaneBadgeState } from "@/lib/plan-events/labels";
 import type { PlanStatus } from "@/lib/schemas/api";
+import { ROUTES } from "@/lib/routes";
 
 import { FoldedLineDemo, FormDemo, FreshStationDemo, MeterDemo, SheetDemo, ToastDemo } from "./demos";
 
@@ -74,7 +77,7 @@ export default function ComponentGalleryPage() {
       <header className="sticky top-0 z-20 border-b border-rule bg-[color-mix(in_srgb,var(--ground)_92%,transparent)] backdrop-blur-[8px]">
         <div className="mx-auto flex max-w-page items-center justify-between gap-4 px-4 py-3 lg:px-7">
           <div className="flex items-baseline gap-3">
-            <Wordmark href="/" />
+            <Wordmark href={ROUTES.plans} />
             <span className="text-meta text-ink-2">Componenti</span>
           </div>
           <ThemeToggle />
@@ -110,6 +113,7 @@ export default function ComponentGalleryPage() {
         <Section title="Tipografia">
           <ThemePair>
             <div className="grid gap-3">
+              <p className="font-hero text-hero font-bold">{BRAND_TAGLINE}</p>
               <p className="font-cond text-display font-semibold">Lisbona, 14–18 nov</p>
               <p className="font-cond text-heading font-semibold">Anteprima delle prenotazioni</p>
               <p className="font-cond text-title font-semibold">Coordinatore</p>
@@ -607,7 +611,12 @@ export default function ComponentGalleryPage() {
                 <VisuallyHidden> (si apre in una nuova scheda)</VisuallyHidden>
                 <span className="text-ink-2"> (il resto della frase è letto solo dagli screen reader)</span>
               </p>
-              <Wordmark />
+              <div className="flex flex-wrap items-end gap-4">
+                <Mark className="size-16" />
+                <Mark className="size-10" />
+                <Mark className="size-7" />
+                <Wordmark />
+              </div>
               <p className="text-meta">
                 Variante dark: <span className="dark:hidden">tema chiaro</span>
                 <span className="hidden dark:inline">tema scuro</span>

@@ -8,8 +8,12 @@ describe("formatCreated", () => {
   it("says today and yesterday on Michele's clock, then the day, and the year only when it is not this one", () => {
     expect(formatCreated("2026-10-12T15:36:00Z", now)).toBe("Oggi, 17:36");
     expect(formatCreated("2026-10-11T19:40:00Z", now)).toBe("Ieri, 21:40");
-    expect(formatCreated("2026-10-08T10:00:00Z", now)).toBe("8 ott");
-    expect(formatCreated("2025-12-31T10:00:00Z", now)).toBe("31 dic 2025");
+    expect(formatCreated("2026-10-08T10:00:00Z", now)).toBe("8 ott, 12:00");
+    expect(formatCreated("2025-12-31T10:00:00Z", now)).toBe("31 dic 2025, 11:00");
+  });
+
+  it("keeps the time on older days, so two plans of one day are told apart", () => {
+    expect(formatCreated("2026-10-08T07:05:00Z", now)).not.toBe(formatCreated("2026-10-08T19:40:00Z", now));
   });
 
   it("counts the day in Rome, not in UTC", () => {

@@ -8,6 +8,20 @@ const SIZES = {
   sm: { box: "size-8", icon: 15 },
 } as const;
 
+/** Class string of an icon button, for a link that must look like one (the header's "Nuovo piano"
+ * on the phone). */
+export function iconButtonClasses(size: keyof typeof SIZES = "md", variant: "outline" | "bare" = "outline"): string {
+  return cx(
+    "inline-grid shrink-0 place-items-center rounded-full border-[1.5px] bg-transparent text-ink",
+    variant === "outline" ? "border-rule-strong" : "border-transparent",
+    "transition-[background-color,scale] duration-(--duration-hover) ease-out not-disabled:hover:bg-notice-wash",
+    "aria-[current=page]:border-ink aria-[current=page]:inset-ring-[1.5px] aria-[current=page]:inset-ring-ink",
+    "active:scale-[0.96] active:duration-(--duration-press) motion-reduce:active:scale-100",
+    "disabled:cursor-not-allowed disabled:opacity-55",
+    SIZES[size].box,
+  );
+}
+
 interface IconButtonProps extends Omit<ComponentPropsWithoutRef<"button">, "children" | "aria-label"> {
   icon: IconName;
   /** The accessible name, an action verb in Italian ("Chiudi", "Passa al tema scuro"). Required:
@@ -35,15 +49,7 @@ export function IconButton({
       type={type}
       aria-label={label}
       title={label}
-      className={cx(
-        "inline-grid shrink-0 place-items-center rounded-full border-[1.5px] bg-transparent text-ink",
-        variant === "outline" ? "border-rule-strong" : "border-transparent",
-        "transition-[background-color,scale] duration-(--duration-hover) ease-out not-disabled:hover:bg-notice-wash",
-        "active:scale-[0.96] active:duration-(--duration-press) motion-reduce:active:scale-100",
-        "disabled:cursor-not-allowed disabled:opacity-55",
-        SIZES[size].box,
-        className,
-      )}
+      className={cx(iconButtonClasses(size, variant), className)}
       {...props}
     >
       <Icon name={icon} size={SIZES[size].icon} />

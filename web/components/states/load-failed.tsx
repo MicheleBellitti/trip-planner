@@ -1,5 +1,6 @@
 import { Button, LinkButton } from "@/components/ui/button";
 import type { ApiError } from "@/lib/api";
+import { ROUTES } from "@/lib/routes";
 
 import { StateFact, StatePanel } from "./state-panel";
 
@@ -16,7 +17,7 @@ export function PlanLoadFailed({ error, onRetry }: { error: ApiError; onRetry: (
         title="Questo piano non c'è"
         headingId="state-load"
         actions={
-          <LinkButton href="/" variant="primary" icon="arrow-left">
+          <LinkButton href={ROUTES.plans} variant="primary" icon="arrow-left">
             Torna ai piani
           </LinkButton>
         }
@@ -41,7 +42,7 @@ export function PlanLoadFailed({ error, onRetry }: { error: ApiError; onRetry: (
               Riprova
             </Button>
           ) : null}
-          <LinkButton href="/" variant={retryable ? "quiet" : "primary"} icon="arrow-left">
+          <LinkButton href={ROUTES.plans} variant={retryable ? "quiet" : "primary"} icon="arrow-left">
             Torna ai piani
           </LinkButton>
         </>

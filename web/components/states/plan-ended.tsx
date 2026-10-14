@@ -3,6 +3,7 @@ import type { IconName } from "@/components/ui/icon";
 import { formatUsd } from "@/lib/format";
 import { AGENT_LABELS } from "@/lib/plan-events/labels";
 import type { AgentName } from "@/lib/schemas/generated/ui-event";
+import { ROUTES } from "@/lib/routes";
 
 import type { EndedStatus } from "./ended-status";
 import { StateFact, StatePanel } from "./state-panel";
@@ -81,7 +82,7 @@ export function PlanEndedPanel({ status, blocker = null, failureReason, costCent
           <LinkButton href="/new" variant="primary" icon="plus">
             Crea un nuovo piano
           </LinkButton>
-          <LinkButton href="/" variant="quiet" icon="arrow-left">
+          <LinkButton href={ROUTES.plans} variant="quiet" icon="arrow-left">
             Torna ai piani
           </LinkButton>
         </>

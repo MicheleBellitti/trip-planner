@@ -3,13 +3,14 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 
-import { SiteHeader } from "@/components/home/site-header";
+import { AppHeader } from "@/components/nav/app-header";
 import { parseDemoScenarios } from "@/components/request/form-model";
 import { RequestForm } from "@/components/request/request-form";
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { emptyRequestForm, exampleRequestForm, todayInRome } from "@/lib/request-form";
+import { ROUTES } from "@/lib/routes";
 
 export const metadata: Metadata = { title: "Nuovo piano" };
 
@@ -19,10 +20,10 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 export default function NewPlanPage({ searchParams }: { searchParams: SearchParams }) {
   return (
     <>
-      <SiteHeader />
+      <AppHeader current="new" />
       <main className="mx-auto max-w-page px-4 pt-5 pb-16 lg:px-7 lg:pt-7">
         <Link
-          href="/"
+          href={ROUTES.plans}
           className="inline-flex min-h-11 items-center gap-1.5 -my-1.5 rounded-xs text-meta text-ink-2 no-underline hover:text-ink hover:underline"
         >
           <Icon name="arrow-left" size={15} />I tuoi piani

@@ -1,50 +1,55 @@
 ---
 name: Atlas
-description: The run drawn as a transit line diagram, one line per agent, calm enough to watch for minutes.
+description: A printed night transit map, one line per agent, ink and cream, never neon.
 colors:
-  ground: "#F2F4F7"
-  surface: "#FBFCFD"
-  ink: "#0F1A2A"
-  ink-2: "#4B5768"
-  rule: "#D5DBE3"
-  rule-strong: "#7A8597"
+  ground: "#F4EFE4"
+  surface: "#FBF8F1"
+  ink: "#1B2230"
+  ink-2: "#5B5E66"
+  rule: "#DDD5C5"
+  rule-strong: "#8A8473"
   line-coordinator: "#33404F"
   line-flights: "#1F55C4"
   line-lodging: "#0F7348"
   line-activities: "#6D3FC0"
   line-transport: "#08707F"
-  on-line: "#FBFCFD"
+  on-line: "#FBF8F1"
   error: "#B3261E"
-  error-wash: "#FBEAE8"
-  notice-wash: "#E8ECF2"
-  amber: "#C47A0B"
+  error-wash: "#F8E3DF"
+  notice-wash: "#EBE5D8"
+  amber: "#A86400"
   amber-ink: "#8A4A00"
-  amber-wash: "#FBEFD9"
-  action: "#0F1A2A"
-  on-action: "#FBFCFD"
-  focus: "#0F1A2A"
-  ground-dark: "#0C121B"
-  surface-dark: "#131B26"
-  ink-dark: "#E6EBF2"
-  ink-2-dark: "#9BA7B8"
-  rule-dark: "#263241"
-  rule-strong-dark: "#5F6C7E"
-  line-coordinator-dark: "#A9B6C7"
-  line-flights-dark: "#7AA2F7"
-  line-lodging-dark: "#43C08A"
-  line-activities-dark: "#B497F5"
-  line-transport-dark: "#3FC0D3"
-  on-line-dark: "#0C121B"
+  amber-wash: "#F6DCA8"
+  action: "#1B2230"
+  on-action: "#FBF8F1"
+  focus: "#1B2230"
+  ground-dark: "#1B2230"
+  surface-dark: "#222A39"
+  ink-dark: "#EFE8D8"
+  ink-2-dark: "#AAA596"
+  rule-dark: "#313A4A"
+  rule-strong-dark: "#6B7384"
+  line-coordinator-dark: "#A3ABB6"
+  line-flights-dark: "#7696E3"
+  line-lodging-dark: "#4FA77B"
+  line-activities-dark: "#A089D9"
+  line-transport-dark: "#4AA8B6"
+  on-line-dark: "#1B2230"
   error-dark: "#F2766B"
-  error-wash-dark: "#2A1516"
-  notice-wash-dark: "#1A2431"
+  error-wash-dark: "#36211F"
+  notice-wash-dark: "#283141"
   amber-dark: "#F3A845"
   amber-ink-dark: "#F3A845"
-  amber-wash-dark: "#2A2112"
-  action-dark: "#E6EBF2"
-  on-action-dark: "#0C121B"
-  focus-dark: "#E6EBF2"
+  amber-wash-dark: "#33291A"
+  action-dark: "#EFE8D8"
+  on-action-dark: "#1B2230"
+  focus-dark: "#EFE8D8"
 typography:
+  hero:
+    fontFamily: "Barlow Semi Condensed, Barlow, system-ui, sans-serif"
+    fontSize: "44px"
+    fontWeight: 700
+    lineHeight: 1
   display:
     fontFamily: "Barlow Semi Condensed, Barlow, system-ui, sans-serif"
     fontSize: "24px"
@@ -197,7 +202,8 @@ components:
 
 Direction 1 "Linee", chosen by Michele on 2026-10-12 from the three studies in
 `web/design/directions/` (the study is `1-linee/index.html`, the comparison and trade-offs are in
-that folder's README). This file was written with `impeccable document` from that study and from
+that folder's README), restyled as **"Carta notturna"** on 2026-10-14
+(`docs/superpowers/specs/2026-10-14-atlas-brand-design.md`). This file was written with `impeccable document` from that study and from
 the code that implements it. **From now on the tokens here are the authority**: the study is a
 reference, `web/app/globals.css` is the implementation, and the two change together.
 
@@ -207,11 +213,15 @@ Where things live:
 | --- | --- |
 | Tokens (both themes), Tailwind theme, base styles, keyframes | `web/app/globals.css` |
 | Fonts, theme bootstrap, metadata, icon sprite | `web/app/layout.tsx` |
-| Product name ("Atlas") | `web/lib/brand.ts`, `BRAND_NAME`, nowhere else |
+| Product name ("Atlas"), tagline, description, site URL | `web/lib/brand.ts` (`BRAND_NAME`, `BRAND_TAGLINE`, `BRAND_DESCRIPTION`, `BRAND_URL`), nowhere else |
+| The mark's geometry and its fixed night colours | `web/lib/brand-mark.ts`; drawn by `components/ui/mark.tsx` |
+| Tab icon, home-screen icon, link preview | `web/app/icon.svg`, `web/app/apple-icon.tsx`, `web/app/opengraph-image.tsx` (font: `web/assets/fonts/`, OFL) |
+| Links between pages | `web/lib/routes.ts` (`ROUTES`), never a hand-written path |
+| The app header | `web/components/nav/app-header.tsx` |
 | Primitives | `web/components/ui/` (inventory under Components) |
 | Every primitive in every state, both themes | `/dev/ui` (development only, `notFound()` in production) |
 | Measured contrast | the table under Colors, enforced by `components/ui/tokens.test.ts` |
-| Invariants (amber only in `DatePair`, no colour on buttons, no em dash) | `components/ui/invariants.test.ts` |
+| Invariants (amber only in `DatePair`, no colour on buttons, no em dash, the No AI Chrome Rule, the tagline spelled once, no hand-written list path) | `components/ui/invariants.test.ts` |
 
 ## Overview
 
@@ -224,11 +234,12 @@ running now is the "you are here" plate at the end of its line. The five lines t
 run. The finished plan keeps the vocabulary: each booking carries the roundel of the line that
 found it.
 
-The tone is a calm control room. Many things change at once on the live screen and it must not
-become noise, so colour is spent on identity (one hue per agent), on failure (one red) and on
-deadlines (one amber), and everything else is ink on a cool neutral ground. Motion reports a change
-and stops: a new station draws its segment down, the live node sends a slow halo, nothing loops
-for decoration. Density is medium: stations are spaced like a printed line map (about 40 px a
+The line map is printed at night: **"Carta notturna"**. A flat ink ground with a paper grain, cream
+type, five matte line inks, the way a transit map looks on good paper under a street lamp. It is
+crafted and alive, and never neon: colour is spent on identity (one hue per agent), on failure (one
+red) and on deadlines (one amber). Everything else is cream or ink on the ground. Motion reports a
+change and stops: a new station draws its segment down, the live node sends a slow halo, nothing
+loops for decoration. Density is medium: stations are spaced like a printed line map (about 40 px a
 row), with tabular figures so times and costs line up.
 
 The lettering comes from road signs. Barlow Semi Condensed carries names and titles; Barlow
@@ -244,19 +255,65 @@ carries everything else. Both are drawn for reading in motion, which is what wat
   layers.
 - Soft corners (10 and 16 px) for containers, pills for every control, circles for every node.
 - Two dates on every booking, "Prenota entro" and "Quando", always labelled.
+- Dark by default; paper grain on the ground; never glow, spotlight, gradient text or glass
+  (The No AI Chrome Rule).
+
+## Brand
+
+**The mark: "A di linee".** The flights and lodging lines rise to meet at a station and form an
+"A"; the coordinator's line is the crossbar. It reads as a letter and as a piece of the map. It is
+a 40-unit square (`web/lib/brand-mark.ts`, `MARK_GEOMETRY`):
+
+- left leg: `M8.5 35 L20 7` in `line-flights`, 5 wide, round caps
+- right leg: `M31.5 35 L20 7` in `line-lodging`
+- crossbar: `M13.5 25 H26.5` in `line-coordinator`, 4.5 wide
+- the station: r 4.6 at (20, 7.5), `ground` fill and `ink` stroke at 2.8
+
+`<Mark>` draws it in token utilities, so it follows the nearest `data-theme`. Images that cannot
+read CSS variables use `NIGHT`, the night values, which a test keeps equal to `globals.css`.
+
+- **Lockup** (`Wordmark`): the mark (28 px) and "Atlas" in Semi Condensed 600. `compact` hides the
+  name below 400 px (the header on a phone); the name stays the link's accessible name.
+- **Tab icon** (`app/icon.svg`): the mark on a night tile, with thicker strokes for 16 px.
+  **Home-screen icon** (`app/apple-icon.tsx`): the mark on the night ground, 180 px. There is no
+  `favicon.ico`.
+- **Link preview** (`app/opengraph-image.tsx`): mark and name, the tagline, the five lines
+  converging on a destination; 1200 × 630, rendered at build time with the vendored Semi
+  Condensed 700.
+- **Tagline**: "Ogni viaggio ha il suo atlante." (`BRAND_TAGLINE`): the landing hero, the
+  metadata, the link preview, the empty plans list's invitation.
+- **Rule:** this is the only mark. It is never redrawn in another form, and it moves only where it
+  draws itself on the landing hero.
+
+**The No AI Chrome Rule.** Nothing on screen may look like a template made by AI. Banned:
+
+- glow (`drop-shadow`, `blur()` used as light, coloured halos)
+- radial or conic spotlight gradients
+- dot or grid backgrounds
+- gradient text (`background-clip: text`)
+- glass beyond the sticky live bar (`backdrop-filter` lives only in `live-header.tsx`,
+  `agent-lanes.tsx` and the dev gallery's header)
+- floating blurred shapes
+- sparkle iconography
+
+`components/ui/invariants.test.ts` enforces the mechanical part, in raw CSS and in Tailwind's own
+utilities (`bg-radial`, `bg-conic`, `blur-*`, `drop-shadow-*`, `text-shadow-*`, `bg-clip-text`). The
+texture of the product is the paper grain, and nothing else.
 
 ## Colors
 
-A cool neutral ground with ink for text and actions, five line hues for the agents, one red for
-failures and one amber that belongs to deadlines alone. Values are the frontmatter's; the dark
-theme's are the `-dark` keys. Light is the default, dark follows `prefers-color-scheme`, and the
-toggle pins either one on `<html data-theme>`.
+"Carta notturna": a flat ink ground with a paper grain, cream text, five matte line inks for the
+agents, one red for failures and one amber that belongs to deadlines alone. Values are the
+frontmatter's: the plain keys are "Carta di giorno" (light), the `-dark` keys "Carta notturna".
+**Dark is the default** everywhere. The system preference does not decide, and the toggle pins
+light (or dark again) on `<html data-theme>`.
 
 ### Primary
 
 - **Ink** (`ink`, `action`, `focus`): text, primary buttons (ink pill with `on-action` text), the
-  focus ring, the cost meter, the interchange lozenge and the wave stations. In dark the ink is
-  the near-white `ink-dark` and primary buttons invert to a light pill with dark text.
+  focus ring, the cost meter, the interchange lozenge and the wave stations. In dark, the default,
+  the ink is the cream `ink-dark` and primary buttons are a cream pill with ink text. In light they
+  are an ink pill with cream text.
 
 ### Secondary: the five lines
 
@@ -286,36 +343,44 @@ else is drawn in a line colour.
 - **Rule strong** (`rule-strong`): control borders (icon buttons, chips, inputs, steppers), the
   dashed edge of a source warning, the cost meter's track. At least 3:1 on ground and surface.
 - **Notice wash** (`notice-wash`): note backgrounds and the hover wash of quiet controls.
-- **Browser surfaces**: selection is `rgb(31 85 196 / .18)` light and `rgb(122 162 247 / .3)`
-  dark; the scrollbar is `rule-strong` on transparent; the caret is ink; the scrim under a sheet is
-  `rgb(15 26 42 / .4)` light and `rgb(3 6 10 / .62)` dark.
+- **Browser surfaces**: selection is `rgb(31 85 196 / .18)` light and `rgb(118 150 227 / .3)` dark;
+  the scrollbar is `rule-strong` on transparent; the caret is ink; the scrim under a sheet is
+  `rgb(27 34 48 / .4)` light and `rgb(3 6 10 / .62)` dark; `<meta name="theme-color">` is each
+  theme's ground (`THEME_COLORS`), set before paint by the theme bootstrap for a pinned theme and
+  repainted by the toggle.
+- **Paper grain** (`--grain`): one still `feTurbulence` tile on the page ground (`html` and any
+  `[data-theme]` subtree), cream specks at 6 % on dark, ink specks at 5 % on light. It is the one
+  texture in the product: never animated, never on surfaces, inputs or plates.
 
 ### Measured contrast
 
-WCAG 2.x ratios, measured on the background each element actually sits on (2026-10-12; text needs
+WCAG 2.x ratios, measured on the background each element actually sits on (2026-10-14; text needs
 4.5:1, large text and non-text 3:1). `components/ui/tokens.test.ts` recomputes every pair from
 `globals.css` on each `npm test`, and fails if the frontmatter above and `globals.css` disagree.
 
 | Pair | Light | Dark | Needs |
 | --- | --- | --- | --- |
-| ink on ground / surface | 15.86 / 17.02 | 15.68 / 14.46 | 4.5 |
-| ink on notice-wash / error-wash / amber-wash | 14.74 / 15.01 / 15.36 | 13.08 / 14.40 / 13.23 | 4.5 |
-| ink-2 on ground / surface | 6.66 / 7.14 | 7.70 / 7.10 | 4.5 |
-| ink-2 on notice-wash / error-wash / amber-wash | 6.19 / 6.30 / 6.45 | 6.42 / 7.08 / 6.50 | 4.5 |
-| error on surface / ground / error-wash | 6.36 / 5.93 / 5.61 | 6.25 / 6.78 / 6.23 | 4.5 |
-| on-line on coordinatore / voli / alloggio / attività / spostamenti | 10.29 / 6.48 / 5.73 / 6.55 / 5.63 | 9.13 / 7.46 / 8.18 / 7.77 / 8.67 | 4.5 |
-| on-line at 92 % on the plate (worst: spostamenti) | 5.03 | 6.67 (voli) | 4.5 |
-| line strokes on surface (worst) | 5.63 (spostamenti) | 6.88 (voli) | 3 |
-| line strokes on ground (worst) | 5.24 (spostamenti) | 7.46 (voli) | 3 |
-| amber-ink on amber-wash / surface | 6.03 / 6.68 | 7.92 / 8.66 | 4.5 |
-| amber stroke on surface / amber-wash | 3.33 / 3.01 | 8.66 / 7.92 | 3 |
-| on-action on action (primary button) / its hover | 17.02 / 11.45 | 15.68 / 11.71 | 4.5 |
-| rule-strong on ground / surface (control borders) | 3.39 / 3.63 | 3.52 / 3.24 | 3 |
-| focus ring (ink) on ground / surface | 15.86 / 17.02 | 15.68 / 14.46 | 3 |
+| ink on ground / surface | 13.89 / 15.02 | 13.05 / 11.80 | 4.5 |
+| ink on notice-wash / error-wash / amber-wash | 12.69 / 12.93 / 11.93 | 10.71 / 12.34 / 11.68 | 4.5 |
+| ink-2 on ground / surface | 5.66 / 6.12 | 6.47 / 5.85 | 4.5 |
+| ink-2 on notice-wash / error-wash / amber-wash | 5.17 / 5.26 / 4.86 | 5.31 / 6.12 / 5.79 | 4.5 |
+| error on surface / ground / error-wash | 6.16 / 5.70 / 5.31 | 5.20 / 5.75 / 5.44 | 4.5 |
+| on-line on coordinatore / voli / alloggio / attività / spostamenti | 9.96 / 6.28 / 5.55 / 6.34 / 5.45 | 6.87 / 5.49 / 5.42 / 5.37 / 5.74 | 4.5 |
+| on-line at 92 % on the plate, blended on 8-bit channels (worst) | 4.87 (spostamenti) | 4.77 (attività) | 4.5 |
+| line strokes on surface (worst) | 5.45 (spostamenti) | 4.85 (attività) | 3 |
+| line strokes on ground (worst) | 5.04 (spostamenti) | 5.37 (attività) | 3 |
+| amber-ink on amber-wash / surface | 5.14 / 6.47 | 7.13 / 7.20 | 4.5 |
+| amber stroke on surface / amber-wash | 4.41 / 3.50 | 7.20 / 7.13 | 3 |
+| on-action on action (primary button) / its hover | 15.02 / 9.99 | 13.05 / 9.95 | 4.5 |
+| rule-strong on ground / surface (control borders) | 3.25 / 3.52 | 3.35 / 3.02 | 3 |
+| focus ring (ink) on ground / surface | 13.89 / 15.02 | 13.05 / 11.80 | 3 |
 
-Decorative only (no minimum, never the sole carrier of meaning): `rule` on surface 1.36 / 1.33,
-surface against ground 1.07 / 1.08, the error notice's 55 % edge 2.56 / 2.80, `rule-strong` as the
-dashed edge of a warning on notice-wash 3.15 / 2.93 (the glyph and the sentence carry it).
+Decorative only (no minimum, never the sole carrier of meaning): `rule` on surface 1.38 / 1.26,
+surface against ground 1.08 / 1.11, the error notice's 55 % edge on error-wash 2.50 / 2.64,
+`rule-strong` as the dashed edge of a warning on notice-wash 2.97 / 2.75 (the glyph and the
+sentence carry it). On the cream light ground `amber-wash` is only 1.16:1 from `ground`: a due
+deadline is carried by the amber stroke (4.41 on surface) and the words "In scadenza", never by the
+wash alone.
 
 ### Named Rules
 
@@ -339,6 +404,7 @@ says "in corso da".
 
 **Display Font:** Barlow Semi Condensed 600 (with Barlow, system-ui)
 **Body Font:** Barlow 400, 500, 600 (with system-ui)
+**Hero Font:** Barlow Semi Condensed 700, the landing and demo headings only (`font-hero`).
 
 **Character:** both families come from highway-sign lettering: open, slightly condensed, made to
 be read at a glance while things move. The condensed cut names things (plan titles, lane names,
@@ -348,12 +414,14 @@ Both are self-hosted by `next/font/google` (`display: swap` with size-adjusted f
 is no layout shift and no request to Google from the browser). Only the latin subset is preloaded,
 four files of about 16 KB: Barlow 400, 500, 600 and Barlow Semi Condensed 600. Latin covers Italian
 and the Portuguese, Spanish and French names a trip meets; the latin-ext files load by
-`unicode-range` only when a name needs them. There is no bold 700 and no italic.
+`unicode-range` only when a name needs them. Barlow Semi Condensed 700 is a separate, non-preloaded
+face: its file loads only on the pages that use `font-hero`. There is no other bold and no italic.
 
 ### Hierarchy
 
 | Role | Token | Face | Size / line height | Where |
 | --- | --- | --- | --- | --- |
+| Hero | `font-hero font-bold text-hero`, `lg:text-hero-lg` | Semi Condensed 700 | 44 / 1.0, 66 / 0.98 from 1080 px | the landing and demo headings only |
 | Display | `text-display`, `lg:text-display-lg`, `xl:text-display-xl` | Semi Condensed 600 | 24 / 1.15, 30 from 1080 px, 32 from 1280 px | the page title ("Lisbona, 14–18 nov") |
 | Headline | `text-heading` | Semi Condensed 600 | 20 / 1.2 | section headings, sheet titles |
 | Title | `text-title` | Semi Condensed 600 | 18 / 1.2 | lane names, plan state in the header, closed sections, wordmark |
@@ -529,10 +597,10 @@ layout, not a stretched phone.
 Flat by default. Depth comes from tone (surface on ground), hairlines and the line glyphs, not from
 shadows. Two shadows exist, both soft and offset downward, both tinted from ink (black in dark):
 
-- **Plate** (`shadow-plate`: `0 1px 2px rgb(15 26 42 / .06), 0 10px 28px -14px rgb(15 26 42 /
+- **Plate** (`shadow-plate`: `0 1px 2px rgb(27 34 48 / .06), 0 10px 28px -14px rgb(27 34 48 /
   .22)`; dark `0 1px 2px rgb(0 0 0 / .4), 0 10px 28px -14px rgb(0 0 0 / .7)`): the live tool plate
   only. It lifts "you are here" off the line.
-- **Pop** (`shadow-pop`: `0 1px 2px rgb(15 26 42 / .08), 0 16px 32px -18px rgb(15 26 42 / .32)`;
+- **Pop** (`shadow-pop`: `0 1px 2px rgb(27 34 48 / .08), 0 16px 32px -18px rgb(27 34 48 / .32)`;
   dark `0 1px 2px rgb(0 0 0 / .45), 0 18px 36px -16px rgb(0 0 0 / .75)`): sheets and toasts.
 
 The sticky control bar is the one translucent surface: ground at 92 % with an 8 px backdrop blur,
@@ -575,6 +643,7 @@ or shape (there is no class merging, on purpose: see JavaScript weight below).
 | --- | --- | --- | --- |
 | `Button`, `LinkButton`, `buttonClasses` | `button.tsx` | Ink pill; `LinkButton` uses next/link inside, `<a target="_blank" rel="noopener noreferrer">` with `external` | primary, secondary, quiet; md 40 px, sm 32 px; icon; hover, press, focus, disabled, busy |
 | `IconButton` | `icon-button.tsx` | Round icon-only button with a required Italian `label` | outline, bare; md, sm; disabled |
+| `iconButtonClasses` | `icon-button.tsx` | An icon button's classes, for a link that must look like one | md, sm; outline, bare |
 | `ThemeToggle` | `theme-toggle.tsx` | Pins the opposite of the theme on screen | moon in light, sun in dark (CSS, no flash) |
 | `Chip` | `chip.tsx` | Static tag ("verificato", "stimato") | outline, quiet |
 | `ToolChip` | `chip.tsx` | The running tool | `plate` (line colour, "in corso da 0:14"), `inline` (ring + title + time) |
@@ -593,9 +662,12 @@ or shape (there is no class merging, on purpose: see JavaScript weight below).
 | `VisuallyHidden` | `visually-hidden.tsx` | Text for screen readers only | |
 | `Icon`, `IconSprite`, `ICON_PATHS` | `icon.tsx`, `icon-sprite.tsx`, `icons.ts` | Phosphor bold, from a sprite | 35 icons |
 | `Field`, `TextInput`, `TextArea`, `Select`, `NumberStepper`, `SegmentedControl` | `field.tsx` | Form controls with label above, hint, error below | default, hint, error, disabled, optional |
-| `Wordmark` | `wordmark.tsx` | "Atlas" in the display face, optionally the link home | |
+| `Mark` | `mark.tsx` | "A di linee" in the theme's line tokens (Brand) | any size via `className` |
+| `Wordmark` | `wordmark.tsx` | The lockup: mark and "Atlas", optionally the link home | `compact` (name hidden below 400 px) |
 | `ThemeScript` | `theme-script.tsx` | Applies the pinned theme before the first paint | |
 | `cx` | `cx.ts` | Joins class names | |
+
+`AppHeader` and `AppHeaderBar` (`web/components/nav/`) are app chrome, not primitives: see Navigation.
 
 ### Buttons
 
@@ -605,7 +677,9 @@ or shape (there is no class merging, on purpose: see JavaScript weight below).
   (the most important tap of the page is not its smallest control); 40 px from `sm` up.
 - **Primary:** ink fill, `on-action` text. One per view: "Pianifica il viaggio", "Prenota su
   <sito>", "Continua con 2 $ in più".
-- **Secondary:** ink outline on transparent; hover fills with `notice-wash`. "Interrompi", "Apri in
+- **Secondary:** ink outline on transparent; hover fills with `notice-wash`. `aria-current="page"`
+  (a link to the page you are on: the header's "Nuovo piano" on the form) thickens the ink edge to
+  3 px, like the current station. "Interrompi", "Apri in
   TripTracker", "Nuovo piano" where a primary already exists.
 - **Quiet:** no edge until hover; inside notices and footers ("Riprova", "Annulla").
 - **States:** hover in 160 ms; press scales to 0.98 in 120 ms (none with reduced motion); focus is
@@ -643,8 +717,26 @@ or shape (there is no class merging, on purpose: see JavaScript weight below).
 
 ### Navigation
 
-- The header holds the `Wordmark` (the link home), the page's own actions and the `ThemeToggle`
-  (40 px icon button). It is never taller than 72 px and stays on one line.
+- **One header on every signed-in page** (`AppHeader`), in this order:
+  - the lockup, the link to the plans (`ROUTES.plans`)
+  - the sections "Piani" and "Valutazioni" as **stations on one line**. The line runs past the
+    outer stations, a route that goes on beyond the map's edge, so the pair never reads as a
+    two-step progress bar. The current station is the larger "you are here" ring (11 px, 3 px ink
+    edge) with `aria-current="page"`; the others are 9 px hollow nodes that fill on hover.
+  - the theme toggle, **bare** (no ring), so it never reads as a twin of the button after it
+  - "Nuovo piano", **always the last item**, so the corner never changes meaning from page to
+    page. It is always the *secondary* button, so each view keeps its single primary; on the
+    phone a ringed 40 px "+" icon link named "Nuovo piano". On the form itself it stays in place
+    with `aria-current="page"`, drawn as the current station is (a 3 px ink edge: the 1.5 px border
+    plus a 1.5 px inset ring), so nothing shifts.
+- At most 72 px tall, one line, no menu drawer at 393 px, 44 px targets (under a finger the 40 px
+  icon controls grow to 44 px, `pointer-coarse:size-11`).
+- On the live screen the header is the compact `AppHeaderBar` (`components/nav/app-header-bar.tsx`):
+  the slim top row (56 px) above the sticky control bar, which keeps the theme toggle (bare there
+  too, so it never sits as a twin of the ringed "+") and stays the only sticky, translucent surface. The bar imports no toggle, so the plan page ships one copy;
+  `AppHeader` is the bar with the toggle at its end. The plan page's error boundary shows the lockup
+  alone (JS budget, README).
+- Links between pages read `ROUTES` (`web/lib/routes.ts`), never a hand-written path.
 
 ### Lane line (signature component)
 
@@ -933,6 +1025,7 @@ recognised before it is read. It is supplementary: every screen is complete with
 - **Do** use `formatUsd` for costs ("1,62 $", two decimals, Italian format) and `formatEur` for
   prices; never cents on screen.
 - **Do** read the product's name from `BRAND_NAME`.
+- **Do** read the tagline from `BRAND_TAGLINE` and every page path from `ROUTES`.
 - **Do** declare a reduced-motion equivalent for every new animation, from the Motion table.
 - **Do** check every new screen at 393 px and at desktop width, light and dark, and on `/dev/ui`
   when a primitive changes.
@@ -953,4 +1046,7 @@ recognised before it is read. It is supplementary: every screen is complete with
   toasts only for the user's own actions.
 - **Don't** animate layout properties, and don't loop anything except the halo and the turning
   arrows.
-- **Don't** invent a logo: Atlas is its wordmark.
+- **Don't** draw another mark or redraw "A di linee": `<Mark>` and `lib/brand-mark.ts` are the only
+  sources.
+- **Don't** add glow, spotlight gradients, dot grids, gradient text, glass or blurred shapes (The No
+  AI Chrome Rule).

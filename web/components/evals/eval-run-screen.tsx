@@ -9,7 +9,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { SiteHeader } from "@/components/home/site-header";
+import { AppHeader } from "@/components/nav/app-header";
 import { Button, LinkButton } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Notice } from "@/components/ui/notice";
@@ -54,7 +54,7 @@ export function EvalRunScreen({ runId }: { runId: string }) {
   if (state.kind === "missing") {
     return (
       <>
-        <SiteHeader current="evals" />
+        <AppHeader current="evals" />
         <main className="mx-auto max-w-page px-4 pt-2 lg:px-7">
           <StatePanel
             icon="warning"
@@ -80,7 +80,7 @@ export function EvalRunScreen({ runId }: { runId: string }) {
   if (state.kind === "error") {
     return (
       <>
-        <SiteHeader current="evals" />
+        <AppHeader current="evals" />
         <main className="mx-auto max-w-page px-4 pt-5 pb-16 lg:px-7 lg:pt-7">
           <BackLink />
           <Notice
@@ -128,7 +128,7 @@ function RunPage({ run }: { run: EvalRunDetail }) {
   const requests = failingFirst(run.results.requests);
   return (
     <>
-      <SiteHeader current="evals" />
+      <AppHeader current="evals" />
       <main className="mx-auto max-w-page px-4 pt-5 pb-16 lg:px-7 lg:pt-7">
         <BackLink />
         <div className="mt-2 max-w-[64rem]">

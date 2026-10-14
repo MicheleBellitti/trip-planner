@@ -60,11 +60,13 @@ export const RECENT_ROWS = 8;
 /** The rail's column: 36 px wide, so its centre (18 px) is where the rail and every node sit (the
  * node is 18 px: it just fits, and the title column keeps the width). */
 const RAIL_COL = "2.25rem";
-/** Phone: rail, cover, title over meta, caret, 10 px apart. Desktop: rail, cover, title, status,
- * cost, created, caret. The cover column is as wide as the thumbnail (4.5 rem on the phone, 6 rem
- * from 1080 px). */
+/** Narrow: rail, cover, title over meta, caret, 10 px apart. Wide: rail, cover, title, status,
+ * cost, created, caret. "Wide" is the list's own width (a container query at 58 rem), not the
+ * window's: beside the featured plan, from 1280 px, the list is narrower than at 1080 px, and the
+ * columns would squeeze the title (the one thing that tells plans apart) to a few words. The cover
+ * column is as wide as the thumbnail (4.5 rem narrow, 6 rem wide). */
 const ROW_GRID =
-  "grid-cols-[2.25rem_4.5rem_minmax(0,1fr)_1rem] lg:grid-cols-[2.25rem_6rem_minmax(0,1fr)_8rem_5.5rem_10.5rem_1rem]";
+  "grid-cols-[2.25rem_4.5rem_minmax(0,1fr)_1rem] @min-[58rem]:grid-cols-[2.25rem_6rem_minmax(0,1fr)_8rem_5.5rem_10.5rem_1rem]";
 
 export function PlanList({ className }: { className?: string }) {
   const [state, setState] = useState<ListState>({ kind: "loading" });
@@ -161,11 +163,11 @@ export function PlanList({ className }: { className?: string }) {
         {rows.length > 0 ? (
           // overflow-hidden keeps the rows' hover wash and the rail inside the rounded corners;
           // the rows' focus ring is drawn inside for the same reason.
-          <div className="relative overflow-hidden rounded-md border border-rule bg-surface">
+          <div className="@container relative overflow-hidden rounded-md border border-rule bg-surface">
             <Rail />
             <div
               aria-hidden="true"
-              className={cx("hidden gap-x-4 border-b border-rule py-2 pr-4 text-micro text-ink-2 lg:grid", ROW_GRID)}
+              className={cx("hidden gap-x-4 border-b border-rule py-2 pr-4 text-micro text-ink-2 @min-[58rem]:grid", ROW_GRID)}
             >
               <span />
               <span />
@@ -313,7 +315,7 @@ function PlanRow({ plan, openedAt }: { plan: PlanSummary; openedAt: number }) {
     <Link
       href={`/plans/${plan.id}`}
       className={cx(
-        "group relative grid items-center gap-x-2.5 gap-y-1 py-3.5 pr-4 no-underline lg:gap-x-4",
+        "group relative grid items-center gap-x-2.5 gap-y-1 py-3.5 pr-4 no-underline @min-[58rem]:gap-x-4",
         "transition-[background-color] duration-(--duration-hover) ease-out hover:bg-notice-wash",
         "focus-visible:-outline-offset-2",
         ROW_GRID,
@@ -334,25 +336,25 @@ function PlanRow({ plan, openedAt }: { plan: PlanSummary; openedAt: number }) {
       <CoverThumb
         planId={plan.id}
         destination={destinationFromTitle(plan.title)}
-        className="col-start-2 row-span-2 row-start-1 w-full lg:row-span-1"
+        className="col-start-2 row-span-2 row-start-1 w-full @min-[58rem]:row-span-1"
       />
-      {/* Two lines at most on the phone, the date range in one piece; the desktop column cuts. */}
+      {/* Two lines at most, in either layout: the date range stays in one piece. */}
       <span
         data-plan-title=""
         className={cx(
-          "col-start-3 row-start-1 line-clamp-2 min-w-0 font-cond font-semibold text-ink group-hover:underline lg:line-clamp-none lg:block lg:truncate",
+          "col-start-3 row-start-1 line-clamp-2 min-w-0 font-cond font-semibold text-ink group-hover:underline",
           plan.status === "running" ? "text-heading" : "text-title",
         )}
       >
         <PlanTitle title={plan.title} />
       </span>
-      <span className="col-start-3 row-start-2 flex flex-wrap items-center gap-x-3 gap-y-1 lg:contents">
+      <span className="col-start-3 row-start-2 flex flex-wrap items-center gap-x-3 gap-y-1 @min-[58rem]:contents">
         <StatusMeta plan={plan} openedAt={openedAt} columns />
       </span>
       <Icon
         name="caret-right"
         size={16}
-        className="col-start-4 row-span-2 row-start-1 text-ink-2 lg:col-start-7 lg:row-span-1"
+        className="col-start-4 row-span-2 row-start-1 text-ink-2 @min-[58rem]:col-start-7 @min-[58rem]:row-span-1"
       />
     </Link>
   );
@@ -374,20 +376,20 @@ function StatusMeta({ plan, openedAt, columns = false }: { plan: PlanSummary; op
       <span
         className={cx(
           "text-meta",
-          columns && "lg:col-start-4 lg:row-start-1 lg:text-small",
+          columns && "@min-[58rem]:col-start-4 @min-[58rem]:row-start-1 @min-[58rem]:text-small",
           failure ? "text-error" : live ? "text-ink" : "text-ink-2",
-          live && columns && "max-lg:sr-only",
+          live && columns && "@max-[58rem]:sr-only",
         )}
       >
         {PLAN_STATUS_LABELS[plan.status]}
       </span>
       {live ? null : (
-        <span className={cx("text-meta text-ink-2", columns && "lg:col-start-5 lg:row-start-1 lg:text-right lg:text-small")}>
+        <span className={cx("text-meta text-ink-2", columns && "@min-[58rem]:col-start-5 @min-[58rem]:row-start-1 @min-[58rem]:text-right @min-[58rem]:text-small")}>
           <VisuallyHidden>Costo </VisuallyHidden>
           {formatUsd(plan.cost_cents)}
         </span>
       )}
-      <span className={cx("text-meta text-ink-2", columns && "lg:col-start-6 lg:row-start-1")}>
+      <span className={cx("text-meta text-ink-2", columns && "@min-[58rem]:col-start-6 @min-[58rem]:row-start-1")}>
         {live ? (
           <RunningFor createdAt={plan.created_at} openedAt={openedAt} />
         ) : (
@@ -401,7 +403,7 @@ function StatusMeta({ plan, openedAt, columns = false }: { plan: PlanSummary; op
   );
 }
 
-/** "Oggi, 17:36", "Ieri, 21:40", "8 ott": read in the browser, where the list is fetched. The full
+/** "Oggi, 17:36", "Ieri, 21:40", "8 ott, 09:15": read in the browser, where the list is fetched. The full
  * date and time stay in the element for anyone who hovers or reads the markup. */
 function Created({ iso, openedAt }: { iso: string; openedAt: number }) {
   return (
@@ -434,22 +436,22 @@ function LoadingRows({ className }: { className?: string }) {
     <div aria-busy="true" className={className}>
       <VisuallyHidden>Carico i piani…</VisuallyHidden>
       <Skeleton className="mb-3 w-40" />
-      <div className="relative overflow-hidden rounded-md border border-rule bg-surface">
+      <div className="@container relative overflow-hidden rounded-md border border-rule bg-surface">
         <Rail />
         <ul className="divide-y divide-rule">
           {[0, 1, 2].map((row) => (
-            <li key={row} className={cx("relative grid items-center gap-x-2.5 gap-y-2 py-3.5 pr-4 lg:gap-x-4", ROW_GRID)}>
+            <li key={row} className={cx("relative grid items-center gap-x-2.5 gap-y-2 py-3.5 pr-4 @min-[58rem]:gap-x-4", ROW_GRID)}>
               {/* A placeholder station on the rail, in the plan's final place. */}
               <span
                 aria-hidden="true"
                 className="absolute top-1/2 z-[2] size-[18px] -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-rule bg-surface"
                 style={{ left: `calc(${RAIL_COL} / 2)` }}
               />
-              <Skeleton shape="block" className="col-start-2 row-span-2 row-start-1 aspect-[4/3] w-full lg:row-span-1" />
-              <Skeleton className={cx("col-start-3 text-title", row === 1 ? "w-3/5" : "w-4/5", "lg:w-3/4")} />
-              <Skeleton className="col-start-3 row-start-2 w-40 lg:col-start-4 lg:row-start-1 lg:w-24" />
-              <Skeleton className="hidden w-12 justify-self-end lg:col-start-5 lg:block" />
-              <Skeleton className="hidden w-28 lg:col-start-6 lg:block" />
+              <Skeleton shape="block" className="col-start-2 row-span-2 row-start-1 aspect-[4/3] w-full @min-[58rem]:row-span-1" />
+              <Skeleton className={cx("col-start-3 text-title", row === 1 ? "w-3/5" : "w-4/5", "@min-[58rem]:w-3/4")} />
+              <Skeleton className="col-start-3 row-start-2 w-40 @min-[58rem]:col-start-4 @min-[58rem]:row-start-1 @min-[58rem]:w-24" />
+              <Skeleton className="hidden w-12 justify-self-end @min-[58rem]:col-start-5 @min-[58rem]:block" />
+              <Skeleton className="hidden w-28 @min-[58rem]:col-start-6 @min-[58rem]:block" />
             </li>
           ))}
         </ul>

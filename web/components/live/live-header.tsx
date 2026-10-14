@@ -151,7 +151,7 @@ export function LiveHeader({
           )}
           <div className="flex items-center gap-2 [grid-area:actions]">
             {action}
-            <ThemeToggle />
+            <ThemeToggle variant="bare" />
           </div>
         </div>
       </div>

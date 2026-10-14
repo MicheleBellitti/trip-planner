@@ -49,3 +49,6 @@ pnpm-debug.log*
 # TripTracker is a private repository: its code snapshot and the integration patch stay local
 docs/triptracker/snapshot/
 docs/triptracker/pr/
+
+# Brainstorming companion: visual studies and session state, local only
+.superpowers/

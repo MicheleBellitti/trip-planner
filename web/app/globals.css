@@ -1,10 +1,11 @@
 /*
- * Atlas design tokens, direction 1 "Linee" (web/DESIGN.md is the authority; change a value
- * there and here together). Two layers:
+ * Atlas design tokens, "Carta notturna" (direction 1 "Linee", restyled on 2026-10-14; web/DESIGN.md
+ * is the authority: change a value there and here together). Two layers:
  *
- * 1. Raw tokens (--ground, --ink, --line-flights, ...) set per theme on :root and on any element
- *    with data-theme="light" | "dark". The system theme applies unless <html data-theme> pins
- *    one (the theme toggle; see components/ui/theme-script.tsx, no flash).
+ * 1. Raw tokens (--ground, --ink, --line-flights, ...) per theme. Dark ("Carta notturna") is the
+ *    default on :root; light ("Carta di giorno") applies only where data-theme="light" pins it
+ *    (the theme toggle on <html>, see components/ui/theme-script.tsx; a subtree in /dev/ui). The
+ *    system preference does not decide.
  * 2. `@theme inline` maps them to Tailwind utilities (bg-ground, text-ink-2, border-rule-strong,
  *    bg-line-flights, shadow-plate, ...). `inline` makes each utility read the raw variable on
  *    the element itself, so a [data-theme] subtree (the /dev/ui gallery) themes correctly.
@@ -15,110 +16,83 @@
 @import "tailwindcss";
 
 /* ---------------------------------------------------------------------------------------------
-   Raw tokens: light (default), dark by system preference, dark or light pinned by data-theme.
-   Order matters: the explicit [data-theme="dark"] block comes last so it wins on :root.
+   Raw tokens: dark by default and wherever data-theme="dark" pins it; light where
+   data-theme="light" pins it. Order matters: the light block comes last, so a pinned <html>
+   wins over :root.
 --------------------------------------------------------------------------------------------- */
 :root,
-[data-theme="light"] {
-  --ground: #f2f4f7;
-  --surface: #fbfcfd;
-  --ink: #0f1a2a;
-  --ink-2: #4b5768;
-  --rule: #d5dbe3;
-  --rule-strong: #7a8597;
-  --line-coordinator: #33404f;
-  --line-flights: #1f55c4;
-  --line-lodging: #0f7348;
-  --line-activities: #6d3fc0;
-  --line-transport: #08707f;
-  --on-line: #fbfcfd;
-  --error: #b3261e;
-  --error-wash: #fbeae8;
-  --notice-wash: #e8ecf2;
-  /* Reserved: only a booking whose dueAt is within 72 hours (DatePair). Never on a button. */
-  --amber: #c47a0b;
-  --amber-ink: #8a4a00;
-  --amber-wash: #fbefd9;
-  --action: #0f1a2a;
-  --on-action: #fbfcfd;
-  --focus: #0f1a2a;
-  --selection: rgb(31 85 196 / 0.18);
-  --scrim: rgb(15 26 42 / 0.4);
-  --elevation-plate: 0 1px 2px rgb(15 26 42 / 0.06), 0 10px 28px -14px rgb(15 26 42 / 0.22);
-  --elevation-pop: 0 1px 2px rgb(15 26 42 / 0.08), 0 16px 32px -18px rgb(15 26 42 / 0.32);
-  /* Inherited switches for theme-dependent glyphs (the theme toggle's moon and sun). */
-  --show-in-light: inline-block;
-  --show-in-dark: none;
-  color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --ground: #0c121b;
-    --surface: #131b26;
-    --ink: #e6ebf2;
-    --ink-2: #9ba7b8;
-    --rule: #263241;
-    --rule-strong: #5f6c7e;
-    --line-coordinator: #a9b6c7;
-    --line-flights: #7aa2f7;
-    --line-lodging: #43c08a;
-    --line-activities: #b497f5;
-    --line-transport: #3fc0d3;
-    --on-line: #0c121b;
-    --error: #f2766b;
-    --error-wash: #2a1516;
-    --notice-wash: #1a2431;
-    --amber: #f3a845;
-    --amber-ink: #f3a845;
-    --amber-wash: #2a2112;
-    --action: #e6ebf2;
-    --on-action: #0c121b;
-    --focus: #e6ebf2;
-    --selection: rgb(122 162 247 / 0.3);
-    --scrim: rgb(3 6 10 / 0.62);
-    --elevation-plate: 0 1px 2px rgb(0 0 0 / 0.4), 0 10px 28px -14px rgb(0 0 0 / 0.7);
-    --elevation-pop: 0 1px 2px rgb(0 0 0 / 0.45), 0 18px 36px -16px rgb(0 0 0 / 0.75);
-    --show-in-light: none;
-    --show-in-dark: inline-block;
-    color-scheme: dark;
-  }
-}
-
 [data-theme="dark"] {
-  --ground: #0c121b;
-  --surface: #131b26;
-  --ink: #e6ebf2;
-  --ink-2: #9ba7b8;
-  --rule: #263241;
-  --rule-strong: #5f6c7e;
-  --line-coordinator: #a9b6c7;
-  --line-flights: #7aa2f7;
-  --line-lodging: #43c08a;
-  --line-activities: #b497f5;
-  --line-transport: #3fc0d3;
-  --on-line: #0c121b;
+  --ground: #1b2230;
+  --surface: #222a39;
+  --ink: #efe8d8;
+  --ink-2: #aaa596;
+  --rule: #313a4a;
+  --rule-strong: #6b7384;
+  --line-coordinator: #a3abb6;
+  --line-flights: #7696e3;
+  --line-lodging: #4fa77b;
+  --line-activities: #a089d9;
+  --line-transport: #4aa8b6;
+  --on-line: #1b2230;
   --error: #f2766b;
-  --error-wash: #2a1516;
-  --notice-wash: #1a2431;
+  --error-wash: #36211f;
+  --notice-wash: #283141;
+  /* Reserved: only a booking whose dueAt is within 72 hours (DatePair). Never on a button. */
   --amber: #f3a845;
   --amber-ink: #f3a845;
-  --amber-wash: #2a2112;
-  --action: #e6ebf2;
-  --on-action: #0c121b;
-  --focus: #e6ebf2;
-  --selection: rgb(122 162 247 / 0.3);
+  --amber-wash: #33291a;
+  --action: #efe8d8;
+  --on-action: #1b2230;
+  --focus: #efe8d8;
+  --selection: rgb(118 150 227 / 0.3);
   --scrim: rgb(3 6 10 / 0.62);
   --elevation-plate: 0 1px 2px rgb(0 0 0 / 0.4), 0 10px 28px -14px rgb(0 0 0 / 0.7);
   --elevation-pop: 0 1px 2px rgb(0 0 0 / 0.45), 0 18px 36px -16px rgb(0 0 0 / 0.75);
+  /* Paper grain (DESIGN.md, "Colors"): one still feTurbulence tile, cream specks at 6 %. */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .94 0 0 0 0 .91 0 0 0 0 .85 0 0 0 .06 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  /* Inherited switches for theme-dependent glyphs (the theme toggle's moon and sun). */
   --show-in-light: none;
   --show-in-dark: inline-block;
   color-scheme: dark;
 }
 
-/* A subtree themed by data-theme repaints its own ground and text. */
+[data-theme="light"] {
+  --ground: #f4efe4;
+  --surface: #fbf8f1;
+  --ink: #1b2230;
+  --ink-2: #5b5e66;
+  --rule: #ddd5c5;
+  --rule-strong: #8a8473;
+  --line-coordinator: #33404f;
+  --line-flights: #1f55c4;
+  --line-lodging: #0f7348;
+  --line-activities: #6d3fc0;
+  --line-transport: #08707f;
+  --on-line: #fbf8f1;
+  --error: #b3261e;
+  --error-wash: #f8e3df;
+  --notice-wash: #ebe5d8;
+  --amber: #a86400;
+  --amber-ink: #8a4a00;
+  --amber-wash: #f6dca8;
+  --action: #1b2230;
+  --on-action: #fbf8f1;
+  --focus: #1b2230;
+  --selection: rgb(31 85 196 / 0.18);
+  --scrim: rgb(27 34 48 / 0.4);
+  --elevation-plate: 0 1px 2px rgb(27 34 48 / 0.06), 0 10px 28px -14px rgb(27 34 48 / 0.22);
+  --elevation-pop: 0 1px 2px rgb(27 34 48 / 0.08), 0 16px 32px -18px rgb(27 34 48 / 0.32);
+  /* Ink specks at 5 %. */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .11 0 0 0 0 .13 0 0 0 0 .19 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --show-in-light: inline-block;
+  --show-in-dark: none;
+  color-scheme: light;
+}
+
+/* A subtree themed by data-theme repaints its own ground, grain and text. */
 [data-theme] {
   background-color: var(--ground);
+  background-image: var(--grain);
   color: var(--ink);
 }
 
@@ -151,20 +125,18 @@
   --line: var(--line-transport);
 }
 
-/* `dark:` follows the resolved theme of the nearest scope: a pinned data-theme, else the system
-   preference. Prefer tokens (they switch by themselves); use dark: only for glyph swaps. */
+/* `dark:` follows the resolved theme of the nearest scope: a pinned data-theme, else the dark
+   default. Prefer tokens (they switch by themselves); use dark: only for glyph swaps. */
 @custom-variant dark {
   &:where([data-theme="dark"], [data-theme="dark"] *):not(
       :where([data-theme="dark"] [data-theme="light"], [data-theme="dark"] [data-theme="light"] *)
     ) {
     @slot;
   }
-  @media (prefers-color-scheme: dark) {
-    &:where(:root:not([data-theme]), :root:not([data-theme]) *):not(
-        :where([data-theme="light"], [data-theme="light"] *)
-      ) {
-      @slot;
-    }
+  &:where(:root:not([data-theme="light"]), :root:not([data-theme="light"]) *):not(
+      :where([data-theme="light"], [data-theme="light"] *)
+    ) {
+    @slot;
   }
 }
 
@@ -200,6 +172,7 @@
   --font-*: initial;
   --font-sans: var(--font-barlow), ui-sans-serif, system-ui, sans-serif;
   --font-cond: var(--font-barlow-semi-condensed), var(--font-barlow), ui-sans-serif, system-ui, sans-serif;
+  --font-hero: var(--font-barlow-semi-condensed-bold), var(--font-barlow-semi-condensed), var(--font-barlow), ui-sans-serif, system-ui, sans-serif;
 
   --shadow-*: initial;
   --shadow-plate: var(--elevation-plate);
@@ -228,11 +201,16 @@
   --text-display-lg--line-height: 1.15;
   --text-display-xl: 2rem;
   --text-display-xl--line-height: 1.12;
+  --text-hero: 2.75rem; /* 44px phone, 66px from lg, Semi Condensed 700: landing and demo headings only */
+  --text-hero--line-height: 1;
+  --text-hero-lg: 4.125rem;
+  --text-hero-lg--line-height: 0.98;
 
   --font-weight-*: initial;
   --font-weight-normal: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
+  --font-weight-bold: 700; /* the hero heading only */
 
   --radius-*: initial;
   --radius-xs: 4px; /* message summary, small marks */
@@ -303,6 +281,7 @@
 @layer base {
   html {
     background-color: var(--ground);
+    background-image: var(--grain);
     color: var(--ink);
     font-family: var(--font-barlow), ui-sans-serif, system-ui, sans-serif;
     font-size: 100%;

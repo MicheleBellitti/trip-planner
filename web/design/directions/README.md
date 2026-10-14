@@ -5,6 +5,10 @@ Michele picks one. `impeccable document` then fixes the chosen one as tokens in 
 (spec, "Interfaccia e design", step 3). Nothing in this folder is production code. Each page is a
 static design study.
 
+**2026-10-14:** Michele chose direction 1, "Linee", and it has since been restyled as "Carta
+notturna" (dark by default, the "A di linee" mark): `docs/superpowers/specs/2026-10-14-atlas-brand-design.md`.
+These studies stay as they were drawn.
+
 | Page | Direction | In one line |
 | --- | --- | --- |
 | [`1-linee/`](1-linee/index.html) | **Linee** | The run drawn as a transit line diagram. Each agent is a line, each event a station, each message an interchange on both lines, and the live tool is the "you are here" plate at the end of its line. |

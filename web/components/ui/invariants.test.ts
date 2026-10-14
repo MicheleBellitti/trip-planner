@@ -2,7 +2,8 @@
  * Mechanical checks of DESIGN.md's invariants over the design system's own sources:
  * amber is drawn only by DatePair, buttons have no colour prop, no em dash reaches the screen, no
  * component reads the clock while rendering (Cache Components prerenders the routes), and a lane
- * that never started is not told "in attesa".
+ * that never started is not told "in attesa", the No AI Chrome Rule holds, the tagline is spelled once,
+ * and no link spells the list's path by hand.
  */
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -30,6 +31,11 @@ const componentFiles = sources(path.join(webDir, "components"));
 /** A use of the amber tokens: a utility (bg-amber-wash, inset-ring-amber, text-amber-ink, ...) or
  * the variable itself. Comments that name the rule ("never amber") do not match. */
 const AMBER_USE = /\b(?:bg|text|border|ring|inset-ring|outline|fill|stroke|decoration|shadow|from|via|to)-amber\b|var\(--amber/;
+
+/** AI chrome (DESIGN.md, "The No AI Chrome Rule"): glow, spotlight gradients and gradient text, spelled
+ * as raw CSS or as Tailwind utilities. The sticky bar's `backdrop-blur` is glass, checked apart. */
+const CHROME =
+  /drop-shadow|text-shadow|(?<!backdrop-)\bblur-|blur\(|\bbg-radial|\bbg-conic|radial-gradient|conic-gradient|bg-clip-text|background-clip:\s*text/;
 
 describe("design invariants", () => {
   it("scans the design system's sources", () => {
@@ -62,6 +68,60 @@ describe("design invariants", () => {
       .filter((file) => IN_RENDER.test(readFileSync(file, "utf8")))
       .map((file) => path.relative(webDir, file));
     expect(offenders).toEqual([]);
+  });
+
+  it("links to the plans list through ROUTES, never a hand-written \"/\"", () => {
+    // Step 2 of the brand spec gives "/" to the landing: every link to the list must move with ROUTES.
+    const LITERAL_ROOT = /href=(?:"\/"|\{"\/"\})/;
+    const offenders = [...sources(path.join(webDir, "components")), ...sources(path.join(webDir, "app"))]
+      .filter((file) => LITERAL_ROOT.test(readFileSync(file, "utf8")))
+      .map((file) => path.relative(webDir, file));
+    expect(offenders).toEqual([]);
+  });
+
+  it("recognises AI chrome in raw CSS and in Tailwind's own utilities, but not the sticky bar's glass", () => {
+    for (const glow of [
+      "filter: drop-shadow(0 0 4px red)",
+      "filter: blur(8px)",
+      "background: radial-gradient(circle, #fff, transparent)",
+      "background: conic-gradient(red, blue)",
+      "background-clip: text",
+      'className="bg-clip-text"',
+      'className="drop-shadow-lg"',
+      'className="bg-radial from-ink"',
+      'className="bg-conic/oklch"',
+      'className="blur-2xl"',
+      'className="text-shadow-lg"',
+    ]) {
+      expect(CHROME.test(glow), glow).toBe(true);
+    }
+    for (const allowed of ['className="backdrop-blur-[8px]"', 'className="lg:backdrop-blur-none"', "box-shadow: var(--elevation-pop)"]) {
+      expect(CHROME.test(allowed), allowed).toBe(false);
+    }
+  });
+
+  it("keeps the No AI Chrome Rule: no glow, spotlight or gradient text, and glass only on the sticky live bar", () => {
+    const all = [...sources(path.join(webDir, "components")), ...sources(path.join(webDir, "app"))];
+    const relative = (file: string) => path.relative(webDir, file);
+    expect(all.filter((file) => CHROME.test(readFileSync(file, "utf8"))).map(relative)).toEqual([]);
+    const GLASS = /backdrop-blur|backdrop-filter/;
+    expect(all.filter((file) => GLASS.test(readFileSync(file, "utf8"))).map(relative).sort()).toEqual([
+      "app/dev/ui/page.tsx",
+      "components/live/agent-lanes.tsx",
+      "components/live/live-header.tsx",
+    ]);
+  });
+
+  it("spells the tagline only in lib/brand.ts", () => {
+    const all = [
+      ...sources(path.join(webDir, "components")),
+      ...sources(path.join(webDir, "app")),
+      ...sources(path.join(webDir, "lib")),
+    ];
+    const spellers = all
+      .filter((file) => readFileSync(file, "utf8").includes("Ogni viaggio ha il suo atlante"))
+      .map((file) => path.relative(webDir, file));
+    expect(spellers).toEqual(["lib/brand.ts"]);
   });
 
   it("tells a lane that never started apart from one that waits", () => {

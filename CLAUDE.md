@@ -381,9 +381,11 @@ CI must pass before merge.
 - Costs are dollars with two decimals in Italian format ("1,62 $", `formatUsd`), never cents on
   screen; trip prices stay in euro.
 - Copy is in sentence case, buttons use an action verb, and an empty state is an invitation.
-  The product name is spelled only in `BRAND_NAME` (`web/lib/brand.ts`).
+  The product name and the tagline are spelled only in `BRAND_NAME` and `BRAND_TAGLINE`
+  (`web/lib/brand.ts`); page paths come from `ROUTES` (`web/lib/routes.ts`).
 - Design: direction 1 "Linee" (the run drawn as a transit line diagram, PRODUCT.md
-  "Decisions"). **The tokens in `web/DESIGN.md` are the authority**: `app/globals.css` follows
+  "Decisions"), restyled as "Carta notturna" on 2026-10-14: dark by default, the "A di linee"
+  mark, no glow or "AI" chrome (`docs/superpowers/specs/2026-10-14-atlas-brand-design.md`). **The tokens in `web/DESIGN.md` are the authority**: `app/globals.css` follows
   them, and `components/ui/tokens.test.ts` checks the two agree and re-measures contrast on
   every `npm test`. Build screens from `components/ui/` (the `/dev/ui` gallery shows them in
   development). `impeccable` checks and polishes; a screen merges only at ≥ 32/40 in the
