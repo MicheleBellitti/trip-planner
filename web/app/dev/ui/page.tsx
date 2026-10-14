@@ -27,6 +27,7 @@ import {
 import { Toaster } from "@/components/ui/toast";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { Wordmark } from "@/components/ui/wordmark";
+import { BRAND_TAGLINE } from "@/lib/brand";
 import { AGENTS, AGENT_LABELS } from "@/lib/plan-events/labels";
 import type { LaneBadgeState } from "@/lib/plan-events/labels";
 import type { PlanStatus } from "@/lib/schemas/api";
@@ -111,6 +112,7 @@ export default function ComponentGalleryPage() {
         <Section title="Tipografia">
           <ThemePair>
             <div className="grid gap-3">
+              <p className="font-hero text-hero font-bold">{BRAND_TAGLINE}</p>
               <p className="font-cond text-display font-semibold">Lisbona, 14–18 nov</p>
               <p className="font-cond text-heading font-semibold">Anteprima delle prenotazioni</p>
               <p className="font-cond text-title font-semibold">Coordinatore</p>

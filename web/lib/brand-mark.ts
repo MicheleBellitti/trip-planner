@@ -25,3 +25,23 @@ export const NIGHT = {
   activities: "#9c84d6",
   transport: "#4aa8b6",
 } as const;
+
+export type MarkColors = Record<"ground" | "ink" | "coordinator" | "flights" | "lodging", string>;
+
+/** The mark as a standalone SVG document, for images (the apple icon, the link preview). */
+export function markSvg(colors: MarkColors = NIGHT): string {
+  const g = MARK_GEOMETRY;
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${MARK_VIEWBOX}">`,
+    `<path d="${g.flights.d}" fill="none" stroke="${colors.flights}" stroke-width="${g.flights.width}" stroke-linecap="round"/>`,
+    `<path d="${g.lodging.d}" fill="none" stroke="${colors.lodging}" stroke-width="${g.lodging.width}" stroke-linecap="round"/>`,
+    `<path d="${g.coordinator.d}" fill="none" stroke="${colors.coordinator}" stroke-width="${g.coordinator.width}" stroke-linecap="round"/>`,
+    `<circle cx="${g.station.cx}" cy="${g.station.cy}" r="${g.station.r}" fill="${colors.ground}" stroke="${colors.ink}" stroke-width="${g.station.width}"/>`,
+    "</svg>",
+  ].join("");
+}
+
+/** markSvg() as a base64 data URI, for <img src> inside next/og images. */
+export function markDataUri(colors: MarkColors = NIGHT): string {
+  return `data:image/svg+xml;base64,${btoa(markSvg(colors))}`;
+}

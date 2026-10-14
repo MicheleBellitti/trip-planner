@@ -1,5 +1,6 @@
 import { RouteLine, TripFact } from "@/components/request/trip-outline";
 import { LinkButton } from "@/components/ui/button";
+import { BRAND_TAGLINE } from "@/lib/brand";
 
 import { EXAMPLE_HREF, type ExampleRequest } from "./example";
 
@@ -11,7 +12,7 @@ export function EmptyInvitation({ example }: { example: ExampleRequest }) {
   return (
     <section aria-labelledby="invito-titolo" className="rounded-md border border-rule bg-surface px-4 py-5 sm:px-6 sm:py-6">
       <h2 id="invito-titolo" className="font-cond text-heading font-semibold">
-        Il primo viaggio parte da qui
+        {BRAND_TAGLINE}
       </h2>
       <p className="mt-1.5 max-w-prose text-small text-ink-2">
         Descrivi un viaggio e cinque agenti lo preparano mentre li guardi lavorare: voli, alloggio, attività e

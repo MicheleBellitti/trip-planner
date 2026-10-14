@@ -3,6 +3,7 @@ import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/lib/api";
+import { BRAND_TAGLINE } from "@/lib/brand";
 import type { PlanSummary } from "@/lib/schemas/api";
 
 import { resetCoverStore } from "@/components/plan/cover/cover-store";
@@ -168,7 +169,7 @@ describe("PlanList", () => {
     mocks.listPlans.mockResolvedValue([]);
     await renderList();
 
-    expect(screen.getByRole("heading", { name: "Il primo viaggio parte da qui" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: BRAND_TAGLINE })).toBeTruthy();
     expect(screen.getByText(/Lisbona a metà aprile, 2 adulti e 2 bambini, 2\.400 €/)).toBeTruthy();
     expect(screen.getByRole("link", { name: "Parti da questo esempio" }).getAttribute("href")).toBe("/new?esempio=1");
   });

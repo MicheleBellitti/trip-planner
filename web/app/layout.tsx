@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { IconSprite } from "@/components/ui/icon-sprite";
 import { DEFAULT_THEME, THEME_COLORS } from "@/components/ui/theme";
 import { ThemeScript } from "@/components/ui/theme-script";
-import { BRAND_DESCRIPTION, BRAND_NAME } from "@/lib/brand";
+import { BRAND_DESCRIPTION, BRAND_NAME, BRAND_URL } from "@/lib/brand";
 
 import "./globals.css";
 
@@ -36,9 +36,11 @@ const barlowSemiCondensedBold = Barlow_Semi_Condensed({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(BRAND_URL),
   title: { default: BRAND_NAME, template: `%s · ${BRAND_NAME}` },
   description: BRAND_DESCRIPTION,
   applicationName: BRAND_NAME,
+  openGraph: { siteName: BRAND_NAME, locale: "it_IT", type: "website" },
 };
 
 /** The browser chrome starts on the dark default's ground; ThemeToggle repaints it when light is
