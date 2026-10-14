@@ -11,6 +11,7 @@ import { Disclosure } from "@/components/ui/disclosure";
 import { Icon } from "@/components/ui/icon";
 import { IconButton } from "@/components/ui/icon-button";
 import { ICON_PATHS, type IconName } from "@/components/ui/icons";
+import { Mark } from "@/components/ui/mark";
 import { InlineStatus, Notice } from "@/components/ui/notice";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PlanStatusBadge, StatusBadge } from "@/components/ui/status-badge";
@@ -607,7 +608,12 @@ export default function ComponentGalleryPage() {
                 <VisuallyHidden> (si apre in una nuova scheda)</VisuallyHidden>
                 <span className="text-ink-2"> (il resto della frase è letto solo dagli screen reader)</span>
               </p>
-              <Wordmark />
+              <div className="flex flex-wrap items-end gap-4">
+                <Mark className="size-16" />
+                <Mark className="size-10" />
+                <Mark className="size-7" />
+                <Wordmark />
+              </div>
               <p className="text-meta">
                 Variante dark: <span className="dark:hidden">tema chiaro</span>
                 <span className="hidden dark:inline">tema scuro</span>
