@@ -202,7 +202,8 @@ components:
 
 Direction 1 "Linee", chosen by Michele on 2026-10-12 from the three studies in
 `web/design/directions/` (the study is `1-linee/index.html`, the comparison and trade-offs are in
-that folder's README). This file was written with `impeccable document` from that study and from
+that folder's README), restyled as **"Carta notturna"** on 2026-10-14
+(`docs/superpowers/specs/2026-10-14-atlas-brand-design.md`). This file was written with `impeccable document` from that study and from
 the code that implements it. **From now on the tokens here are the authority**: the study is a
 reference, `web/app/globals.css` is the implementation, and the two change together.
 
@@ -212,11 +213,15 @@ Where things live:
 | --- | --- |
 | Tokens (both themes), Tailwind theme, base styles, keyframes | `web/app/globals.css` |
 | Fonts, theme bootstrap, metadata, icon sprite | `web/app/layout.tsx` |
-| Product name ("Atlas") | `web/lib/brand.ts`, `BRAND_NAME`, nowhere else |
+| Product name ("Atlas"), tagline, description, site URL | `web/lib/brand.ts` (`BRAND_NAME`, `BRAND_TAGLINE`, `BRAND_DESCRIPTION`, `BRAND_URL`), nowhere else |
+| The mark's geometry and its fixed night colours | `web/lib/brand-mark.ts`; drawn by `components/ui/mark.tsx` |
+| Tab icon, home-screen icon, link preview | `web/app/icon.svg`, `web/app/apple-icon.tsx`, `web/app/opengraph-image.tsx` (font: `web/assets/fonts/`, OFL) |
+| Links between pages | `web/lib/routes.ts` (`ROUTES`), never a hand-written path |
+| The app header | `web/components/nav/app-header.tsx` |
 | Primitives | `web/components/ui/` (inventory under Components) |
 | Every primitive in every state, both themes | `/dev/ui` (development only, `notFound()` in production) |
 | Measured contrast | the table under Colors, enforced by `components/ui/tokens.test.ts` |
-| Invariants (amber only in `DatePair`, no colour on buttons, no em dash) | `components/ui/invariants.test.ts` |
+| Invariants (amber only in `DatePair`, no colour on buttons, no em dash, the No AI Chrome Rule, the tagline spelled once, no hand-written list path) | `components/ui/invariants.test.ts` |
 
 ## Overview
 
@@ -229,11 +234,12 @@ running now is the "you are here" plate at the end of its line. The five lines t
 run. The finished plan keeps the vocabulary: each booking carries the roundel of the line that
 found it.
 
-The tone is a calm control room. Many things change at once on the live screen and it must not
-become noise, so colour is spent on identity (one hue per agent), on failure (one red) and on
-deadlines (one amber), and everything else is ink on a cool neutral ground. Motion reports a change
-and stops: a new station draws its segment down, the live node sends a slow halo, nothing loops
-for decoration. Density is medium: stations are spaced like a printed line map (about 40 px a
+The line map is printed at night: **"Carta notturna"**. A flat ink ground with a paper grain, cream
+type, five matte line inks, the way a transit map looks on good paper under a street lamp. It is
+crafted and alive, and never neon: colour is spent on identity (one hue per agent), on failure (one
+red) and on deadlines (one amber). Everything else is cream or ink on the ground. Motion reports a
+change and stops: a new station draws its segment down, the live node sends a slow halo, nothing
+loops for decoration. Density is medium: stations are spaced like a printed line map (about 40 px a
 row), with tabular figures so times and costs line up.
 
 The lettering comes from road signs. Barlow Semi Condensed carries names and titles; Barlow
@@ -249,6 +255,49 @@ carries everything else. Both are drawn for reading in motion, which is what wat
   layers.
 - Soft corners (10 and 16 px) for containers, pills for every control, circles for every node.
 - Two dates on every booking, "Prenota entro" and "Quando", always labelled.
+- Dark by default; paper grain on the ground; never glow, spotlight, gradient text or glass
+  (The No AI Chrome Rule).
+
+## Brand
+
+**The mark: "A di linee".** The flights and lodging lines rise to meet at a station and form an
+"A"; the coordinator's line is the crossbar. It reads as a letter and as a piece of the map. It is
+a 40-unit square (`web/lib/brand-mark.ts`, `MARK_GEOMETRY`):
+
+- left leg: `M8.5 35 L20 7` in `line-flights`, 5 wide, round caps
+- right leg: `M31.5 35 L20 7` in `line-lodging`
+- crossbar: `M13.5 25 H26.5` in `line-coordinator`, 4.5 wide
+- the station: r 4.6 at (20, 7.5), `ground` fill and `ink` stroke at 2.8
+
+`<Mark>` draws it in token utilities, so it follows the nearest `data-theme`. Images that cannot
+read CSS variables use `NIGHT`, the night values, which a test keeps equal to `globals.css`.
+
+- **Lockup** (`Wordmark`): the mark (28 px) and "Atlas" in Semi Condensed 600. `compact` hides the
+  name below 400 px (the header on a phone); the name stays the link's accessible name.
+- **Tab icon** (`app/icon.svg`): the mark on a night tile, with thicker strokes for 16 px.
+  **Home-screen icon** (`app/apple-icon.tsx`): the mark on the night ground, 180 px. There is no
+  `favicon.ico`.
+- **Link preview** (`app/opengraph-image.tsx`): mark and name, the tagline, the five lines
+  converging on a destination; 1200 × 630, rendered at build time with the vendored Semi
+  Condensed 700.
+- **Tagline**: "Ogni viaggio ha il suo atlante." (`BRAND_TAGLINE`): the landing hero, the
+  metadata, the link preview, the empty plans list's invitation.
+- **Rule:** this is the only mark. It is never redrawn in another form, and it moves only where it
+  draws itself on the landing hero.
+
+**The No AI Chrome Rule.** Nothing on screen may look like a template made by AI. Banned:
+
+- glow (`drop-shadow`, `blur()` used as light, coloured halos)
+- radial or conic spotlight gradients
+- dot or grid backgrounds
+- gradient text (`background-clip: text`)
+- glass beyond the sticky live bar (`backdrop-filter` lives only in `live-header.tsx`,
+  `agent-lanes.tsx` and the dev gallery's header)
+- floating blurred shapes
+- sparkle iconography
+
+`components/ui/invariants.test.ts` enforces the mechanical part. The texture of the product is the
+paper grain, and nothing else.
 
 ## Colors
 
@@ -592,6 +641,7 @@ or shape (there is no class merging, on purpose: see JavaScript weight below).
 | --- | --- | --- | --- |
 | `Button`, `LinkButton`, `buttonClasses` | `button.tsx` | Ink pill; `LinkButton` uses next/link inside, `<a target="_blank" rel="noopener noreferrer">` with `external` | primary, secondary, quiet; md 40 px, sm 32 px; icon; hover, press, focus, disabled, busy |
 | `IconButton` | `icon-button.tsx` | Round icon-only button with a required Italian `label` | outline, bare; md, sm; disabled |
+| `iconButtonClasses` | `icon-button.tsx` | An icon button's classes, for a link that must look like one | md, sm; outline, bare |
 | `ThemeToggle` | `theme-toggle.tsx` | Pins the opposite of the theme on screen | moon in light, sun in dark (CSS, no flash) |
 | `Chip` | `chip.tsx` | Static tag ("verificato", "stimato") | outline, quiet |
 | `ToolChip` | `chip.tsx` | The running tool | `plate` (line colour, "in corso da 0:14"), `inline` (ring + title + time) |
@@ -610,9 +660,12 @@ or shape (there is no class merging, on purpose: see JavaScript weight below).
 | `VisuallyHidden` | `visually-hidden.tsx` | Text for screen readers only | |
 | `Icon`, `IconSprite`, `ICON_PATHS` | `icon.tsx`, `icon-sprite.tsx`, `icons.ts` | Phosphor bold, from a sprite | 35 icons |
 | `Field`, `TextInput`, `TextArea`, `Select`, `NumberStepper`, `SegmentedControl` | `field.tsx` | Form controls with label above, hint, error below | default, hint, error, disabled, optional |
-| `Wordmark` | `wordmark.tsx` | "Atlas" in the display face, optionally the link home | |
+| `Mark` | `mark.tsx` | "A di linee" in the theme's line tokens (Brand) | any size via `className` |
+| `Wordmark` | `wordmark.tsx` | The lockup: mark and "Atlas", optionally the link home | `compact` (name hidden below 400 px) |
 | `ThemeScript` | `theme-script.tsx` | Applies the pinned theme before the first paint | |
 | `cx` | `cx.ts` | Joins class names | |
+
+`AppHeader` (`web/components/nav/app-header.tsx`) is app chrome, not a primitive: see Navigation.
 
 ### Buttons
 
@@ -660,8 +713,18 @@ or shape (there is no class merging, on purpose: see JavaScript weight below).
 
 ### Navigation
 
-- The header holds the `Wordmark` (the link home), the page's own actions and the `ThemeToggle`
-  (40 px icon button). It is never taller than 72 px and stays on one line.
+- **One header on every signed-in page** (`AppHeader`):
+  - the lockup, the link to the plans (`ROUTES.plans`)
+  - the sections "Piani" and "Valutazioni" as **stations on one line**: the current one has a
+    filled ink node and `aria-current="page"`, the others a hollow node that fills on hover
+  - "Nuovo piano", always the *secondary* button so each view keeps its single primary. On the
+    phone it is a 40 px "+" icon link named "Nuovo piano". It is hidden on the form itself.
+  - the theme toggle
+- At most 72 px tall, one line, no menu drawer at 393 px, 44 px targets (under a finger the 40 px
+  icon controls grow to 44 px, `pointer-coarse:size-11`).
+- On the live screen the header is `compact`: the slim top row (56 px) above the sticky control
+  bar, which keeps the theme toggle and stays the only sticky, translucent surface.
+- Links between pages read `ROUTES` (`web/lib/routes.ts`), never a hand-written path.
 
 ### Lane line (signature component)
 
@@ -950,6 +1013,7 @@ recognised before it is read. It is supplementary: every screen is complete with
 - **Do** use `formatUsd` for costs ("1,62 $", two decimals, Italian format) and `formatEur` for
   prices; never cents on screen.
 - **Do** read the product's name from `BRAND_NAME`.
+- **Do** read the tagline from `BRAND_TAGLINE` and every page path from `ROUTES`.
 - **Do** declare a reduced-motion equivalent for every new animation, from the Motion table.
 - **Do** check every new screen at 393 px and at desktop width, light and dark, and on `/dev/ui`
   when a primitive changes.
@@ -970,4 +1034,7 @@ recognised before it is read. It is supplementary: every screen is complete with
   toasts only for the user's own actions.
 - **Don't** animate layout properties, and don't loop anything except the halo and the turning
   arrows.
-- **Don't** invent a logo: Atlas is its wordmark.
+- **Don't** draw another mark or redraw "A di linee": `<Mark>` and `lib/brand-mark.ts` are the only
+  sources.
+- **Don't** add glow, spotlight gradients, dot grids, gradient text, glass or blurred shapes (The No
+  AI Chrome Rule).

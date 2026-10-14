@@ -8,6 +8,9 @@
 > of those sources that Michele has not confirmed. The three items the first pass left open (the
 > product name, the due-soon window, the cost unit) were decided by Michele on 2026-10-12 and are
 > recorded under "Decisions". The visual system lives in `web/DESIGN.md`.
+>
+> On 2026-10-14 Michele restyled the brand ("Carta notturna", the "A di linee" mark, the tagline,
+> dark by default, a public front door): `docs/superpowers/specs/2026-10-14-atlas-brand-design.md`.
 
 ## Platform
 
@@ -146,15 +149,29 @@ Taken by Michele on 2026-10-12. They replace the first pass's open questions.
   2. From Partitura: the waves are named stations on the coordinator's line, "Ondata 1",
      "Scelta" and "Ondata 2", so the shape of the run reads without a time grid.
 
+### 2026-10-14: the brand restyle
+
+- **Audience of the restyle: showing Atlas off** (friends, portfolio, a launch video), on top of
+  daily use.
+- **World: "Carta notturna"**, a printed night transit map: flat ink ground, paper grain, cream
+  type, matte line inks. **Dark is the default everywhere**; light ("Carta di giorno") is pinned
+  with the toggle.
+- **Mark: "A di linee"** (DESIGN.md, Brand). **Tagline: "Ogni viaggio ha il suo atlante."**
+- **Front door** (step 2 of the spec): a public landing at `/`, the plans list at `/plans`, and a
+  free demo run at `/demo`.
+- **Navigation: one app header**, with the current section drawn as a station.
+- **Never the "AI site" look**: no glow, no spotlight gradients, no dot grids, no gradient text, no
+  glass beyond the sticky bar.
+
 ## Brand Commitments
 
 - **Own identity.** From TripTracker the planner keeps only two rules: a booking's two dates
   are always separate and labelled, and one colour is reserved for deadlines. Not its palette,
   not its type, not its aurora.
-- **Tone: a calm control room, not a videogame.** Many things move at once on the live screen
-  and it must not become noise: no scores, no celebratory animation, no glowing "AI" chrome, no
-  spectacle. The spec's knobs for this reason are layout variance 5, motion 5, density 6 (more
-  density and less show than the design skill's default).
+- **Tone: a printed night map.** Crafted, alive, never neon. Many things move at once on the live
+  screen and it must not become noise: no scores, no glowing "AI" chrome (The No AI Chrome Rule,
+  DESIGN.md). The motion rule itself is rewritten with the live-run motion (step 4 of the brand
+  spec); until then DESIGN.md's "Report, Don't Perform" stands.
 - **Two dates, always.** "Prenota entro" (`dueAt`, by when to book) and "Quando"
   (`scheduledFor`, when it happens) are two labelled values everywhere a booking appears,
   including previews and compact strips. Never merged, never one in place of the other.
@@ -168,7 +185,9 @@ Taken by Michele on 2026-10-12. They replace the first pass's open questions.
 
 - The spec and `CLAUDE.md`; the TripTracker code snapshot in `docs/triptracker/snapshot/`
   (reference only: its identity is not ours).
-- No logo, no photography, no illustrations, no brand assets exist. Do not invent them.
+- The brand assets are the mark "A di linee", the tagline and the paper grain (DESIGN.md, Brand),
+  plus free Wikimedia cover photos per destination. No other logo, illustration or stock imagery is
+  invented.
 - No real plans exist yet. Mockups use synthetic content (a Lisbon trip, 14–18 Nov 2026, two
   adults and two children, a 2400 EUR budget) and must not present invented prices or
   availability as real.
