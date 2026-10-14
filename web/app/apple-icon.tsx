@@ -20,7 +20,6 @@ export default function AppleIcon() {
           background: NIGHT.ground,
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element -- next/og draws a plain <img> */}
         <img src={markDataUri()} width={116} height={116} alt="" />
       </div>
     ),

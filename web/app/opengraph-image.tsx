@@ -46,12 +46,10 @@ export default async function OpengraphImage() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 18, fontSize: 44 }}>
-          {/* eslint-disable-next-line @next/next/no-img-element -- next/og draws a plain <img> */}
           <img src={markDataUri()} width={56} height={56} alt="" />
           {BRAND_NAME}
         </div>
         <div style={{ display: "flex", fontSize: 96, lineHeight: 0.98, maxWidth: 780 }}>{BRAND_TAGLINE}</div>
-        {/* eslint-disable-next-line @next/next/no-img-element -- next/og draws a plain <img> */}
         <img src={`data:image/svg+xml;base64,${btoa(CONVERGING_LINES)}`} width={1056} height={150} alt="" />
       </div>
     ),

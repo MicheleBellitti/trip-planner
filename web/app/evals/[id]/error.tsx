@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-import { SiteHeader } from "@/components/home/site-header";
+import { AppHeader } from "@/components/nav/app-header";
 import { StateFact, StatePanel } from "@/components/states/state-panel";
 import { Button, LinkButton } from "@/components/ui/button";
 
@@ -15,7 +15,7 @@ export default function EvalRunError({ error, retry }: { error: Error & { digest
 
   return (
     <>
-      <SiteHeader current="evals" />
+      <AppHeader current="evals" />
       <main className="mx-auto max-w-page px-4 pt-2 lg:px-7">
         <StatePanel
           icon="warning"

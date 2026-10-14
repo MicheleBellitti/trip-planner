@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { SiteHeader } from "@/components/home/site-header";
+import { AppHeader } from "@/components/nav/app-header";
 import { EvalRunList } from "@/components/evals/eval-run-list";
 
 export const metadata: Metadata = { title: "Valutazioni" };
@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "Valutazioni" };
 export default function EvalsPage() {
   return (
     <>
-      <SiteHeader current="evals" />
+      <AppHeader current="evals" />
       <main className="mx-auto max-w-page px-4 pt-6 pb-16 lg:px-7 lg:pt-8">
         <h1 className="font-cond text-display font-semibold lg:text-display-lg">Valutazioni</h1>
         <p className="mt-1.5 max-w-prose text-small text-ink-2">

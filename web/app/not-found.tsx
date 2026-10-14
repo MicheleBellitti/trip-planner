@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { buttonClasses } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Wordmark } from "@/components/ui/wordmark";
+import { ROUTES } from "@/lib/routes";
 
 export const metadata: Metadata = { title: "Pagina non trovata" };
 
@@ -29,8 +30,8 @@ export default function NotFound() {
           L&apos;indirizzo non porta a nessuna schermata. Controlla il link, oppure riparti dai tuoi piani.
         </p>
         <div className="mt-5">
-          {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- see the comment above: no client JS here */}
-          <a href="/" className={buttonClasses("primary")}>
+          {/* A plain <a>, not next/link: see the comment above, no client JS here. */}
+          <a href={ROUTES.plans} className={buttonClasses("primary")}>
             <Icon name="arrow-left" size={16} />
             Torna ai piani
           </a>

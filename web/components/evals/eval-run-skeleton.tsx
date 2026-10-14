@@ -1,4 +1,4 @@
-import { SiteHeader } from "@/components/home/site-header";
+import { AppHeader } from "@/components/nav/app-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 
@@ -9,7 +9,7 @@ export function EvalRunSkeleton() {
   return (
     <div aria-busy="true">
       <VisuallyHidden>Carico la valutazione…</VisuallyHidden>
-      <SiteHeader current="evals" />
+      <AppHeader current="evals" />
       <main className="mx-auto max-w-page px-4 pt-5 pb-16 lg:px-7 lg:pt-7">
         <Skeleton className="mt-2.5 w-24" />
         <div className="mt-4 max-w-[64rem]">

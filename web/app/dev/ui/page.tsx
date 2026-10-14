@@ -31,6 +31,7 @@ import { BRAND_TAGLINE } from "@/lib/brand";
 import { AGENTS, AGENT_LABELS } from "@/lib/plan-events/labels";
 import type { LaneBadgeState } from "@/lib/plan-events/labels";
 import type { PlanStatus } from "@/lib/schemas/api";
+import { ROUTES } from "@/lib/routes";
 
 import { FoldedLineDemo, FormDemo, FreshStationDemo, MeterDemo, SheetDemo, ToastDemo } from "./demos";
 
@@ -76,7 +77,7 @@ export default function ComponentGalleryPage() {
       <header className="sticky top-0 z-20 border-b border-rule bg-[color-mix(in_srgb,var(--ground)_92%,transparent)] backdrop-blur-[8px]">
         <div className="mx-auto flex max-w-page items-center justify-between gap-4 px-4 py-3 lg:px-7">
           <div className="flex items-baseline gap-3">
-            <Wordmark href="/" />
+            <Wordmark href={ROUTES.plans} />
             <span className="text-meta text-ink-2">Componenti</span>
           </div>
           <ThemeToggle />

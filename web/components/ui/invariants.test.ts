@@ -64,6 +64,15 @@ describe("design invariants", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("links to the plans list through ROUTES, never a hand-written \"/\"", () => {
+    // Step 2 of the brand spec gives "/" to the landing: every link to the list must move with ROUTES.
+    const LITERAL_ROOT = /href=(?:"\/"|\{"\/"\})/;
+    const offenders = [...sources(path.join(webDir, "components")), ...sources(path.join(webDir, "app"))]
+      .filter((file) => LITERAL_ROOT.test(readFileSync(file, "utf8")))
+      .map((file) => path.relative(webDir, file));
+    expect(offenders).toEqual([]);
+  });
+
   it("tells a lane that never started apart from one that waits", () => {
     expect(Object.keys(LANE_BADGE_LABELS).sort()).toEqual([...Object.keys(LANE_STATE_LABELS), "not_started"].sort());
     expect(LANE_BADGE_LABELS.not_started).not.toBe(LANE_BADGE_LABELS.waiting);
