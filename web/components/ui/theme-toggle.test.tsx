@@ -7,7 +7,7 @@ import { ThemeToggle } from "./theme-toggle";
 afterEach(() => {
   cleanup();
   document.documentElement.removeAttribute("data-theme");
-  document.head.querySelector('meta[name="theme-color"]')?.remove();
+  document.head.querySelectorAll('meta[name="theme-color"]').forEach((meta) => meta.remove());
   try {
     localStorage.clear();
   } catch {
@@ -43,12 +43,13 @@ describe("ThemeToggle", () => {
   });
 
   it("pins light from the default, remembers it and repaints the browser chrome", () => {
-    const meta = themeColorMeta("#1b2230");
+    // Next streams the metadata, so a page can carry a second theme-color meta: repaint every one.
+    const metas = [themeColorMeta("#1b2230"), themeColorMeta("#1b2230")];
     render(<ThemeToggle />);
     fireEvent.click(screen.getByRole("button", { name: "Passa al tema chiaro" }));
     expect(document.documentElement.getAttribute("data-theme")).toBe("light");
     expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe("light");
-    expect(meta.content).toBe("#f4efe4");
+    expect(metas.map((meta) => meta.content)).toEqual(["#f4efe4", "#f4efe4"]);
     expect(screen.getByRole("button", { name: "Passa al tema scuro" })).toBeTruthy();
   });
 

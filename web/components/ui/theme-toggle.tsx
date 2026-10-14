@@ -28,9 +28,12 @@ function subscribe(onChange: () => void): () => void {
   return () => window.removeEventListener(THEME_EVENT, onChange);
 }
 
-/** The browser chrome (iOS status bar, Android toolbar) follows the theme on screen. */
+/** The browser chrome (iOS status bar, Android toolbar) follows the theme on screen. Every
+ * theme-color meta: Next streams the metadata, so a page can carry a second one. */
 function syncThemeColor(theme: ThemeName) {
-  document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute("content", THEME_COLORS[theme]);
+  for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
+    meta.setAttribute("content", THEME_COLORS[theme]);
+  }
 }
 
 /**

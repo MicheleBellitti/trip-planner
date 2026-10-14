@@ -16,8 +16,12 @@ export function isThemeName(value: unknown): value is ThemeName {
   return value === "light" || value === "dark";
 }
 
-/** The inline script: read the stored preference and pin it on <html>, before paint. ES5, no
- * dependencies, and silent when storage is blocked (private mode, disabled cookies). */
+/** The inline script: read the stored preference and pin it on <html>, and repaint the browser
+ * chrome (every <meta name="theme-color"> already in <head>, which Next renders before it) to match,
+ * before paint. ThemeToggle repaints any meta streamed in later.
+ * ES5, no dependencies, and silent when storage is blocked (private mode, disabled cookies). */
 export const THEME_BOOTSTRAP = `(function(){try{var t=localStorage.getItem(${JSON.stringify(
   THEME_STORAGE_KEY,
-)});if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}})()`;
+)});if(t==="light"||t==="dark"){document.documentElement.setAttribute("data-theme",t);var m=document.querySelectorAll('meta[name="theme-color"]');for(var i=0;i<m.length;i++)m[i].setAttribute("content",${JSON.stringify(
+  THEME_COLORS,
+)}[t])}}catch(e){}})()`;

@@ -43,8 +43,8 @@ export const metadata: Metadata = {
   openGraph: { siteName: BRAND_NAME, locale: "it_IT", type: "website" },
 };
 
-/** The browser chrome starts on the dark default's ground; ThemeToggle repaints it when light is
- * pinned (components/ui/theme-toggle.tsx). */
+/** The browser chrome starts on the dark default's ground; a pinned light theme repaints it before
+ * paint (THEME_BOOTSTRAP) and again from ThemeToggle (components/ui/theme.ts, theme-toggle.tsx). */
 export const viewport: Viewport = {
   themeColor: THEME_COLORS[DEFAULT_THEME],
   colorScheme: "dark light",

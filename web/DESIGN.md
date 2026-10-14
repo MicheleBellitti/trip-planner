@@ -346,7 +346,8 @@ else is drawn in a line colour.
 - **Browser surfaces**: selection is `rgb(31 85 196 / .18)` light and `rgb(118 150 227 / .3)` dark;
   the scrollbar is `rule-strong` on transparent; the caret is ink; the scrim under a sheet is
   `rgb(27 34 48 / .4)` light and `rgb(3 6 10 / .62)` dark; `<meta name="theme-color">` is each
-  theme's ground (`THEME_COLORS`, repainted by the toggle).
+  theme's ground (`THEME_COLORS`), set before paint by the theme bootstrap for a pinned theme and
+  repainted by the toggle.
 - **Paper grain** (`--grain`): one still `feTurbulence` tile on the page ground (`html` and any
   `[data-theme]` subtree), cream specks at 6 % on dark, ink specks at 5 % on light. It is the one
   texture in the product: never animated, never on surfaces, inputs or plates.
