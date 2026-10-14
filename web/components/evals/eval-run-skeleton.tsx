@@ -3,8 +3,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 
 /** The run page before its first answer, in the shape of what is coming: the title and its line of
- * facts, the verdict card with its figures, the first request. Server-safe: loading.tsx renders
- * it during navigation. */
+ * facts, the verdict card with its figures, the comparison, the first closed request rows.
+ * Server-safe: loading.tsx renders it during navigation. */
 export function EvalRunSkeleton() {
   return (
     <div aria-busy="true">
@@ -27,8 +27,22 @@ export function EvalRunSkeleton() {
               ))}
             </div>
           </div>
-          <Skeleton className="mt-9 h-6 w-56" />
-          <Skeleton shape="block" className="mt-3 h-24 w-full max-w-[48rem]" />
+          {/* The comparison: its heading and two lines. */}
+          <Skeleton className="mt-9 h-6 w-64" />
+          <Skeleton className="mt-3 h-4 w-4/5 max-w-[34rem]" />
+          <Skeleton className="mt-2 h-4 w-3/5 max-w-[26rem]" />
+          <Skeleton className="mt-9 h-6 w-40" />
+          <div className="mt-3 divide-y divide-rule rounded-md border border-rule bg-surface">
+            {[0, 1, 2].map((row) => (
+              <div key={row} className="grid grid-cols-[1.125rem_minmax(0,1fr)] gap-x-3 px-4 py-3.5 lg:px-5">
+                <Skeleton shape="round" className="size-[18px]" />
+                <div className="grid gap-1.5">
+                  <Skeleton className={row === 1 ? "h-5 w-1/3" : "h-5 w-2/5"} />
+                  <Skeleton className="h-3.5 w-3/5 max-w-[26rem]" />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </main>
     </div>

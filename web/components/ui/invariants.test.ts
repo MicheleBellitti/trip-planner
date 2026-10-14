@@ -1,6 +1,6 @@
 /**
  * Mechanical checks of DESIGN.md's invariants over the design system's own sources:
- * amber is drawn only by DatePair, buttons have no colour prop, no em dash reaches the screen, no
+ * amber is drawn only by DatePair, the green only by the eval history, buttons have no colour prop, no em dash reaches the screen, no
  * component reads the clock while rendering (Cache Components prerenders the routes), and a lane
  * that never started is not told "in attesa", the No AI Chrome Rule holds, the tagline is spelled once,
  * and no link spells the list's path by hand.
@@ -32,6 +32,10 @@ const componentFiles = sources(path.join(webDir, "components"));
  * the variable itself. Comments that name the rule ("never amber") do not match. */
 const AMBER_USE = /\b(?:bg|text|border|ring|inset-ring|outline|fill|stroke|decoration|shadow|from|via|to)-amber\b|var\(--amber/;
 
+/** A use of the eval green (DESIGN.md, "The Green Means Passed Rule"): a utility or the variable. */
+const SUCCESS_USE =
+  /\b(?:bg|text|border|ring|inset-ring|outline|fill|stroke|decoration|shadow|from|via|to)-success(?:-wash)?\b|var\(--success/;
+
 /** AI chrome (DESIGN.md, "The No AI Chrome Rule"): glow, spotlight gradients and gradient text, spelled
  * as raw CSS or as Tailwind utilities. The sticky bar's `backdrop-blur` is glass, checked apart. */
 const CHROME =
@@ -45,6 +49,17 @@ describe("design invariants", () => {
   it("draws amber only in DatePair (bookings due within 72 hours)", () => {
     const users = files.filter((file) => AMBER_USE.test(readFileSync(file, "utf8"))).map((file) => path.basename(file));
     expect(users).toEqual(["date-pair.tsx"]);
+  });
+
+  it("draws the green only in the eval history (a passed run, check or score)", () => {
+    expect(SUCCESS_USE.test('className="text-success"')).toBe(true);
+    expect(SUCCESS_USE.test("bg-success-wash")).toBe(true);
+    expect(SUCCESS_USE.test("// a success message")).toBe(false);
+    const users = [...componentFiles, ...sources(path.join(webDir, "app"))]
+      .filter((file) => !file.endsWith("globals.css") && SUCCESS_USE.test(readFileSync(file, "utf8")))
+      .map((file) => path.relative(webDir, file));
+    expect(users.length).toBeGreaterThan(0);
+    expect(users.filter((file) => !file.startsWith("components/evals/"))).toEqual([]);
   });
 
   it("offers no way to colour a button", () => {

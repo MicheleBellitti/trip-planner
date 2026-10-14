@@ -8,6 +8,7 @@ import {
   criterionLabel,
   meanAgainstBaseline,
   orderedFindings,
+  requestAnchor,
   ruleLabel,
   type RunVerdict,
 } from "./eval-model";
@@ -131,7 +132,12 @@ function FindingRow({ finding, requestTitle }: { finding: EvalFinding; requestTi
             {finding.blocking ? "Blocca" : "Segnala"}
           </span>
           <span className="font-medium">{ruleLabel(finding.rule)}</span>
-          {finding.request_id ? <span className="text-ink-2">{requestTitle ?? finding.request_id}</span> : null}
+          {finding.request_id ? (
+            // Opens the request's row below (the run page opens the row a link points to).
+            <a href={`#${requestAnchor(finding.request_id)}`} className="text-ink-2 underline-offset-[0.2em] hover:text-ink">
+              {requestTitle ?? finding.request_id}
+            </a>
+          ) : null}
         </p>
         <p lang="en" className="mt-0.5 text-meta break-words text-ink-2">
           {finding.message}

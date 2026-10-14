@@ -38,7 +38,7 @@ import {
   type Cover,
   type CreatePlanResponse,
   type EvalRunDetail,
-  type EvalRunSummary,
+  type EvalRunListResponse,
   type HealthResponse,
   type PlanDetail,
   type PlanSummary,
@@ -225,8 +225,9 @@ export interface ApiClient {
   interruptPlan(planId: string, options?: RequestOptions): Promise<StatusResponse>;
   /** POST /plans/{id}/continue ("Continua con 2 $ in più"). */
   continuePlan(planId: string, options?: RequestOptions): Promise<ContinueResponse>;
-  /** GET /evals/runs: the eval history, newest first (at most `limit`, default 50). */
-  listEvalRuns(options?: RequestOptions & { limit?: number }): Promise<EvalRunSummary[]>;
+  /** GET /evals/runs: a page of the eval history, newest first (at most `limit`, default 50, after
+   * the newest `offset`), and how many runs there are. */
+  listEvalRuns(options?: RequestOptions & { limit?: number; offset?: number }): Promise<EvalRunListResponse>;
   /** GET /evals/runs/{id}: one run with its stored results and comparison. */
   getEvalRun(runId: string, options?: RequestOptions): Promise<EvalRunDetail>;
   /** GET /health (no authentication). */
@@ -354,9 +355,12 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
     continuePlan: (planId, opts) =>
       send("POST", `${planPath(planId)}/continue`, ContinueResponseSchema, { signal: opts?.signal }),
     listEvalRuns: async (opts) => {
-      const limit = opts?.limit === undefined ? "" : `?limit=${Math.max(1, Math.floor(opts.limit))}`;
+      const query = new URLSearchParams();
+      if (opts?.limit !== undefined) query.set("limit", `${Math.max(1, Math.floor(opts.limit))}`);
+      if (opts?.offset) query.set("offset", `${Math.max(0, Math.floor(opts.offset))}`);
+      const search = query.size > 0 ? `?${query}` : "";
       try {
-        return (await send("GET", `/evals/runs${limit}`, EvalRunListResponseSchema, { signal: opts?.signal })).runs;
+        return await send("GET", `/evals/runs${search}`, EvalRunListResponseSchema, { signal: opts?.signal });
       } catch (error) {
         throw evalNotFound(error);
       }

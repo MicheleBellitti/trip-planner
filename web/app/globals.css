@@ -36,6 +36,9 @@
   --on-line: #1b2230;
   --error: #f2766b;
   --error-wash: #36211f;
+  /* Only a passed eval check or run (The Green Means Passed Rule): never the lodging line. */
+  --success: #9ccc65;
+  --success-wash: #26301f;
   --notice-wash: #283141;
   /* Reserved: only a booking whose dueAt is within 72 hours (DatePair). Never on a button. */
   --amber: #f3a845;
@@ -71,6 +74,8 @@
   --on-line: #fbf8f1;
   --error: #b3261e;
   --error-wash: #f8e3df;
+  --success: #4b7300;
+  --success-wash: #eaf0db;
   --notice-wash: #ebe5d8;
   --amber: #a86400;
   --amber-ink: #8a4a00;
@@ -160,6 +165,8 @@
   --color-on-line: var(--on-line);
   --color-error: var(--error);
   --color-error-wash: var(--error-wash);
+  --color-success: var(--success);
+  --color-success-wash: var(--success-wash);
   --color-notice-wash: var(--notice-wash);
   --color-amber: var(--amber);
   --color-amber-ink: var(--amber-ink);

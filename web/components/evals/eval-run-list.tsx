@@ -2,7 +2,8 @@
 
 /**
  * "/evals": the eval history (GET /evals/runs), drawn like the home page's plans: a 3 px ink rail
- * down the left of the card, each run a station on it with its verdict as the node. Newest first.
+ * down the left of the card, each run a station on it with its verdict as the node. Newest first,
+ * ten runs a page (`?pagina=N`, RunPager); a new page keeps the old rows, dimmed, until it arrives.
  * A row says when the run started, which commit it measured, which roster, the verdict in a word,
  * how many plans were accepted, what it cost, the judge's mean and the CI run it came from; the
  * whole row opens the run (a stretched link), the GitHub link sits above it.
@@ -14,7 +15,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button, LinkButton } from "@/components/ui/button";
 import { cx } from "@/components/ui/cx";
 import { Icon } from "@/components/ui/icon";
 import { Notice } from "@/components/ui/notice";
@@ -28,6 +29,9 @@ import {
   acceptedLabel,
   formatJudgeMean,
   formatRunCost,
+  PAGE_SIZE,
+  pageCount,
+  pageHref,
   profileLabel,
   RUN_VERDICT_LABELS,
   runVerdict,
@@ -36,14 +40,13 @@ import {
 import { EvalEmptyInvitation } from "./eval-empty";
 import { Sha, WorkflowLink } from "./external-link";
 import { RunVerdictGlyph, verdictTone } from "./marks";
+import { RunPager } from "./run-pager";
 
 type ListState =
   | { kind: "loading" }
-  | { kind: "ready"; runs: EvalRunSummary[]; openedAt: number }
+  /** `page` is the page these rows belong to: while another one loads they stay, dimmed. */
+  | { kind: "ready"; page: number; runs: EvalRunSummary[]; total: number | null; openedAt: number }
   | { kind: "error"; message: string };
-
-/** How many runs the list asks for (the endpoint's default). */
-export const LIST_LIMIT = 50;
 
 /** The rail's column: 36 px, so its centre (18 px) is where the rail and every node sit. */
 const RAIL_COL = "2.25rem";
@@ -53,24 +56,24 @@ const ROW_GRID =
   "grid-cols-[2.25rem_minmax(0,1fr)_1rem] " +
   "lg:grid-cols-[2.25rem_minmax(8rem,1.1fr)_4.5rem_5.5rem_7.5rem_minmax(9.5rem,1fr)_4.5rem_3.25rem_8.5rem_1rem]";
 
-export function EvalRunList({ className }: { className?: string }) {
+export function EvalRunList({ page, className }: { page: number; className?: string }) {
   const [state, setState] = useState<ListState>({ kind: "loading" });
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
     api
-      .listEvalRuns({ limit: LIST_LIMIT, signal: controller.signal })
-      .then((runs) => setState({ kind: "ready", runs, openedAt: Date.now() }))
+      .listEvalRuns({ limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE, signal: controller.signal })
+      .then(({ runs, total }) => setState({ kind: "ready", page, runs, total, openedAt: Date.now() }))
       .catch((error: unknown) => {
         // 401: the browser is on its way to TripTracker's login; keep the placeholder rows.
         if (controller.signal.aborted || error instanceof UnauthorizedError) return;
         setState({ kind: "error", message: error instanceof ApiError ? error.message : API_ERROR_MESSAGES.unknown });
       });
     return () => controller.abort();
-  }, [attempt]);
+  }, [page, attempt]);
 
-  if (state.kind === "loading") return <LoadingRows className={className} />;
+  if (state.kind === "loading") return <EvalRunListPlaceholder className={className} />;
 
   if (state.kind === "error") {
     return (
@@ -97,11 +100,39 @@ export function EvalRunList({ className }: { className?: string }) {
     );
   }
 
-  if (state.runs.length === 0) return <EvalEmptyInvitation className={className} />;
+  if (state.runs.length === 0 && state.page === 1) return <EvalEmptyInvitation className={className} />;
 
+  if (state.runs.length === 0) {
+    const last = state.total === null ? state.page - 1 : pageCount(state.total, PAGE_SIZE);
+    return (
+      <Notice
+        tone="info"
+        title={`Le valutazioni finiscono a pagina ${last}`}
+        className={className}
+        action={
+          <LinkButton href={pageHref(last)} size="sm" variant="quiet" icon="arrow-left">
+            Vai a pagina {last}
+          </LinkButton>
+        }
+      >
+        Questa pagina è oltre l&apos;ultima valutazione caricata.
+      </Notice>
+    );
+  }
+
+  const stale = state.page !== page;
+  const first = (state.page - 1) * PAGE_SIZE + 1;
+  const pages = state.total === null ? null : pageCount(state.total, PAGE_SIZE);
   return (
-    <div className={className}>
-      <div className="relative overflow-hidden rounded-md border border-rule bg-surface">
+    <section aria-labelledby={LIST_HEADING_ID} className={className}>
+      <ListHeading total={state.total} />
+      <div
+        aria-busy={stale || undefined}
+        className={cx(
+          "relative overflow-hidden rounded-md border border-rule bg-surface transition-opacity duration-(--duration-hover)",
+          stale && "opacity-60",
+        )}
+      >
         <Rail />
         <div
           aria-hidden="true"
@@ -125,11 +156,27 @@ export function EvalRunList({ className }: { className?: string }) {
           ))}
         </ul>
       </div>
+      <RunPager page={state.page} total={state.total} pageSize={PAGE_SIZE} shown={state.runs.length} className="mt-3" />
       <p className="mt-3 max-w-prose text-meta text-ink-2">
-        {state.runs.length === LIST_LIMIT
-          ? `Le ${LIST_LIMIT} valutazioni più recenti.`
-          : "Le valutazioni arrivano dalla CI dopo ogni run; il voto è la media dei punteggi del giudice, da 1 a 5."}
+        {pages !== null && pages > 1
+          ? `Valutazioni da ${first} a ${first + state.runs.length - 1} di ${state.total}. `
+          : ""}
+        Le valutazioni arrivano dalla CI dopo ogni run; il voto è la media dei punteggi del giudice, da 1 a 5.
       </p>
+    </section>
+  );
+}
+
+const LIST_HEADING_ID = "tutte-le-valutazioni";
+
+/** The list's heading, with how many runs the history holds when the backend says. */
+function ListHeading({ total }: { total: number | null }) {
+  return (
+    <div className="mb-2 flex flex-wrap items-baseline gap-x-2">
+      <h2 id={LIST_HEADING_ID} className="font-cond text-heading font-semibold">
+        Tutte le valutazioni
+      </h2>
+      {total ? <p className="text-meta text-ink-2">{total === 1 ? "una in tutto" : `${total} in tutto`}</p> : null}
     </div>
   );
 }
@@ -190,7 +237,8 @@ function RunRow({ run, openedAt }: { run: EvalRunSummary; openedAt: number }) {
         <span
           className={cx(
             "lg:col-start-5 lg:row-start-1 lg:text-small",
-            verdict === "blocked" ? "font-medium text-error" : verdict === "passed" ? "text-ink" : "text-ink-2",
+            (verdict === "blocked" || verdict === "passed") && "font-medium",
+            verdictTone(verdict),
           )}
         >
           <VisuallyHidden>Esito </VisuallyHidden>
@@ -230,10 +278,13 @@ function RunRow({ run, openedAt }: { run: EvalRunSummary; openedAt: number }) {
   );
 }
 
-function LoadingRows({ className }: { className?: string }) {
+/** The list's rows in their final shape while the page arrives (also the page's Suspense
+ * fallback while it reads `?pagina=`). */
+export function EvalRunListPlaceholder({ className }: { className?: string }) {
   return (
     <div aria-busy="true" className={className}>
       <VisuallyHidden>Carico le valutazioni…</VisuallyHidden>
+      <ListHeading total={null} />
       <div className="relative overflow-hidden rounded-md border border-rule bg-surface">
         <Rail />
         <ul className="divide-y divide-rule">

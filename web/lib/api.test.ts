@@ -387,22 +387,37 @@ describe("loginUrl", () => {
 
 describe("the eval history", () => {
   it("GET /evals/runs sends the limit and answers the rows, newest first as the backend sent them", async () => {
-    const { api, fetchMock } = client(json(200, { runs: evalList }));
+    const { api, fetchMock } = client(json(200, { runs: evalList, total: 12 }));
 
-    const runs = await api.listEvalRuns({ limit: 20 });
+    const { runs, total } = await api.listEvalRuns({ limit: 20 });
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe("https://atlas.api.test/evals/runs?limit=20");
     expect(fetchMock.mock.calls[0]?.[1]?.credentials).toBe("include");
     expect(runs.map((run) => run.id)).toEqual(evalList.map((run) => run.id));
     expect(runs[0]).toMatchObject({ compare_status: null, requests_total: 5, total_cost_cents: 309 });
+    expect(total).toBe(12);
+  });
+
+  it("GET /evals/runs sends the offset of a later page", async () => {
+    const { api, fetchMock } = client(json(200, { runs: [], total: 12 }));
+
+    await api.listEvalRuns({ limit: 10, offset: 10 });
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://atlas.api.test/evals/runs?limit=10&offset=10");
   });
 
   it("GET /evals/runs without a limit sends none, and an empty history is an empty list", async () => {
-    const { api, fetchMock } = client(json(200, { runs: [] }));
+    const { api, fetchMock } = client(json(200, { runs: [], total: 0 }));
 
-    await expect(api.listEvalRuns()).resolves.toEqual([]);
+    await expect(api.listEvalRuns()).resolves.toEqual({ runs: [], total: 0 });
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe("https://atlas.api.test/evals/runs");
+  });
+
+  it("an older backend that does not count the runs answers a null total", async () => {
+    const { api } = client(json(200, { runs: evalList }));
+
+    expect((await api.listEvalRuns()).total).toBeNull();
   });
 
   it("GET /evals/runs/{id} parses the stored results and comparison", async () => {
@@ -429,6 +444,33 @@ describe("the eval history", () => {
 
     expect(run.results.requests[0]).toMatchObject({ id: "only-an-id", checks: [], tags: [], judge: null, plan: null });
     expect(run.results.agent_versions).toBeNull();
+  });
+
+  it("reads a run's baseline, blocking findings and neighbours, and their absence from an older backend", async () => {
+    const neighbour = { ...evalList[1]!, reference_judge_mean: 4.1, blocking_findings: [] };
+    const { api } = client(
+      json(200, {
+        ...evalRun,
+        reference_judge_mean: 4.1,
+        reference_cost_per_plan_cents: 52.5,
+        blocking_findings: [
+          { rule: "deterministic checks", message: "2 prices without a source_url", request_id: "sea-week-family", request_title: "Settimana al mare" },
+        ],
+        previous_run: neighbour,
+        next_run: null,
+      }),
+    );
+
+    const run = await api.getEvalRun(evalRun.id);
+
+    expect(run.reference_cost_per_plan_cents).toBe(52.5);
+    expect(run.blocking_findings[0]).toMatchObject({ request_id: "sea-week-family", request_title: "Settimana al mare" });
+    expect(run.previous_run?.reference_judge_mean).toBe(4.1);
+    expect(run.next_run).toBeNull();
+
+    const older = client(json(200, evalRun));
+    const plain = await older.api.getEvalRun(evalRun.id);
+    expect(plain).toMatchObject({ reference_judge_mean: null, reference_cost_per_plan_cents: null, blocking_findings: [], previous_run: null, next_run: null });
   });
 
   it("a run the backend does not have is its own Italian sentence, not 'Questo piano non c'è'", async () => {
