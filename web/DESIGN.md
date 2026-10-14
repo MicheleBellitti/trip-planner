@@ -665,7 +665,7 @@ or shape (there is no class merging, on purpose: see JavaScript weight below).
 | `ThemeScript` | `theme-script.tsx` | Applies the pinned theme before the first paint | |
 | `cx` | `cx.ts` | Joins class names | |
 
-`AppHeader` (`web/components/nav/app-header.tsx`) is app chrome, not a primitive: see Navigation.
+`AppHeader` and `AppHeaderBar` (`web/components/nav/`) are app chrome, not primitives: see Navigation.
 
 ### Buttons
 
@@ -722,8 +722,11 @@ or shape (there is no class merging, on purpose: see JavaScript weight below).
   - the theme toggle
 - At most 72 px tall, one line, no menu drawer at 393 px, 44 px targets (under a finger the 40 px
   icon controls grow to 44 px, `pointer-coarse:size-11`).
-- On the live screen the header is `compact`: the slim top row (56 px) above the sticky control
-  bar, which keeps the theme toggle and stays the only sticky, translucent surface.
+- On the live screen the header is the compact `AppHeaderBar` (`components/nav/app-header-bar.tsx`):
+  the slim top row (56 px) above the sticky control bar, which keeps the theme toggle and stays the
+  only sticky, translucent surface. The bar imports no toggle, so the plan page ships one copy;
+  `AppHeader` is the bar with the toggle at its end. The plan page's error boundary shows the lockup
+  alone (JS budget, README).
 - Links between pages read `ROUTES` (`web/lib/routes.ts`), never a hand-written path.
 
 ### Lane line (signature component)

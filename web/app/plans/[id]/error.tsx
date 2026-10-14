@@ -2,9 +2,9 @@
 
 import { useEffect } from "react";
 
-import { AppHeader } from "@/components/nav/app-header";
 import { StateFact, StatePanel } from "@/components/states/state-panel";
 import { Button, LinkButton } from "@/components/ui/button";
+import { Wordmark } from "@/components/ui/wordmark";
 import { ROUTES } from "@/lib/routes";
 
 /**
@@ -19,7 +19,11 @@ export default function PlanError({ error, retry }: { error: Error & { digest?: 
 
   return (
     <>
-      <AppHeader current="plans" compact />
+      {/* The lockup only, as on not-found: this boundary rides in the plan page's first load, so it
+          does not carry the whole header bar (JS budget, README). */}
+      <div className="mx-auto flex min-h-14 max-w-page items-center px-4 lg:px-7">
+        <Wordmark href={ROUTES.plans} />
+      </div>
       <main className="mx-auto max-w-page px-4 pt-2 lg:px-7">
         <StatePanel
           icon="warning"

@@ -144,6 +144,13 @@ validating without zod, or a plain `<a>` instead of `next/link` (about 4 KB, and
 lose client-side navigation). Neither is worth it, so treat 190 KB gzip as this page's real budget and
 `--budget 190` as its gate until the spec's 180 is revisited.
 
+Re-measured on 2026-10-14 for the brand restyle (step 1): `/plans/[id]` was 190.4 KB gzip at the
+branch's start (the features merged since 2026-10-12) and is 192.1 KB after it, 166.8 KB in brotli.
+The difference is the app header's nav on the live screen (about 1 KB) and the mark in the lockup. To
+keep it there, the compact `AppHeaderBar` imports no theme toggle (the control bar already ships one)
+and the plan page's error boundary shows the lockup alone. `/` is 176.2 KB and `/new` 176.5 KB. The
+page is above the 190 gate: decide on the gate before tightening anything else.
+
 ## Accessibility
 
 Built to WCAG 2.2 AA; checked by hand in the browser on every screen at 393 and 1440 px, light and

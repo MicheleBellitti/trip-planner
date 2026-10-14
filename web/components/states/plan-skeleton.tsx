@@ -1,4 +1,4 @@
-import { AppHeader } from "@/components/nav/app-header";
+import { AppHeaderBar } from "@/components/nav/app-header-bar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 
@@ -11,7 +11,7 @@ export function PlanSkeleton() {
   return (
     <div aria-busy="true">
       <VisuallyHidden>Carico il piano…</VisuallyHidden>
-      <AppHeader current="plans" compact />
+      <AppHeaderBar current="plans" compact />
       <div className="lg:border-b lg:border-rule">
         <div className="mx-auto max-w-page lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end lg:gap-6 lg:px-7 lg:pt-4 lg:pb-3.5">
           <div className="px-4 pt-1 pb-3 lg:p-0">

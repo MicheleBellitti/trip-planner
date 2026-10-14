@@ -1,9 +1,14 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ROUTES } from "@/lib/routes";
 
 import { AppHeader } from "./app-header";
+import { AppHeaderBar } from "./app-header-bar";
 
 vi.mock("@/components/ui/theme-toggle", () => ({
   ThemeToggle: ({ className }: { className?: string }) => (
@@ -57,11 +62,17 @@ describe("AppHeader", () => {
     expect(screen.queryByRole("link", { name: "Nuovo piano" })).toBeNull();
   });
 
-  it("leaves the theme toggle to the live screen's bar when compact", () => {
+  it("leaves the theme toggle to the live screen's bar in the compact bar", () => {
     const { unmount } = render(<AppHeader current="plans" />);
     expect(screen.getByRole("button", { name: "Tema" })).toBeTruthy();
     unmount();
-    render(<AppHeader current="plans" compact />);
+    render(<AppHeaderBar current="plans" compact />);
+    expect(screen.getByRole("link", { name: "Piani" }).getAttribute("aria-current")).toBe("page");
     expect(screen.queryByRole("button", { name: "Tema" })).toBeNull();
+  });
+
+  it("keeps the theme toggle's code out of the compact bar (the plan page's JS budget)", () => {
+    const bar = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "app-header-bar.tsx"), "utf8");
+    expect(bar).not.toMatch(/theme-toggle/);
   });
 });

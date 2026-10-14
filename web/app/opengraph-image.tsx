@@ -26,10 +26,13 @@ const CONVERGING_LINES = [
   `</svg>`,
 ].join("");
 
+/** Read when the module loads, as in Next's guide: a read inside the handler is uncached I/O under
+ * Cache Components and would make the route render on every request. */
+const bold = await readFile(path.join(process.cwd(), "assets/fonts/BarlowSemiCondensed-Bold.ttf"));
+
 /** The link preview of every page (WhatsApp, Slack, iMessage): mark and name, the tagline, the
  * lines converging. Static: rendered once at build time from the vendored hero face. */
-export default async function OpengraphImage() {
-  const bold = await readFile(path.join(process.cwd(), "assets/fonts/BarlowSemiCondensed-Bold.ttf"));
+export default function OpengraphImage() {
   return new ImageResponse(
     (
       <div

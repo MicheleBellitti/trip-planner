@@ -16,7 +16,7 @@ import type { TripLoader } from "@/components/plan/PlanView";
 import { daysCount, titleStatesDates, tripLength } from "@/components/plan/trip-dates";
 import { isEndedStatus } from "@/components/states/ended-status";
 import { SessionExpiredPanel } from "@/components/states/session-expired";
-import { AppHeader } from "@/components/nav/app-header";
+import { AppHeaderBar } from "@/components/nav/app-header-bar";
 import { PlanSkeleton } from "@/components/states/plan-skeleton";
 import { InlineStatus } from "@/components/ui/notice";
 import { API_ERROR_MESSAGES, ApiError, UnauthorizedError, type ApiClient } from "@/lib/api";
@@ -234,7 +234,7 @@ export function PlanScreen({ planId, client = liveApi }: { planId: string; clien
   if (!hasData && loginUrl) {
     return (
       <>
-        <AppHeader current="plans" compact />
+        <AppHeaderBar current="plans" compact />
         <main className="mx-auto max-w-page px-4 pt-2 lg:px-7">
           <SessionExpiredPanel loginUrl={loginUrl} />
         </main>
@@ -244,7 +244,7 @@ export function PlanScreen({ planId, client = liveApi }: { planId: string; clien
   if (loadError && (gone || !hasData)) {
     return (
       <>
-        <AppHeader current="plans" compact />
+        <AppHeaderBar current="plans" compact />
         <main className="mx-auto max-w-page px-4 pt-2 lg:px-7">
           <Suspense fallback={null}>
             <PlanLoadFailed
@@ -295,7 +295,7 @@ export function PlanScreen({ planId, client = liveApi }: { planId: string; clien
 
   return (
     <div className="pb-12">
-      <AppHeader current="plans" compact />
+      <AppHeaderBar current="plans" compact />
       <LiveHeader
         title={title}
         summary={subtitle}
