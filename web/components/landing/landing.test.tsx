@@ -2,6 +2,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import LandingPage from "@/app/page";
+import { buttonClasses } from "@/components/ui/button";
 import { BRAND_DESCRIPTION, BRAND_TAGLINE } from "@/lib/brand";
 import { AGENT_LABELS, AGENTS } from "@/lib/plan-events/labels";
 import { SKIP_LANDING_BOOTSTRAP } from "@/lib/skip-landing";
@@ -63,6 +64,30 @@ describe("the hero", () => {
     render(<LandingHero />);
     expect(screen.getAllByRole("img", { name: "Le cinque linee degli agenti convergono su Lisbona" }).length).toBeGreaterThan(0);
   });
+
+  it("says plainly that the agents are AI", () => {
+    render(<LandingHero />);
+    expect(screen.getByText(BRAND_DESCRIPTION).textContent).toContain("agenti AI");
+  });
+
+  it("names every line at its head on both maps, so no line is a colour alone", () => {
+    render(<LandingHero />);
+    const maps = screen.getAllByRole("img", { name: "Le cinque linee degli agenti convergono su Lisbona" });
+    expect(maps).toHaveLength(2);
+    for (const map of maps) {
+      const words = [...map.querySelectorAll("text")].map((text) => text.textContent);
+      AGENTS.forEach((agent) => expect(words).toContain(AGENT_LABELS[agent]));
+    }
+  });
+
+  it("shows the live plate only while the map draws: its finished state is the plan", () => {
+    render(<LandingHero />);
+    for (const map of screen.getAllByRole("img", { name: "Le cinque linee degli agenti convergono su Lisbona" })) {
+      const plate = [...map.querySelectorAll("text")].find((text) => text.textContent?.includes("0:14"));
+      expect(plate).toBeTruthy();
+      expect(plate?.closest("g")?.getAttribute("class")).toContain("opacity-0");
+    }
+  });
 });
 
 describe("how it works", () => {
@@ -86,6 +111,21 @@ describe("how it works", () => {
       expect(drawing).toBeTruthy();
       expect(drawing?.querySelector("a, button, input")).toBeNull();
     }
+  });
+
+  it("marks each sample visibly as an example, inside the drawing", () => {
+    const { container } = render(<HowItWorks />);
+    for (const figure of container.querySelectorAll("figure")) {
+      const drawing = figure.querySelector("[inert]");
+      expect([...(drawing?.querySelectorAll("*") ?? [])].some((el) => el.textContent === "Esempio")).toBe(true);
+    }
+  });
+
+  it("draws the sample's booking button below the page's own actions", () => {
+    render(<HowItWorks />);
+    const sample = screen.getByText("Prenota su Expedia");
+    expect(sample.className).toContain(buttonClasses("secondary"));
+    expect(sample.className).not.toContain(buttonClasses("primary"));
   });
 
   it("shows a booking's two dates, the due one in amber words, and a button that is not a link", () => {

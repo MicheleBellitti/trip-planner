@@ -36,7 +36,7 @@ export function HowItWorks() {
       <p className="mt-2 max-w-[36em] text-small text-ink-2">Tre fermate, dalla richiesta alla prenotazione.</p>
       <ol
         className={cx(
-          "relative mt-9 grid gap-9 pl-9 lg:grid-cols-3 lg:gap-7 lg:pt-9 lg:pl-0",
+          "relative mt-9 grid gap-9 pl-9 lg:grid-cols-3 lg:grid-rows-[auto_auto_auto] lg:gap-x-7 lg:gap-y-0 lg:pt-9 lg:pl-0",
           "before:absolute before:top-2.5 before:bottom-2.5 before:left-[11px] before:w-[3px] before:rounded-full before:bg-ink",
           "lg:before:inset-x-2 lg:before:top-1.5 lg:before:bottom-auto lg:before:h-[3px] lg:before:w-auto",
         )}
@@ -98,7 +98,7 @@ export function HowItWorks() {
             <Chip>verificato</Chip>
             <span>Fonte expedia.it, letto il 17 ott 2026, 10:12</span>
           </p>
-          <span className={cx(buttonClasses("primary"), "mt-3.5")}>
+          <span className={cx(buttonClasses("secondary"), "mt-3.5")}>
             Prenota su Expedia
             <Icon name="arrow-square-out" size={16} />
           </span>
@@ -108,10 +108,13 @@ export function HowItWorks() {
   );
 }
 
-/** One station: its ring on the line, its title and sentence, and the sample as a figure. */
+/** One station: its ring on the line, its title and sentence, and the sample as a figure. From
+ * 1080 px the three share their rows (subgrid), so the samples start on one line. The "Esempio" tab
+ * on the frame, like a map's inset label, says on screen what the figcaption says to a screen
+ * reader: this is an illustration, nothing in it is live. */
 function Stop({ title, text, caption, children }: { title: string; text: string; caption: string; children: ReactNode }) {
   return (
-    <li className="relative">
+    <li className="relative lg:row-span-3 lg:grid lg:grid-rows-subgrid">
       <span
         aria-hidden="true"
         className="absolute top-[3px] -left-9 size-4 translate-x-1 rounded-full border-[3.5px] border-ink bg-ground lg:-top-9 lg:left-0 lg:translate-x-0"
@@ -120,7 +123,10 @@ function Stop({ title, text, caption, children }: { title: string; text: string;
       <p className="mt-1.5 max-w-[32em] text-small text-ink-2">{text}</p>
       <figure className="m-0 mt-4.5">
         <VisuallyHidden as="figcaption">{caption}</VisuallyHidden>
-        <div aria-hidden="true" inert className="rounded-md border border-rule bg-surface px-4 py-3.5">
+        <div aria-hidden="true" inert className="relative rounded-md border border-rule bg-surface px-4 pt-4 pb-3.5">
+          <span className="absolute -top-2.5 left-3 rounded-sm border border-rule bg-surface px-1.5 text-micro leading-4 text-ink-2">
+            Esempio
+          </span>
           {children}
         </div>
       </figure>

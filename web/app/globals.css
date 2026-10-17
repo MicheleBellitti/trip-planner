@@ -247,11 +247,13 @@
   --animate-breathe: breathe 1.6s ease-in-out infinite;
   --animate-toast-in: toast-in 200ms var(--ease-expo) both;
   /* The landing hero's one authored moment (DESIGN.md, Landing). Each is used only behind
-     motion-safe:, so reduced motion shows the final state, still. */
+     motion-safe:, so reduced motion shows the final state, still. The live plate belongs to the
+     run, not to its end: it rises, holds and retires before the destination stamps, and its
+     resting state is hidden. */
   --animate-pen: pen 2s var(--ease-pen) both;
   --animate-ring: pen 1.2s var(--ease-pen) both;
   --animate-stamp: stamp 350ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-  --animate-rise: rise 500ms var(--ease-expo) both;
+  --animate-plate: plate 1.5s ease both;
   --animate-reveal: arrive 500ms ease both;
 
   @keyframes draw {
@@ -299,10 +301,19 @@
       transform: scale(1.35);
     }
   }
-  @keyframes rise {
-    from {
+  @keyframes plate {
+    0% {
       opacity: 0;
       transform: translateY(10px);
+    }
+    18%,
+    78% {
+      opacity: 1;
+      transform: none;
+    }
+    100% {
+      opacity: 0;
+      transform: none;
     }
   }
   @keyframes breathe {

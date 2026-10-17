@@ -827,7 +827,7 @@ space:
 | Toast | fades in and rises 8 px, 200 ms expo | fades in, 120 ms |
 | Skeleton | breathes between 100 % and 55 % opacity, 1.6 s | still |
 | Button and icon button press | scale to 0.98 / 0.96, 120 ms; hover colour 160 ms | no scale; colour stays |
-| The landing map, once per load | lines draw with `--ease-pen`, 2 s, staggered; stations stamp (scale 1.35 to 1, 350 ms); the tool plate rises; the destination's ring draws, 1.2 s | the final map, still |
+| The landing map, once per load | lines draw with `--ease-pen`, 2 s, staggered; stations stamp (scale 1.35 to 1, 350 ms); the live tool plate rises, holds and retires before the destination stamps; the destination's ring draws, 1.2 s | the final map, still, without the plate (the finished plan) |
 
 **The Report, Don't Perform Rule.** If an animation does not report a state change or answer the
 user's action, it does not ship. No celebratory motion, no entrance choreography, no loops except
@@ -911,15 +911,20 @@ Its only client JavaScript is the theme toggle and `next/link`. Components live 
   (`DEMO_READY`). "Accedi" lives in the header and the closing, never in the hero. The legend names
   the five lines in run order with their jobs; on the phone the line map comes before it.
 - **Line map** (`LineMap`): horizontal from 768 px, vertical below (the lines converge at the
-  bottom, like the phone's lanes). It is the landing's one authored moment (Motion table), drawn
-  only behind `motion-safe:`.
+  bottom, like the phone's lanes). Each line carries its name at its head (`AGENT_LABELS`,
+  condensed 600, like a transit diagram), so no line is told apart by its colour alone. The phone's
+  map is short (viewBox 360×274) so the destination stamps inside the first screen. It is the
+  landing's one authored moment (Motion table), drawn only behind `motion-safe:`.
 - **Come funziona** (`HowItWorks`): three stations on one ink line, vertical on the phone and
   horizontal from 1080 px, each holding a real component with sample data (the request summary, a
   lane with its live plate, a booking with `DatePair` and a price with its source). The samples are
   illustrations: each is a `<figure>` whose visually hidden `<figcaption>` says the sample in one
-  sentence, while the drawing is `inert` and `aria-hidden`. The booking's "Prenota su Expedia" is
-  never a link (CLAUDE.md contract rule 4: booking URLs are never hand-written). The sample's fixed
-  "now" makes its deadline due soon, so the amber appears there doing its one job.
+  sentence, while the drawing is `inert` and `aria-hidden`. On screen, an "Esempio" tab on each
+  frame's top edge, like a map's inset label, says the same. The booking's "Prenota su Expedia" is
+  never a link (CLAUDE.md contract rule 4: booking URLs are never hand-written) and is drawn
+  secondary, below the page's own actions. The sample's fixed "now" makes its deadline due soon,
+  so the amber appears there doing its one job. From 1080 px the three stations share their rows
+  (subgrid), so the samples start on one line.
 - **Closing** (`LandingClose`): the five lines entering the destination (`ConvergingLines`, the link
   preview's drawing), then, with the demo, "Guarda una corsa intera, senza account.", "Guarda una
   corsa", "Accedi" and "Accesso su invito."; until then, "Atlas è su invito." and "Accedi".

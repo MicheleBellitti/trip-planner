@@ -24,8 +24,8 @@ const JOBS: Record<AgentName, string> = {
  */
 export function LandingHero({ demoReady = DEMO_READY }: { demoReady?: boolean }) {
   return (
-    <section aria-labelledby="landing-title" className="mx-auto max-w-landing px-4 pt-8 lg:px-7 lg:pt-12">
-      <div className="grid gap-7 lg:grid-cols-[0.95fr_1.15fr] lg:gap-x-8 lg:gap-y-8">
+    <section aria-labelledby="landing-title" className="mx-auto max-w-landing px-4 pt-6 lg:px-7 lg:pt-12">
+      <div className="grid gap-6 lg:grid-cols-[0.95fr_1.15fr] lg:gap-x-8 lg:gap-y-8">
         <div className="lg:col-start-1 lg:row-start-1">
           <h1 id="landing-title" className="font-hero text-hero font-bold tracking-[-0.01em] lg:text-hero-lg">
             {BRAND_TAGLINE}
@@ -70,7 +70,7 @@ export function LandingHero({ demoReady = DEMO_READY }: { demoReady?: boolean })
       </div>
       <p className="mt-5 flex flex-wrap justify-between gap-x-4 gap-y-1 border-t border-rule pt-3 pb-4 text-micro text-ink-2">
         <span>Corsa di prova: Milano → Lisbona, 2 adulti e 2 bambini</span>
-        <span>38°43′ N, 9°08′ O</span>
+        <span>38°43’ N, 9°08’ O</span>
       </p>
     </section>
   );
