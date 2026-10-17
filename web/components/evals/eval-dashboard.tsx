@@ -49,6 +49,7 @@ import { DeltaNote } from "./delta";
 import { Sha } from "./external-link";
 import { RunVerdictPill } from "./marks";
 import { TrendChart } from "./trend-chart";
+import { evalRunPath } from "@/lib/routes";
 
 type DashboardState =
   | { kind: "loading" }
@@ -164,7 +165,7 @@ function LatestRun({ run, previous, openedAt }: { run: EvalRunSummary; previous:
       ) : null}
 
       <LinkButton
-        href={`/evals/${run.id}`}
+        href={evalRunPath(run.id)}
         size="sm"
         className="mt-4 justify-self-start sm:col-start-2 sm:row-start-1 sm:mt-0 sm:self-start"
       >
@@ -195,7 +196,7 @@ function Reasons({ run }: { run: EvalRunSummary }) {
                 <span className="font-semibold text-error">{ruleLabel(finding.rule)}</span>
                 {finding.request_id ? (
                   <Link
-                    href={`/evals/${run.id}#${requestAnchor(finding.request_id)}`}
+                    href={`${evalRunPath(run.id)}#${requestAnchor(finding.request_id)}`}
                     className="font-medium text-ink underline-offset-[0.2em] hover:underline"
                   >
                     {finding.request_title ?? finding.request_id}
@@ -212,7 +213,7 @@ function Reasons({ run }: { run: EvalRunSummary }) {
       {rest > 0 ? (
         <p className="mt-1.5 text-meta">
           <Link
-            href={`/evals/${run.id}#confronto`}
+            href={`${evalRunPath(run.id)}#confronto`}
             className="text-ink-2 underline underline-offset-[0.2em] hover:text-ink"
           >
             {rest === 1 ? "Un altro motivo nella valutazione" : `Altri ${rest} motivi nella valutazione`}

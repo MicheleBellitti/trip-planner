@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { iconButtonClasses } from "./icon-button";
 import { THEME_STORAGE_KEY } from "./theme";
 import { ThemeToggle } from "./theme-toggle";
 
@@ -24,6 +25,12 @@ function themeColorMeta(content: string): HTMLMetaElement {
 }
 
 describe("ThemeToggle", () => {
+  it("is drawn by the icon button's own classes", () => {
+    render(<ThemeToggle variant="bare" />);
+    const classes = screen.getByRole("button").className.split(/\s+/);
+    for (const name of iconButtonClasses("md", "bare").split(/\s+/)) expect(classes).toContain(name);
+  });
+
   it("treats a page with nothing pinned as dark, the default", () => {
     render(<ThemeToggle />);
     expect(screen.getByRole("button", { name: "Passa al tema chiaro" })).toBeTruthy();

@@ -51,6 +51,7 @@ import {
   withFieldWording,
 } from "./form-model";
 import { RequestSummary } from "./request-summary";
+import { planPath } from "@/lib/routes";
 
 /** The run's cost estimate under the button (spec: "circa 2–4 $"). */
 export const COST_ESTIMATE = "Il planner costa circa 2–4 $ per piano";
@@ -159,7 +160,7 @@ export function RequestForm({ today, initialValues, restoreLast = false, demoSce
         demoScenario: demo ? demoScenario : null,
       });
       rememberRequest(values);
-      router.push(`/plans/${id}`);
+      router.push(planPath(id));
     } catch (error) {
       // 401: the browser is on its way to TripTracker's login; stay busy until it leaves.
       if (error instanceof UnauthorizedError) return;

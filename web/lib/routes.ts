@@ -11,6 +11,12 @@ export const ROUTES = {
   demo: "/demo",
 } as const;
 
+/** A plan's page. The id is one path segment, whatever it holds. */
+export const planPath = (id: string): string => `${ROUTES.plans}/${encodeURIComponent(id)}`;
+
+/** An eval run's page. */
+export const evalRunPath = (id: string): string => `${ROUTES.evals}/${encodeURIComponent(id)}`;
+
 /** The public demo run (step 3) does not exist yet. Until it does, the landing offers "Scopri come
  * funziona" instead of "Guarda una corsa", so no button leads to a 404. Step 3 builds /demo and
  * flips this. */

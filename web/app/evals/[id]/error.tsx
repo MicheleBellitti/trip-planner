@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { AppHeader } from "@/components/nav/app-header";
 import { StateFact, StatePanel } from "@/components/states/state-panel";
 import { Button, LinkButton } from "@/components/ui/button";
+import { ROUTES } from "@/lib/routes";
 
 /** Something broke while drawing the run page (a bug, not a missing run: that has its own panel).
  * Says so, reassures that the stored results are safe, and offers to try again or go back. */
@@ -26,7 +27,7 @@ export default function EvalRunError({ error, retry }: { error: Error & { digest
               <Button variant="primary" icon="arrows-clockwise" onClick={() => retry()}>
                 Riprova
               </Button>
-              <LinkButton href="/evals" variant="quiet" icon="arrow-left">
+              <LinkButton href={ROUTES.evals} variant="quiet" icon="arrow-left">
                 Torna alle valutazioni
               </LinkButton>
             </>

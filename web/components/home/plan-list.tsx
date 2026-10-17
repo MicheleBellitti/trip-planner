@@ -42,6 +42,7 @@ import type { PlanStatus, PlanSummary } from "@/lib/schemas/api";
 
 import { EmptyInvitation } from "./empty-invitation";
 import { exampleRequest } from "./example";
+import { planPath } from "@/lib/routes";
 
 /** `openedAt` is the moment the list was last read: "Oggi" and "Ieri" are counted from it. It is
  * taken in the fetch callbacks, so the clock is never read while rendering. */
@@ -211,7 +212,7 @@ function FeaturedPlan({ plan, openedAt, className }: { plan: PlanSummary; opened
         {live ? "In corso" : "Ultimo piano pronto"}
       </h2>
       <Link
-        href={`/plans/${plan.id}`}
+        href={planPath(plan.id)}
         data-featured=""
         className={cx(
           "group block overflow-hidden rounded-md border border-rule bg-surface no-underline",
@@ -313,7 +314,7 @@ const NODE_TONE: Record<PlanStatus, string> = {
 function PlanRow({ plan, openedAt }: { plan: PlanSummary; openedAt: number }) {
   return (
     <Link
-      href={`/plans/${plan.id}`}
+      href={planPath(plan.id)}
       className={cx(
         "group relative grid items-center gap-x-2.5 gap-y-1 py-3.5 pr-4 no-underline @min-[58rem]:gap-x-4",
         "transition-[background-color] duration-(--duration-hover) ease-out hover:bg-notice-wash",

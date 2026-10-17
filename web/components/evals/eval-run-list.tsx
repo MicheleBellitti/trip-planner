@@ -41,6 +41,7 @@ import { EvalEmptyInvitation } from "./eval-empty";
 import { Sha, WorkflowLink } from "./external-link";
 import { RunVerdictGlyph, verdictTone } from "./marks";
 import { RunPager } from "./run-pager";
+import { evalRunPath } from "@/lib/routes";
 
 type ListState =
   | { kind: "loading" }
@@ -241,7 +242,7 @@ function RunRow({ run, openedAt }: { run: EvalRunSummary; openedAt: number }) {
 
       {/* The run's link: its text is the date, its box is the whole row. */}
       <Link
-        href={`/evals/${run.id}`}
+        href={evalRunPath(run.id)}
         className={cx(
           "col-start-2 row-start-1 min-w-0 font-cond text-title font-semibold text-ink no-underline group-hover:underline",
           "after:absolute after:inset-0 after:content-['']",

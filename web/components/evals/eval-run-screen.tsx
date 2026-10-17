@@ -26,6 +26,7 @@ import { EvalRunSkeleton } from "./eval-run-skeleton";
 import { RequestRow } from "./request-row";
 import { RunHeader } from "./run-header";
 import { StepLink } from "./run-pager";
+import { evalRunPath, ROUTES } from "@/lib/routes";
 
 type ScreenState =
   | { kind: "loading" }
@@ -63,7 +64,7 @@ export function EvalRunScreen({ runId }: { runId: string }) {
             title="Questa valutazione non c'è"
             headingId="valutazione-mancante"
             actions={
-              <LinkButton href="/evals" variant="primary" icon="arrow-left">
+              <LinkButton href={ROUTES.evals} variant="primary" icon="arrow-left">
                 Torna alle valutazioni
               </LinkButton>
             }
@@ -116,7 +117,7 @@ export function EvalRunScreen({ runId }: { runId: string }) {
 function BackLink() {
   return (
     <Link
-      href="/evals"
+      href={ROUTES.evals}
       className="-my-1.5 inline-flex min-h-11 items-center gap-1.5 rounded-xs text-meta text-ink-2 no-underline hover:text-ink hover:underline"
     >
       <Icon name="arrow-left" size={15} />
@@ -156,10 +157,10 @@ function RunPage({ run }: { run: EvalRunDetail }) {
           <BackLink />
           {/* The neighbours, in the list's direction: newer to the left, older to the right. */}
           <nav aria-label="Valutazioni vicine" className="flex items-center gap-4">
-            <StepLink href={run.next_run ? `/evals/${run.next_run.id}` : null} direction="newer">
+            <StepLink href={run.next_run ? evalRunPath(run.next_run.id) : null} direction="newer">
               Più recente
             </StepLink>
-            <StepLink href={run.previous_run ? `/evals/${run.previous_run.id}` : null} direction="older">
+            <StepLink href={run.previous_run ? evalRunPath(run.previous_run.id) : null} direction="older">
               Più vecchia
             </StepLink>
           </nav>
