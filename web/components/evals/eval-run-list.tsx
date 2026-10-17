@@ -80,7 +80,7 @@ export function EvalRunList({ page, className }: { page: number; className?: str
     return (
       <Notice
         tone="error"
-        title="Le valutazioni non si sono caricate"
+        title="I collaudi non si sono caricati"
         className={className}
         action={
           <Button
@@ -117,7 +117,7 @@ export function EvalRunList({ page, className }: { page: number; className?: str
           </LinkButton>
         }
       >
-        Il planner non divide ancora le valutazioni in pagine: si aggiorna con il prossimo rilascio.
+        Il planner non divide ancora i collaudi in pagine: si aggiorna con il prossimo rilascio.
       </Notice>
     );
   }
@@ -127,7 +127,7 @@ export function EvalRunList({ page, className }: { page: number; className?: str
     return (
       <Notice
         tone="info"
-        title={`Le valutazioni finiscono a pagina ${last}`}
+        title={`I collaudi finiscono a pagina ${last}`}
         className={className}
         action={
           <LinkButton href={pageHref(last)} size="sm" variant="quiet" icon="arrow-left">
@@ -135,7 +135,7 @@ export function EvalRunList({ page, className }: { page: number; className?: str
           </LinkButton>
         }
       >
-        Questa pagina è oltre l&apos;ultima valutazione caricata.
+        Questa pagina è oltre l&apos;ultimo collaudo caricato.
       </Notice>
     );
   }
@@ -181,22 +181,22 @@ export function EvalRunList({ page, className }: { page: number; className?: str
       ) : null}
       <p className="mt-3 max-w-prose text-meta text-ink-2">
         {pages !== null && pages > 1
-          ? `Valutazioni da ${first} a ${first + state.runs.length - 1} di ${state.total}. `
+          ? `Collaudi da ${first} a ${first + state.runs.length - 1} di ${state.total}. `
           : ""}
-        Le valutazioni arrivano dalla CI dopo ogni run; il voto è la media dei punteggi del giudice, da 1 a 5.
+        I collaudi arrivano dalla CI dopo ogni run; il voto è la media dei punteggi del giudice, da 1 a 5.
       </p>
     </section>
   );
 }
 
-const LIST_HEADING_ID = "tutte-le-valutazioni";
+const LIST_HEADING_ID = "tutti-i-collaudi";
 
 /** The list's heading, with how many runs the history holds when the backend says. */
 function ListHeading({ total }: { total: number | null }) {
   return (
     <div className="mb-2 flex flex-wrap items-baseline gap-x-2">
       <h2 id={LIST_HEADING_ID} className="font-cond text-heading font-semibold">
-        Tutte le valutazioni
+        Tutti i collaudi
       </h2>
       {total ? <p className="text-meta text-ink-2">{total === 1 ? "una in tutto" : `${total} in tutto`}</p> : null}
     </div>
@@ -250,7 +250,7 @@ function RunRow({ run, openedAt }: { run: EvalRunSummary; openedAt: number }) {
         )}
       >
         <time dateTime={run.started_at} title={formatDateTime(run.started_at)}>
-          <VisuallyHidden>Valutazione del </VisuallyHidden>
+          <VisuallyHidden>Collaudo del </VisuallyHidden>
           {formatCreated(run.started_at, openedAt)}
         </time>
       </Link>
@@ -305,7 +305,7 @@ function RunRow({ run, openedAt }: { run: EvalRunSummary; openedAt: number }) {
 export function EvalRunListPlaceholder({ className }: { className?: string }) {
   return (
     <div aria-busy="true" className={className}>
-      <VisuallyHidden>Carico le valutazioni…</VisuallyHidden>
+      <VisuallyHidden>Carico i collaudi…</VisuallyHidden>
       <ListHeading total={null} />
       <div className="relative overflow-hidden rounded-md border border-rule bg-surface">
         <Rail />

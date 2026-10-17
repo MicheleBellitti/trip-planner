@@ -13,7 +13,7 @@ export type AppSection = "plans" | "evals" | "new";
 
 const SECTIONS = [
   { section: "plans", href: ROUTES.plans, label: "Piani" },
-  { section: "evals", href: ROUTES.evals, label: "Valutazioni" },
+  { section: "evals", href: ROUTES.evals, label: "Collaudi" },
 ] as const;
 
 /**
@@ -45,8 +45,14 @@ export function AppHeaderBar({
         <div className="flex items-center gap-2">
           <nav aria-label="Sezioni">
             <ul className="flex">
-              {SECTIONS.map((item) => (
-                <Station key={item.section} href={item.href} label={item.label} current={current === item.section} />
+              {SECTIONS.map((item, index) => (
+                <Station
+                  key={item.section}
+                  href={item.href}
+                  label={item.label}
+                  current={current === item.section}
+                  edge={index === 0 ? "first" : index === SECTIONS.length - 1 ? "last" : "middle"}
+                />
               ))}
             </ul>
           </nav>
@@ -91,17 +97,28 @@ function NewPlan({ current }: { current: boolean }) {
 
 /**
  * One section on the header's line: its label above its station. The line runs through every
- * station and past the outer ones, a route that goes on beyond the edge of the map, so the pair
- * never reads as a two-step progress bar. The current station is the larger "you are here" ring.
- * The link is positioned, so it paints above the line drawn before it.
+ * station and the same 24 px past the outer ones, a route that goes on beyond the edge of the map,
+ * so the pair never reads as a two-step progress bar; 1 px on the phone, 2 px from 1080 px, where
+ * the header has room for it. The current station is the larger "you are here" ring. The link is
+ * positioned, so it paints above the line drawn before it.
  */
-function Station({ href, label, current }: { href: string; label: string; current: boolean }) {
+function Station({
+  href,
+  label,
+  current,
+  edge,
+}: {
+  href: string;
+  label: string;
+  current: boolean;
+  edge: "first" | "middle" | "last";
+}) {
   // The station's centre is 13.5 px above the item's bottom (8 px padding + half of its 11 px box).
-  const half = "pointer-events-none absolute bottom-[13px] h-px bg-rule-strong";
+  const half = "pointer-events-none absolute bottom-[13px] h-px bg-rule-strong lg:bottom-[12.5px] lg:h-0.5";
   return (
     <li className="relative flex">
-      <span aria-hidden="true" data-line="" className={cx(half, "right-1/2 left-0")} />
-      <span aria-hidden="true" data-line="" className={cx(half, "right-0 left-1/2")} />
+      <span aria-hidden="true" data-line="" className={cx(half, edge === "first" ? "right-1/2 w-6" : "right-1/2 left-0")} />
+      <span aria-hidden="true" data-line="" className={cx(half, edge === "last" ? "left-1/2 w-6" : "right-0 left-1/2")} />
       <Link
         href={href}
         aria-current={current ? "page" : undefined}

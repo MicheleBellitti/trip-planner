@@ -20,21 +20,21 @@ export default function EvalRunError({ error, retry }: { error: Error & { digest
       <main className="mx-auto max-w-page px-4 pt-2 lg:px-7">
         <StatePanel
           icon="warning"
-          title="La pagina della valutazione si è interrotta"
-          headingId="valutazione-errore"
+          title="La pagina del collaudo si è interrotta"
+          headingId="collaudo-errore"
           actions={
             <>
               <Button variant="primary" icon="arrows-clockwise" onClick={() => retry()}>
                 Riprova
               </Button>
               <LinkButton href={ROUTES.evals} variant="quiet" icon="arrow-left">
-                Torna alle valutazioni
+                Torna ai collaudi
               </LinkButton>
             </>
           }
         >
           <StateFact label="Cosa è successo">Qualcosa è andato storto nel mostrare questa pagina.</StateFact>
-          <StateFact label="Cosa è stato salvato">I risultati della valutazione sono al sicuro sul planner.</StateFact>
+          <StateFact label="Cosa è stato salvato">I risultati del collaudo sono al sicuro sul planner.</StateFact>
           <StateFact label="Cosa puoi fare">Riprova, oppure torna all&apos;elenco.</StateFact>
         </StatePanel>
       </main>

@@ -610,7 +610,7 @@ layout, not a stretched phone.
   17:36", "Ieri, 21:40", "8 ott", the year only when it is not the current one); the full date and
   time are in the element's `title`. The clock is read in the fetch callbacks, never in render
   (Cache Components prerenders the route: a `Date.now()` in render is frozen into the shell).
-- **The eval history** (`/evals`) is a dashboard over a line. On top, "Ultima valutazione": the
+- **The eval history** (`/evals`) is a dashboard over a line. On top, "Ultimo collaudo": the
   newest run's verdict as a pill on its wash (green passed, red blocked, the notice wash otherwise),
   what it means, why it stopped (its first two blocking findings, the rule in Italian, the request
   linked to its open row, compare.py's sentence), and four figures (piani accettati, richieste
@@ -626,7 +626,7 @@ layout, not a stretched phone.
   tight clean bounds, the plans from zero) and its two ends' days. One tab stop per chart (arrows,
   Home, End, Enter opens the run), the reading in the caption (never a floating box), each key
   move said once, the values in a table for screen readers. The charts wait for the third run.
-  Then "Tutte le valutazioni", the rail list, ten runs a page with numbered pages (`?pagina=N`,
+  Then "Tutti i collaudi", the rail list, ten runs a page with numbered pages (`?pagina=N`,
   the scroll kept). A run's page steps to its neighbours ("Più recente" to the left, "Più
   vecchia" to the right, as the list reads), gives its figures with their changes since the run
   before, and lists its reference requests as closed rows (glyph and colour, title, plan, checks,
@@ -763,9 +763,10 @@ or shape (there is no class merging, on purpose: see JavaScript weight below).
 
 - **One header on every signed-in page** (`AppHeader`), in this order:
   - the lockup, the link to the plans (`ROUTES.plans`)
-  - the sections "Piani" and "Valutazioni" as **stations on one line**. The line runs past the
-    outer stations, a route that goes on beyond the map's edge, so the pair never reads as a
-    two-step progress bar. The current station is the larger "you are here" ring (11 px, 3 px ink
+  - the sections "Piani" and "Collaudi" (the eval history, named for a visitor) as **stations on
+    one line**. The line runs the same 24 px past the outer stations, a route that goes on beyond
+    the map's edge, so the pair never reads as a two-step progress bar; 1 px on the phone, 2 px
+    from 1080 px, where the header has room for it. The current station is the larger "you are here" ring (11 px, 3 px ink
     edge) with `aria-current="page"`; the others are 9 px hollow nodes that fill on hover.
   - the theme toggle, **bare** (no ring), so it never reads as a twin of the button after it
   - "Nuovo piano", **always the last item**, so the corner never changes meaning from page to

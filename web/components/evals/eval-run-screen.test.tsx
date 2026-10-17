@@ -52,13 +52,13 @@ describe("EvalRunScreen", () => {
   it("shows the skeleton in the page's shape while loading", () => {
     mocks.getEvalRun.mockReturnValue(new Promise(() => {}));
     render(<EvalRunScreen runId={ACCEPTED.id} />);
-    expect(screen.getByText("Carico la valutazione…")).toBeTruthy();
+    expect(screen.getByText("Carico il collaudo…")).toBeTruthy();
     expect(document.querySelector("[aria-busy='true']")).toBeTruthy();
   });
 
   it("titles the page with the run's date, and gives its facts: commit, roster, duration and the CI run", async () => {
     await renderRun(ACCEPTED);
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Valutazione del 12 ott 2026, 20:12");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Collaudo del 12 ott 2026, 20:12");
     expect(screen.getByText("a91c3e0").tagName).toBe("CODE");
     expect(screen.getByText("sviluppo")).toBeTruthy();
     expect(screen.getByText("5 min 37 s")).toBeTruthy();
@@ -240,14 +240,14 @@ describe("EvalRunScreen", () => {
 
   it("steps to the newer and the older run, in the list's direction", async () => {
     await renderRun(BETWEEN);
-    const steps = screen.getByRole("navigation", { name: "Valutazioni vicine" });
+    const steps = screen.getByRole("navigation", { name: "Collaudi vicini" });
     expect(within(steps).getByRole("link", { name: /Più recente/ }).getAttribute("href")).toBe(`/evals/${NEWER!.id}`);
     expect(within(steps).getByRole("link", { name: /Più vecchia/ }).getAttribute("href")).toBe(`/evals/${OLDER!.id}`);
   });
 
   it("has no step past the newest or the oldest run", async () => {
     await renderRun({ ...ACCEPTED, previous_run: OLDER!, next_run: null });
-    const steps = screen.getByRole("navigation", { name: "Valutazioni vicine" });
+    const steps = screen.getByRole("navigation", { name: "Collaudi vicini" });
     expect(within(steps).queryByRole("link", { name: /Più recente/ })).toBeNull();
     expect(within(steps).getByRole("link", { name: /Più vecchia/ })).toBeTruthy();
   });
@@ -260,21 +260,21 @@ describe("EvalRunScreen", () => {
     expect(within(accepted).getByText(/−3/).className).toContain("text-error");
     const cost = within(facts).getByText("Costo").closest("div") as HTMLElement;
     expect(within(cost).getByText(/\+0,17 \$/).className).toContain("text-error");
-    expect(document.body.textContent).toContain("Variazioni rispetto alla valutazione precedente (12 ott 2026, 17:30).");
+    expect(document.body.textContent).toContain("Variazioni rispetto al collaudo precedente (12 ott 2026, 17:30).");
   });
 
   it("says nothing moved when there is no run before it", async () => {
     await renderRun(ACCEPTED);
-    expect(document.body.textContent).not.toContain("Variazioni rispetto alla valutazione precedente");
+    expect(document.body.textContent).not.toContain("Variazioni rispetto al collaudo precedente");
   });
 
   it("says a run is missing, with the way back", async () => {
-    mocks.getEvalRun.mockRejectedValue(new ApiError({ kind: "not_found", status: 404, code: "eval_run_not_found", message: "Questa valutazione non c'è." }));
+    mocks.getEvalRun.mockRejectedValue(new ApiError({ kind: "not_found", status: 404, code: "eval_run_not_found", message: "Questo collaudo non c'è." }));
     await act(async () => {
       render(<EvalRunScreen runId="00000000-0000-4000-8000-000000000000" />);
     });
-    expect(screen.getByRole("heading", { name: "Questa valutazione non c'è" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: /Torna alle valutazioni/ }).getAttribute("href")).toBe("/evals");
+    expect(screen.getByRole("heading", { name: "Questo collaudo non c'è" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Torna ai collaudi/ }).getAttribute("href")).toBe("/evals");
   });
 
   it("says what went wrong and tries again on 'Riprova'", async () => {
@@ -282,11 +282,11 @@ describe("EvalRunScreen", () => {
     await act(async () => {
       render(<EvalRunScreen runId={ACCEPTED.id} />);
     });
-    expect(screen.getByText("La valutazione non si è caricata")).toBeTruthy();
+    expect(screen.getByText("Il collaudo non si è caricato")).toBeTruthy();
     mocks.getEvalRun.mockResolvedValueOnce(ACCEPTED);
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /Riprova/ }));
     });
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toContain("Valutazione del");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toContain("Collaudo del");
   });
 });
