@@ -439,7 +439,8 @@ async def start_plan(
     2. Monthly limit: `monthly_spend_cents()` >= `MONTHLY_LIMIT_CENTS` ->
        `MonthlyLimitReachedError` (spec: refuse when this month's sum "supera" the limit; at
        the limit counts as reached).
-    3. Insert the `plans` row: `user_email`, `agent_profile`, status `running` (`running_since`
+    3. Insert the `plans` row: `user_email`, `user_id` (the web app's own `users.id`, only
+       with `Settings.plans_carry_user_id`), `agent_profile`, status `running` (`running_since`
        defaults to `now()`), `request` (`request.model_dump(mode="json")`), `agent_versions`
        (`roster.agent_versions(git_sha=backend_git_sha(settings), trip_schema_sha256=...)`);
        emit the `TITLE_PLAN_CREATED` status event.
@@ -532,6 +533,9 @@ async def _create_and_start(
             PlanRecord(
                 id=plan_id,
                 user_email=user.email,
+                # Only the web app's own user ids are `users.id` (a foreign key): TripTracker's
+                # and the local mode's never go here.
+                user_id=user.auth_user_id if settings.plans_carry_user_id else None,
                 agent_profile=settings.agent_profile,
                 status=PlanStatus.RUNNING.value,
                 request=request.model_dump(mode="json"),

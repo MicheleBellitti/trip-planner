@@ -959,6 +959,23 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
 
 ---
 
+36. The web app's own accounts (`AUTH_MODE=atlas`; `web/lib/auth.ts`, migration
+    `600fbb922f91`). The identity provider becomes a setting: `Settings.auth_origin`
+    (`FRONTEND_ORIGIN` for `atlas`, `TRIPTRACKER_ORIGIN` for `triptracker`) and
+    `Settings.auth_cookie_prefix` (`atlas` / `better-auth`), so `SessionVerifier` and
+    `current_user` keep decision 19 unchanged and only read the provider's cookies (never the
+    other provider's, even on the shared `bellittim.com` domain). The error wording names
+    TripTracker only in its mode (`auth_messages`). `CurrentUser.auth_user_id` carries the
+    provider's `user.id`; `start_plan` stores it in `plans.user_id` (a foreign key to `users`,
+    ON DELETE CASCADE) only when `Settings.plans_carry_user_id`, that is in `atlas` mode:
+    TripTracker's ids are not rows of `users`. Ownership stays by `user_email` until the
+    switch. Alembic owns Better Auth's four tables (`users`, `auth_sessions`, `auth_accounts`,
+    `auth_verifications`, snake_case through Better Auth's `fields` mapping): one `alembic
+    upgrade head` prepares the database for both services, and `tests/test_db.py` keeps the
+    models and the migrations together. The web app's Better Auth exempts `/get-session` from
+    its per-IP rate limit, because every check comes from the backend's one egress IP; the
+    `VerificationBudget` stays as a second guard.
+
 ## 7. Contracts with events.py, the database, config, the web app and the agents
 
 **events.py (`normalize`).**

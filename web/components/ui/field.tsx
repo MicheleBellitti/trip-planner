@@ -1,4 +1,4 @@
-import { useId, type ComponentPropsWithoutRef, type ReactNode } from "react";
+import { useId, type ComponentProps, type ComponentPropsWithoutRef, type ReactNode } from "react";
 
 import { cx } from "./cx";
 import { Icon } from "./icon";
@@ -72,7 +72,8 @@ const CONTROL =
   "not-disabled:hover:border-ink focus-visible:border-ink aria-invalid:border-error " +
   "disabled:cursor-not-allowed disabled:opacity-55";
 
-export function TextInput({ className, type = "text", ...props }: ComponentPropsWithoutRef<"input">) {
+/** `ref` is an ordinary prop (React 19): a form that moves focus onto the field after an error passes it. */
+export function TextInput({ className, type = "text", ...props }: ComponentProps<"input">) {
   return <input type={type} className={cx(CONTROL, "min-h-11 w-full px-3", className)} {...props} />;
 }
 

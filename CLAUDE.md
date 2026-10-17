@@ -39,7 +39,8 @@ backend/                 FastAPI service (uv, Python 3.12). The package is backe
   app/hub.py               in-memory per-plan pub/sub for SSE
   app/routes.py            every endpoint except /health; SSE; CORS; request body cap
   app/evals_store.py       the eval history: store a run (POST /evals/runs, bearer token), list, read
-  app/auth.py              current_user() via TripTracker get-session; the Origin check
+  app/auth.py              current_user() via Better Auth get-session (TripTracker's, or the web app's
+                           own accounts with AUTH_MODE=atlas); the Origin check
   app/mapping.py           plan_to_trip(): Plan -> TripTracker Trip (pure function)
   app/links.py             check_link(): the booking-link domain allowlist (pure)
   app/fx.py                FxConverter: Banca d'Italia daily rate, InforEuro fallback, fx_rates cache
@@ -61,7 +62,9 @@ web/                     Next.js 16 (App Router), TypeScript strict, Tailwind 4,
   app/                     routes: / (landing, public), /plans (plans), /new (request form), /plans/[id], /evals (eval history),
                            /evals/[id], /dev/ui (dev only)
   components/ui/           the design system's primitives (DatePair, Timeline, ToolChip, ...)
-  lib/                     typed API client, SSE + timeline reducer (lib/plan-events), schemas
+  lib/                     typed API client, SSE + timeline reducer (lib/plan-events), schemas,
+                           auth.ts (the app's own accounts: Better Auth server, Postgres, magic link
+                           and Google), auth-client.ts, server/ (server-only config, the sign-in email)
   DESIGN.md, PRODUCT.md    design tokens (the authority) and product decisions
   design/directions/       three static design studies; direction 1 "Linee" was chosen
 agents/                  hand-written agent templates, the single source of the prompts:
@@ -340,9 +343,13 @@ CI must pass before merge.
   one plan binds them with `structlog.contextvars`, so the tasks it creates inherit them.
 - An unset `ENVIRONMENT` means production. `AUTH_MODE=local`, `DEMO_MODE` and `DEMO_PACE` are
   only allowed with `ENVIRONMENT=development`, and Settings refuses to start otherwise.
-- Auth checks the Better Auth cookie with TripTracker's
+- Auth checks a Better Auth session cookie with the provider's
   `/api/auth/get-session?disableRefresh=true` (a check never refreshes the session), cached
-  for 60 s. An empty `PLANNER_ALLOWED_EMAILS` lets nobody in. State-changing requests must send
+  for 60 s. `AUTH_MODE` picks the provider: `triptracker` (TripTracker's accounts at
+  `TRIPTRACKER_ORIGIN`, cookie prefix `better-auth`) or `atlas` (the web app's own accounts,
+  `web/lib/auth.ts`, at `FRONTEND_ORIGIN`, cookie prefix `atlas`, the user's id stored in
+  `plans.user_id`). The web app mirrors it with `NEXT_PUBLIC_AUTH_MODE` (where a 401 sends the
+  browser). An empty `PLANNER_ALLOWED_EMAILS` lets nobody in. State-changing requests must send
   `Origin: FRONTEND_ORIGIN`. CORS allows `FRONTEND_ORIGIN` only, plus `TRIPTRACKER_ORIGIN`
   read-only on `GET /plans/{id}/trip`.
 - Every error answer is `{"detail": {"code", "message" (Italian), "data"}}`, framework errors

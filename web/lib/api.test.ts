@@ -379,10 +379,35 @@ describe("errors", () => {
 });
 
 describe("loginUrl", () => {
-  it("encodes the return URL and tolerates a trailing slash", () => {
-    expect(loginUrl("https://viaggi.bellittim.com/", "https://atlas.bellittim.com/new?x=1&y=2")).toBe(
-      "https://viaggi.bellittim.com/accedi?returnTo=https%3A%2F%2Fatlas.bellittim.com%2Fnew%3Fx%3D1%26y%3D2",
+  it("encodes the return URL and tolerates a trailing slash (TripTracker)", () => {
+    expect(
+      loginUrl(
+        { mode: "triptracker", triptrackerUrl: "https://viaggi.bellittim.com/" },
+        "https://atlas.bellittim.com/new?x=1&y=2",
+      ),
+    ).toBe("https://viaggi.bellittim.com/accedi?returnTo=https%3A%2F%2Fatlas.bellittim.com%2Fnew%3Fx%3D1%26y%3D2");
+  });
+
+  it("points at this app's own /login in atlas mode", () => {
+    expect(loginUrl({ mode: "atlas" }, "https://atlas.bellittim.com/new?x=1&y=2")).toBe(
+      "/login?returnTo=https%3A%2F%2Fatlas.bellittim.com%2Fnew%3Fx%3D1%26y%3D2",
     );
+  });
+});
+
+describe("401 in atlas mode", () => {
+  it("sends the browser to /login with the current page, never to TripTracker", async () => {
+    const { api, onUnauthorized } = client(json(401, envelope("not_authenticated", "Accedi per usare il planner.")), {
+      authMode: "atlas",
+    });
+
+    const error = await failure(api.listPlans());
+
+    const expected = `/login?returnTo=${encodeURIComponent(CURRENT_PAGE)}`;
+    expect(error).toBeInstanceOf(UnauthorizedError);
+    expect((error as UnauthorizedError).loginUrl).toBe(expected);
+    expect(onUnauthorized).toHaveBeenCalledWith(expected);
+    expect(expected).not.toContain("viaggi");
   });
 });
 

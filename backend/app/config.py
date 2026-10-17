@@ -39,7 +39,15 @@ TRIP_SCHEMA_PATH = "/schema/trip.json"
 
 Environment = Literal["development", "production"]
 AgentProfile = Literal["development", "production"]
-AuthMode = Literal["triptracker", "local"]
+AuthMode = Literal["triptracker", "atlas", "local"]
+
+TRIPTRACKER_COOKIE_PREFIX = "better-auth"
+"""Better Auth's default cookie prefix: TripTracker's session cookie is
+`__Secure-better-auth.session_token`."""
+ATLAS_COOKIE_PREFIX = "atlas"
+"""The web app's own Better Auth cookie prefix (web/lib/auth.ts `advanced.cookiePrefix`):
+`__Secure-atlas.session_token`. Distinct from TripTracker's, so the two never overwrite each
+other on the shared `bellittim.com` cookie domain."""
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
 PLAN_LOG_KEYS: tuple[str, ...] = ("plan_id", "session_id", "agent", "event_type")
@@ -184,8 +192,10 @@ class Settings(BaseSettings):
     # TripTracker: session verification, trip.json schema and CORS for GET /plans/{id}/trip.
     triptracker_origin: str = "https://viaggi.bellittim.com"
 
-    # triptracker: verify the Better Auth cookie with TripTracker. local: development only, the
-    # current user is the first PLANNER_ALLOWED_EMAILS entry.
+    # Who says who the user is. triptracker: TripTracker's Better Auth cookie, verified at
+    # TRIPTRACKER_ORIGIN. atlas: the web app's own Better Auth (web/lib/auth.ts), verified at
+    # FRONTEND_ORIGIN; the user's id is stored with the plan (plans.user_id). local: development
+    # only, the current user is the first PLANNER_ALLOWED_EMAILS entry.
     auth_mode: AuthMode = "triptracker"
 
     # The profile's lockfile written by `ant apply --lock-file`: agent, environment and skill IDs.
@@ -408,6 +418,24 @@ class Settings(BaseSettings):
         if self.auth_mode != "local":
             return None
         return self.planner_allowed_emails[0]
+
+    @property
+    def auth_origin(self) -> str:
+        """Where `GET /api/auth/get-session` is asked: the web app itself with AUTH_MODE=atlas,
+        TripTracker otherwise (meaningless, but defined, with AUTH_MODE=local)."""
+        return self.frontend_origin if self.auth_mode == "atlas" else self.triptracker_origin
+
+    @property
+    def auth_cookie_prefix(self) -> str:
+        """The Better Auth cookie prefix the session cookie carries: `atlas` for the web app's
+        own accounts, `better-auth` (the library default) for TripTracker's."""
+        return ATLAS_COOKIE_PREFIX if self.auth_mode == "atlas" else TRIPTRACKER_COOKIE_PREFIX
+
+    @property
+    def plans_carry_user_id(self) -> bool:
+        """True when the signed-in user's id is one of the web app's own `users.id`, so a new
+        plan may store it in `plans.user_id` (a foreign key). TripTracker's ids never are."""
+        return self.auth_mode == "atlas"
 
     def is_email_allowed(self, email: str | None) -> bool:
         """True only for an address listed in PLANNER_ALLOWED_EMAILS (an empty list allows none)."""

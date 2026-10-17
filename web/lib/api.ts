@@ -20,9 +20,10 @@
  * - 404 `cover_unavailable`: the destination has no free photo; `getCover` answers null.
  */
 
-import { getConfig, stripTrailingSlash } from "./config";
+import { getAuthMode, getConfig, stripTrailingSlash, type AuthMode } from "./config";
 import { formatUsd } from "./format";
 import { markSignedIn, markSignedOut } from "./returning";
+import { ROUTES } from "./routes";
 import {
   ContinueResponseSchema,
   COVER_UNAVAILABLE_CODE,
@@ -180,10 +181,19 @@ export class RequestValidationError extends ApiError {
   }
 }
 
-/** `<triptracker>/accedi?returnTo=<returnTo>`: TripTracker sends the user back after login
- * (only to trusted origins, on its side). */
-export function loginUrl(triptrackerUrl: string, returnTo: string): string {
-  return `${stripTrailingSlash(triptrackerUrl)}/accedi?returnTo=${encodeURIComponent(returnTo)}`;
+/** Where a 401 sends the browser (lib/config.ts `AuthMode`). */
+export type LoginTarget = { mode: "triptracker"; triptrackerUrl: string } | { mode: "atlas" };
+
+/**
+ * The login page that brings the user back to `returnTo` afterwards. TripTracker:
+ * `<triptracker>/accedi?returnTo=<returnTo>` (it sends the user back only to trusted origins, on
+ * its side). Atlas: this app's `/login?returnTo=<returnTo>` (the page accepts same-origin targets
+ * only, lib/return-to.ts). `returnTo` is the full current URL in both cases.
+ */
+export function loginUrl(target: LoginTarget, returnTo: string): string {
+  const query = `returnTo=${encodeURIComponent(returnTo)}`;
+  if (target.mode === "atlas") return `${ROUTES.login}?${query}`;
+  return `${stripTrailingSlash(target.triptrackerUrl)}/accedi?${query}`;
 }
 
 export interface ApiClientOptions {
@@ -191,6 +201,8 @@ export interface ApiClientOptions {
   baseUrl?: string;
   /** TripTracker origin; defaults to NEXT_PUBLIC_TRIPTRACKER_URL, read at call time. */
   triptrackerUrl?: string;
+  /** Whose login a 401 leads to; defaults to NEXT_PUBLIC_AUTH_MODE, read at call time. */
+  authMode?: AuthMode;
   /** Defaults to the global fetch. */
   fetch?: typeof fetch;
   /** The page to come back to after login; defaults to `window.location.href`. */
@@ -277,12 +289,16 @@ function kindForStatus(status: number, code: string | null): ApiErrorKind {
 
 export function createApiClient(options: ApiClientOptions = {}): ApiClient {
   const baseUrl = () => stripTrailingSlash(options.baseUrl ?? getConfig().apiUrl);
-  const triptrackerUrl = () => options.triptrackerUrl ?? getConfig().triptrackerUrl;
+  const loginTarget = (): LoginTarget => {
+    const mode = options.authMode ?? getAuthMode();
+    if (mode === "atlas") return { mode };
+    return { mode, triptrackerUrl: options.triptrackerUrl ?? getConfig().triptrackerUrl };
+  };
   const doFetch: typeof fetch = (...args) => (options.fetch ?? globalThis.fetch)(...args);
   const currentUrl = options.currentUrl ?? (() => window.location.href);
   const onUnauthorized = options.onUnauthorized ?? ((url: string) => window.location.assign(url));
   const planPath = (planId: string) => `/plans/${encodeURIComponent(planId)}`;
-  const login = () => loginUrl(triptrackerUrl(), currentUrl());
+  const login = () => loginUrl(loginTarget(), currentUrl());
 
   function errorFromResponse(status: number, payload: unknown): ApiError {
     if (status === 422) {
