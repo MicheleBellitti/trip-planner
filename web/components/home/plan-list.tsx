@@ -42,7 +42,7 @@ import type { PlanStatus, PlanSummary } from "@/lib/schemas/api";
 
 import { EmptyInvitation } from "./empty-invitation";
 import { exampleRequest } from "./example";
-import { planPath } from "@/lib/routes";
+import { planPath } from "@/lib/page-paths";
 
 /** `openedAt` is the moment the list was last read: "Oggi" and "Ieri" are counted from it. It is
  * taken in the fetch callbacks, so the clock is never read while rendering. */

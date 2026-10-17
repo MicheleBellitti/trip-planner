@@ -1,4 +1,4 @@
-import { MARK_GEOMETRY, MARK_GEOMETRY_SMALL, MARK_VIEWBOX } from "@/lib/brand-mark";
+import { MARK_GEOMETRY, MARK_GEOMETRY_SMALL, MARK_VIEWBOX } from "@/lib/mark-geometry";
 
 import { cx } from "./cx";
 

@@ -32,7 +32,7 @@ import { formatCreated, formatDateTime } from "@/lib/format";
 
 import { axisDay, RUN_VERDICT_LABELS, type TrendPoint, type TrendReference } from "./eval-model";
 import { RunVerdictGlyph, verdictTone } from "./marks";
-import { evalRunPath } from "@/lib/routes";
+import { evalRunPath } from "@/lib/page-paths";
 
 /** The plot's inner height in the SVG's units: the viewBox is 100 by 100, stretched. */
 const VIEW = 100;

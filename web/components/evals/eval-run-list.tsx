@@ -41,7 +41,7 @@ import { EvalEmptyInvitation } from "./eval-empty";
 import { Sha, WorkflowLink } from "./external-link";
 import { RunVerdictGlyph, verdictTone } from "./marks";
 import { RunPager } from "./run-pager";
-import { evalRunPath } from "@/lib/routes";
+import { evalRunPath } from "@/lib/page-paths";
 
 type ListState =
   | { kind: "loading" }

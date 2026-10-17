@@ -51,7 +51,7 @@ import {
   withFieldWording,
 } from "./form-model";
 import { RequestSummary } from "./request-summary";
-import { planPath } from "@/lib/routes";
+import { planPath } from "@/lib/page-paths";
 
 /** The run's cost estimate under the button (spec: "circa 2–4 $"). */
 export const COST_ESTIMATE = "Il planner costa circa 2–4 $ per piano";

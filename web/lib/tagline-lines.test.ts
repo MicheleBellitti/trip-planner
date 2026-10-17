@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { BRAND_TAGLINE, taglineLines } from "./brand";
+import { BRAND_TAGLINE } from "./brand";
+import { taglineLines } from "./tagline-lines";
 
 describe("taglineLines", () => {
   it("breaks the tagline before its article, never between the article and its noun", () => {

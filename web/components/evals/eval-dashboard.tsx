@@ -49,7 +49,7 @@ import { DeltaNote } from "./delta";
 import { Sha } from "./external-link";
 import { RunVerdictPill } from "./marks";
 import { TrendChart } from "./trend-chart";
-import { evalRunPath } from "@/lib/routes";
+import { evalRunPath } from "@/lib/page-paths";
 
 type DashboardState =
   | { kind: "loading" }

@@ -3,7 +3,8 @@ import path from "node:path";
 
 import { ImageResponse } from "next/og";
 
-import { BRAND_NAME, BRAND_TAGLINE, taglineLines } from "@/lib/brand";
+import { BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand";
+import { taglineLines } from "@/lib/tagline-lines";
 import { CONVERGING_DESTINATION, CONVERGING_PATHS, CONVERGING_VIEWBOX, markDataUri, NIGHT } from "@/lib/brand-mark";
 
 export const alt = `${BRAND_NAME}: ${BRAND_TAGLINE}`;

@@ -26,7 +26,8 @@ import { EvalRunSkeleton } from "./eval-run-skeleton";
 import { RequestRow } from "./request-row";
 import { RunHeader } from "./run-header";
 import { StepLink } from "./run-pager";
-import { evalRunPath, ROUTES } from "@/lib/routes";
+import { evalRunPath } from "@/lib/page-paths";
+import { ROUTES } from "@/lib/routes";
 
 type ScreenState =
   | { kind: "loading" }

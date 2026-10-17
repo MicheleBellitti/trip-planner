@@ -156,6 +156,13 @@ Re-measured on 2026-10-17 for the front door (step 2): `/` is now the public lan
 (the eval history, PR #3, had added 0.2 KB). The landing skip's script strings live in
 `lib/skip-landing.ts`, so the API client carries only the mark's two functions.
 
+Re-measured on 2026-10-17 for the step 1 polish: `/plans/[id]` is 192.7 KB (+0.3: the theme swap's
+transition guard, the small mark's geometry and the header line's fixed overhang), `/` 140.3,
+`/plans` 176.8, `/new` 177.1. Turbopack keeps every export of a module a page loads, so code only
+some pages need lives apart: the path builders in `lib/page-paths.ts`, the mark's geometry in
+`lib/mark-geometry.ts` (not `lib/brand-mark.ts`), the tagline's line break in
+`lib/tagline-lines.ts`.
+
 ## Accessibility
 
 Built to WCAG 2.2 AA; checked by hand in the browser on every screen at 393 and 1440 px, light and

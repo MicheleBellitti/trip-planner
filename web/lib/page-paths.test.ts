@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { evalRunPath, planPath } from "./routes";
+import { evalRunPath, planPath } from "./page-paths";
 
 describe("page paths", () => {
   it("builds a plan's and an eval run's path", () => {
