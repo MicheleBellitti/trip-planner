@@ -44,18 +44,18 @@ describe("LoginForm", () => {
 
   it("says what the link is, how long it lasts, which address to use, and offers Google only when configured", () => {
     renderForm();
-    expect(screen.getByText(/Ti mandiamo un link per entrare, senza password\./).textContent).toContain(LINK_VALIDITY);
-    expect(screen.queryByText(/Poi torni dove eri/)).toBeNull();
+    expect(screen.getByText(/Ti inviamo un link per entrare, senza password\./).textContent).toContain(LINK_VALIDITY);
+    expect(screen.queryByText(/tornare dove eri/)).toBeNull();
     expect(screen.getByLabelText(LABEL)).toHaveProperty("type", "email");
-    expect(screen.getByText("Quello a cui è arrivato l'invito.")).toBeTruthy();
+    expect(screen.getByText("Quello invitato, o con cui sei già entrato.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Inviami il link" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Continua con Google" })).toBeTruthy();
     expect(screen.queryByText(/su invito/)).toBeNull(); // the invite rule appears only when an address is refused
   });
 
-  it("promises the way back when it knows where the user was", () => {
+  it("says why the user is here and promises the way back when it knows where they were", () => {
     renderForm({ returnTo: "/plans/abc" });
-    expect(screen.getByText(/Poi torni dove eri\./)).toBeTruthy();
+    expect(screen.getByText(/Accedi per tornare dove eri/).textContent).toContain(LINK_VALIDITY);
   });
 
   it("hides Google when the server has no client", () => {
@@ -76,7 +76,7 @@ describe("LoginForm", () => {
       errorCallbackURL: "/login",
     });
     expect(screen.getByText("Someone@Example.com")).toBeTruthy();
-    expect(screen.getByText(/Abbiamo mandato un link a/).textContent).toContain(LINK_VALIDITY);
+    expect(screen.getByText(/Abbiamo inviato un link a/).textContent).toContain(LINK_VALIDITY);
     expect(screen.getByText(/Guarda nella posta indesiderata/)).toBeTruthy();
     await waitFor(() => expect(document.activeElement?.contains(heading)).toBe(true));
   });
@@ -91,16 +91,19 @@ describe("LoginForm", () => {
     expect(magicLink.mock.calls[0]?.[0]).toMatchObject({ callbackURL: "/" });
   });
 
-  it("'Mandane un altro' resends to the same address and says so; 'Cambia indirizzo' keeps it in the field", async () => {
+  it("'Inviane un altro' resends to the same address, says so and refocuses the news; 'Cambia indirizzo' keeps the address", async () => {
     magicLink.mockResolvedValue(sent);
     renderForm();
     typeAndSubmit("a@example.com");
     await screen.findByRole("heading", { name: "Controlla la posta" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Mandane un altro" }));
+    (document.activeElement as HTMLElement | null)?.blur();
+    fireEvent.click(screen.getByRole("button", { name: "Inviane un altro" }));
     await waitFor(() => expect(magicLink).toHaveBeenCalledTimes(2));
     expect(magicLink.mock.calls[1]?.[0]).toMatchObject({ email: "a@example.com" });
-    await screen.findByText(/Abbiamo mandato un altro link a/);
+    const news = await screen.findByText(/Abbiamo inviato un altro link a/);
+    expect(news.getAttribute("aria-live")).toBe("polite");
+    await waitFor(() => expect(document.activeElement?.contains(news)).toBe(true));
 
     fireEvent.click(screen.getByRole("button", { name: "Cambia indirizzo" }));
     expect(screen.getByLabelText(LABEL)).toHaveProperty("value", "a@example.com");
@@ -113,7 +116,7 @@ describe("LoginForm", () => {
     typeAndSubmit("a@example.com");
     await screen.findByRole("heading", { name: "Controlla la posta" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Mandane un altro" }));
+    fireEvent.click(screen.getByRole("button", { name: "Inviane un altro" }));
 
     await waitFor(() => expect(screen.getByRole("alert").textContent).toContain(TOO_MANY_REQUESTS_ERROR));
     expect(screen.getByRole("heading", { name: "Controlla la posta" })).toBeTruthy();
@@ -127,7 +130,9 @@ describe("LoginForm", () => {
 
     const input = screen.getByLabelText(LABEL);
     await waitFor(() => expect(input.getAttribute("aria-invalid")).toBe("true"));
-    expect(screen.getByText(new RegExp(INVITE_ONLY_ERROR)).textContent).toContain(INVITE_ONLY_HELP);
+    const error = screen.getByText(INVITE_ONLY_ERROR).closest("p")!;
+    expect(error.textContent).toContain(INVITE_ONLY_HELP);
+    expect(input.getAttribute("aria-describedby")).toContain(error.id);
     expect(screen.queryByRole("alert")).toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(input));
 
@@ -161,7 +166,8 @@ describe("LoginForm", () => {
     renderForm({ errorCode: "INVALID_TOKEN" });
     const alert = screen.getByRole("alert");
     expect(alert.textContent).toContain(SIGN_IN_ERRORS.INVALID_TOKEN!.title);
-    expect(alert.textContent).toContain(LINK_VALIDITY);
+    expect(alert.textContent).toContain("Chiedine un altro qui sotto.");
+    expect(alert.textContent).not.toContain(LINK_VALIDITY); // the lede already says it
     expect(signInError("something_else")).toEqual({ title: GENERIC_SIGN_IN_ERROR });
     expect(signInError(null)).toBeNull();
   });
@@ -176,11 +182,19 @@ describe("LoginForm", () => {
     expect(screen.getByRole("button", { name: "Apro Google…" })).toHaveProperty("disabled", true);
   });
 
-  it("without accounts on the server the form is disabled and says why", () => {
+  it("without accounts on the server there is the lede and the reason, no form", () => {
     renderForm({ configured: false });
     expect(screen.getByText(UNCONFIGURED_MESSAGE)).toBeTruthy();
     expect(screen.queryByText(/env\.example/)).toBeNull();
-    expect(screen.getByLabelText(LABEL)).toHaveProperty("disabled", true);
-    expect(screen.getByRole("button", { name: "Inviami il link" })).toHaveProperty("disabled", true);
+    expect(screen.queryByLabelText(LABEL)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Inviami il link" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Continua con Google" })).toBeNull();
+  });
+
+  it("drops a shown ?error= from the address bar and keeps returnTo", () => {
+    window.history.replaceState(null, "", "/login?returnTo=%2Fplans%2Fabc&error=INVALID_TOKEN");
+    renderForm({ errorCode: "INVALID_TOKEN", returnTo: "/plans/abc" });
+    expect(window.location.search).toBe("?returnTo=%2Fplans%2Fabc");
+    window.history.replaceState(null, "", "/");
   });
 });

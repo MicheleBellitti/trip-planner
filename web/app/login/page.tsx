@@ -64,22 +64,32 @@ async function Gate({ searchParams }: { searchParams: SearchParams }) {
   );
 }
 
-/** The lede, the field and the button in their final shape while the request-time part arrives. */
+/** The lede, the field and the button in their final shape and rhythm while the request-time part
+ * arrives: each text line takes its real line box (text-small 20 px, text-meta 19 px), so the field
+ * and the button do not jump when the form replaces the placeholder. */
 function FormPlaceholder() {
   return (
     <div aria-busy="true" className="grid gap-5">
       <VisuallyHidden>Carico il modulo…</VisuallyHidden>
-      <div className="grid gap-1.5">
-        <Skeleton className="w-full text-small" />
-        <Skeleton className="w-3/4 text-small" />
+      <div className="grid">
+        <div className="flex h-5 items-center">
+          <Skeleton className="w-full text-small" />
+        </div>
+        <div className="flex h-5 items-center">
+          <Skeleton className="w-3/4 text-small" />
+        </div>
       </div>
       <div className="grid gap-4">
         <div className="grid gap-1.5">
-          <Skeleton className="w-28 text-meta" />
-          <Skeleton className="w-52 text-meta" />
-          <Skeleton className="h-11 w-full rounded-sm" />
+          <div className="flex h-[19px] items-center">
+            <Skeleton className="w-28 text-meta" />
+          </div>
+          <div className="-mt-1 flex h-[19px] items-center">
+            <Skeleton className="w-60 text-meta" />
+          </div>
+          <Skeleton shape="block" className="h-11 w-full" />
         </div>
-        <Skeleton className="h-11 w-full rounded-full sm:h-10 sm:w-40" />
+        <Skeleton shape="round" className="h-11 w-full sm:h-10 sm:w-[9.25rem]" />
       </div>
     </div>
   );
