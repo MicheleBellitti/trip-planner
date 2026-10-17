@@ -7,6 +7,7 @@ import { AGENT_LABELS, AGENTS } from "@/lib/plan-events/labels";
 import { SKIP_LANDING_BOOTSTRAP } from "@/lib/returning";
 import { ROUTES } from "@/lib/routes";
 
+import { HowItWorks } from "./how-it-works";
 import { LandingHero } from "./landing-hero";
 
 vi.mock("@/components/ui/theme-toggle", () => ({ ThemeToggle: () => <button type="button">Tema</button> }));
@@ -60,5 +61,39 @@ describe("the hero", () => {
   it("draws the line map as one image with a description", () => {
     render(<LandingHero />);
     expect(screen.getAllByRole("img", { name: "Le cinque linee degli agenti convergono su Lisbona" }).length).toBeGreaterThan(0);
+  });
+});
+
+describe("how it works", () => {
+  it("is three stations on one line, reachable from the header", () => {
+    const { container } = render(<HowItWorks />);
+    expect(container.querySelector("section#come-funziona")).toBeTruthy();
+    expect(screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual([
+      "Descrivi il viaggio",
+      "Guarda gli agenti",
+      "Prenota entro la data",
+    ]);
+  });
+
+  it("gives each sample one sentence for screen readers and keeps the drawing out of the way", () => {
+    const { container } = render(<HowItWorks />);
+    const figures = [...container.querySelectorAll("figure")];
+    expect(figures).toHaveLength(3);
+    for (const figure of figures) {
+      expect(figure.querySelector("figcaption")?.textContent?.length).toBeGreaterThan(40);
+      const drawing = figure.querySelector("[aria-hidden='true'][inert]");
+      expect(drawing).toBeTruthy();
+      expect(drawing?.querySelector("a, button, input")).toBeNull();
+    }
+  });
+
+  it("shows a booking's two dates, the due one in amber words, and a button that is not a link", () => {
+    const { container } = render(<HowItWorks />);
+    const booking = container.querySelectorAll("figure")[2]!;
+    expect(booking.textContent).toContain("Prenota entro");
+    expect(booking.textContent).toContain("Quando");
+    expect(booking.textContent).toContain("In scadenza");
+    expect(booking.textContent).toContain("Prenota su Expedia");
+    expect(booking.querySelector("a")).toBeNull();
   });
 });
