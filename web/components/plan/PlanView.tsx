@@ -172,6 +172,7 @@ export function PlanView({ detail, trip = null, timeline, arrival = false, loadT
     booking,
     deadline: deadlines[index] ?? ({ kind: "unknown" } as const),
     check: checks[index] ?? null,
+    startsAtHome: bookingStartsAtHome(plan, booking),
   }));
   const byUrgency = sortByDeadline(items);
   const zoneName = tripZoneName(plan, HOME_TIMEZONE);
@@ -228,6 +229,8 @@ export function PlanView({ detail, trip = null, timeline, arrival = false, loadT
                 headingId={ids.toBook}
                 anchor={bookingAnchor}
                 items={items}
+                timeZone={plan.timezone}
+                tripLabel={tripLabel}
               />
             ) : null}
           </PlanSummary>
@@ -267,7 +270,7 @@ export function PlanView({ detail, trip = null, timeline, arrival = false, loadT
         </SectionHeading>
         {plan.bookings.length > 0 ? (
           <ol className="m-0 mt-2 list-none p-0">
-            {byUrgency.map(({ booking, index, check, deadline }) => (
+            {byUrgency.map(({ booking, index, check, deadline, startsAtHome }) => (
               <BookingRow
                 key={`${booking.title}-${index}`}
                 id={bookingAnchor(index)}
@@ -275,7 +278,7 @@ export function PlanView({ detail, trip = null, timeline, arrival = false, loadT
                 check={check ?? null}
                 deadline={deadline}
                 timeZone={plan.timezone}
-                startsAtHome={bookingStartsAtHome(plan, booking)}
+                startsAtHome={startsAtHome}
                 tripLabel={tripLabel}
               />
             ))}

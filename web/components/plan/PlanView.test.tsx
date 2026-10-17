@@ -221,14 +221,19 @@ describe("PlanView, what to do first", () => {
     const rows = within(strip).getAllByRole("link");
     // book_by 26 feb, 14 mar, 9 apr; dueAt derived for the other two: 12 apr (Oceanário), and
     // "Aerobus" has none ("da prenotare subito" or a date, whichever the Trip says).
-    expect(rows.map((row) => row.querySelector(".flex-1")?.textContent)).toEqual([
+    const titles = [
       "Volo TAP Milano Malpensa ⇄ Lisbona",
       "Hotel Lisboa Plaza, camera familiare (4 notti)",
       "Ingressi Palácio da Pena a orario fisso",
       "Biglietti Oceanário de Lisboa",
       "Aerobus aeroporto → centro",
-    ]);
-    expect(rows[0]?.textContent).toContain("entro ven 26 feb");
+    ];
+    expect(rows.map((row) => titles.find((title) => row.textContent?.startsWith(title)))).toEqual(titles);
+    // Each one previews both dates, labelled, as everywhere a booking appears.
+    for (const row of rows) {
+      expect(within(row).getAllByRole("term").map((term) => term.textContent)).toEqual(["Prenota entro", "Quando"]);
+    }
+    expect(deadlineOf(rows[0] as HTMLElement).textContent).toBe("ven 26 feb");
     expect(rows[0]?.getAttribute("href")).toMatch(/^#.+-prenotazione-1$/);
     // Nothing is due soon on 12 Oct 2026: no amber, no count.
     expect(strip.textContent).not.toContain("in scadenza");
@@ -248,7 +253,8 @@ describe("PlanView, what to do first", () => {
     expect(within(strip).getByText("2 in scadenza")).toBeTruthy();
     expect(strip.textContent).toContain("Scadenza passata");
     expect(strip.textContent).toContain("In scadenza · tra un giorno");
-    expect(strip.innerHTML).not.toMatch(/amber/);
+    // Amber on those two deadlines only, drawn by their DatePair.
+    expect(strip.querySelectorAll("[data-due-soon]")).toHaveLength(2);
     // The most urgent first: the one already past.
     expect(within(strip).getAllByRole("link")[0]?.textContent).toContain("Hotel Lisboa Plaza");
   });
