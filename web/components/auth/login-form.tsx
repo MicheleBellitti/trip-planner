@@ -1,44 +1,58 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
+import { StatePanel } from "@/components/states/state-panel";
 import { Button } from "@/components/ui/button";
 import { Field, TextInput } from "@/components/ui/field";
-import { Icon } from "@/components/ui/icon";
 import { Notice } from "@/components/ui/notice";
 import { authClient } from "@/lib/auth-client";
 import { safeReturnTo } from "@/lib/return-to";
 import { ROUTES } from "@/lib/routes";
 
-export const GENERIC_SIGN_IN_ERROR = "Non è stato possibile accedere. Riprova.";
-export const INVITE_ONLY_ERROR = "Questo indirizzo non è abilitato: l'accesso è su invito.";
+/** The one sentence about the link, reused wherever it is described. */
+export const LINK_VALIDITY = "Vale cinque minuti e funziona una volta sola.";
+export const INVITE_ONLY_ERROR = "Questo indirizzo non è abilitato.";
+export const INVITE_ONLY_HELP =
+  "L'accesso è su invito: usa l'indirizzo a cui è arrivato, o chiedi a chi ti ha invitato di abilitare questo.";
+export const INVALID_EMAIL_ERROR = "Scrivi un indirizzo email completo.";
 export const TOO_MANY_REQUESTS_ERROR = "Troppi tentativi: aspetta un minuto e riprova.";
-const LINK_SPENT_ERROR = "Il link non è più valido: ne vale uno solo, per cinque minuti. Chiedine un altro.";
-
-/** What Better Auth puts in `?error=` when a magic link or a Google sign-in fails, in Italian. */
-export const SIGN_IN_ERRORS: Record<string, string> = {
-  INVALID_TOKEN: LINK_SPENT_ERROR,
-  EXPIRED_TOKEN: LINK_SPENT_ERROR,
-  new_user_signup_disabled: INVITE_ONLY_ERROR,
-  signup_disabled: INVITE_ONLY_ERROR,
-  SIGNUP_NOT_ALLOWED: INVITE_ONLY_ERROR,
-  unable_to_create_user: INVITE_ONLY_ERROR,
-  access_denied: "Accesso con Google annullato. Puoi riprovare quando vuoi.",
-};
+export const GENERIC_SIGN_IN_ERROR = "Non è stato possibile accedere. Riprova.";
 export const UNCONFIGURED_MESSAGE = "Gli account non sono configurati su questo server.";
 
-export function signInErrorMessage(code: string | null | undefined): string | null {
+export interface SignInNotice {
+  title: string;
+  body?: string;
+}
+
+const LINK_SPENT: SignInNotice = { title: "Il link non è più valido.", body: `${LINK_VALIDITY} Chiedine un altro qui sotto.` };
+const INVITE_ONLY: SignInNotice = { title: INVITE_ONLY_ERROR, body: INVITE_ONLY_HELP };
+
+/** What Better Auth puts in `?error=` when a magic link or a Google sign-in fails, in Italian. */
+export const SIGN_IN_ERRORS: Record<string, SignInNotice> = {
+  INVALID_TOKEN: LINK_SPENT,
+  EXPIRED_TOKEN: LINK_SPENT,
+  new_user_signup_disabled: INVITE_ONLY,
+  signup_disabled: INVITE_ONLY,
+  SIGNUP_NOT_ALLOWED: INVITE_ONLY,
+  unable_to_create_user: INVITE_ONLY,
+  access_denied: { title: "Accesso con Google annullato.", body: "Puoi riprovare quando vuoi, o entrare con il link via email." },
+};
+
+export function signInError(code: string | null | undefined): SignInNotice | null {
   if (!code) return null;
-  return SIGN_IN_ERRORS[code] ?? GENERIC_SIGN_IN_ERROR;
+  return SIGN_IN_ERRORS[code] ?? { title: GENERIC_SIGN_IN_ERROR };
 }
 
-function messageForClientError(error: { status?: number; code?: string } | null | undefined): string {
-  if (error?.code === "SIGNUP_NOT_ALLOWED" || error?.status === 403) return INVITE_ONLY_ERROR;
-  if (error?.status === 429) return TOO_MANY_REQUESTS_ERROR;
-  return GENERIC_SIGN_IN_ERROR;
+/** A shape check, not a validator: the server decides. It keeps the browser's own English bubble away. */
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+interface ClientError {
+  status?: number;
+  code?: string;
 }
 
-type Phase = { kind: "form"; error: string | null } | { kind: "sent"; email: string };
+type Phase = { kind: "form" } | { kind: "sent"; email: string; again: boolean };
 
 interface LoginFormProps {
   /** The page to come back to after signing in (lib/api.ts `loginUrl`); reduced to a same-origin path. */
@@ -51,22 +65,40 @@ interface LoginFormProps {
 }
 
 /**
- * Sign in: an email for the magic link, or Google. No passwords (PRODUCT.md). The copy says what
- * happens next and how long the link lasts; the "sent" state keeps the address on screen so a typo
- * is caught, with a way back to the form. Errors answer the user's own action, so they are alerts.
+ * Sign in: an email for the magic link, or Google. No passwords (PRODUCT.md). One lede says what the
+ * link is, how long it lasts and that the user goes back where they were. An address problem (shape,
+ * not invited) is a Field error on the input; everything else (an expired link, too many tries, a
+ * failure) is a Notice that answers the user's own action. The "sent" state keeps the address on
+ * screen, says where to look, and can send another link or change the address. Focus follows every
+ * transition: the input on an error, the panel when the link is sent.
  */
 export function LoginForm({ returnTo, errorCode, configured, googleEnabled }: LoginFormProps) {
-  const [phase, setPhase] = useState<Phase>({ kind: "form", error: signInErrorMessage(errorCode) });
+  const [phase, setPhase] = useState<Phase>({ kind: "form" });
   const [email, setEmail] = useState("");
+  const [fieldError, setFieldError] = useState<React.ReactNode>(null);
+  const [notice, setNotice] = useState<SignInNotice | null>(() => signInError(errorCode));
   const [busy, setBusy] = useState<"link" | "google" | null>(null);
+  // Bumped whenever focus should land on the input after the next render (an error, the way back
+  // from the sent state): an effect does it once the field is mounted and enabled again.
+  const [focusInput, setFocusInput] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const sentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (phase.kind === "sent") sentRef.current?.focus();
+  }, [phase.kind]);
+
+  useEffect(() => {
+    if (focusInput > 0) inputRef.current?.focus();
+  }, [focusInput]);
 
   const callbackURL = () => safeReturnTo(returnTo, window.location.origin);
 
-  async function sendLink(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const address = email.trim();
-    if (!address) return;
+  /** Sends the link to `address`; `again` marks a resend from the sent state. */
+  async function send(address: string, again: boolean) {
     setBusy("link");
+    setNotice(null);
+    setFieldError(null);
     const { error } = await authClient.signIn.magicLink({
       email: address,
       callbackURL: callbackURL(),
@@ -74,14 +106,43 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled }: Lo
     });
     setBusy(null);
     if (error) {
-      setPhase({ kind: "form", error: messageForClientError(error) });
+      failed(error, again);
       return;
     }
-    setPhase({ kind: "sent", email: address });
+    setPhase({ kind: "sent", email: address, again });
+  }
+
+  function failed(error: ClientError, inSentState: boolean) {
+    if (error.code === "SIGNUP_NOT_ALLOWED" || error.status === 403) {
+      if (inSentState) setPhase({ kind: "form" });
+      setFieldError(
+        <>
+          {INVITE_ONLY_ERROR} {INVITE_ONLY_HELP}
+        </>,
+      );
+      setFocusInput((tick) => tick + 1);
+      return;
+    }
+    setNotice({ title: error.status === 429 ? TOO_MANY_REQUESTS_ERROR : GENERIC_SIGN_IN_ERROR });
+    if (!inSentState) setFocusInput((tick) => tick + 1);
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const address = email.trim();
+    if (!EMAIL_SHAPE.test(address)) {
+      setNotice(null);
+      setFieldError(INVALID_EMAIL_ERROR);
+      setFocusInput((tick) => tick + 1);
+      return;
+    }
+    void send(address, false);
   }
 
   async function withGoogle() {
     setBusy("google");
+    setNotice(null);
+    setFieldError(null);
     const { error } = await authClient.signIn.social({
       provider: "google",
       callbackURL: callbackURL(),
@@ -89,63 +150,111 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled }: Lo
     });
     if (error) {
       setBusy(null);
-      setPhase({ kind: "form", error: messageForClientError(error) });
+      failed(error, false);
     }
     // On success the browser is leaving for Google: the button stays busy until then.
   }
 
   if (phase.kind === "sent") {
     return (
-      <section aria-labelledby="login-sent" className="rounded-md border border-rule bg-surface px-4 py-3.5 lg:px-5 lg:py-4">
-        <h2 id="login-sent" className="flex items-center gap-2 font-cond text-heading font-semibold text-ink">
-          <Icon name="check-circle" size={20} />
-          Controlla la posta
-        </h2>
-        <p className="mt-2 max-w-prose text-small text-ink">
-          Abbiamo mandato un link a <strong className="font-semibold">{phase.email}</strong>. Vale cinque minuti e
-          funziona una volta sola: aprilo da questo dispositivo.
-        </p>
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Button
-            variant="quiet"
-            size="sm"
-            icon="arrow-left"
-            onClick={() => setPhase({ kind: "form", error: null })}
-          >
-            Usa un altro indirizzo
-          </Button>
-        </div>
-      </section>
+      // Focusable, so the swap from the form lands a keyboard or screen-reader user on the news.
+      <div ref={sentRef} tabIndex={-1} className="rounded-md outline-none">
+        <StatePanel
+          icon="check-circle"
+          title="Controlla la posta"
+          headingId="login-sent"
+          footer={notice ? <Notice tone="error" role="alert" title={notice.title}>{notice.body}</Notice> : null}
+          actions={
+            <>
+              <Button
+                variant="quiet"
+                size="sm"
+                icon="arrows-clockwise"
+                busy={busy === "link"}
+                onClick={() => void send(phase.email, true)}
+                className="min-h-11 sm:min-h-8"
+              >
+                {busy === "link" ? "Invio il link…" : "Mandane un altro"}
+              </Button>
+              <Button
+                variant="quiet"
+                size="sm"
+                icon="arrow-left"
+                disabled={busy !== null}
+                onClick={() => {
+                  setNotice(null);
+                  setPhase({ kind: "form" });
+                  setFocusInput((tick) => tick + 1);
+                }}
+                className="min-h-11 sm:min-h-8"
+              >
+                Cambia indirizzo
+              </Button>
+            </>
+          }
+        >
+          <div className="min-w-0 lg:col-span-3">
+            <dt className="sr-only">Cosa è successo</dt>
+            <dd className="m-0 max-w-prose text-small text-ink">
+              {phase.again ? "Abbiamo mandato un altro link a " : "Abbiamo mandato un link a "}
+              <strong className="font-semibold">{phase.email}</strong>. {LINK_VALIDITY}
+            </dd>
+            <dt className="sr-only">Cosa puoi fare</dt>
+            <dd className="m-0 mt-1.5 max-w-prose text-small text-ink-2">
+              Non lo vedi? Guarda nella posta indesiderata, o chiedine un altro.
+            </dd>
+          </div>
+        </StatePanel>
+      </div>
     );
   }
 
   return (
     <div className="grid gap-5">
+      <p className="max-w-prose text-small text-ink-2">
+        Ti mandiamo un link per entrare, senza password. {LINK_VALIDITY}
+        {returnTo ? " Poi torni dove eri." : null}
+      </p>
       {!configured ? (
         <Notice tone="warning" title={UNCONFIGURED_MESSAGE}>
-          Chi gestisce questo server deve impostare il database e la posta degli account (web/.env.example).
+          Chi gestisce questo server deve ancora configurare gli account.
         </Notice>
       ) : null}
-      {phase.error ? (
-        <Notice tone="error" role="alert" title={phase.error} />
+      {notice ? (
+        <Notice tone="error" role="alert" title={notice.title}>
+          {notice.body}
+        </Notice>
       ) : null}
-      <form onSubmit={sendLink} noValidate={false} className="grid gap-4">
-        <Field label="Email" hint="Ti mandiamo un link per entrare, senza password.">
+      <form onSubmit={submit} noValidate className="grid gap-4">
+        <Field label="Indirizzo email" hint="Quello a cui è arrivato l'invito." error={fieldError}>
           {(control) => (
             <TextInput
               {...control}
+              ref={inputRef}
               type="email"
               name="email"
               autoComplete="email"
               inputMode="email"
               spellCheck={false}
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              onChange={(event) => {
+                setEmail(event.target.value);
+                if (fieldError) setFieldError(null);
+              }}
               disabled={!configured || busy !== null}
             />
           )}
         </Field>
-        <Button type="submit" variant="primary" icon="arrow-right" busy={busy === "link"} disabled={!configured || busy !== null}>
+        <Button
+          type="submit"
+          variant="primary"
+          icon="arrow-right"
+          busy={busy === "link"}
+          disabled={!configured || busy !== null}
+          // 44 px on the phone, like the field above it; 40 px and its own width from 640 px (DESIGN.md,
+          // Buttons; the grid would otherwise stretch it).
+          className="min-h-11 w-full sm:min-h-10 sm:w-auto sm:justify-self-start"
+        >
           {busy === "link" ? "Invio il link…" : "Inviami il link"}
         </Button>
       </form>
@@ -156,12 +265,17 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled }: Lo
             oppure
             <span className="h-px flex-1 bg-rule" />
           </p>
-          <Button variant="secondary" onClick={withGoogle} busy={busy === "google"} disabled={!configured || busy !== null}>
-            {busy === "google" ? "Vado su Google…" : "Continua con Google"}
+          <Button
+            variant="secondary"
+            onClick={withGoogle}
+            busy={busy === "google"}
+            disabled={!configured || busy !== null}
+            className="min-h-11 w-full sm:min-h-10 sm:w-auto sm:justify-self-start"
+          >
+            {busy === "google" ? "Apro Google…" : "Continua con Google"}
           </Button>
         </>
       ) : null}
-      <p className="text-meta text-ink-2">L&apos;accesso è su invito: entra solo chi è stato abilitato.</p>
     </div>
   );
 }

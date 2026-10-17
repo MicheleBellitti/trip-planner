@@ -23,10 +23,7 @@ export default function LoginPage({ searchParams }: { searchParams: SearchParams
       <main className="mx-auto max-w-page px-4 pt-8 pb-16 lg:px-7 lg:pt-14">
         <div className="mx-auto max-w-[26rem]">
           <h1 className="font-cond text-display font-semibold lg:text-display-lg">Accedi</h1>
-          <p className="mt-1.5 max-w-prose text-small text-ink-2">
-            I tuoi piani ti aspettano: voli, alloggio, attività e spostamenti, con le date entro cui prenotare.
-          </p>
-          <div className="mt-7">
+          <div className="mt-3">
             <Suspense fallback={<FormPlaceholder />}>
               <Gate searchParams={searchParams} />
             </Suspense>
@@ -67,15 +64,23 @@ async function Gate({ searchParams }: { searchParams: SearchParams }) {
   );
 }
 
+/** The lede, the field and the button in their final shape while the request-time part arrives. */
 function FormPlaceholder() {
   return (
-    <div aria-busy="true" className="grid gap-4">
+    <div aria-busy="true" className="grid gap-5">
       <VisuallyHidden>Carico il modulo…</VisuallyHidden>
-      <div className="grid gap-2">
-        <Skeleton className="w-16" />
-        <Skeleton className="h-11 w-full" />
+      <div className="grid gap-1.5">
+        <Skeleton className="w-full text-small" />
+        <Skeleton className="w-3/4 text-small" />
       </div>
-      <Skeleton className="h-10 w-40 rounded-full" />
+      <div className="grid gap-4">
+        <div className="grid gap-1.5">
+          <Skeleton className="w-28 text-meta" />
+          <Skeleton className="w-52 text-meta" />
+          <Skeleton className="h-11 w-full rounded-sm" />
+        </div>
+        <Skeleton className="h-11 w-full rounded-full sm:h-10 sm:w-40" />
+      </div>
     </div>
   );
 }
