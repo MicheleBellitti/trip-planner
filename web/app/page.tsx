@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { LandingHero } from "@/components/landing/landing-hero";
 import { PublicHeader } from "@/components/landing/public-header";
 import { SkipLandingScript } from "@/components/landing/skip-landing-script";
 import { BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand";
@@ -16,7 +17,9 @@ export default function LandingPage() {
     <>
       <SkipLandingScript />
       <PublicHeader />
-      <main />
+      <main>
+        <LandingHero />
+      </main>
     </>
   );
 }

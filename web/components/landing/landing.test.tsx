@@ -2,8 +2,12 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import LandingPage from "@/app/page";
+import { BRAND_DESCRIPTION, BRAND_TAGLINE } from "@/lib/brand";
+import { AGENT_LABELS, AGENTS } from "@/lib/plan-events/labels";
 import { SKIP_LANDING_BOOTSTRAP } from "@/lib/returning";
 import { ROUTES } from "@/lib/routes";
+
+import { LandingHero } from "./landing-hero";
 
 vi.mock("@/components/ui/theme-toggle", () => ({ ThemeToggle: () => <button type="button">Tema</button> }));
 
@@ -23,5 +27,38 @@ describe("the landing", () => {
     expect(within(header).getByRole("link", { name: "Atlas" }).getAttribute("href")).toBe(ROUTES.home);
     expect(within(header).getByRole("link", { name: "Come funziona" }).getAttribute("href")).toBe("#come-funziona");
     expect(within(header).getByRole("link", { name: "Accedi" }).getAttribute("href")).toBe(ROUTES.plans);
+  });
+});
+
+describe("the hero", () => {
+  it("greets with the tagline and the lede", () => {
+    render(<LandingHero />);
+    expect(screen.getByRole("heading", { level: 1, name: BRAND_TAGLINE })).toBeTruthy();
+    expect(screen.getByText(BRAND_DESCRIPTION)).toBeTruthy();
+  });
+
+  it("until the demo exists, points to how it works and never to /demo", () => {
+    const { container } = render(<LandingHero demoReady={false} />);
+    expect(screen.getByRole("link", { name: "Scopri come funziona" }).getAttribute("href")).toBe("#come-funziona");
+    expect(container.querySelector(`a[href="${ROUTES.demo}"]`)).toBeNull();
+  });
+
+  it("with the demo, its one action is the demo, and no Accedi", () => {
+    render(<LandingHero demoReady />);
+    expect(screen.getByRole("link", { name: "Guarda una corsa" }).getAttribute("href")).toBe(ROUTES.demo);
+    expect(screen.queryByRole("link", { name: "Accedi" })).toBeNull();
+  });
+
+  it("names the five agents in the run's order, each with its job", () => {
+    render(<LandingHero />);
+    const legend = screen.getByRole("list", { name: "Legenda" });
+    const items = within(legend).getAllByRole("listitem").map((item) => item.textContent ?? "");
+    expect(items).toHaveLength(AGENTS.length);
+    AGENTS.forEach((agent, index) => expect(items[index]).toContain(AGENT_LABELS[agent]));
+  });
+
+  it("draws the line map as one image with a description", () => {
+    render(<LandingHero />);
+    expect(screen.getAllByRole("img", { name: "Le cinque linee degli agenti convergono su Lisbona" }).length).toBeGreaterThan(0);
   });
 });
