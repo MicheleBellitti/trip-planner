@@ -222,7 +222,7 @@ Where things live:
 | Tab icon, home-screen icon, link preview | `web/app/icon.svg`, `web/app/apple-icon.tsx`, `web/app/opengraph-image.tsx` (font: `web/assets/fonts/`, OFL) |
 | Links between pages | `web/lib/routes.ts` (`ROUTES`, and `DEMO_READY` until step 3 builds /demo), never a hand-written path |
 | The landing (`/`, public) | `web/app/page.tsx`, `web/components/landing/` |
-| Returning visitors skip the landing | `web/lib/returning.ts` (the mark, the decision, the inline script) |
+| Returning visitors skip the landing | `web/lib/returning.ts` (the mark), `web/lib/skip-landing.ts` (the decision, the inline script) |
 | The app header | `web/components/nav/app-header.tsx` |
 | Primitives | `web/components/ui/` (inventory under Components) |
 | Every primitive in every state, both themes | `/dev/ui` (development only, `notFound()` in production) |
@@ -901,8 +901,9 @@ Its only client JavaScript is the theme toggle and `next/link`. Components live 
   localStorage) after any authenticated 2xx and clears the mark on a 401. `SkipLandingScript`, the
   first element of the page, runs `location.replace("/plans")` before paint when the mark is set
   and the visitor did not come from a page of this site (a bookmark, a typed URL, the login coming
-  back). Blocked storage or an unreadable referrer fail safe: the landing shows. Client-side
-  navigation never runs it.
+  back). A link to a part of the page (`/#come-funziona`) always shows the landing: that is how a
+  signed-in browser still reaches it, and what to share. Blocked storage or an unreadable referrer
+  fail safe: the landing shows. Client-side navigation never runs it.
 - **Public header** (`PublicHeader`): the lockup to `/`, "Come funziona" (a jump down the page,
   hidden below 480 px), the bare theme toggle, "Accedi" to `/plans` (which sends a signed-out
   visitor to TripTracker's login and back).

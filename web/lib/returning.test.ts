@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { markSignedIn, markSignedOut, SIGNED_IN_KEY } from "./returning";
 import { SKIP_LANDING_BOOTSTRAP, SKIP_LANDING_DECISION } from "./skip-landing";
 
-type Decide = (storage: Pick<Storage, "getItem">, referrer: string, origin: string) => string | null;
+type Decide = (storage: Pick<Storage, "getItem">, referrer: string, origin: string, hash?: string) => string | null;
 // The same source the inline script runs.
 const decide = new Function(`return (${SKIP_LANDING_DECISION})`)() as Decide;
 const ORIGIN = "https://atlas.bellittim.com";
@@ -33,6 +33,15 @@ describe("the landing skip", () => {
       },
     };
     expect(decide(blocked, "", ORIGIN)).toBeNull();
+  });
+
+  it("shows the landing to anyone who links to a part of it, so a signed-in browser can still reach it", () => {
+    expect(decide(marked, "", ORIGIN, "#come-funziona")).toBeNull();
+    expect(decide(marked, "", ORIGIN, "")).toBe("/plans");
+  });
+
+  it("reads the fragment in the inline script", () => {
+    expect(SKIP_LANDING_BOOTSTRAP).toContain("location.hash");
   });
 
   it("treats an unreadable referrer as outside", () => {
