@@ -109,7 +109,7 @@ export function HowItWorks() {
 }
 
 /** One station: its ring on the line, its title and sentence, and the sample as a figure. From
- * 1080 px the three share their rows (subgrid), so the samples start on one line. The "Esempio" tab
+ * 1080 px the three share their rows (subgrid), so the samples start and end on one line. The "Esempio" tab
  * on the frame, like a map's inset label, says on screen what the figcaption says to a screen
  * reader: this is an illustration, nothing in it is live. */
 function Stop({ title, text, caption, children }: { title: string; text: string; caption: string; children: ReactNode }) {
@@ -121,9 +121,9 @@ function Stop({ title, text, caption, children }: { title: string; text: string;
       />
       <h3 className="font-cond text-heading font-semibold">{title}</h3>
       <p className="mt-1.5 max-w-[32em] text-small text-ink-2">{text}</p>
-      <figure className="m-0 mt-4.5">
+      <figure className="m-0 mt-4.5 lg:flex lg:flex-col">
         <VisuallyHidden as="figcaption">{caption}</VisuallyHidden>
-        <div aria-hidden="true" inert className="relative rounded-md border border-rule bg-surface px-4 pt-4 pb-3.5">
+        <div aria-hidden="true" inert className="relative rounded-md border border-rule bg-surface px-4 pt-4 pb-3.5 lg:flex-1">
           <span className="absolute -top-2.5 left-3 rounded-sm border border-rule bg-surface px-1.5 text-micro leading-4 text-ink-2">
             Esempio
           </span>

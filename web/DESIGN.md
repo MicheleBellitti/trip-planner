@@ -912,9 +912,12 @@ Its only client JavaScript is the theme toggle and `next/link`. Components live 
   the five lines in run order with their jobs; on the phone the line map comes before it.
 - **Line map** (`LineMap`): horizontal from 768 px, vertical below (the lines converge at the
   bottom, like the phone's lanes). Each line carries its name at its head (`AGENT_LABELS`,
-  condensed 600, like a transit diagram), so no line is told apart by its colour alone. The phone's
-  map is short (viewBox 360×274) so the destination stamps inside the first screen. It is the
-  landing's one authored moment (Motion table), drawn only behind `motion-safe:`.
+  condensed 600, like a transit diagram), so no line is told apart by its colour alone. Like a
+  transit hub, each line enters the destination from its own direction and none is drawn over
+  another (`line-geometry.test.ts` checks every drawing of the lines). The phone's map is short
+  (viewBox 360×310) so the destination stamps inside the first screen; between 768 and 1080 px,
+  where the hero is one column, the map is capped at 40rem. It is the landing's one authored
+  moment (Motion table), drawn only behind `motion-safe:`.
 - **Come funziona** (`HowItWorks`): three stations on one ink line, vertical on the phone and
   horizontal from 1080 px, each holding a real component with sample data (the request summary, a
   lane with its live plate, a booking with `DatePair` and a price with its source). The samples are
@@ -926,7 +929,8 @@ Its only client JavaScript is the theme toggle and `next/link`. Components live 
   so the amber appears there doing its one job. From 1080 px the three stations share their rows
   (subgrid), so the samples start on one line.
 - **Closing** (`LandingClose`): the five lines entering the destination (`ConvergingLines`, the link
-  preview's drawing), then, with the demo, "Guarda una corsa intera, senza account.", "Guarda una
+  preview's drawing, paths in `lib/brand-mark.ts`; below 768 px it shows only the last stretch, so
+  the lines keep their weight), then, with the demo, "Guarda una corsa intera, senza account.", "Guarda una
   corsa", "Accedi" and "Accesso su invito."; until then, "Atlas è su invito." and "Accedi".
 - **Footer**: the lockup and one honest line ("Prezzi e disponibilità si confermano sempre sul sito
   del fornitore.").

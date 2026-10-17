@@ -22,6 +22,34 @@ const PLATE = "opacity-0 motion-safe:animate-plate";
 
 const at = (delay: number): CSSProperties => ({ animationDelay: `${delay}s` });
 
+/** Each line's path and where the lines meet: `wide` from 768 px (560 × 420), `tall` below
+ * (360 × 310). Like a transit diagram's hub, each line enters the destination from its own
+ * direction, so none is drawn over another (line-geometry.test.ts). */
+export const LINE_MAP = {
+  wide: {
+    destination: { cx: 430, cy: 230 },
+    paths: {
+      coordinator: "M20 230 H430",
+      flights: "M20 70 H430 V230",
+      lodging: "M20 150 H350 L430 230",
+      activities: "M20 310 H350 L430 230",
+      transport: "M130 390 H430 V230",
+    },
+  },
+  tall: {
+    destination: { cx: 180, cy: 230 },
+    paths: {
+      coordinator: "M180 30 V230",
+      flights: "M32 30 V230 H180",
+      lodging: "M106 30 V156 L180 230",
+      activities: "M254 30 V156 L180 230",
+      transport: "M328 30 V230 H180",
+    },
+  },
+} as const;
+const WIDE = LINE_MAP.wide.paths;
+const TALL = LINE_MAP.tall.paths;
+
 /**
  * The landing's line map (DESIGN.md, Landing): the five agent lines draw in, named at their heads,
  * their stations stamp on, the live tool's plate rises and retires, and the lines converge on the
@@ -39,11 +67,11 @@ export function LineMap() {
         className="hidden h-auto w-full overflow-visible md:block"
       >
         <g strokeLinecap="round" strokeLinejoin="round" strokeWidth={6}>
-          <path d="M20 230 H430" strokeWidth={8} className={cx(LINE, "stroke-line-coordinator")} style={at(0)} />
-          <path d="M20 70 H250 L410 230" className={cx(LINE, "stroke-line-flights")} style={at(0.15)} />
-          <path d="M20 150 H330 L410 230" className={cx(LINE, "stroke-line-lodging")} style={at(0.3)} />
-          <path d="M20 310 H330 L410 230" className={cx(LINE, "stroke-line-activities")} style={at(0.45)} />
-          <path d="M130 390 H250 L410 230" className={cx(LINE, "stroke-line-transport")} style={at(1)} />
+          <path d={WIDE.coordinator} strokeWidth={8} className={cx(LINE, "stroke-line-coordinator")} style={at(0)} />
+          <path d={WIDE.flights} className={cx(LINE, "stroke-line-flights")} style={at(0.15)} />
+          <path d={WIDE.lodging} className={cx(LINE, "stroke-line-lodging")} style={at(0.3)} />
+          <path d={WIDE.activities} className={cx(LINE, "stroke-line-activities")} style={at(0.45)} />
+          <path d={WIDE.transport} className={cx(LINE, "stroke-line-transport")} style={at(1)} />
         </g>
         <g strokeWidth={3}>
           <circle cx={90} cy={70} r={7} className={cx(STATION, "stroke-line-flights")} style={at(0.7)} />
@@ -121,17 +149,17 @@ export function LineMap() {
       </svg>
 
       <svg
-        viewBox="0 0 360 274"
+        viewBox="0 0 360 310"
         role="img"
         aria-label={LABEL}
         className="mx-auto block h-auto w-full max-w-[26rem] overflow-visible md:hidden"
       >
         <g strokeLinecap="round" strokeLinejoin="round" strokeWidth={6}>
-          <path d="M180 30 V230" strokeWidth={8} className={cx(LINE, "stroke-line-coordinator")} style={at(0)} />
-          <path d="M32 30 V82 L180 230" className={cx(LINE, "stroke-line-flights")} style={at(0.15)} />
-          <path d="M106 30 V156 L180 230" className={cx(LINE, "stroke-line-lodging")} style={at(0.3)} />
-          <path d="M254 30 V156 L180 230" className={cx(LINE, "stroke-line-activities")} style={at(0.45)} />
-          <path d="M328 30 V82 L180 230" className={cx(LINE, "stroke-line-transport")} style={at(1)} />
+          <path d={TALL.coordinator} strokeWidth={8} className={cx(LINE, "stroke-line-coordinator")} style={at(0)} />
+          <path d={TALL.flights} className={cx(LINE, "stroke-line-flights")} style={at(0.15)} />
+          <path d={TALL.lodging} className={cx(LINE, "stroke-line-lodging")} style={at(0.3)} />
+          <path d={TALL.activities} className={cx(LINE, "stroke-line-activities")} style={at(0.45)} />
+          <path d={TALL.transport} className={cx(LINE, "stroke-line-transport")} style={at(1)} />
         </g>
         <g strokeWidth={3}>
           <circle cx={32} cy={56} r={7} className={cx(STATION, "stroke-line-flights")} style={at(0.7)} />
@@ -175,8 +203,8 @@ export function LineMap() {
           Aerobus
         </text>
         <g className={PLATE} style={at(0.8)}>
-          <rect x={214} y={226} width={140} height={28} rx={8} className="fill-line-flights" />
-          <text x={225} y={244.5} className="fill-on-line font-sans text-micro font-semibold">
+          <rect x={110} y={268} width={140} height={28} rx={8} className="fill-line-flights" />
+          <text x={180} y={286.5} textAnchor="middle" className="fill-on-line font-sans text-micro font-semibold">
             Expedia · voli · 0:14
           </text>
         </g>
@@ -185,14 +213,11 @@ export function LineMap() {
           <circle cx={180} cy={230} r={20} strokeWidth={5} className="fill-ground stroke-ink" />
           <circle cx={180} cy={230} r={6} className="fill-ink" />
         </g>
-        <text x={220} y={234} className={PLACE} style={at(2.3)}>
+        <text x={180} y={288} textAnchor="middle" className={PLACE} style={at(2.3)}>
           Lisbona
         </text>
-        <text x={220} y={252} className={TEXT} style={at(2.4)}>
-          14–18 aprile
-        </text>
-        <text x={220} y={268} className={TEXT} style={at(2.5)}>
-          piano pronto
+        <text x={180} y={306} textAnchor="middle" className={TEXT} style={at(2.4)}>
+          14–18 aprile, piano pronto
         </text>
       </svg>
     </>

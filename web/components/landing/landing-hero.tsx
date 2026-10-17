@@ -43,7 +43,7 @@ export function LandingHero({ demoReady = DEMO_READY }: { demoReady?: boolean })
             )}
           </div>
         </div>
-        <div className="lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-start">
+        <div className="md:mx-auto md:w-full md:max-w-[40rem] lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:max-w-none lg:self-start">
           <LineMap />
         </div>
         <div className="lg:col-start-1 lg:row-start-2">
