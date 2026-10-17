@@ -284,10 +284,10 @@ a 40-unit square (`web/lib/brand-mark.ts`, `MARK_GEOMETRY`):
 read CSS variables use `NIGHT`, the night values, which a test keeps equal to `globals.css`.
 
 - **Lockup** (`Wordmark`): the small mark (28 px) and "Atlas" in Semi Condensed 600. `compact` hides the
-  name below 400 px (the header on a phone); the name stays the link's accessible name.
+  name below 360 px (the header on the narrowest phones; at 393 px "Atlas" shows); the name stays the link's accessible name.
 - **Tab icon** (`app/icon.svg`): the small mark on a night tile, scaled to 32 units.
-  **`/favicon.ico`** (`app/favicon.ico/route.tsx`): the same, as a 32 px PNG prerendered at build
-  time, for the clients that ask for it by name. **Home-screen icon** (`app/apple-icon.tsx`): the
+  **`/favicon.ico`** (`app/favicon.ico/route.tsx`): `icon.svg` itself rasterised to a 32 px PNG,
+  prerendered at build time, for the clients that ask for it by name. **Home-screen icon** (`app/apple-icon.tsx`): the
   full mark on the night ground, 180 px.
 - **Link preview** (`app/opengraph-image.tsx`): mark and name, the tagline on two lines broken by
   `taglineLines()` (before its article: "Ogni viaggio ha / il suo atlante."), the five lines
@@ -702,7 +702,7 @@ or shape (there is no class merging, on purpose: see JavaScript weight below).
 | `ToolChip` | `chip.tsx` | The running tool | `plate` (line colour, "in corso da 0:14"), `inline` (ring + title + time) |
 | `AgentRoundel`, `AGENT_ICONS` | `agent.tsx` | The agent's disc with its icon | sm 26, md 30, lg 34 px |
 | `StatusBadge` | `status-badge.tsx` | A lane's state, word + glyph | in attesa, al lavoro, finito, errore, fermato, **non partita** (a dashed ring, for a lane with no event on a plan that is over: "in attesa" would promise work that will not come) |
-| `PlanStatusBadge`, `PlanStatusGlyph` | `status-badge.tsx` | A plan's status, word + glyph; the glyph alone (the home rail's node) | In corso, Pronto, Budget raggiunto, Interrotto, Non riuscito, Bloccato; md, lg; glyph also `node` |
+| `PlanStatusBadge`, `PlanStatusGlyph` | `status-badge.tsx` | A plan's status, word + glyph; the glyph alone (the home rail's node) | In corso, Pronto, Limite raggiunto ("budget" stays with the trip's money), Interrotto, Non riuscito, Bloccato; md, lg; glyph also `node` |
 | `CostMeter` | `cost-meter.tsx` | The session's API cost on a line that ends at its limit ("limite 0,60 $": the word "budget" stays with the trip's money), `role="meter"`, `aria-valuetext` in words | loading, **pending** ("Costo non ancora aggiornato": no usage reported yet, the backend reports at the end of a turn), no budget, 0, partial, at limit, over limit |
 | `Disclosure` | `disclosure.tsx` | Native `<details>` | `row` (message, `contentLang="en"`), `section` (closed section with a count); open, closed, exclusive `name` |
 | `Notice`, `InlineStatus` | `notice.tsx` | Framed note; the discreet one-line status | info, warning (the MCP-source style), error with title and action; turning, static |
@@ -716,7 +716,7 @@ or shape (there is no class merging, on purpose: see JavaScript weight below).
 | `Icon`, `IconSprite`, `ICON_PATHS` | `icon.tsx`, `icon-sprite.tsx`, `icons.ts` | Phosphor bold, from a sprite | 35 icons |
 | `Field`, `TextInput`, `TextArea`, `Select`, `NumberStepper`, `SegmentedControl` | `field.tsx` | Form controls with label above, hint, error below | default, hint, error, disabled, optional |
 | `Mark` | `mark.tsx` | "A di linee" in the theme's line tokens (Brand) | any size via `className` |
-| `Wordmark` | `wordmark.tsx` | The lockup: mark and "Atlas", optionally the link home | `compact` (name hidden below 400 px) |
+| `Wordmark` | `wordmark.tsx` | The lockup: mark and "Atlas", optionally the link home | `compact` (name hidden below 360 px) |
 | `ThemeScript` | `theme-script.tsx` | Applies the pinned theme before the first paint | |
 | `cx` | `cx.ts` | Joins class names | |
 

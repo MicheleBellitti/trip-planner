@@ -88,7 +88,7 @@ describe("Wordmark", () => {
   it("keeps the name for screen readers when compact hides it on narrow phones", () => {
     render(<Wordmark href="/somewhere" compact />);
     const name = screen.getByText("Atlas");
-    expect(name.className).toContain("max-[25rem]:sr-only");
+    expect(name.className).toContain("max-[22.5rem]:sr-only");
     expect(screen.getByRole("link", { name: "Atlas" })).toBeTruthy();
   });
 });

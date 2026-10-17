@@ -46,7 +46,8 @@ export const PLAN_STATUS_LABELS: Record<PlanStatus, string> = {
   running: "In corso",
   ready: "Pronto",
   failed: "Non riuscito",
-  budget_paused: "Budget raggiunto",
+  // "Limite", not "budget": the word "budget" stays with the trip's money (DESIGN.md, CostMeter).
+  budget_paused: "Limite raggiunto",
   blocked: "Bloccato",
   interrupted: "Interrotto",
 };
