@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { NIGHT } from "@/lib/brand-mark";
+import { MARK_GEOMETRY_SMALL, markSvg, NIGHT } from "@/lib/brand-mark";
 
 import { Mark } from "./mark";
 import { Wordmark } from "./wordmark";
@@ -47,6 +47,33 @@ describe("Mark", () => {
       activities: tokens["line-activities"],
       transport: tokens["line-transport"],
     });
+  });
+});
+
+describe("the small mark", () => {
+  const station = (root: ParentNode) => root.querySelector("circle")!;
+  const crossbar = (root: ParentNode) => root.querySelectorAll("path")[2]!;
+
+  it("draws a smaller, lighter station and thicker strokes, so it reads as an A, not a compass", () => {
+    const { container } = render(<Mark small />);
+    expect(station(container).getAttribute("r")).toBe("3.5");
+    expect(station(container).getAttribute("stroke-width")).toBe("2");
+    expect(crossbar(container).getAttribute("stroke-width")).toBe("5.6");
+  });
+
+  it("keeps the full mark above 28 px", () => {
+    const { container } = render(<Mark />);
+    expect(station(container).getAttribute("r")).toBe("4.6");
+  });
+
+  it("is the header lockup's mark (28 px)", () => {
+    const { container } = render(<Wordmark href="/somewhere" />);
+    expect(station(container).getAttribute("r")).toBe("3.5");
+  });
+
+  it("can be drawn as a standalone image (the tab icon, the favicon)", () => {
+    expect(markSvg(NIGHT, MARK_GEOMETRY_SMALL)).toContain('r="3.5"');
+    expect(markSvg()).toContain('r="4.6"');
   });
 });
 

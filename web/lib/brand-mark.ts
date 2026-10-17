@@ -14,6 +14,18 @@ export const MARK_GEOMETRY = {
   station: { cx: 20, cy: 7.5, r: 4.6, width: 2.8 },
 } as const;
 
+/** The mark at 28 px and below (the header lockup, the tab icon, the favicon): a smaller, lighter
+ * station and thicker strokes, so the "A" reads before the ring and the mark is not taken for a
+ * drafting compass. Same keys and viewBox as MARK_GEOMETRY. */
+export const MARK_GEOMETRY_SMALL = {
+  flights: { d: "M8.5 35 L20 7", width: 5.4 },
+  lodging: { d: "M31.5 35 L20 7", width: 5.4 },
+  coordinator: { d: "M12.6 25 H27.4", width: 5.6 },
+  station: { cx: 20, cy: 7.5, r: 3.5, width: 2 },
+} as const;
+
+export type MarkGeometry = typeof MARK_GEOMETRY | typeof MARK_GEOMETRY_SMALL;
+
 /** "Carta notturna", the dark default, as fixed values: for images that cannot read CSS variables
  * (the icons, the link preview). components/ui/mark.test.tsx keeps them equal to globals.css. */
 export const NIGHT = {
@@ -44,9 +56,9 @@ export const CONVERGING_PATHS = {
   transport: "M120 135 H990 V75",
 } as const;
 
-/** The mark as a standalone SVG document, for images (the apple icon, the link preview). */
-export function markSvg(colors: MarkColors = NIGHT): string {
-  const g = MARK_GEOMETRY;
+/** The mark as a standalone SVG document, for images (the apple icon, the link preview; the small
+ * geometry for the favicon). */
+export function markSvg(colors: MarkColors = NIGHT, g: MarkGeometry = MARK_GEOMETRY): string {
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${MARK_VIEWBOX}">`,
     `<path d="${g.flights.d}" fill="none" stroke="${colors.flights}" stroke-width="${g.flights.width}" stroke-linecap="round"/>`,
@@ -58,6 +70,6 @@ export function markSvg(colors: MarkColors = NIGHT): string {
 }
 
 /** markSvg() as a base64 data URI, for <img src> inside next/og images. */
-export function markDataUri(colors: MarkColors = NIGHT): string {
-  return `data:image/svg+xml;base64,${btoa(markSvg(colors))}`;
+export function markDataUri(colors: MarkColors = NIGHT, geometry: MarkGeometry = MARK_GEOMETRY): string {
+  return `data:image/svg+xml;base64,${btoa(markSvg(colors, geometry))}`;
 }

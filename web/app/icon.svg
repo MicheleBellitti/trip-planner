@@ -1,9 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <!-- The mark of Atlas for browser tabs (DESIGN.md, "Brand"). The night ground is a tile, so the
-       icon reads on light and dark tab bars; strokes are thicker than the 40-unit mark for 16 px. -->
+  <!-- The mark of Atlas for browser tabs (DESIGN.md, "Brand"), in its small geometry: a lighter
+       station and thicker strokes, so the "A" reads at 16 px. The night ground is a tile, so the
+       icon reads on light and dark tab bars. -->
   <rect width="32" height="32" rx="7" fill="#1b2230"/>
-  <path d="M8.2 27 L16 7.5" fill="none" stroke="#7696e3" stroke-width="4.2" stroke-linecap="round"/>
-  <path d="M23.8 27 L16 7.5" fill="none" stroke="#4fa77b" stroke-width="4.2" stroke-linecap="round"/>
-  <path d="M11.3 20.5 H20.7" fill="none" stroke="#a3abb6" stroke-width="3.6" stroke-linecap="round"/>
-  <circle cx="16" cy="7.6" r="3.3" fill="#1b2230" stroke="#efe8d8" stroke-width="2.2"/>
+  <path d="M8.2 27 L16 7.5" fill="none" stroke="#7696e3" stroke-width="4.5" stroke-linecap="round"/>
+  <path d="M23.8 27 L16 7.5" fill="none" stroke="#4fa77b" stroke-width="4.5" stroke-linecap="round"/>
+  <path d="M10.8 20.5 H21.2" fill="none" stroke="#a3abb6" stroke-width="4.4" stroke-linecap="round"/>
+  <circle cx="16" cy="7.6" r="2.6" fill="#1b2230" stroke="#efe8d8" stroke-width="1.6"/>
 </svg>

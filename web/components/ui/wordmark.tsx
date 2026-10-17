@@ -17,7 +17,7 @@ export function Wordmark({ href, className, compact = false }: { href?: string; 
   );
   const content = (
     <>
-      <Mark className="size-7" />
+      <Mark className="size-7" small />
       <span className={cx(compact && "max-[25rem]:sr-only")}>{BRAND_NAME}</span>
     </>
   );

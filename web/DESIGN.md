@@ -275,15 +275,20 @@ a 40-unit square (`web/lib/brand-mark.ts`, `MARK_GEOMETRY`):
 - right leg: `M31.5 35 L20 7` in `line-lodging`
 - crossbar: `M13.5 25 H26.5` in `line-coordinator`, 4.5 wide
 - the station: r 4.6 at (20, 7.5), `ground` fill and `ink` stroke at 2.8
+- **at 28 px and below** (`MARK_GEOMETRY_SMALL`, `<Mark small>`): lines 5.4, the crossbar
+  `M12.6 25 H27.4` at 5.6, the station r 3.5 with a 2 stroke. At that size the full mark's cream
+  ring dominated and the "A" read as a drafting compass; Michele chose this from a mockup on
+  2026-10-17.
 
 `<Mark>` draws it in token utilities, so it follows the nearest `data-theme`. Images that cannot
 read CSS variables use `NIGHT`, the night values, which a test keeps equal to `globals.css`.
 
-- **Lockup** (`Wordmark`): the mark (28 px) and "Atlas" in Semi Condensed 600. `compact` hides the
+- **Lockup** (`Wordmark`): the small mark (28 px) and "Atlas" in Semi Condensed 600. `compact` hides the
   name below 400 px (the header on a phone); the name stays the link's accessible name.
-- **Tab icon** (`app/icon.svg`): the mark on a night tile, with thicker strokes for 16 px.
-  **Home-screen icon** (`app/apple-icon.tsx`): the mark on the night ground, 180 px. There is no
-  `favicon.ico`.
+- **Tab icon** (`app/icon.svg`): the small mark on a night tile, scaled to 32 units.
+  **`/favicon.ico`** (`app/favicon.ico/route.tsx`): the same, as a 32 px PNG prerendered at build
+  time, for the clients that ask for it by name. **Home-screen icon** (`app/apple-icon.tsx`): the
+  full mark on the night ground, 180 px.
 - **Link preview** (`app/opengraph-image.tsx`): mark and name, the tagline, the five lines
   converging on a destination; 1200 × 630, rendered at build time with the vendored Semi
   Condensed 700.
