@@ -34,7 +34,7 @@ from app.consumer import (
     ConsumerRegistry,
     PlanNotFoundError,
 )
-from app.db import EventRecord, PlanRecord, PlanStatus
+from app.db import EventRecord, PlanRecord, PlanStatus, UserRecord
 from app.fx import FxConverter
 from app.hub import PlanHub
 from app.lockfile import load_roster
@@ -341,6 +341,34 @@ async def test_start_plan_creates_the_session_with_budget_pins_and_metadata(
         (0, "status", TITLE_PLAN_CREATED)
     ]
     assert events[0].ma_event_id == f"backend:{plan_id}:status:created"
+
+
+async def test_start_plan_stores_the_users_id_only_with_the_apps_own_accounts(
+    make_settings: Callable[..., Settings],
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    # AUTH_MODE=atlas: the provider's user id is one of this backend's users.id, so it is kept.
+    atlas_settings = planner_settings(make_settings, auth_mode="atlas")
+    async with open_planner(atlas_settings, db_session_factory) as atlas:
+        async with db_session_factory() as db:
+            db.add(UserRecord(id="usr_atlas_1", email=USER.email))
+            await db.commit()
+        plan_id = await start_plan(
+            REQUEST, CurrentUser(USER.email, "usr_atlas_1"), services=atlas.services
+        )
+        plan = await load_plan(atlas.session_factory, plan_id)
+        assert plan.user_id == "usr_atlas_1"
+        assert plan.user_email == USER.email
+
+    # AUTH_MODE=triptracker: TripTracker's user id is not a users.id and never goes there.
+    triptracker_settings = planner_settings(make_settings, auth_mode="triptracker")
+    async with open_planner(triptracker_settings, db_session_factory) as triptracker:
+        plan_id = await start_plan(
+            REQUEST, CurrentUser(USER.email, "tt_usr_9"), services=triptracker.services
+        )
+        plan = await load_plan(triptracker.session_factory, plan_id)
+        assert plan.user_id is None
+        assert plan.user_email == USER.email
 
 
 async def test_start_plan_uses_the_brief_date_in_rome(planner: Planner) -> None:

@@ -396,3 +396,26 @@ def test_log_lines_carry_the_event_as_message_for_railway() -> None:
     assert line["event"] == "session_create_failed"
     kept = add_message_key(None, "info", {"event": "x", "message": "already set"})
     assert kept["message"] == "already set"
+
+
+def test_atlas_auth_is_allowed_in_production(make_settings: MakeSettings) -> None:
+    settings = make_settings(
+        environment="production",
+        auth_mode="atlas",
+        anthropic_api_key="sk-test",
+        agent_profile="production",
+    )
+
+    assert settings.auth_mode == "atlas"
+    assert settings.local_user_email is None
+    assert settings.auth_origin == settings.frontend_origin
+    assert settings.auth_cookie_prefix == "atlas"
+    assert settings.plans_carry_user_id is True
+
+
+def test_triptracker_auth_keeps_its_provider(make_settings: MakeSettings) -> None:
+    settings = make_settings(auth_mode="triptracker")
+
+    assert settings.auth_origin == settings.triptracker_origin
+    assert settings.auth_cookie_prefix == "better-auth"
+    assert settings.plans_carry_user_id is False

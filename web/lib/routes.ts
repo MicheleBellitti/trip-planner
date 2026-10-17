@@ -7,4 +7,6 @@ export const ROUTES = {
   plans: "/",
   newPlan: "/new",
   evals: "/evals",
+  /** The app's own sign-in (Better Auth, lib/auth.ts); takes `?returnTo=<same-origin page>`. */
+  login: "/login",
 } as const;
