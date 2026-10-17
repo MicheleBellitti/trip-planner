@@ -84,7 +84,7 @@ CI (`ci-web.yml`) runs `gen:schemas --check`, lint, typecheck, test and build; `
 ## Structure
 
 ```
-app/                       routes: / (plans), /new (request form), /plans/[id] (live + finished plan),
+app/                       routes: / (landing, public), /plans (plans), /new (request form), /plans/[id] (live + finished plan),
                            /dev/ui and /dev/plan (development only), not-found.tsx
 components/ui/             the design system's primitives (Button, Chip, Timeline, DatePair, CostMeter,
                            Disclosure, Field, Notice, Sheet, Toast, ...) and the tokens' tests
