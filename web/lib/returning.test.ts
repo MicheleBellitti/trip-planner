@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { markSignedIn, markSignedOut, SIGNED_IN_KEY, SKIP_LANDING_BOOTSTRAP, SKIP_LANDING_DECISION } from "./returning";
+import { markSignedIn, markSignedOut, SIGNED_IN_KEY } from "./returning";
+import { SKIP_LANDING_BOOTSTRAP, SKIP_LANDING_DECISION } from "./skip-landing";
 
 type Decide = (storage: Pick<Storage, "getItem">, referrer: string, origin: string) => string | null;
 // The same source the inline script runs.

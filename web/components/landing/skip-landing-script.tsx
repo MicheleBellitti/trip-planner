@@ -1,4 +1,4 @@
-import { SKIP_LANDING_BOOTSTRAP } from "@/lib/returning";
+import { SKIP_LANDING_BOOTSTRAP } from "@/lib/skip-landing";
 
 /**
  * Sends a returning, signed-in visitor from "/" to the plans before the landing paints. It uses the

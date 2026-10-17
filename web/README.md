@@ -151,6 +151,11 @@ keep it there, the compact `AppHeaderBar` imports no theme toggle (the control b
 and the plan page's error boundary shows the lockup alone. `/` is 176.3 KB and `/new` 176.6 KB. The
 page is above the 190 gate: decide on the gate before tightening anything else.
 
+Re-measured on 2026-10-17 for the front door (step 2): `/` is now the public landing at 140.0 KB gzip
+(the list moved to `/plans`, 176.5 KB); `/plans/[id]` is 192.4 KB, unchanged from the branch's start
+(the eval history, PR #3, had added 0.2 KB). The landing skip's script strings live in
+`lib/skip-landing.ts`, so the API client carries only the mark's two functions.
+
 ## Accessibility
 
 Built to WCAG 2.2 AA; checked by hand in the browser on every screen at 393 and 1440 px, light and

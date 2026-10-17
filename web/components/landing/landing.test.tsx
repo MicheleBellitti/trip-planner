@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import LandingPage from "@/app/page";
 import { BRAND_DESCRIPTION, BRAND_TAGLINE } from "@/lib/brand";
 import { AGENT_LABELS, AGENTS } from "@/lib/plan-events/labels";
-import { SKIP_LANDING_BOOTSTRAP } from "@/lib/returning";
+import { SKIP_LANDING_BOOTSTRAP } from "@/lib/skip-landing";
 import { ROUTES } from "@/lib/routes";
 
 import { HowItWorks } from "./how-it-works";
