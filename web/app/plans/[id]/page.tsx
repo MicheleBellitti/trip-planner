@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Piano" };
 /**
  * "/plans/[id]": the live timeline while the plan runs, every state that is not `ready`, and the
  * finished plan with the timeline closed under it. Everything is fetched in the browser, which
- * carries the TripTracker cookie to the backend; the server only sends the skeleton.
+ * carries the session cookie to the backend; the server only sends the skeleton.
  */
 export default function PlanPage({ params }: { params: Promise<{ id: string }> }) {
   return (

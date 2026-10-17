@@ -1,16 +1,20 @@
 /**
  * Typed client of the planner backend (backend/app/routes.py), for the browser.
  *
- * - Every call sends the TripTracker session cookie (`credentials: "include"`); the backend
- *   lives on another origin (atlas.api.bellittim.com), so nothing else carries the user.
+ * - Every call sends the session cookie (`credentials: "include"`): the app's own
+ *   (`__Secure-atlas.session_token`, lib/auth.ts) or TripTracker's, by NEXT_PUBLIC_AUTH_MODE. The
+ *   backend lives on another origin (atlas.api.bellittim.com), so nothing else carries the user.
  * - Every response is validated with Zod; a 2xx body that does not match the contract is an
  *   `ApiError` of kind `invalid_response`, never data the UI trusts.
  * - Errors use the envelope `{"detail": {"code", "message", "data"}}` with an Italian `message`,
  *   shown as is. FastAPI's 422 keeps its own shape (`{"detail": [issues]}`) for the form.
  * - A 2xx marks the browser as signed in (lib/returning.ts) and a 401 clears the mark: "/" skips the
  *   landing for a returning visitor.
- * - 401 sends the browser to TripTracker's login, which brings the user back here:
- *   `<NEXT_PUBLIC_TRIPTRACKER_URL>/accedi?returnTo=<current page URL, encoded>`.
+ * - 401 sends the browser to the login, which brings the user back here (`loginUrl`): this app's
+ *   `/login?returnTo=<current page URL, encoded>` in atlas mode, TripTracker's
+ *   `<NEXT_PUBLIC_TRIPTRACKER_URL>/accedi?returnTo=...` otherwise.
+ * - 403 `admin_only`: the eval history is for the backend's ADMIN_EMAILS; `me()` says whether
+ *   the signed-in user is one (the header shows "Valutazioni" only to them).
  * - 429 `monthly_limit_reached` carries the month's spend and limit (US cents).
  * - 503 `planner_unavailable`: the planner can't start plans (nothing was spent).
  * - 404 `demo_unavailable`: `createPlan`'s development-only `demoScenario` reached a backend
@@ -33,6 +37,7 @@ import {
   EvalRunDetailSchema,
   EvalRunListResponseSchema,
   HealthResponseSchema,
+  MeSchema,
   MonthlyLimitDataSchema,
   PlanDetailSchema,
   PlanListResponseSchema,
@@ -44,6 +49,7 @@ import {
   type EvalRunDetail,
   type EvalRunListResponse,
   type HealthResponse,
+  type Me,
   type PlanDetail,
   type PlanSummary,
   type StatusResponse,
@@ -52,9 +58,10 @@ import {
 import type { PlanRequestInput } from "./schemas/generated/request";
 
 export type ApiErrorKind =
-  /** 401: not signed in to TripTracker; the browser is being sent to its login. */
+  /** 401: not signed in; the browser is being sent to the login. */
   | "unauthorized"
-  /** 403: signed in but not allowed (email_not_allowed), or a request from a wrong Origin. */
+  /** 403: signed in but not allowed (email_not_allowed), not an admin (admin_only, the eval
+   * history), or a request from a wrong Origin. */
   | "forbidden"
   /** 404: the plan does not exist or is another user's. */
   | "not_found"
@@ -68,7 +75,7 @@ export type ApiErrorKind =
   | "agents_unavailable"
   /** 503 planner_unavailable: no API key, lockfile or trip.json; nothing was spent. */
   | "planner_unavailable"
-  /** 503 auth_unavailable: TripTracker could not be asked who the user is. */
+  /** 503 auth_unavailable: the backend could not check who the user is. */
   | "auth_unavailable"
   /** The request never got an answer: offline, DNS, CORS, the backend is down. */
   | "network"
@@ -81,7 +88,7 @@ export type ApiErrorKind =
 
 /** Italian copy for errors the backend did not describe itself (no envelope, network, ...). */
 export const API_ERROR_MESSAGES: Record<ApiErrorKind, string> = {
-  unauthorized: "Accedi a TripTracker per usare il planner.",
+  unauthorized: "Accedi per usare il planner.",
   forbidden: "Questo account non è abilitato al planner.",
   not_found: "Questo piano non c'è.",
   conflict: "Il piano non è in uno stato che lo permette.",
@@ -90,7 +97,7 @@ export const API_ERROR_MESSAGES: Record<ApiErrorKind, string> = {
   agents_unavailable: "Gli agenti non rispondono: il piano non è partito. Riprova tra qualche minuto.",
   planner_unavailable:
     "Il planner non è pronto in questo momento: nessun costo è stato addebitato. Riprova più tardi.",
-  auth_unavailable: "Non riesco a verificare l'accesso con TripTracker. Riprova tra poco.",
+  auth_unavailable: "Non riesco a verificare l'accesso. Riprova tra poco.",
   network: "Non riesco a raggiungere il planner. Controlla la connessione e riprova.",
   invalid_response: "Il planner ha risposto in un modo inatteso. Riprova più tardi.",
   server: "Il planner ha avuto un problema. Riprova più tardi.",
@@ -140,7 +147,7 @@ export class ApiError extends Error {
   }
 }
 
-/** 401: the browser is on its way to TripTracker's login (`loginUrl`). Callers just stop. */
+/** 401: the browser is on its way to the login (`loginUrl`). Callers just stop. */
 export class UnauthorizedError extends ApiError {
   readonly loginUrl: string;
 
@@ -245,13 +252,15 @@ export interface ApiClient {
   listEvalRuns(options?: RequestOptions & { limit?: number; offset?: number }): Promise<EvalRunListResponse>;
   /** GET /evals/runs/{id}: one run with its stored results and comparison. */
   getEvalRun(runId: string, options?: RequestOptions): Promise<EvalRunDetail>;
+  /** GET /me: the signed-in address and whether it may read the eval history. */
+  me(options?: RequestOptions): Promise<Me>;
   /** GET /health (no authentication). */
   health(options?: RequestOptions): Promise<HealthResponse>;
   /** URL of GET /plans/{id}/events (SSE) for `new EventSource(url, {withCredentials: true})`;
    * `after` resumes after that seq on a fresh connection (EventSource only sends Last-Event-ID
    * on its own reconnections). */
   eventsUrl(planId: string, after?: number | null): string;
-  /** TripTracker's login URL that returns to the current page. */
+  /** The login URL that returns to the current page (this app's or TripTracker's, by mode). */
   loginUrl(): string;
 }
 
@@ -396,6 +405,7 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
         throw evalNotFound(error);
       }
     },
+    me: (opts) => send("GET", "/me", MeSchema, { signal: opts?.signal }),
     health: (opts) => send("GET", "/health", HealthResponseSchema, { signal: opts?.signal }),
     eventsUrl: (planId, after) => {
       const url = `${baseUrl()}${planPath(planId)}/events`;

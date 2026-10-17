@@ -3,13 +3,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { cleanup, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/lib/api";
 
 import { PlanLoadFailed } from "./load-failed";
 import { isEndedStatus, PlanEndedPanel } from "./plan-ended";
-import { SessionExpiredLine } from "./session-expired";
+import { SessionExpiredLine, SessionExpiredPanel, sessionExpiredSentence } from "./session-expired";
 
 afterEach(cleanup);
 
@@ -74,6 +74,22 @@ describe("SessionExpiredLine", () => {
     const link = screen.getByRole("link", { name: "Accedi di nuovo" });
     expect(link.getAttribute("href")).toBe("https://viaggi.test/accedi?returnTo=x");
     expect(link.getAttribute("target")).toBeNull();
+  });
+});
+
+describe("SessionExpiredPanel", () => {
+  it("names what expired in the words of the auth mode: the app's own session under next dev", () => {
+    // vitest runs with NODE_ENV=test and no NEXT_PUBLIC_AUTH_MODE: the deployed default, TripTracker.
+    expect(sessionExpiredSentence()).toBe("L'accesso a TripTracker è scaduto. Accedi di nuovo: tornerai qui, al tuo piano.");
+    vi.stubEnv("NEXT_PUBLIC_AUTH_MODE", "atlas");
+    try {
+      expect(sessionExpiredSentence()).toBe("La sessione è scaduta. Accedi di nuovo: tornerai qui, al tuo piano.");
+      render(<SessionExpiredPanel loginUrl="/login?returnTo=%2Fplans%2Fx" />);
+      expect(screen.getByRole("region", { name: "Sessione scaduta" }).textContent).not.toContain("TripTracker");
+      expect(screen.getByRole("link", { name: "Accedi di nuovo" }).getAttribute("href")).toBe("/login?returnTo=%2Fplans%2Fx");
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
 

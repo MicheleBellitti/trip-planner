@@ -10,6 +10,10 @@ import { ROUTES } from "@/lib/routes";
 import { AppHeader } from "./app-header";
 import { AppHeaderBar } from "./app-header-bar";
 
+const isAdmin = vi.fn<() => boolean | null>(() => true);
+
+vi.mock("@/lib/me", () => ({ useIsAdmin: () => isAdmin() }));
+
 vi.mock("@/components/ui/theme-toggle", () => ({
   ThemeToggle: ({ className, variant }: { className?: string; variant?: string }) => (
     <button type="button" className={className} data-variant={variant ?? "outline"}>
@@ -18,9 +22,32 @@ vi.mock("@/components/ui/theme-toggle", () => ({
   ),
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  isAdmin.mockReset();
+  isAdmin.mockReturnValue(true);
+});
 
 describe("AppHeader", () => {
+  it("draws the eval history's station only for the users who manage the planner", () => {
+    isAdmin.mockReturnValue(false);
+    const { unmount } = render(<AppHeader current="plans" />);
+    const nav = screen.getByRole("navigation", { name: "Sezioni" });
+    expect(within(nav).getByRole("link", { name: "Piani" })).toBeTruthy();
+    expect(within(nav).queryByRole("link", { name: "Valutazioni" })).toBeNull();
+    unmount();
+
+    isAdmin.mockReturnValue(null); // not known yet: nothing appears and vanishes
+    render(<AppHeader current="plans" />);
+    expect(screen.queryByRole("link", { name: "Valutazioni" })).toBeNull();
+  });
+
+  it("on the eval pages the station is always there, as the current one, whoever is looking", () => {
+    isAdmin.mockReturnValue(false);
+    render(<AppHeader current="evals" />);
+    expect(screen.getByRole("link", { name: "Valutazioni" }).getAttribute("aria-current")).toBe("page");
+  });
+
   it("links the lockup to the plans and draws both sections as stations, the current one filled", () => {
     render(<AppHeader current="plans" />);
     expect(screen.getByRole("link", { name: "Atlas" }).getAttribute("href")).toBe(ROUTES.plans);

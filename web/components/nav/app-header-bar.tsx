@@ -8,19 +8,18 @@ import { iconButtonClasses } from "@/components/ui/icon-button";
 import { Wordmark } from "@/components/ui/wordmark";
 import { ROUTES } from "@/lib/routes";
 
+import { EvalsStation } from "./evals-station";
+import { Station } from "./station";
+
 /** The app's sections. "new" is the request form: it has no nav item, and no "Nuovo piano" there. */
 export type AppSection = "plans" | "evals" | "new";
-
-const SECTIONS = [
-  { section: "plans", href: ROUTES.plans, label: "Piani" },
-  { section: "evals", href: ROUTES.evals, label: "Valutazioni" },
-] as const;
 
 /**
  * The header's bar (DESIGN.md, Navigation): the lockup as the link to the plans, the sections drawn
  * as stations on one line (the current one is the "you are here" ring), then `trailing` (AppHeader
  * puts the bare theme toggle there), then "Nuovo piano", always last and always a secondary action
- * (each view keeps its single primary). One line, at most 72 px, no menu drawer at 393 px, 44 px targets under a finger (the 40 px
+ * (each view keeps its single primary). "Piani" is everyone's; "Valutazioni" (EvalsStation) is drawn
+ * only for the users who manage the planner. One line, at most 72 px, no menu drawer at 393 px, 44 px targets under a finger (the 40 px
  * icon controls grow). `compact` is the live screen's slim top row; it has no toggle (the sticky
  * control bar carries it), and this file imports none, so the plan page ships no second copy.
  */
@@ -45,9 +44,8 @@ export function AppHeaderBar({
         <div className="flex items-center gap-2">
           <nav aria-label="Sezioni">
             <ul className="flex">
-              {SECTIONS.map((item) => (
-                <Station key={item.section} href={item.href} label={item.label} current={current === item.section} />
-              ))}
+              <Station href={ROUTES.plans} label="Piani" current={current === "plans"} />
+              <EvalsStation current={current === "evals"} />
             </ul>
           </nav>
           {trailing}
@@ -86,42 +84,5 @@ function NewPlan({ current }: { current: boolean }) {
         <Icon name="plus" size={18} />
       </Link>
     </>
-  );
-}
-
-/**
- * One section on the header's line: its label above its station. The line runs through every
- * station and past the outer ones, a route that goes on beyond the edge of the map, so the pair
- * never reads as a two-step progress bar. The current station is the larger "you are here" ring.
- * The link is positioned, so it paints above the line drawn before it.
- */
-function Station({ href, label, current }: { href: string; label: string; current: boolean }) {
-  // The station's centre is 13.5 px above the item's bottom (8 px padding + half of its 11 px box).
-  const half = "pointer-events-none absolute bottom-[13px] h-px bg-rule-strong";
-  return (
-    <li className="relative flex">
-      <span aria-hidden="true" data-line="" className={cx(half, "right-1/2 left-0")} />
-      <span aria-hidden="true" data-line="" className={cx(half, "right-0 left-1/2")} />
-      <Link
-        href={href}
-        aria-current={current ? "page" : undefined}
-        className={cx(
-          "group relative grid min-h-11 justify-items-center gap-1 rounded-xs px-2.5 pt-1 pb-2 text-small no-underline sm:px-3",
-          current ? "font-semibold text-ink" : "text-ink-2 hover:text-ink",
-        )}
-      >
-        <span>{label}</span>
-        <span aria-hidden="true" className="grid size-[11px] place-items-center">
-          <span
-            data-testid="station"
-            data-current={current}
-            className={cx(
-              "rounded-full bg-ground transition-colors duration-(--duration-hover) ease-out",
-              current ? "size-[11px] border-[3px] border-ink" : "size-[9px] border-[1.5px] border-ink-2 group-hover:bg-ink-2",
-            )}
-          />
-        </span>
-      </Link>
-    </li>
   );
 }

@@ -161,7 +161,7 @@ export function RequestForm({ today, initialValues, restoreLast = false, demoSce
       rememberRequest(values);
       router.push(`/plans/${id}`);
     } catch (error) {
-      // 401: the browser is on its way to TripTracker's login; stay busy until it leaves.
+      // 401: the browser is on its way to the login; stay busy until it leaves.
       if (error instanceof UnauthorizedError) return;
       if (error instanceof RequestValidationError) {
         const fromServer = fieldErrorsFromServer(error.issues);

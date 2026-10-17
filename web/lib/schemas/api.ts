@@ -3,7 +3,7 @@
  *
  * Hand-written from the Pydantic models in backend/app/routes.py (PlanSummary,
  * PlanListResponse, LinkCheck, PlanDetail, CreatePlanResponse, StatusResponse,
- * ContinueResponse, ErrorBody), backend/app/db.py (PlanStatus), backend/app/config.py
+ * ContinueResponse, MeResponse, ErrorBody), backend/app/db.py (PlanStatus), backend/app/config.py
  * (AgentProfile) and backend/app/auth.py (AuthErrorCode). Keep them in step with those models;
  * the generated contract schemas (request, UI event, plan) live in ./generated.
  *
@@ -442,8 +442,19 @@ export const AUTH_ERROR_CODES = [
   "not_authenticated",
   "email_not_allowed",
   "bad_origin",
+  "admin_only",
   "auth_unavailable",
 ] as const;
+
+/** 403 of the eval history for a signed-in user who is not one of the backend's ADMIN_EMAILS. */
+export const ADMIN_ONLY_CODE = "admin_only";
+
+/** GET /me (routes.MeResponse): who the cookie belongs to, and whether they may read the evals. */
+export const MeSchema = z.object({
+  email: z.string(),
+  is_admin: z.boolean(),
+});
+export type Me = z.output<typeof MeSchema>;
 
 export type PlanErrorCode = (typeof PLAN_ERROR_CODES)[number];
 export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[number];

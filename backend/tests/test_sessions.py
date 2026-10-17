@@ -244,13 +244,14 @@ async def insert_plan(
     status: PlanStatus = PlanStatus.RUNNING,
     session_id: str | None = "sesn_fake_0001",
     user_email: str = USER.email,
+    user_id: str | None = None,
     cost_cents: int = 0,
     budget_cents: int | None = 60,
     created_at: dt.datetime | None = None,
     running_since: dt.datetime | None = None,
 ) -> uuid.UUID:
     plan_id = uuid.uuid4()
-    values: dict[str, Any] = {}
+    values: dict[str, Any] = {"user_id": user_id}
     if created_at is not None:
         values["created_at"] = created_at
     if running_since is not None:
@@ -673,14 +674,60 @@ async def test_monthly_spend_counts_the_rome_month(
 
 
 async def test_get_user_plan_hides_other_users_plans(
-    db_session_factory: async_sessionmaker[AsyncSession], db_session: AsyncSession
+    db_session_factory: async_sessionmaker[AsyncSession],
+    db_session: AsyncSession,
+    settings: Settings,
 ) -> None:
     plan_id = await insert_plan(db_session_factory)
-    assert (await get_user_plan(db_session, plan_id, USER)).id == plan_id
+    assert (await get_user_plan(db_session, plan_id, USER, settings=settings)).id == plan_id
     with pytest.raises(PlanNotFoundError):
-        await get_user_plan(db_session, plan_id, OTHER_USER)
+        await get_user_plan(db_session, plan_id, OTHER_USER, settings=settings)
     with pytest.raises(PlanNotFoundError):
-        await get_user_plan(db_session, uuid.uuid4(), USER)
+        await get_user_plan(db_session, uuid.uuid4(), USER, settings=settings)
+
+
+async def test_with_the_apps_own_accounts_ownership_goes_by_user_id_then_by_legacy_email(
+    make_settings: Callable[..., Settings],
+    db_session_factory: async_sessionmaker[AsyncSession],
+    db_session: AsyncSession,
+) -> None:
+    """AUTH_MODE=atlas: a plan is the user's when `plans.user_id` is their id, or when it has no
+    id (a plan from before the switch) and carries their email. A plan with another user's id is
+    never theirs, whatever its email says."""
+    atlas = make_settings(auth_mode="atlas")
+    me = CurrentUser(USER.email, "usr_me")
+    db_session.add_all(
+        [
+            UserRecord(id="usr_me", email=USER.email),
+            UserRecord(id="usr_other", email="o@example.com"),
+        ]
+    )
+    await db_session.commit()
+    mine = await insert_plan(db_session_factory, user_id="usr_me", user_email="old@example.com")
+    legacy = await insert_plan(db_session_factory, user_email=USER.email.upper())
+    others = await insert_plan(db_session_factory, user_id="usr_other", user_email=USER.email)
+    someone_elses_legacy = await insert_plan(db_session_factory, user_email=OTHER_USER.email)
+
+    assert (await get_user_plan(db_session, mine, me, settings=atlas)).id == mine
+    assert (await get_user_plan(db_session, legacy, me, settings=atlas)).id == legacy
+    for hidden in (others, someone_elses_legacy):
+        with pytest.raises(PlanNotFoundError):
+            await get_user_plan(db_session, hidden, me, settings=atlas)
+    listed = await db_session.scalars(
+        select(PlanRecord.id).where(sessions.plan_owner_filter(me, settings=atlas))
+    )
+    assert set(listed) == {mine, legacy}
+
+    # Outside atlas mode the id means nothing (TripTracker's ids are not rows of `users`):
+    # the email alone decides, as before the switch.
+    triptracker = make_settings(auth_mode="triptracker")
+    tt_user = CurrentUser(USER.email, "tt_usr_9")
+    listed = await db_session.scalars(
+        select(PlanRecord.id).where(sessions.plan_owner_filter(tt_user, settings=triptracker))
+    )
+    assert set(listed) == {legacy, others}
+    with pytest.raises(PlanNotFoundError):
+        await get_user_plan(db_session, mine, tt_user, settings=triptracker)
 
 
 # --- interrupt -----------------------------------------------------------------------------------
