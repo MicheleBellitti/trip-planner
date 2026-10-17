@@ -828,6 +828,7 @@ space:
 | Toast | fades in and rises 8 px, 200 ms expo | fades in, 120 ms |
 | Skeleton | breathes between 100 % and 55 % opacity, 1.6 s | still |
 | Button and icon button press | scale to 0.98 / 0.96, 120 ms; hover colour 160 ms | no scale; colour stays |
+| Theme switch | instant: every transition is off for the frame that repaints (`data-theme-swap` on `<html>`, two frames), so no colour fades through grey | the same |
 | The landing map, once per load | lines draw with `--ease-pen`, 2 s, staggered; stations stamp (scale 1.35 to 1, 350 ms); the live tool plate rises, holds and retires before the destination stamps; the destination's ring draws, 1.2 s | the final map, still, without the plate (the finished plan) |
 
 **The Report, Don't Perform Rule.** If an animation does not report a state change or answer the

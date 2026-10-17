@@ -37,6 +37,23 @@ function syncThemeColor(theme: ThemeName) {
   }
 }
 
+/** The latest swap: only its frames take the guard off, so quick toggles never strand it on. */
+let latestSwap = 0;
+
+/** The swap repaints every colour at once. Transitions (hover washes, borders) would fade the
+ * old colours into the new ones through grey, so `data-theme-swap` turns them off (globals.css)
+ * until two frames later, when the new theme is on screen. */
+function guardSwap() {
+  const root = document.documentElement;
+  const swap = ++latestSwap;
+  root.setAttribute("data-theme-swap", "");
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      if (swap === latestSwap) root.removeAttribute("data-theme-swap");
+    }),
+  );
+}
+
 /**
  * The theme toggle: a round icon button that pins the other theme (dark is the default) and
  * remembers it (localStorage, read before paint by ThemeScript). `bare` drops the ring. The glyph is chosen by CSS
@@ -59,6 +76,7 @@ export function ThemeToggle({ className, variant = "outline" }: { className?: st
 
   function toggle() {
     const next: ThemeName = resolvedTheme() === "dark" ? "light" : "dark";
+    guardSwap();
     document.documentElement.setAttribute("data-theme", next);
     syncThemeColor(next);
     try {
