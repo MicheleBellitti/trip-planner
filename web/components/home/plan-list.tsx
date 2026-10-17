@@ -78,7 +78,7 @@ export function PlanList({ className }: { className?: string }) {
       .listPlans({ signal: controller.signal })
       .then((plans) => setState({ kind: "ready", plans, openedAt: Date.now() }))
       .catch((error: unknown) => {
-        // 401: the browser is on its way to TripTracker's login; keep the placeholder rows.
+        // 401: the browser is on its way to the login; keep the placeholder rows.
         if (controller.signal.aborted || error instanceof UnauthorizedError) return;
         setState({ kind: "error", message: error instanceof ApiError ? error.message : API_ERROR_MESSAGES.unknown });
       });

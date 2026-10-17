@@ -5,7 +5,7 @@ import type { ConnectionStatus } from "@/lib/plan-events/labels";
 interface StreamStatusProps {
   connection: ConnectionStatus;
   online: boolean;
-  /** TripTracker's login that returns here, when the session expired. */
+  /** The login that returns here, when the session expired. */
   loginUrl: string | null;
   /** When the state on screen was last true ("10:41"), for the offline line. */
   lastUpdate: string | null;

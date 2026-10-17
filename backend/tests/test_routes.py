@@ -26,7 +26,7 @@ from app import main, routes, sessions
 from app.auth import CurrentUser
 from app.config import Settings
 from app.consumer import PlanNotFoundError
-from app.db import PlanStatus
+from app.db import AuthSessionRecord, PlanStatus
 from app.events import AgentName, EventKind, UIEvent
 from app.links import check_link
 from app.ma_client import ApiRejectedError, ApiUnavailableError
@@ -807,6 +807,93 @@ async def test_a_signed_in_allowed_user_sees_their_plans(
     assert len(response.json()["plans"]) == 1
 
 
+# --- GET /me and ownership with the app's own accounts (AUTH_MODE=atlas) --------------------------
+
+
+async def test_me_says_who_is_signed_in_and_whether_they_manage_the_evals(api: Api) -> None:
+    # AUTH_MODE=local without ADMIN_EMAILS: the allowed user is the admin (the one-user setup).
+    response = await api.client.get("/me")
+
+    assert response.status_code == 200
+    assert response.json() == {"email": USER, "is_admin": True}
+
+
+async def test_me_needs_a_session(tt_api: httpx.AsyncClient) -> None:
+    response = await tt_api.get("/me")
+
+    assert response.status_code == 401
+    assert detail(response)["code"] == "not_authenticated"
+
+
+ATLAS_COOKIE = "__Secure-atlas.session_token"
+
+
+async def add_session(plan_rows: PlanRows, *, user_id: str, token: str, hours: float = 24) -> None:
+    async with plan_rows.session_factory() as db:
+        db.add(
+            AuthSessionRecord(
+                id=f"ses_{token}",
+                user_id=user_id,
+                token=token,
+                expires_at=dt.datetime.now(dt.UTC) + dt.timedelta(hours=hours),
+            )
+        )
+        await db.commit()
+
+
+async def test_with_the_apps_own_accounts_the_cookie_is_the_session_table_and_plans_go_by_id(
+    make_app: AppFactory,
+    make_settings: Callable[..., Settings],
+    stub_planner: StubPlanner,
+    plan_rows: PlanRows,
+) -> None:
+    """AUTH_MODE=atlas end to end: the `atlas` cookie's token is looked up in `auth_sessions`
+    (no HTTP call to anyone), PLANNER_ALLOWED_EMAILS plays no part, the list and the detail go by
+    `plans.user_id` (plus the user's legacy rows without one), and `/me` says this user is no
+    admin until ADMIN_EMAILS names them."""
+    await plan_rows.add_user("usr_me", "Me@Example.com")
+    await plan_rows.add_user("usr_other", "other@example.com")
+    await add_session(plan_rows, user_id="usr_me", token="tok3nMe")
+    await add_session(plan_rows, user_id="usr_other", token="tok3nOther", hours=-1)  # expired
+    mine = await plan_rows.add_plan(user_email="me@example.com", user_id="usr_me")
+    legacy = await plan_rows.add_plan(user_email="ME@example.com")  # before the switch: no id
+    others = await plan_rows.add_plan(user_email="me@example.com", user_id="usr_other")
+    strangers = await plan_rows.add_plan(user_email="other@example.com")
+
+    atlas = make_settings(auth_mode="atlas", planner_allowed_emails="nobody@example.com")
+    async with make_app(settings=atlas) as app:
+        transport = httpx.ASGITransport(app=app)
+        async with (
+            httpx.AsyncClient(transport=transport, base_url="http://testserver") as http,
+            respx.mock(assert_all_mocked=True),  # any HTTP call out of the app fails the test
+        ):
+            cookie = {"Cookie": f"{ATLAS_COOKIE}=tok3nMe.SiGnAtUrE%3D; theme=dark"}
+            me = await http.get("/me", headers=cookie)
+            listed = await http.get("/plans", headers=cookie)
+            opened = [
+                (await http.get(f"/plans/{plan.id}", headers=cookie)).status_code
+                for plan in (mine, legacy, others, strangers)
+            ]
+            expired = await http.get("/plans", headers={"Cookie": f"{ATLAS_COOKIE}=tok3nOther.x"})
+            unknown = await http.get("/plans", headers={"Cookie": f"{ATLAS_COOKIE}=nobody.x"})
+            triptrackers = await http.get(
+                "/plans", headers={"Cookie": "__Secure-better-auth.session_token=tok3nMe.x"}
+            )
+
+    assert me.status_code == 200
+    assert me.json() == {"email": "me@example.com", "is_admin": False}
+    assert listed.status_code == 200
+    assert {plan["id"] for plan in listed.json()["plans"]} == {str(mine.id), str(legacy.id)}
+    assert opened == [200, 200, 404, 404]
+    for response in (expired, unknown, triptrackers):
+        assert response.status_code == 401
+        assert detail(response) == {
+            "code": "not_authenticated",
+            "message": "Accedi per usare il planner.",
+            "data": None,
+        }
+
+
 # --- CORS -----------------------------------------------------------------------------------------
 
 
@@ -928,6 +1015,7 @@ async def test_development_documents_every_route(api: Api) -> None:
 
     assert set(paths) == {
         "/health",
+        "/me",
         "/plans",
         "/plans/{plan_id}",
         "/plans/{plan_id}/events",

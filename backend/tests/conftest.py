@@ -107,7 +107,7 @@ def _remove_from_environ(key: str) -> None:
 _apply_offline_anthropic_env(os.environ.__setitem__, _remove_from_environ)
 
 from app.config import Settings, get_settings  # noqa: E402
-from app.db import Base, create_session_factory  # noqa: E402
+from app.db import Base, UserRecord, create_session_factory  # noqa: E402
 from app.main import create_app  # noqa: E402
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -438,10 +438,17 @@ class PlanRows:
 
     session_factory: async_sessionmaker[AsyncSession]
 
+    async def add_user(self, user_id: str, email: str) -> None:
+        """Insert a `users` row (the web app's own accounts), for plans that carry `user_id`."""
+        async with self.session_factory() as db:
+            db.add(UserRecord(id=user_id, email=email))
+            await db.commit()
+
     async def add_plan(
         self,
         *,
         user_email: str = TEST_USER_EMAIL,
+        user_id: str | None = None,
         status: PlanStatus = PlanStatus.RUNNING,
         request: dict[str, Any] | None = None,
         plan: dict[str, Any] | None = None,
@@ -453,6 +460,7 @@ class PlanRows:
     ) -> PlanRecord:
         record = PlanRecord(
             user_email=user_email,
+            user_id=user_id,
             session_id="sesn_test",
             agent_profile="development",
             status=status.value,

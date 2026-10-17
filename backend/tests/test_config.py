@@ -221,6 +221,54 @@ def test_allowlist_is_a_comma_list_read_from_the_environment(
     assert not settings.is_email_allowed("someone@example.com")
 
 
+def test_with_the_apps_own_accounts_every_account_may_plan(make_settings: MakeSettings) -> None:
+    """AUTH_MODE=atlas: the web app decided who could sign up, so PLANNER_ALLOWED_EMAILS is not
+    a second gate; the other modes keep the allowlist."""
+    atlas = make_settings(auth_mode="atlas", planner_allowed_emails="only@example.com")
+    assert atlas.may_use_planner("anyone@example.com")
+    assert atlas.may_use_planner("only@example.com")
+    assert not atlas.may_use_planner("")
+    assert not atlas.may_use_planner(None)
+
+    triptracker = make_settings(auth_mode="triptracker", planner_allowed_emails="only@example.com")
+    assert triptracker.may_use_planner("Only@example.com")
+    assert not triptracker.may_use_planner("anyone@example.com")
+
+
+def test_admins_are_admin_emails_or_the_allowed_users_outside_atlas_mode(
+    make_settings: MakeSettings,
+) -> None:
+    # The one-user setups: the allowed users run the evals, so they read the history by default.
+    for mode in ("triptracker", "local"):
+        settings = make_settings(auth_mode=mode, planner_allowed_emails="me@example.com")
+        assert settings.admins == ["me@example.com"]
+        assert settings.is_admin("ME@example.com ")
+        assert not settings.is_admin("someone@example.com")
+    # Many accounts: nobody is an admin until ADMIN_EMAILS says who.
+    atlas = make_settings(auth_mode="atlas", planner_allowed_emails="me@example.com")
+    assert atlas.admins == []
+    assert not atlas.is_admin("me@example.com")
+    # ADMIN_EMAILS set: exactly those, in every mode.
+    for mode in ("triptracker", "local", "atlas"):
+        settings = make_settings(
+            auth_mode=mode,
+            planner_allowed_emails="me@example.com",
+            admin_emails=" Boss@Example.com, ops@example.com ,, ",
+        )
+        assert settings.admins == ["boss@example.com", "ops@example.com"]
+        assert settings.is_admin("boss@example.com")
+        assert not settings.is_admin("me@example.com")
+        assert not settings.is_admin(None)
+
+
+def test_admin_emails_is_read_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ADMIN_EMAILS", "Michele@Example.com")
+    settings = Settings(_env_file=None)  # pyright: ignore[reportCallIssue]
+
+    assert settings.admin_emails == ["michele@example.com"]
+    assert settings.is_admin("michele@example.com")
+
+
 # --- origins, schema URL, lockfile, log level -------------------------------------------------
 
 

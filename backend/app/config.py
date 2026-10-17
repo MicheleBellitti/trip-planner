@@ -1,9 +1,10 @@
 """Backend settings, read from the environment and, locally, from backend/.env.
 
 Every variable of the Railway table in the implementation doc lives here, plus ENVIRONMENT,
-AUTH_MODE, LOCKFILE_PATH, TRIP_SCHEMA_URL, LOG_LEVEL, the backend's git sha (GIT_SHA or
-Railway's RAILWAY_GIT_COMMIT_SHA), EVALS_INGEST_TOKEN (the eval upload endpoint) and the local
-demo's DEMO_MODE and DEMO_PACE (development only: Settings refuses them in production).
+AUTH_MODE, ADMIN_EMAILS (the admin role: who reads the eval history), LOCKFILE_PATH,
+TRIP_SCHEMA_URL, LOG_LEVEL, the backend's git sha (GIT_SHA or Railway's RAILWAY_GIT_COMMIT_SHA),
+EVALS_INGEST_TOKEN (the eval upload endpoint) and the local demo's DEMO_MODE and DEMO_PACE
+(development only: Settings refuses them in production).
 Defaults are the production-safe choice (ENVIRONMENT=production, AUTH_MODE=triptracker).
 AGENT_PROFILE defaults to the cheap development roster, but production refuses to start unless
 it is set explicitly; SESSION_BUDGET_CENTS and LOCKFILE_PATH default per profile. Secrets are
@@ -183,8 +184,16 @@ class Settings(BaseSettings):
     # Monthly spend ceiling across all plans, in cents; POST /plans refuses past it.
     monthly_limit_cents: int = Field(default=5000, gt=0)
 
-    # Who may use the planner. Comma separated, case insensitive; empty means nobody.
+    # Who may use the planner with AUTH_MODE=triptracker (and the user of AUTH_MODE=local). Comma
+    # separated, case insensitive; empty means nobody. Not consulted with AUTH_MODE=atlas: there
+    # the web app decides who may sign up (AUTH_ALLOWED_EMAILS), and every account may plan.
     planner_allowed_emails: Annotated[list[str], NoDecode] = Field(default_factory=list)
+
+    # Who may read the eval history (GET /evals/runs*): the admin role, comma separated, case
+    # insensitive. Empty: with AUTH_MODE=triptracker or local everyone in PLANNER_ALLOWED_EMAILS
+    # (the one-user setup, where the user is the one running the evals); with AUTH_MODE=atlas
+    # nobody.
+    admin_emails: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
     # The planner web app: CORS allow-origin and the Origin check on state-changing requests.
     frontend_origin: str = "https://atlas.bellittim.com"
@@ -278,7 +287,7 @@ class Settings(BaseSettings):
             return normalize_database_url(value)
         return value
 
-    @field_validator("planner_allowed_emails", mode="before")
+    @field_validator("planner_allowed_emails", "admin_emails", mode="before")
     @classmethod
     def _split_emails(cls, value: object) -> object:
         if value is None:
@@ -442,6 +451,29 @@ class Settings(BaseSettings):
         if not email:
             return False
         return email.strip().lower() in self.planner_allowed_emails
+
+    def may_use_planner(self, email: str | None) -> bool:
+        """Whether the signed-in `email` may use the planner. With AUTH_MODE=atlas every account
+        may: the web app already decided who could sign up (AUTH_ALLOWED_EMAILS,
+        web/lib/auth-policy.ts), so PLANNER_ALLOWED_EMAILS is not a second gate. In the other
+        modes the address must be listed (`is_email_allowed`)."""
+        if self.auth_mode == "atlas":
+            return bool(email and email.strip())
+        return self.is_email_allowed(email)
+
+    @property
+    def admins(self) -> list[str]:
+        """Who may read the eval history: ADMIN_EMAILS when set; else, outside AUTH_MODE=atlas,
+        the planner's allowed users (the one-user setup); else nobody."""
+        if self.admin_emails:
+            return self.admin_emails
+        return [] if self.auth_mode == "atlas" else self.planner_allowed_emails
+
+    def is_admin(self, email: str | None) -> bool:
+        """True when `email` is one of `admins` (trimmed, case insensitive)."""
+        if not email:
+            return False
+        return email.strip().lower() in self.admins
 
 
 @lru_cache

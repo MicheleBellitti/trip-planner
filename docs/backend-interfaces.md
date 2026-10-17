@@ -45,7 +45,7 @@ Contents:
 | `app/links.py` | Booking-link domain allowlist | Sicurezza e privacy | D |
 | `app/triptracker_schema.py` | Fetch and keep trip.json; `validate_trip()` | Contratto del piano, "Una sola fonte di verità" | D |
 | `app/fx.py` | `FxConverter`: Banca d'Italia, then InforEuro, with the `fx_rates` cache | Conversione delle valute | E |
-| `app/auth.py` | `current_user()`, `require_origin()`, the get-session cache | Autenticazione e domini | F |
+| `app/auth.py` | `current_user()`, `require_origin()`, `require_admin()`; the atlas session lookup (`verify_atlas_session`) and TripTracker's get-session cache | Autenticazione e domini | F |
 | `app/hub.py` | In-memory per-plan pub/sub for SSE | Backend FastAPI step 3; "Un solo processo" | F |
 | `app/routes.py` | Every endpoint except /health; SSE; CORS policy; the request body cap | Endpoint table; SSE verso il browser | F |
 | `app/main.py` | `create_app()`, the error envelope of framework errors (decision 20), lifespan wiring (§3) | Deploy e configurazione | F |
@@ -93,7 +93,7 @@ graph acyclic. The parentheses list what each module actually imports.
     hub (db, events)
     fx (clock, db, plan)
     triptracker_schema (clock, config)
-    auth (config)
+    auth (clock, config, db)
  7  mapping (fx, links, plan)                                   pure
  8  consumer (clock, config, db, events, fx, hub, ma_client, mapping, plan, results,
               triptracker_schema)
@@ -251,6 +251,9 @@ Signatures are abbreviated where the code has more keyword defaults; the code is
 |---|---|---|
 | auth | `current_user(request) -> CurrentUser` (via `CurrentUserDep`) | every route |
 | auth | `require_origin(request) -> None` (via `RequireOrigin`) | POST routes |
+| auth | `require_admin(request, user) -> None` (via `RequireAdmin`) | GET /evals/runs* |
+| sessions | `plan_owner_filter(user, *, settings) -> ColumnElement[bool]` | GET /plans |
+| sessions | `get_user_plan(db, plan_id, user, *, settings) -> PlanRecord` (raises `consumer.PlanNotFoundError`) | GET /plans/{id}, /events, /trip, /cover |
 | sessions | `start_plan(request: PlanRequest, user: CurrentUser, *, services: PlannerServices, demo_scenario: str \| None = None) -> uuid.UUID` | POST /plans (`demo_scenario` from `?demo_scenario=`, checked first by `routes.check_demo_scenario` against `services.demo_scenarios`) |
 | sessions | `interrupt_plan(plan_id, user, *, services) -> PlanStatus` | POST /plans/{id}/interrupt |
 | sessions | `continue_plan(plan_id, user, *, services, extra_cents=200) -> int` | POST /plans/{id}/continue |
@@ -741,7 +744,7 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
       {spent_cents, limit_cents}`; the spec gives no status code), `planner_unavailable` 503,
       `agents_unavailable` 502, `request_too_large` 413, `demo_unavailable` 404;
     - auth (`auth.AuthErrorCode`): `not_authenticated` 401, `email_not_allowed` 403,
-      `bad_origin` 403, `auth_unavailable` 503;
+      `bad_origin` 403, `admin_only` 403, `auth_unavailable` 503;
     - the framework's own (`main.AppErrorCode`): `not_found` 404 (unknown path),
       `method_not_allowed` 405 (keeps its `Allow` header), `bad_request` 400 (a body that
       can't be parsed), `internal_error` 500, `http_error` for any other status.
@@ -972,9 +975,32 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
     switch. Alembic owns Better Auth's four tables (`users`, `auth_sessions`, `auth_accounts`,
     `auth_verifications`, snake_case through Better Auth's `fields` mapping): one `alembic
     upgrade head` prepares the database for both services, and `tests/test_db.py` keeps the
-    models and the migrations together. The web app's Better Auth exempts `/get-session` from
-    its per-IP rate limit, because every check comes from the backend's one egress IP; the
-    `VerificationBudget` stays as a second guard.
+    models and the migrations together. (The first version of this mode asked the web app's
+    `/get-session` over HTTP; decision 37 replaced that with the session table.)
+
+37. The backend auth switch (`AUTH_MODE=atlas` reads the session table; the admin role). With
+    the web app's own accounts the sessions live in the database this backend migrates, so
+    `current_user` looks the cookie's token up there (`auth.verify_atlas_session`: one indexed
+    query on `auth_sessions.token`, `expires_at > now`, joined to `users`) instead of asking the
+    web app over HTTP. What goes with it: no `VerificationBudget` and no stale window (they
+    answered TripTracker's per-IP rate limit, decision 19, which only the TripTracker path still
+    needs), no 60 s cache (a sign-out is effective on the next request), no dependence on Vercel
+    being up for API auth, and the web app no longer needs to exempt `/get-session` from its
+    rate limit. The signature half of the cookie is not checked: Better Auth's own `getSession`
+    checks it and then looks the token up, and the 32-character random token alone is the
+    secret, so a forged signature with an unknown token finds no row; a database error is 503
+    `auth_unavailable`. Access: in `atlas` mode every account may plan
+    (`Settings.may_use_planner`): the web app's `AUTH_ALLOWED_EMAILS` already decided who could
+    sign up, and a second list on Railway would have to be kept in step by hand.
+    Ownership (`sessions.plan_owner_filter`, `owns_plan`, `get_user_plan(..., settings=)`): in
+    `atlas` mode a plan is the user's when `plans.user_id` is their id, or when it has no id
+    (a plan from before the switch) and carries their verified email; in the other modes by
+    email alone, as before. The admin role is `ADMIN_EMAILS` (`Settings.admins`, `is_admin`):
+    `auth.require_admin` guards `GET /evals/runs*` with 403 `admin_only`; empty means the
+    allowed users outside `atlas` mode (the one-user setup keeps working with no new variable)
+    and nobody in it. `GET /me` (`routes.MeResponse`: `email`, `is_admin`) lets the web app
+    show the "Valutazioni" station only to admins. The TripTracker path is untouched (contract
+    rule 7): its removal waits until production runs `atlas`.
 
 ## 7. Contracts with events.py, the database, config, the web app and the agents
 

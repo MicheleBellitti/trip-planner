@@ -40,7 +40,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import structlog
-from sqlalchemy import func, select, update
+from sqlalchemy import and_, func, or_, select, update
 
 from app import clock
 from app import consumer as consumer_api
@@ -68,6 +68,7 @@ from app.triptracker_schema import DEV_FALLBACK_SCHEMA_PATH, TripSchemaStore
 
 if TYPE_CHECKING:
     import httpx
+    from sqlalchemy import ColumnElement
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from app.auth import CurrentUser
@@ -665,7 +666,7 @@ async def _interrupt_locked(
     plan_id: uuid.UUID, user: CurrentUser, *, services: PlannerServices
 ) -> PlanStatus:
     async with services.session_factory() as db:
-        plan = await get_user_plan(db, plan_id, user)
+        plan = await get_user_plan(db, plan_id, user, settings=services.settings)
     status = PlanStatus(plan.status)
     if status is PlanStatus.RUNNING:
         return await request_interrupt(services, plan, reason=REASON_INTERRUPTED)
@@ -867,7 +868,7 @@ async def _continue_locked(
     extra_cents: int,
 ) -> int:
     async with services.session_factory() as db:
-        plan = await get_user_plan(db, plan_id, user)
+        plan = await get_user_plan(db, plan_id, user, settings=services.settings)
     status = PlanStatus(plan.status)
     session_id = plan.session_id
     if status is not PlanStatus.BUDGET_PAUSED or session_id is None:
@@ -1056,11 +1057,41 @@ async def _resume_one(
 # --- queries and helpers ------------------------------------------------------------------------
 
 
-async def get_user_plan(db: AsyncSession, plan_id: uuid.UUID, user: CurrentUser) -> PlanRecord:
-    """The plan row if it exists and `user_email == user.email`; else `PlanNotFoundError`
+def plan_owner_filter(user: CurrentUser, *, settings: Settings) -> ColumnElement[bool]:
+    """SQL predicate: the plans that belong to `user`.
+
+    When the signed-in id is one of this backend's `users.id` (`Settings.plans_carry_user_id`,
+    AUTH_MODE=atlas): the rows whose `user_id` is that id, plus the rows from before the switch
+    that have no `user_id` and carry the user's email (the provider verified the address, so
+    those plans are theirs too). Otherwise (TripTracker's and the local mode's plans) the rows
+    with the user's email, compared trimmed and lower-cased. `owns_plan` is the same rule for a
+    row already loaded.
+    """
+    email = user.email.strip().lower()
+    by_email = func.lower(PlanRecord.user_email) == email
+    if settings.plans_carry_user_id and user.auth_user_id:
+        return or_(
+            PlanRecord.user_id == user.auth_user_id,
+            and_(PlanRecord.user_id.is_(None), by_email),
+        )
+    return by_email
+
+
+def owns_plan(plan: PlanRecord, user: CurrentUser, *, settings: Settings) -> bool:
+    """`plan_owner_filter`'s rule for a loaded row."""
+    same_email = plan.user_email.strip().lower() == user.email.strip().lower()
+    if settings.plans_carry_user_id and user.auth_user_id:
+        return plan.user_id == user.auth_user_id or (plan.user_id is None and same_email)
+    return same_email
+
+
+async def get_user_plan(
+    db: AsyncSession, plan_id: uuid.UUID, user: CurrentUser, *, settings: Settings
+) -> PlanRecord:
+    """The plan row if it exists and `owns_plan(plan, user)`; else `PlanNotFoundError`
     (consumer.PlanNotFoundError: another user's plan is indistinguishable from a missing one)."""
     plan = await db.get(PlanRecord, plan_id)
-    if plan is None or plan.user_email.strip().lower() != user.email.strip().lower():
+    if plan is None or not owns_plan(plan, user, settings=settings):
         raise PlanNotFoundError(f"plan {plan_id} not found")
     return plan
 

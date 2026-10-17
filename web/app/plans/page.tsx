@@ -8,7 +8,7 @@ import { BRAND_NAME } from "@/lib/brand";
 export const metadata: Metadata = { title: { absolute: `I tuoi piani · ${BRAND_NAME}` } };
 
 /** "/plans": the latest plans with status, cost and date; "Nuovo piano" is in the
- * header. The list is fetched in the browser, which carries the TripTracker cookie. */
+ * header. The list is fetched in the browser, which carries the session cookie. */
 export default function PlansPage() {
   return (
     <>

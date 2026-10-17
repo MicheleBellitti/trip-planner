@@ -17,8 +17,10 @@ import { Icon } from "@/components/ui/icon";
 import { Notice } from "@/components/ui/notice";
 import { StateFact, StatePanel } from "@/components/states/state-panel";
 import { api, API_ERROR_MESSAGES, ApiError, UnauthorizedError } from "@/lib/api";
+import { isAdminOnly } from "@/lib/me";
 import type { EvalRunDetail } from "@/lib/schemas/api";
 
+import { AdminOnlyPanel } from "./admin-only";
 import { AgentVersions } from "./agent-versions";
 import { ComparisonSection } from "./comparison-section";
 import { failingFirst, requestsLabel, runVerdict } from "./eval-model";
@@ -31,6 +33,7 @@ type ScreenState =
   | { kind: "loading" }
   | { kind: "ready"; run: EvalRunDetail }
   | { kind: "missing"; message: string }
+  | { kind: "admin_only"; message: string }
   | { kind: "error"; message: string };
 
 export function EvalRunScreen({ runId }: { runId: string }) {
@@ -43,9 +46,10 @@ export function EvalRunScreen({ runId }: { runId: string }) {
       .getEvalRun(runId, { signal: controller.signal })
       .then((run) => setState({ kind: "ready", run }))
       .catch((error: unknown) => {
-        // 401: the browser is on its way to TripTracker's login; keep the skeleton.
+        // 401: the browser is on its way to the login; keep the skeleton.
         if (controller.signal.aborted || error instanceof UnauthorizedError) return;
         const message = error instanceof ApiError ? error.message : API_ERROR_MESSAGES.unknown;
+        if (isAdminOnly(error)) return setState({ kind: "admin_only", message });
         setState(error instanceof ApiError && error.kind === "not_found" ? { kind: "missing", message } : { kind: "error", message });
       });
     return () => controller.abort();
@@ -74,6 +78,17 @@ export function EvalRunScreen({ runId }: { runId: string }) {
               essere ancora stata caricata.
             </StateFact>
           </StatePanel>
+        </main>
+      </>
+    );
+  }
+
+  if (state.kind === "admin_only") {
+    return (
+      <>
+        <AppHeader current="evals" />
+        <main className="mx-auto max-w-page px-4 pt-2 lg:px-7">
+          <AdminOnlyPanel message={state.message} />
         </main>
       </>
     );
