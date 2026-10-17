@@ -11,7 +11,7 @@ export const BRAND_TAGLINE = "Ogni viaggio ha il suo atlante.";
 
 /** The page description and the landing's lede (Italian, sentence case). */
 export const BRAND_DESCRIPTION =
-  "Da Milano a Lisbona in un pomeriggio di lavoro, fatto da altri. Cinque agenti tracciano voli, alloggio, attività e spostamenti, e ti lasciano un piano con le date entro cui prenotare.";
+  "Da Milano a Lisbona in un pomeriggio di lavoro, fatto da altri. Cinque agenti AI tracciano voli, alloggio, attività e spostamenti, e ti lasciano un piano con le date entro cui prenotare.";
 
 /** The production origin: absolute URLs in metadata (the link preview image) start here. */
 export const BRAND_URL = "https://atlas.bellittim.com";

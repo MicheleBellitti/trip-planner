@@ -92,7 +92,7 @@ describe("LoginForm", () => {
     typeAndSubmit("a@example.com");
 
     await waitFor(() => expect(magicLink).toHaveBeenCalled());
-    expect(magicLink.mock.calls[0]?.[0]).toMatchObject({ callbackURL: "/" });
+    expect(magicLink.mock.calls[0]?.[0]).toMatchObject({ callbackURL: "/plans" });
   });
 
   it("'Inviane un altro' resends to the same address, says so and refocuses the news; 'Cambia indirizzo' keeps the address", async () => {

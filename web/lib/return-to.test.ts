@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { safeReturnTo } from "./return-to";
+import { ROUTES } from "./routes";
 
 const ORIGIN = "https://atlas.bellittim.com";
 
@@ -8,7 +9,7 @@ describe("safeReturnTo", () => {
   it("keeps a same-origin page with its query and hash", () => {
     expect(safeReturnTo(`${ORIGIN}/plans/abc?tab=piano#giorno-2`, ORIGIN)).toBe("/plans/abc?tab=piano#giorno-2");
     expect(safeReturnTo("/new?esempio=1", ORIGIN)).toBe("/new?esempio=1");
-    expect(safeReturnTo("/", ORIGIN)).toBe("/");
+    expect(safeReturnTo("/", ORIGIN)).toBe("/"); // the landing is a page of this origin too
   });
 
   it("falls back to the plans list for anything that is not this origin", () => {
@@ -26,12 +27,12 @@ describe("safeReturnTo", () => {
       null,
       undefined,
     ]) {
-      expect(safeReturnTo(raw, ORIGIN)).toBe("/");
+      expect(safeReturnTo(raw, ORIGIN)).toBe(ROUTES.plans);
     }
   });
 
   it("never loops back to the login page itself", () => {
-    expect(safeReturnTo("/login?returnTo=%2Fplans", ORIGIN)).toBe("/");
+    expect(safeReturnTo("/login?returnTo=%2Fplans", ORIGIN)).toBe(ROUTES.plans);
   });
 
   it("accepts the origin with a trailing slash", () => {

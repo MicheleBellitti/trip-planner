@@ -94,7 +94,7 @@ CI (`ci-web.yml`) runs `gen:schemas --check`, lint, typecheck, test and build; `
 ## Structure
 
 ```
-app/                       routes: / (plans), /new (request form), /plans/[id] (live + finished plan),
+app/                       routes: / (landing, public), /plans (plans), /new (request form), /plans/[id] (live + finished plan),
                            /dev/ui and /dev/plan (development only), not-found.tsx
 components/ui/             the design system's primitives (Button, Chip, Timeline, DatePair, CostMeter,
                            Disclosure, Field, Notice, Sheet, Toast, ...) and the tokens' tests
@@ -164,6 +164,11 @@ The difference is the app header's nav on the live screen (about 1 KB) and the m
 keep it there, the compact `AppHeaderBar` imports no theme toggle (the control bar already ships one)
 and the plan page's error boundary shows the lockup alone. `/` is 176.3 KB and `/new` 176.6 KB. The
 page is above the 190 gate: decide on the gate before tightening anything else.
+
+Re-measured on 2026-10-17 for the front door (step 2): `/` is now the public landing at 140.0 KB gzip
+(the list moved to `/plans`, 176.5 KB); `/plans/[id]` is 192.4 KB, unchanged from the branch's start
+(the eval history, PR #3, had added 0.2 KB). The landing skip's script strings live in
+`lib/skip-landing.ts`, so the API client carries only the mark's two functions.
 
 ## Accessibility
 

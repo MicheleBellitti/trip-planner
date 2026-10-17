@@ -220,7 +220,9 @@ Where things live:
 | Product name ("Atlas"), tagline, description, site URL | `web/lib/brand.ts` (`BRAND_NAME`, `BRAND_TAGLINE`, `BRAND_DESCRIPTION`, `BRAND_URL`), nowhere else |
 | The mark's geometry and its fixed night colours | `web/lib/brand-mark.ts`; drawn by `components/ui/mark.tsx` |
 | Tab icon, home-screen icon, link preview | `web/app/icon.svg`, `web/app/apple-icon.tsx`, `web/app/opengraph-image.tsx` (font: `web/assets/fonts/`, OFL) |
-| Links between pages | `web/lib/routes.ts` (`ROUTES`), never a hand-written path |
+| Links between pages | `web/lib/routes.ts` (`ROUTES`, and `DEMO_READY` until step 3 builds /demo), never a hand-written path |
+| The landing (`/`, public) | `web/app/page.tsx`, `web/components/landing/` |
+| Returning visitors skip the landing | `web/lib/returning.ts` (the mark), `web/lib/skip-landing.ts` (the decision, the inline script) |
 | The app header | `web/components/nav/app-header.tsx` |
 | Primitives | `web/components/ui/` (inventory under Components) |
 | Every primitive in every state, both themes | `/dev/ui` (development only, `notFound()` in production) |
@@ -447,6 +449,7 @@ face: its file loads only on the pages that use `font-hero`. There is no other b
 | Small | `text-small` | Barlow 400–600 | 14.5 / 1.38 | station titles, buttons (600), notices, secondary prose |
 | Meta | `text-meta` | Barlow 400–600 | 13.5 / 1.4 | meta lines, lane state, the stream line, message text, labels of fields (600) |
 | Label | `text-micro` | Barlow 400–600 | 12.5 / 1.35 | the time gutter, hints, chips (600), date captions |
+| Lede | `text-lede` | Barlow 400 | 16.5 / 1.5 | the landing's lede and closing paragraph |
 | Input | `text-input` | Barlow 400–600 | 16 / 1.35 | form controls only: at 16 px iOS Safari does not zoom when they take focus |
 
 Tailwind's default sizes are switched off in `globals.css`; use only these.
@@ -824,6 +827,7 @@ space:
 | Toast | fades in and rises 8 px, 200 ms expo | fades in, 120 ms |
 | Skeleton | breathes between 100 % and 55 % opacity, 1.6 s | still |
 | Button and icon button press | scale to 0.98 / 0.96, 120 ms; hover colour 160 ms | no scale; colour stays |
+| The landing map, once per load | lines draw with `--ease-pen`, 2 s, staggered; stations stamp (scale 1.35 to 1, 350 ms); the live tool plate rises, holds and retires before the destination stamps; the destination's ring draws, 1.2 s | the final map, still, without the plate (the finished plan) |
 
 **The Report, Don't Perform Rule.** If an animation does not report a state change or answer the
 user's action, it does not ship. No celebratory motion, no entrance choreography, no loops except
@@ -886,6 +890,53 @@ without hooks.
 The one exception is the itinerary map's `maplibre-gl` (about 250 KB gzip with its worker), which
 lives in a lazy chunk loaded only when the map is near the viewport (Map, above), so it is not part of
 the first load.
+
+## Landing
+
+`/` is public and prerendered, with no client fetch: the front door for anyone Atlas is shown to.
+Its only client JavaScript is the theme toggle and `next/link`. Components live in
+`web/components/landing/`; decided with Michele from a mockup on 2026-10-17.
+
+- **Returning visitors skip it.** The API client marks the browser (`atlas-signed-in` in
+  localStorage) after any authenticated 2xx and clears the mark on a 401. `SkipLandingScript`, the
+  first element of the page, runs `location.replace("/plans")` before paint when the mark is set
+  and the visitor did not come from a page of this site (a bookmark, a typed URL, the login coming
+  back). A link to a part of the page (`/#come-funziona`) always shows the landing: that is how a
+  signed-in browser still reaches it, and what to share. Blocked storage or an unreadable referrer
+  fail safe: the landing shows. Client-side navigation never runs it.
+- **Public header** (`PublicHeader`): the lockup to `/`, "Come funziona" (a jump down the page,
+  hidden below 480 px), the bare theme toggle, "Accedi" to `/plans` (which sends a signed-out
+  visitor to TripTracker's login and back).
+- **Hero**: the tagline in `font-hero text-hero` (Semi Condensed 700), the lede in `text-lede`, one
+  call to action: "Guarda una corsa" once `/demo` exists, "Scopri come funziona" until then
+  (`DEMO_READY`). "Accedi" lives in the header and the closing, never in the hero. The legend names
+  the five lines in run order with their jobs; on the phone the line map comes before it.
+- **Line map** (`LineMap`): horizontal from 768 px, vertical below (the lines converge at the
+  bottom, like the phone's lanes). Each line carries its name at its head (`AGENT_LABELS`,
+  condensed 600, like a transit diagram), so no line is told apart by its colour alone. Like a
+  transit hub, each line enters the destination from its own direction and none is drawn over
+  another (`line-geometry.test.ts` checks every drawing of the lines). The phone's map is short
+  (viewBox 360×310) so the destination stamps inside the first screen; between 768 and 1080 px,
+  where the hero is one column, the map is capped at 40rem. It is the landing's one authored
+  moment (Motion table), drawn only behind `motion-safe:`.
+- **Come funziona** (`HowItWorks`): three stations on one ink line, vertical on the phone and
+  horizontal from 1080 px, each holding a real component with sample data (the request summary, a
+  lane with its live plate, a booking with `DatePair` and a price with its source). The samples are
+  illustrations: each is a `<figure>` whose visually hidden `<figcaption>` says the sample in one
+  sentence, while the drawing is `inert` and `aria-hidden`. On screen, an "Esempio" tab on each
+  frame's top edge, like a map's inset label, says the same. The booking's "Prenota su Expedia" is
+  never a link (CLAUDE.md contract rule 4: booking URLs are never hand-written) and is drawn
+  secondary, below the page's own actions. The sample's fixed "now" makes its deadline due soon,
+  so the amber appears there doing its one job. From 1080 px the three stations share their rows
+  (subgrid), so the samples start on one line.
+- **Closing** (`LandingClose`): the five lines entering the destination (`ConvergingLines`, the link
+  preview's drawing, paths in `lib/brand-mark.ts`; below 768 px it shows only the last stretch, so
+  the lines keep their weight), then, with the demo, "Guarda una corsa intera, senza account.", "Guarda una
+  corsa", "Accedi" and "Accesso su invito."; until then, "Atlas è su invito." and "Accedi".
+- **Footer**: the lockup and one honest line ("Prezzi e disponibilità si confermano sempre sul sito
+  del fornitore.").
+- **Motion**: the line map is a named exception to The Report, Don't Perform Rule, for the landing
+  (and the demo in step 3) only: it presents the product. Nothing else on the landing moves.
 
 ## Map
 

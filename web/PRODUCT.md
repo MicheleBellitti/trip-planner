@@ -71,8 +71,9 @@ domains. It ends in TripTracker, the app Michele already uses to not miss bookin
 
 ## Operating Context
 
-- **Three screens** (spec "Frontend Next.js"): `/` recent plans with status and cost and
-  "Nuovo piano"; `/new` the request form, whose button says "Pianifica il viaggio" with the run's
+- **The screens** (spec "Frontend Next.js", plus the brand restyle's front door): `/` the public
+  landing (a returning signed-in visitor goes straight to the plans); `/plans` recent plans with
+  status and cost and "Nuovo piano"; `/new` the request form, whose button says "Pianifica il viaggio" with the run's
   cost estimate under it ("circa 2–4 $"); `/plans/[id]` the live timeline while running, then the
   finished plan with the timeline collapsible below it.
 - **The live screen** carries, at the top: plan status, elapsed time, cumulative cost on a bar
@@ -162,6 +163,9 @@ Taken by Michele on 2026-10-12. They replace the first pass's open questions.
 - **Navigation: one app header**, with the current section drawn as a station.
 - **Never the "AI site" look**: no glow, no spotlight gradients, no dot grids, no gradient text, no
   glass beyond the sticky bar.
+- **2026-10-17: the landing**, approved from a mockup: "Accedi" only in the header and the
+  closing, the line map before the legend on the phone, one choreographed moment (the map). Until
+  `/demo` exists (step 3) its demo calls to action are off (`DEMO_READY`).
 
 ## Brand Commitments
 
