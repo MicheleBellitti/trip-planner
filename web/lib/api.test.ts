@@ -479,7 +479,7 @@ describe("the eval history", () => {
     expect((await failure(own.api.getEvalRun(evalRun.id))).message).toBe("Questa valutazione non esiste.");
 
     const bare = client(new Response("", { status: 404 }));
-    expect((await failure(bare.api.getEvalRun(evalRun.id))).message).toBe("Questa valutazione non c'è.");
+    expect((await failure(bare.api.getEvalRun(evalRun.id))).message).toBe("Questo collaudo non c'è.");
   });
 
   it("an older backend without the routes says the history is not available", async () => {
@@ -488,7 +488,7 @@ describe("the eval history", () => {
     const error = await failure(api.listEvalRuns());
 
     expect(error.kind).toBe("not_found");
-    expect(error.message).toBe("La cronologia delle valutazioni non è disponibile su questo planner.");
+    expect(error.message).toBe("La cronologia dei collaudi non è disponibile su questo planner.");
   });
 
   it("401 sends the browser to the login like every other call", async () => {

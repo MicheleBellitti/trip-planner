@@ -42,8 +42,8 @@ export const RUN_VERDICT_EXPLANATIONS: Record<RunVerdict, string> = {
   blocked: "Il confronto con il riferimento non lascia passare questa modifica.",
   report_only:
     "Non c'è un riferimento approvato: voti e costi non si confrontano, ma i controlli bloccanti valgono comunque.",
-  aborted: "La valutazione è stata fermata prima della fine: i risultati sono parziali e il confronto la blocca.",
-  unknown: "Di questa valutazione non c'è un confronto salvato.",
+  aborted: "Il collaudo è stato fermato prima della fine: i risultati sono parziali e il confronto lo blocca.",
+  unknown: "Di questo collaudo non c'è un confronto salvato.",
 };
 
 /** The sentence under the verdict. A blocked run whose comparison had no baseline was not

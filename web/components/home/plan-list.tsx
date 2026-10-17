@@ -42,6 +42,7 @@ import type { PlanStatus, PlanSummary } from "@/lib/schemas/api";
 
 import { EmptyInvitation } from "./empty-invitation";
 import { exampleRequest } from "./example";
+import { planPath } from "@/lib/page-paths";
 
 /** `openedAt` is the moment the list was last read: "Oggi" and "Ieri" are counted from it. It is
  * taken in the fetch callbacks, so the clock is never read while rendering. */
@@ -106,7 +107,7 @@ export function PlanList({ className }: { className?: string }) {
     };
   }, [anyRunning]);
 
-  if (state.kind === "loading") return <LoadingRows className={cx(className, "max-w-[64rem]")} />;
+  if (state.kind === "loading") return <LoadingRows className={className} />;
 
   if (state.kind === "error") {
     return (
@@ -211,7 +212,7 @@ function FeaturedPlan({ plan, openedAt, className }: { plan: PlanSummary; opened
         {live ? "In corso" : "Ultimo piano pronto"}
       </h2>
       <Link
-        href={`/plans/${plan.id}`}
+        href={planPath(plan.id)}
         data-featured=""
         className={cx(
           "group block overflow-hidden rounded-md border border-rule bg-surface no-underline",
@@ -313,7 +314,7 @@ const NODE_TONE: Record<PlanStatus, string> = {
 function PlanRow({ plan, openedAt }: { plan: PlanSummary; openedAt: number }) {
   return (
     <Link
-      href={`/plans/${plan.id}`}
+      href={planPath(plan.id)}
       className={cx(
         "group relative grid items-center gap-x-2.5 gap-y-1 py-3.5 pr-4 no-underline @min-[58rem]:gap-x-4",
         "transition-[background-color] duration-(--duration-hover) ease-out hover:bg-notice-wash",
@@ -432,11 +433,37 @@ function RunningFor({ createdAt, openedAt }: { createdAt: string; openedAt: numb
 }
 
 function LoadingRows({ className }: { className?: string }) {
+  // The loaded layout's shape: the featured card's place first (beside the list from 1280 px),
+  // then the list card, so nothing moves when the plans arrive.
   return (
-    <div aria-busy="true" className={className}>
+    <div aria-busy="true" className={cx(className, "xl:grid xl:grid-cols-[minmax(0,64rem)_22rem] xl:items-start xl:gap-x-8")}>
       <VisuallyHidden>Carico i piani…</VisuallyHidden>
-      <Skeleton className="mb-3 w-40" />
-      <div className="@container relative overflow-hidden rounded-md border border-rule bg-surface">
+      <div data-featured-placeholder="" className="mb-5 max-w-[64rem] xl:col-start-2 xl:row-start-1 xl:mb-0">
+        {/* Each bar sits in its line's own box (0.8 em bar, the rest as padding), so the
+            placeholder is as tall as the card: the label, a title on two lines (one where the
+            card is wide, 1080 to 1279 px) and the status line. */}
+        <div className="pb-1.5 text-micro">
+          <div className="py-[0.275em]">
+            <Skeleton className="w-32" />
+          </div>
+        </div>
+        <div className="overflow-hidden rounded-md border border-rule bg-surface">
+          <Skeleton shape="block" className="h-44 w-full rounded-none lg:h-56" />
+          <div className="flex items-start gap-3 border-t border-rule px-4 py-3.5">
+            <span aria-hidden="true" className="mt-[3px] size-[18px] shrink-0 rounded-full border-4 border-rule" />
+            <div className="min-w-0 flex-1">
+              <div className="grid gap-[0.4em] py-[0.2em] text-heading">
+                <Skeleton className="w-full" />
+                <Skeleton className="w-2/3 lg:max-xl:hidden" />
+              </div>
+              <div className="mt-1 py-[0.3em] text-meta">
+                <Skeleton className="w-40" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="@container relative max-w-[64rem] min-w-0 overflow-hidden rounded-md border border-rule bg-surface xl:col-start-1 xl:row-start-1">
         <Rail />
         <ul className="divide-y divide-rule">
           {[0, 1, 2].map((row) => (
