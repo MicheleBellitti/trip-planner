@@ -8,6 +8,7 @@ import { SKIP_LANDING_BOOTSTRAP } from "@/lib/returning";
 import { ROUTES } from "@/lib/routes";
 
 import { HowItWorks } from "./how-it-works";
+import { LandingClose } from "./landing-close";
 import { LandingHero } from "./landing-hero";
 
 vi.mock("@/components/ui/theme-toggle", () => ({ ThemeToggle: () => <button type="button">Tema</button> }));
@@ -95,5 +96,27 @@ describe("how it works", () => {
     expect(booking.textContent).toContain("In scadenza");
     expect(booking.textContent).toContain("Prenota su Expedia");
     expect(booking.querySelector("a")).toBeNull();
+  });
+});
+
+describe("the closing", () => {
+  it("until the demo exists, says Atlas is by invitation and offers to sign in", () => {
+    const { container } = render(<LandingClose demoReady={false} />);
+    expect(screen.getByRole("heading", { level: 2, name: "Atlas è su invito." })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Accedi" }).getAttribute("href")).toBe(ROUTES.plans);
+    expect(container.querySelector(`a[href="${ROUTES.demo}"]`)).toBeNull();
+  });
+
+  it("with the demo, offers it first, then sign in, and says access is by invitation", () => {
+    render(<LandingClose demoReady />);
+    const links = screen.getAllByRole("link");
+    expect(links.map((link) => link.getAttribute("href"))).toEqual([ROUTES.demo, ROUTES.plans]);
+    expect(screen.getByText("Accesso su invito.")).toBeTruthy();
+  });
+
+  it("puts no demo link anywhere on today's landing, and ends with a footer", () => {
+    const { container } = render(<LandingPage />);
+    expect(container.querySelector(`a[href="${ROUTES.demo}"]`)).toBeNull();
+    expect(screen.getByRole("contentinfo")).toBeTruthy();
   });
 });

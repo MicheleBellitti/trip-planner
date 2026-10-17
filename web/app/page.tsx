@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 
 import { HowItWorks } from "@/components/landing/how-it-works";
+import { LandingClose } from "@/components/landing/landing-close";
+import { LandingFooter } from "@/components/landing/landing-footer";
 import { LandingHero } from "@/components/landing/landing-hero";
 import { PublicHeader } from "@/components/landing/public-header";
 import { SkipLandingScript } from "@/components/landing/skip-landing-script";
@@ -21,7 +23,9 @@ export default function LandingPage() {
       <main>
         <LandingHero />
         <HowItWorks />
+        <LandingClose />
       </main>
+      <LandingFooter />
     </>
   );
 }
