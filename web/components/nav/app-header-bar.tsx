@@ -100,7 +100,7 @@ function NewPlan({ current }: { current: boolean }) {
  * station and the same 24 px past the outer ones, a route that goes on beyond the edge of the map,
  * so the pair never reads as a two-step progress bar; 1 px on the phone, 2 px from 1080 px, where
  * the header has room for it. The current station is the larger "you are here" ring. The link is
- * positioned, so it paints above the line drawn before it.
+ * stacked above every line (z-1), including the next station's, so no line notches its focus ring.
  */
 function Station({
   href,
@@ -123,7 +123,7 @@ function Station({
         href={href}
         aria-current={current ? "page" : undefined}
         className={cx(
-          "group relative grid min-h-11 justify-items-center gap-1 rounded-xs px-2.5 pt-1 pb-2 text-small no-underline sm:px-3",
+          "group relative z-[1] grid min-h-11 justify-items-center gap-1 rounded-xs px-2.5 pt-1 pb-2 text-small no-underline sm:px-3",
           current ? "font-semibold text-ink" : "text-ink-2 hover:text-ink",
         )}
       >

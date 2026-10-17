@@ -4,7 +4,7 @@
  * "/evals/[id]": one eval run (GET /evals/runs/{id}). The header with the run's facts and its
  * verdict, the comparison with the baseline, the requests as closed rows (the deep dive behind
  * each, the ones that stopped the gate first) and the agent versions closed at the end. A link to
- * `#richiesta-<id>` opens that request; "Più recente" and "Più vecchia" step to the neighbouring
+ * `#richiesta-<id>` opens that request; "Più recente" and "Più vecchio" step to the neighbouring
  * runs. Fetched in the browser (the cookie), like the plans.
  */
 
@@ -73,7 +73,7 @@ export function EvalRunScreen({ runId }: { runId: string }) {
             <StateFact label="Cosa è successo">{state.message}</StateFact>
             <StateFact label="Cosa puoi fare">
               Torna all&apos;elenco: i collaudi arrivano dalla CI dopo ogni run, e quello che cerchi potrebbe non
-              essere ancora stata caricata.
+              essere ancora stato caricato.
             </StateFact>
           </StatePanel>
         </main>
@@ -162,7 +162,7 @@ function RunPage({ run }: { run: EvalRunDetail }) {
               Più recente
             </StepLink>
             <StepLink href={run.previous_run ? evalRunPath(run.previous_run.id) : null} direction="older">
-              Più vecchia
+              Più vecchio
             </StepLink>
           </nav>
         </div>

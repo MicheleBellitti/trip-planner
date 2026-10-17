@@ -242,14 +242,14 @@ describe("EvalRunScreen", () => {
     await renderRun(BETWEEN);
     const steps = screen.getByRole("navigation", { name: "Collaudi vicini" });
     expect(within(steps).getByRole("link", { name: /Più recente/ }).getAttribute("href")).toBe(`/evals/${NEWER!.id}`);
-    expect(within(steps).getByRole("link", { name: /Più vecchia/ }).getAttribute("href")).toBe(`/evals/${OLDER!.id}`);
+    expect(within(steps).getByRole("link", { name: /Più vecchio/ }).getAttribute("href")).toBe(`/evals/${OLDER!.id}`);
   });
 
   it("has no step past the newest or the oldest run", async () => {
     await renderRun({ ...ACCEPTED, previous_run: OLDER!, next_run: null });
     const steps = screen.getByRole("navigation", { name: "Collaudi vicini" });
     expect(within(steps).queryByRole("link", { name: /Più recente/ })).toBeNull();
-    expect(within(steps).getByRole("link", { name: /Più vecchia/ })).toBeTruthy();
+    expect(within(steps).getByRole("link", { name: /Più vecchio/ })).toBeTruthy();
   });
 
   it("gives the run's figures with how they moved since the run before it", async () => {

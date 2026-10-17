@@ -637,7 +637,7 @@ layout, not a stretched phone.
   move said once, the values in a table for screen readers. The charts wait for the third run.
   Then "Tutti i collaudi", the rail list, ten runs a page with numbered pages (`?pagina=N`,
   the scroll kept). A run's page steps to its neighbours ("Più recente" to the left, "Più
-  vecchia" to the right, as the list reads), gives its figures with their changes since the run
+  vecchio" to the right, as the list reads), gives its figures with their changes since the run
   before, and lists its reference requests as closed rows (glyph and colour, title, plan, checks,
   score, cost, and the blocking check and the low scores named), the failing ones first; a row
   opens the deep dive, and `#richiesta-<id>` opens one.
@@ -860,7 +860,7 @@ never as JavaScript; the icon names are a TypeScript type.
 
 Agents: `tree-structure` coordinatore, `airplane-tilt` voli, `bed` alloggio, `ticket` attività,
 `tram` spostamenti. States: `hourglass-medium` in attesa, `check-circle` finito, `x-circle` errore,
-`stop-circle` fermato and interrotto, `pause-circle` budget raggiunto, `prohibit` bloccato. Copy
+`stop-circle` fermato and interrotto, `pause-circle` limite raggiunto, `prohibit` bloccato. Copy
 the path of any new icon from the same version and weight; never draw one, never mix a family.
 
 **Why not lucide-react** (the spec lists it as Agent Plan's dependency): one family per product,

@@ -187,7 +187,7 @@ function Reasons({ run }: { run: EvalRunSummary }) {
   const rest = findings.length - SHOWN_REASONS;
   return (
     <div className="mt-3 sm:col-span-2">
-      <ul aria-label="Perché si è fermata" className="grid gap-2.5">
+      <ul aria-label="Perché si è fermato" className="grid gap-2.5">
         {findings.slice(0, SHOWN_REASONS).map((finding, index) => (
           <li key={index} className="grid grid-cols-[1rem_minmax(0,1fr)] gap-x-2">
             <Icon name="x-circle" size={15} className="mt-[3px] text-error" />

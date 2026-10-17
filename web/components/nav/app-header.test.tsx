@@ -93,6 +93,8 @@ describe("AppHeader", () => {
     expect(firstOuter.className).toMatch(/\bw-6\b/);
     expect(lastOuter.className).toMatch(/\bleft-1\/2\b/);
     expect(lastOuter.className).toMatch(/\bw-6\b/);
+    // Each link paints above every line, so no line notches a station's focus ring.
+    for (const link of nav.querySelectorAll("a")) expect(link.className).toMatch(/\bz-\[1\]/);
     for (const line of nav.querySelectorAll("[data-line]")) {
       expect(line.className).toContain("pointer-events-none");
       expect(line.className).toMatch(/\bh-px\b/);

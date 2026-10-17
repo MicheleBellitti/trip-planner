@@ -72,7 +72,7 @@ describe("EvalDashboard", () => {
     expect(fact("Piani accettati").textContent).toContain("0/5");
     const fewer = within(fact("Piani accettati")).getByText(/−2/);
     expect(fewer.className).toContain("text-error");
-    expect(fewer.textContent).toContain("rispetto alla precedente");
+    expect(fewer.textContent).toContain("rispetto al precedente");
     const dearer = within(fact("Costo")).getByText(/\+0,21 \$/);
     expect(dearer.className).toContain("text-error");
     expect(fact("Voto medio").textContent).toContain("nessuno");
@@ -161,7 +161,7 @@ describe("EvalDashboard", () => {
       { rule: "judge criteria", message: "Realistic transfers dropped", request_id: null, request_title: null },
     ];
     await renderDashboard([{ ...RUNS[1]!, blocking_findings: findings }, ...RUNS.slice(2)]);
-    const reasons = within(latest()).getByRole("list", { name: "Perché si è fermata" });
+    const reasons = within(latest()).getByRole("list", { name: "Perché si è fermato" });
     const items = within(reasons).getAllByRole("listitem");
     expect(items).toHaveLength(2);
     expect(items[0]?.textContent).toContain("Controlli");
@@ -175,7 +175,7 @@ describe("EvalDashboard", () => {
 
   it("names no reasons for a run that passed", async () => {
     await renderDashboard([RUNS[2]!, ...RUNS.slice(3)]);
-    expect(within(latest()).queryByRole("list", { name: "Perché si è fermata" })).toBeNull();
+    expect(within(latest()).queryByRole("list", { name: "Perché si è fermato" })).toBeNull();
   });
 
   it("reads a chart from the keyboard, saying each run it moves to, and opens the run on Enter", async () => {
