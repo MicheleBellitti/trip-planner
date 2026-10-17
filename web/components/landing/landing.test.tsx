@@ -148,7 +148,7 @@ describe("the closing", () => {
     expect(form.querySelector('input[name="source"]')?.getAttribute("value")).toBe("landing");
     expect(screen.getByRole("button", { name: "Mettimi in lista" })).toBeTruthy();
     const signIn = screen.getByRole("link", { name: "Accedi" });
-    expect(signIn.getAttribute("href")).toBe(ROUTES.plans);
+    expect(signIn.getAttribute("href")).toBe(ROUTES.login); // the login forwards a live session to the plans
     expect(form.compareDocumentPosition(signIn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); // the list first
     expect(container.querySelector(`a[href="${ROUTES.demo}"]`)).toBeNull();
   });

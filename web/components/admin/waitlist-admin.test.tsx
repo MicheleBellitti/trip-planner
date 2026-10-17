@@ -5,7 +5,7 @@ import { inviteAction, removeRequestAction } from "@/app/actions/waitlist";
 
 import type { WaitlistRow } from "@/lib/server/waitlist";
 
-import { formatDay, INVITE_ERRORS, inviteOutcome, removeOutcome, SOURCE_LABELS, WaitlistAdmin } from "./waitlist-admin";
+import { formatDay, INVITE_ERRORS, inviteOutcome, REMOVE_ERRORS, removeOutcome, SOURCE_LABELS, WaitlistAdmin } from "./waitlist-admin";
 
 vi.mock("@/app/actions/waitlist", () => ({ inviteAction: vi.fn(), removeRequestAction: vi.fn() }));
 
@@ -62,20 +62,39 @@ describe("WaitlistAdmin", () => {
     expect(within(add).getByLabelText(/Nota/)).toBeTruthy();
     const primaries = screen.getAllByRole("button").filter((button) => /\bbg-action\b/.test(button.className));
     expect(primaries.map((button) => button.textContent)).toEqual(["Invita"]);
-    expect(screen.getAllByRole("status").length).toBeGreaterThanOrEqual(2); // the add form's line and the rows' line, mounted empty
+    expect(screen.getAllByRole("status").length).toBe(1); // one region for the whole view, mounted empty
     expect(screen.getByText("Nessuna richiesta in attesa.")).toBeTruthy();
     expect(screen.getByText(/Nessun invito ancora/)).toBeTruthy();
   });
 
-  it("answers a row action in the page's status region, which takes focus once the answer is there", async () => {
+  it("'Togli' asks once: the question takes focus, 'Annulla' gives it back, 'Sì, togli' removes and the status region takes focus when no request is left", async () => {
     vi.mocked(removeRequestAction).mockResolvedValue({ status: "removed", email: "pending@example.com" });
     render(<WaitlistAdmin rows={[row({ email: "pending@example.com" })]} />);
     fireEvent.click(screen.getByRole("button", { name: "Togli pending@example.com" }));
+    expect(vi.mocked(removeRequestAction)).not.toHaveBeenCalled();
+    const yes = screen.getByRole("button", { name: "Sì, togli pending@example.com" });
+    await waitFor(() => expect(document.activeElement).toBe(yes));
+
+    fireEvent.click(screen.getByRole("button", { name: "Annulla" }));
+    const remove = screen.getByRole("button", { name: "Togli pending@example.com" });
+    await waitFor(() => expect(document.activeElement).toBe(remove));
+    expect(screen.queryByRole("button", { name: /Sì, togli/ })).toBeNull();
+
+    fireEvent.click(remove);
+    fireEvent.click(screen.getByRole("button", { name: "Sì, togli pending@example.com" }));
     const line = await screen.findByText("pending@example.com è stato tolto dalla lista.");
     const region = line.closest("[role='status']");
     expect(region).toBeTruthy();
     await waitFor(() => expect(document.activeElement).toBe(region));
     expect(vi.mocked(removeRequestAction).mock.calls[0]?.[1].get("email")).toBe("pending@example.com");
+  });
+
+  it("after a row action focus moves to the next request's button, not up to the status line", async () => {
+    vi.mocked(inviteAction).mockResolvedValue({ status: "invited", email: "first@example.com", emailSent: true, alreadyInvited: false });
+    render(<WaitlistAdmin rows={[row({ email: "first@example.com" }), row({ email: "second@example.com" })]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Invita first@example.com" }));
+    await screen.findByText("Invito inviato a first@example.com.");
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Invita second@example.com" })));
   });
 
   it("keeps the typing and focuses the field after a refused add, and clears both after a success", async () => {
@@ -95,7 +114,7 @@ describe("WaitlistAdmin", () => {
     vi.mocked(inviteAction).mockResolvedValueOnce({ status: "invited", email: "cousin@example.com", alreadyInvited: false, emailSent: true });
     fireEvent.change(email, { target: { value: "cousin@example.com" } });
     fireEvent.click(within(add).getByRole("button", { name: "Invita" }));
-    const sent = await within(add).findByText("Invito inviato a cousin@example.com.");
+    const sent = await screen.findByText("Invito inviato a cousin@example.com."); // the page's one region
     expect((email as HTMLInputElement).value).toBe("");
     expect((note as HTMLTextAreaElement).value).toBe("");
     await waitFor(() => expect(document.activeElement).toBe(sent.closest("[role='status']")));
@@ -109,6 +128,8 @@ describe("WaitlistAdmin", () => {
     expect(inviteOutcome({ status: "error", error: "forbidden" })).toEqual({ tone: "error", text: INVITE_ERRORS.forbidden });
     expect(removeOutcome({ status: "removed", email: "a@b.co" })).toEqual({ tone: "info", text: "a@b.co è stato tolto dalla lista." });
     expect(removeOutcome({ status: "error", error: "signed_out" })?.text).toBe(INVITE_ERRORS.signed_out);
+    expect(removeOutcome({ status: "error", error: "failed" })?.text).toBe(REMOVE_ERRORS.failed);
+    expect(REMOVE_ERRORS.failed).toContain("togliere");
   });
 
   it("writes dates in the planner's home time zone, whatever the machine's", () => {

@@ -9,6 +9,7 @@ import { Wordmark } from "@/components/ui/wordmark";
 import { ROUTES } from "@/lib/routes";
 
 import { AdminStations } from "./admin-stations";
+import { ScrollToCurrent } from "./scroll-to-current";
 import { Station } from "./station";
 
 /** The app's sections. "new" is the request form: it has no nav item, and no "Nuovo piano" there;
@@ -21,7 +22,9 @@ export type AppSection = "plans" | "evals" | "invites" | "new";
  * puts the bare theme toggle there), then "Nuovo piano", always last and always a secondary action
  * (each view keeps its single primary). "Piani" is everyone's; "Valutazioni" and "Inviti" (AdminStations)
  * are drawn only for the users who manage the planner. One line, at most 72 px, no menu drawer at 393 px, 44 px targets under a finger (the 40 px
- * icon controls grow). `compact` is the live screen's slim top row; it has no toggle (the sticky
+ * icon controls grow). Below about 360 px the three admin stations no longer fit beside the
+ * controls: the strip scrolls sideways (the line runs past the edge, as it does past the outer
+ * stations) instead of pushing the page wider, and ScrollToCurrent keeps the current one in view. `compact` is the live screen's slim top row; it has no toggle (the sticky
  * control bar carries it), and this file imports none, so the plan page ships no second copy.
  */
 export function AppHeaderBar({
@@ -42,12 +45,14 @@ export function AppHeaderBar({
         )}
       >
         <Wordmark href={ROUTES.plans} compact />
-        <div className="flex items-center gap-2">
-          <nav aria-label="Sezioni">
+        <div className="flex min-w-0 items-center gap-2">
+          {/* The vertical padding keeps the links' focus ring inside the scroll container. */}
+          <nav aria-label="Sezioni" className="-my-1 min-w-0 overflow-x-auto py-1 [scrollbar-width:none]">
             <ul className="flex">
               <Station href={ROUTES.plans} label="Piani" current={current === "plans"} />
               <AdminStations current={current} />
             </ul>
+            <ScrollToCurrent />
           </nav>
           {trailing}
           <NewPlan current={current === "new"} />

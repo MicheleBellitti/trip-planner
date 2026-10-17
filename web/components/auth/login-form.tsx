@@ -250,6 +250,11 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled, navi
       setFocusInput((tick) => tick + 1);
       return;
     }
+    // Enter on an address that stands refused does what the primary says, not another refusal.
+    if (refusedAddress && address.toLowerCase() === refusedAddress.toLowerCase()) {
+      void joinList(refusedAddress);
+      return;
+    }
     void send(address, false);
   }
 
@@ -392,25 +397,15 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled, navi
               />
             )}
           </Field>
-          {/* While an address stands refused, the way in is the primary and the failed action steps
-              back; typing another address clears `refusedAddress` and undoes the swap. */}
+          {/* While an address stands refused, the way in is the primary and comes first, and the failed
+              action steps back without its arrow; typing another address clears `refusedAddress` and
+              undoes the swap. The submit button keeps Enter: `submit` turns it into the join then. */}
           <div className="grid gap-2.5 sm:flex sm:flex-wrap sm:items-center">
-            <Button
-              type="submit"
-              variant={refusedAddress ? "secondary" : "primary"}
-              icon="arrow-right"
-              busy={busy === "link"}
-              disabled={busy !== null}
-              // 44 px on the phone, like the field above it; 40 px and its own width from 640 px (DESIGN.md,
-              // Buttons; the grid would otherwise stretch it).
-              className="min-h-11 w-full sm:min-h-10 sm:w-auto"
-            >
-              {busy === "link" ? "Invio il link…" : "Inviami il link"}
-            </Button>
             {refusedAddress ? (
               <Button
                 type="button"
                 variant="primary"
+                icon="arrow-right"
                 busy={busy === "list"}
                 disabled={busy !== null}
                 onClick={() => void joinList(refusedAddress)}
@@ -419,6 +414,18 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled, navi
                 {busy === "list" ? "Invio…" : WAITLIST_SUBMIT}
               </Button>
             ) : null}
+            <Button
+              type="submit"
+              variant={refusedAddress ? "secondary" : "primary"}
+              icon={refusedAddress ? undefined : "arrow-right"}
+              busy={busy === "link"}
+              disabled={busy !== null}
+              // 44 px on the phone, like the field above it; 40 px and its own width from 640 px (DESIGN.md,
+              // Buttons; the grid would otherwise stretch it).
+              className="min-h-11 w-full sm:min-h-10 sm:w-auto"
+            >
+              {busy === "link" ? "Invio il link…" : "Inviami il link"}
+            </Button>
           </div>
         </form>
       ) : null}

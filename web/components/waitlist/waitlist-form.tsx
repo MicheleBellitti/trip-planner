@@ -62,7 +62,11 @@ export function WaitlistOutcome({
   }, []);
   const words = WAITLIST_OUTCOMES[outcome];
   return (
-    <div ref={ref} tabIndex={-1} className={cx("rounded-md outline-none", className)}>
+    <div
+      ref={ref}
+      tabIndex={-1}
+      className={cx("rounded-md outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus", className)}
+    >
       <StatePanel
         icon={words.icon}
         title={words.title}
@@ -102,8 +106,8 @@ export function WaitlistOutcome({
 interface WaitlistFormProps {
   /** Where the request comes from (the row's `source`). */
   source: Extract<WaitlistSource, "landing" | "login">;
-  /** After the button, "Hai già un invito? Accedi" (to the plans, which ask to sign in): it goes
-   * with the form, so the outcome panel's own "Accedi" is never doubled. */
+  /** After the button, "Hai già un invito? Accedi" (to the login, which forwards a live session to
+   * the plans): it goes with the form, so the outcome panel's own "Accedi" is never doubled. */
   signInHint?: boolean;
   className?: string;
 }
@@ -111,24 +115,25 @@ interface WaitlistFormProps {
 /**
  * Join the waitlist: an address, two optional lines about the trip, one button. The server action
  * (app/actions/waitlist.ts) validates and answers; an address problem is a Field error on the field,
- * which takes focus; a failure is a Notice; the four outcomes replace the form with their panel, and
- * "Cambia indirizzo" brings the form back with the address kept and selected (a new key, since an
- * action's state cannot be reset in place). The fields are controlled, so a refused submit keeps
- * what was typed.
+ * which takes focus and clears as soon as the field is edited; a failure is a Notice; the four
+ * outcomes replace the form with their panel, and "Cambia indirizzo" brings the form back with the
+ * address kept and selected and the note as it was (a new key, since an action's state cannot be
+ * reset in place). The fields are controlled, so a refused submit keeps what was typed.
  */
 export function WaitlistForm({ source, signInHint = false, className }: WaitlistFormProps) {
   const [attempt, setAttempt] = useState(0);
-  const [carried, setCarried] = useState("");
+  const [carried, setCarried] = useState({ email: "", note: "" });
   return (
     <JoinForm
       key={attempt}
       source={source}
       signInHint={signInHint}
       className={className}
-      initialEmail={carried}
+      initialEmail={carried.email}
+      initialNote={carried.note}
       selectEmail={attempt > 0}
-      onChangeAddress={(email) => {
-        setCarried(email);
+      onChangeAddress={(email, note) => {
+        setCarried({ email, note });
         setAttempt((count) => count + 1);
       }}
     />
@@ -140,14 +145,28 @@ function JoinForm({
   signInHint,
   className,
   initialEmail,
+  initialNote,
   selectEmail,
   onChangeAddress,
-}: WaitlistFormProps & { initialEmail: string; selectEmail: boolean; onChangeAddress: (email: string) => void }) {
+}: WaitlistFormProps & {
+  initialEmail: string;
+  initialNote: string;
+  selectEmail: boolean;
+  onChangeAddress: (email: string, note: string) => void;
+}) {
   const [state, formAction, pending] = useActionState<JoinState, FormData>(joinWaitlistAction, JOIN_IDLE);
   const [email, setEmail] = useState(initialEmail);
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState(initialNote);
+  // Which fields were edited since the last submit: a field's error shows only until then (the
+  // action's state cannot be cleared in place, so the flags are reset when the form is sent).
+  const [edited, setEdited] = useState({ email: false, note: false });
   const emailRef = useRef<HTMLInputElement>(null);
   const noteRef = useRef<HTMLTextAreaElement>(null);
+
+  function send(data: FormData) {
+    setEdited({ email: false, note: false });
+    formAction(data);
+  }
 
   // The way back from an outcome: the field, with the kept address selected so typing replaces it.
   useEffect(() => {
@@ -174,7 +193,7 @@ function JoinForm({
             variant="quiet"
             size="sm"
             icon="arrow-left"
-            onClick={() => onChangeAddress(state.email)}
+            onClick={() => onChangeAddress(state.email, note)}
             className={cx("min-h-11 sm:min-h-8", !WAITLIST_OUTCOMES[state.status].signIn && "-ml-3")}
           >
             {WAITLIST_CHANGE_ADDRESS}
@@ -185,12 +204,12 @@ function JoinForm({
   }
 
   const error = state.status === "error" ? state.error : null;
-  const emailError = error === "invalid_email" ? WAITLIST_INVALID_EMAIL : null;
-  const noteError = error === "note_too_long" ? WAITLIST_NOTE_TOO_LONG : null;
+  const emailError = error === "invalid_email" && !edited.email ? WAITLIST_INVALID_EMAIL : null;
+  const noteError = error === "note_too_long" && !edited.note ? WAITLIST_NOTE_TOO_LONG : null;
   const failed = error === "failed" || error === "unavailable";
 
   return (
-    <form action={formAction} noValidate className={cx("grid gap-4", className)}>
+    <form action={send} noValidate className={cx("grid gap-4", className)}>
       <input type="hidden" name="source" value={source} />
       {failed ? <Notice tone="error" role="alert" title={WAITLIST_FAILED} /> : null}
       <Field label={WAITLIST_EMAIL_LABEL} error={emailError}>
@@ -204,7 +223,10 @@ function JoinForm({
             inputMode="email"
             spellCheck={false}
             value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            onChange={(event) => {
+              setEmail(event.target.value);
+              setEdited((flags) => (flags.email ? flags : { ...flags, email: true }));
+            }}
             disabled={pending}
           />
         )}
@@ -223,7 +245,10 @@ function JoinForm({
             rows={2}
             maxLength={WAITLIST_NOTE_MAX}
             value={note}
-            onChange={(event) => setNote(event.target.value)}
+            onChange={(event) => {
+              setNote(event.target.value);
+              setEdited((flags) => (flags.note ? flags : { ...flags, note: true }));
+            }}
             disabled={pending}
           />
         )}
@@ -241,7 +266,7 @@ function JoinForm({
       {signInHint ? (
         <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-small text-ink-2">
           Hai già un invito?
-          <LinkButton href={ROUTES.plans} variant="secondary" icon="sign-in" className="pointer-coarse:min-h-11">
+          <LinkButton href={ROUTES.login} variant="secondary" icon="sign-in" className="pointer-coarse:min-h-11">
             Accedi
           </LinkButton>
         </p>

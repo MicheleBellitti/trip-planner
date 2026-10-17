@@ -26,6 +26,12 @@ export const INVITE_ERRORS: Record<InviteError, string> = {
   failed: "Non è stato possibile invitare. Riprova tra poco.",
 };
 
+/** The removal's own wording where it differs; the rest is shared with the invitation. */
+export const REMOVE_ERRORS: Record<InviteError, string> = {
+  ...INVITE_ERRORS,
+  failed: "Non è stato possibile togliere la richiesta. Riprova tra poco.",
+};
+
 /** Dates are shown in the planner's home time zone, the same on the server and in the browser. */
 const DATE = new Intl.DateTimeFormat("it-IT", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/Rome" });
 
@@ -50,47 +56,87 @@ export function inviteOutcome(state: InviteState): Outcome | null {
 /** What removing a request did. */
 export function removeOutcome(state: RemoveState): Outcome | null {
   if (state.status === "idle") return null;
-  if (state.status === "error") return { tone: "error", text: INVITE_ERRORS[state.error] };
+  if (state.status === "error") return { tone: "error", text: REMOVE_ERRORS[state.error] };
   return { tone: "info", text: `${state.email} è stato tolto dalla lista.` };
 }
+
+type RowAction = "invite" | "remove";
 
 /**
  * The invitations page's body: invite an address, the pending requests with "Invita" and "Togli",
  * the invitations with their state. Every action is a server action checked on the server
- * (app/actions/waitlist.ts); the page re-reads the rows after each one. One status region, there
- * from the first render, says what the last row action did and takes focus after it, so the
- * answer survives the row's move between the lists and reaches a screen reader; the add form has
- * its own line. Focus moves in effects, once the answer is rendered: the status region is
- * `display: none` while empty and the fields are disabled while the action runs, and neither can
- * take focus before the commit. The view's one primary is the add form's button: the rows' are
- * secondary.
+ * (app/actions/waitlist.ts); the page re-reads the rows after each one. One status region for the
+ * whole view, there from the first render, says what the last action did, the add form's included
+ * (its field errors stay on the fields and clear it). It sticks to the top of the viewport, so the
+ * sentence is in view wherever the action was, and `aria-live` reads it; after a row action focus
+ * does not jump up to it but moves to the next pending row's button (the list shifts, the work goes
+ * on where the thumb is), and lands on the region only when no request is left or the action
+ * failed. Focus moves in effects, once the answer is rendered: the region is `display: none`
+ * while empty and the fields are disabled while the action runs, and neither can take focus
+ * before the commit. "Togli" asks once, inline, before it removes. The view's one primary is the
+ * add form's button: the rows' are secondary and quiet.
  */
 export function WaitlistAdmin({ rows }: { rows: WaitlistRow[] }) {
   const pending = rows.filter((row) => row.invitedAt === null);
   const invited = rows.filter((row) => row.invitedAt !== null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
-  const [busy, setBusy] = useState<{ email: string; kind: "invite" | "remove" } | null>(null);
+  const [busy, setBusy] = useState<{ email: string; kind: RowAction } | null>(null);
+  const [confirming, setConfirming] = useState<string | null>(null);
   const [inFlight, startTransition] = useTransition();
   const statusRef = useRef<HTMLDivElement>(null);
+  const items = useRef(new Map<string, HTMLLIElement>());
+  const focusNext = useRef<string | null>(null);
 
-  function run(kind: "invite" | "remove", email: string) {
+  function register(email: string, element: HTMLLIElement | null) {
+    if (element) items.current.set(email, element);
+    else items.current.delete(email);
+  }
+
+  function run(kind: RowAction, email: string) {
+    // The row leaves the list on success: focus will go to its neighbour, the one after it or else
+    // the one before. An invited row's "Invia l'email" has no neighbour here: the region takes it.
+    const index = pending.findIndex((row) => row.email === email);
+    const next = index === -1 ? undefined : (pending[index + 1] ?? pending[index - 1]);
+    focusNext.current = next?.email ?? null;
     setBusy({ email, kind });
     startTransition(async () => {
       const data = new FormData();
       data.set("email", email);
-      setOutcome(kind === "invite" ? inviteOutcome(await inviteAction(INVITE_IDLE, data)) : removeOutcome(await removeRequestAction(REMOVE_IDLE, data)));
+      setOutcome(
+        kind === "invite" ? inviteOutcome(await inviteAction(INVITE_IDLE, data)) : removeOutcome(await removeRequestAction(REMOVE_IDLE, data)),
+      );
     });
   }
 
-  // Every answer is a new object, so a repeated outcome moves focus again.
+  function announce(result: Outcome | null) {
+    focusNext.current = null;
+    setOutcome(result);
+  }
+
+  // Every answer is a new object, so a repeated outcome moves focus again. The answer can commit
+  // a beat before the transition ends, while the rows' buttons are still disabled and cannot take
+  // focus: the effect waits for `inFlight` to clear and remembers which answer it already placed.
+  const placed = useRef<Outcome | null>(null);
   useEffect(() => {
-    if (outcome) statusRef.current?.focus();
-  }, [outcome]);
+    if (!outcome || inFlight || placed.current === outcome) return;
+    placed.current = outcome;
+    const next = outcome.tone === "error" || !focusNext.current ? null : items.current.get(focusNext.current)?.querySelector("button");
+    (next ?? statusRef.current)?.focus();
+  }, [outcome, inFlight]);
 
   return (
     <div className="grid max-w-[40rem] gap-9">
-      <AddInvite />
-      <div ref={statusRef} tabIndex={-1} role="status" aria-live="polite" className="-my-4 rounded-md outline-none empty:hidden">
+      <AddInvite onOutcome={announce} />
+      <div
+        ref={statusRef}
+        tabIndex={-1}
+        role="status"
+        aria-live="polite"
+        className={cx(
+          "sticky top-0 z-10 -my-4 rounded-md bg-ground py-3 outline-none empty:hidden",
+          "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+        )}
+      >
         {outcome ? <Notice tone={outcome.tone}>{outcome.text}</Notice> : null}
       </div>
       <section aria-labelledby="pending-title" className="grid gap-3">
@@ -102,7 +148,16 @@ export function WaitlistAdmin({ rows }: { rows: WaitlistRow[] }) {
         ) : (
           <ul className="divide-y divide-rule border-y border-rule">
             {pending.map((row) => (
-              <Row key={row.email} row={row} busy={busy} inFlight={inFlight} onRun={run} />
+              <Row
+                key={row.email}
+                row={row}
+                busy={busy}
+                inFlight={inFlight}
+                confirming={confirming === row.email}
+                onConfirm={(open) => setConfirming(open ? row.email : null)}
+                onRun={run}
+                itemRef={(element) => register(row.email, element)}
+              />
             ))}
           </ul>
         )}
@@ -126,18 +181,19 @@ export function WaitlistAdmin({ rows }: { rows: WaitlistRow[] }) {
 }
 
 /** "Invita un indirizzo": a row with source "admin", invited at once, the email sent. The fields are
- * cleared only once the invitation went through; a refused address stays in its field, focused. */
-function AddInvite() {
+ * controlled and cleared only once the server says the invitation went out; an address or note
+ * problem is a Field error, which takes focus once the fields are enabled again; every other
+ * answer goes to the page's status region through `onOutcome` (null clears it when a field error
+ * takes over, so no stale sentence stays beside a fresh one). */
+function AddInvite({ onOutcome }: { onOutcome: (outcome: Outcome | null) => void }) {
   const [state, setState] = useState<InviteState>(INVITE_IDLE);
   const [pending, startTransition] = useTransition();
   const [email, setEmail] = useState("");
   const [note, setNote] = useState("");
   const emailRef = useRef<HTMLInputElement>(null);
   const noteRef = useRef<HTMLTextAreaElement>(null);
-  const statusRef = useRef<HTMLDivElement>(null);
   const emailError = state.status === "error" && state.error === "invalid_email" ? INVITE_ERRORS.invalid_email : null;
   const noteError = state.status === "error" && state.error === "note_too_long" ? INVITE_ERRORS.note_too_long : null;
-  const line = emailError || noteError ? null : inviteOutcome(state);
 
   function submit(data: FormData) {
     startTransition(async () => {
@@ -147,16 +203,15 @@ function AddInvite() {
         setEmail("");
         setNote("");
       }
+      const onField = result.status === "error" && (result.error === "invalid_email" || result.error === "note_too_long");
+      onOutcome(onField ? null : inviteOutcome(result));
     });
   }
 
-  // The answer lands focus where it belongs once the fields are enabled again: a refused field, or
-  // the status line (the success, or a failure that is not about one field).
   useEffect(() => {
-    if (pending || state.status === "idle") return;
-    if (state.status === "error" && state.error === "invalid_email") emailRef.current?.focus();
-    else if (state.status === "error" && state.error === "note_too_long") noteRef.current?.focus();
-    else statusRef.current?.focus();
+    if (pending || state.status !== "error") return;
+    if (state.error === "invalid_email") emailRef.current?.focus();
+    else if (state.error === "note_too_long") noteRef.current?.focus();
   }, [state, pending]);
 
   return (
@@ -164,9 +219,6 @@ function AddInvite() {
       <h2 id="add-title" className="font-cond text-heading font-semibold">
         Invita un indirizzo
       </h2>
-      <div ref={statusRef} tabIndex={-1} role="status" aria-live="polite" className="rounded-md outline-none empty:hidden">
-        {line ? <Notice tone={line.tone}>{line.text}</Notice> : null}
-      </div>
       <form action={submit} noValidate className="grid max-w-[26rem] gap-4">
         <Field label="Indirizzo email" error={emailError}>
           {(control) => (
@@ -207,18 +259,35 @@ function AddInvite() {
 }
 
 /** One address: who, what they wrote, where from and when; the actions on the right, each named
- * with the address for a screen reader (fourteen buttons that all read "Invita" tell nothing). */
+ * with the address for a screen reader (fourteen buttons that all read "Invita" tell nothing).
+ * "Togli" swaps itself for a one-line question with "Sì, togli" and "Annulla": the question takes
+ * focus, and "Annulla" gives it back to "Togli". The question stays, busy, while the removal runs. */
 function Row({
   row,
   busy,
   inFlight,
+  confirming = false,
+  onConfirm,
   onRun,
+  itemRef,
 }: {
   row: WaitlistRow;
-  busy: { email: string; kind: "invite" | "remove" } | null;
+  busy: { email: string; kind: RowAction } | null;
   inFlight: boolean;
-  onRun: (kind: "invite" | "remove", email: string) => void;
+  confirming?: boolean;
+  onConfirm?: (open: boolean) => void;
+  onRun: (kind: RowAction, email: string) => void;
+  itemRef?: (element: HTMLLIElement | null) => void;
 }) {
+  const item = useRef<HTMLLIElement | null>(null);
+  const wasConfirming = useRef(false);
+  useEffect(() => {
+    const buttons = item.current;
+    if (confirming) buttons?.querySelector<HTMLButtonElement>('[data-action="confirm-remove"]')?.focus();
+    else if (wasConfirming.current) buttons?.querySelector<HTMLButtonElement>('[data-action="remove"]')?.focus();
+    wasConfirming.current = confirming;
+  }, [confirming]);
+
   const invitedAt = row.invitedAt;
   const facts: string[] = [];
   if (invitedAt) {
@@ -229,39 +298,67 @@ function Row({
     facts.push(`${SOURCE_LABELS[row.source]}, ${formatDay(row.createdAt)}`);
   }
   const needsEmail = invitedAt !== null && row.invitationSentAt === null && !row.registered;
-  const mine = (kind: "invite" | "remove") => inFlight && busy?.email === row.email && busy.kind === kind;
+  const mine = (kind: RowAction) => inFlight && busy?.email === row.email && busy.kind === kind;
+  const button = "min-h-11 sm:min-h-8";
   return (
-    <li className="grid gap-x-6 gap-y-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+    <li
+      ref={(element) => {
+        item.current = element;
+        itemRef?.(element);
+      }}
+      className="grid gap-x-6 gap-y-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
+    >
       <div className="min-w-0">
         <p className="font-semibold text-ink [overflow-wrap:anywhere]">{row.email}</p>
         {row.note ? <p className="mt-0.5 max-w-prose text-small whitespace-pre-line text-ink-2">{row.note}</p> : null}
         <p className={cx("text-meta text-ink-2", row.note ? "mt-1" : "mt-0.5")}>{facts.join(" · ")}</p>
       </div>
       {!invitedAt ? (
-        <div className="flex flex-wrap items-center gap-2 sm:pt-0.5">
-          <Button
-            variant="secondary"
-            size="sm"
-            busy={mine("invite")}
-            disabled={inFlight}
-            aria-label={`Invita ${row.email}`}
-            onClick={() => onRun("invite", row.email)}
-            className="min-h-11 sm:min-h-8"
-          >
-            {mine("invite") ? "Invio…" : "Invita"}
-          </Button>
-          <Button
-            variant="quiet"
-            size="sm"
-            busy={mine("remove")}
-            disabled={inFlight}
-            aria-label={`Togli ${row.email}`}
-            onClick={() => onRun("remove", row.email)}
-            className="min-h-11 sm:min-h-8"
-          >
-            {mine("remove") ? "Tolgo…" : "Togli"}
-          </Button>
-        </div>
+        confirming ? (
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 sm:pt-0.5">
+            <span className="text-small text-ink-2">Togliere la richiesta?</span>
+            <Button
+              variant="secondary"
+              size="sm"
+              data-action="confirm-remove"
+              busy={mine("remove")}
+              disabled={inFlight}
+              aria-label={`Sì, togli ${row.email}`}
+              onClick={() => onRun("remove", row.email)}
+              className={button}
+            >
+              {mine("remove") ? "Tolgo…" : "Sì, togli"}
+            </Button>
+            <Button variant="quiet" size="sm" disabled={inFlight} onClick={() => onConfirm?.(false)} className={button}>
+              Annulla
+            </Button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2 sm:pt-0.5">
+            <Button
+              variant="secondary"
+              size="sm"
+              busy={mine("invite")}
+              disabled={inFlight}
+              aria-label={`Invita ${row.email}`}
+              onClick={() => onRun("invite", row.email)}
+              className={button}
+            >
+              {mine("invite") ? "Invio…" : "Invita"}
+            </Button>
+            <Button
+              variant="quiet"
+              size="sm"
+              data-action="remove"
+              disabled={inFlight}
+              aria-label={`Togli ${row.email}`}
+              onClick={() => onConfirm?.(true)}
+              className={button}
+            >
+              Togli
+            </Button>
+          </div>
+        )
       ) : needsEmail ? (
         <div className="sm:pt-0.5">
           <Button
@@ -271,7 +368,7 @@ function Row({
             disabled={inFlight}
             aria-label={`Invia l'email a ${row.email}`}
             onClick={() => onRun("invite", row.email)}
-            className="min-h-11 sm:min-h-8"
+            className={button}
           >
             {mine("invite") ? "Invio…" : "Invia l'email"}
           </Button>

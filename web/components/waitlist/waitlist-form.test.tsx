@@ -82,10 +82,10 @@ describe("WaitlistForm", () => {
     await waitFor(() => expect(document.activeElement).toBe(note));
   });
 
-  it("'Cambia indirizzo' brings the form back with the address kept and selected", async () => {
+  it("'Cambia indirizzo' brings the form back with the address kept and selected, and the note as it was", async () => {
     join.mockResolvedValue({ status: "joined", email: "friend@example.com" });
     render(<WaitlistForm source="landing" signInHint />);
-    submit("friend@example.com");
+    submit("friend@example.com", "Lisbona ad aprile");
     await screen.findByRole("heading", { name: WAITLIST_OUTCOMES.joined.title });
     expect(screen.queryByRole("link", { name: "Accedi" })).toBeNull(); // the hint went with the form
 
@@ -94,9 +94,23 @@ describe("WaitlistForm", () => {
 
     const input = screen.getByLabelText(WAITLIST_EMAIL_LABEL) as HTMLInputElement;
     expect(input.value).toBe("friend@example.com");
+    expect((screen.getByLabelText(/Il prossimo viaggio/) as HTMLTextAreaElement).value).toBe("Lisbona ad aprile");
     await waitFor(() => expect(document.activeElement).toBe(input));
     expect(select).toHaveBeenCalled();
-    expect(screen.getByRole("link", { name: "Accedi" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Accedi" }).getAttribute("href")).toBe("/login");
+  });
+
+  it("a field's error clears as soon as the field is edited", async () => {
+    join.mockResolvedValue({ status: "error", error: "invalid_email" });
+    render(<WaitlistForm source="landing" />);
+    submit("nope");
+    const input = screen.getByLabelText(WAITLIST_EMAIL_LABEL) as HTMLInputElement;
+    await waitFor(() => expect(input.getAttribute("aria-invalid")).toBe("true"));
+
+    fireEvent.change(input, { target: { value: "nope@" } });
+
+    expect(input.getAttribute("aria-invalid")).toBeNull();
+    expect(screen.queryByText(WAITLIST_INVALID_EMAIL)).toBeNull();
   });
 
   it("a failure is an alert above the form", async () => {

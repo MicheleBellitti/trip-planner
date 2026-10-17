@@ -172,6 +172,23 @@ describe("LoginForm", () => {
     expect(screen.getByRole("button", { name: "Inviami il link" }).className).toMatch(/\bbg-action\b/);
   });
 
+  it("while an address stands refused, the way in comes first and Enter on the same address joins the list instead of another refusal", async () => {
+    magicLink.mockResolvedValue(REFUSED);
+    join.mockResolvedValue({ status: "joined", email: "nobody@example.com" });
+    renderForm();
+    typeAndSubmit("nobody@example.com");
+    const offer = await screen.findByRole("button", { name: "Mettimi in lista" });
+    const link = screen.getByRole("button", { name: "Inviami il link" });
+    expect(offer.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(magicLink).toHaveBeenCalledTimes(1);
+
+    fireEvent.submit(screen.getByLabelText(LABEL).closest("form")!);
+
+    await screen.findByRole("heading", { name: "Sei in lista" });
+    expect(magicLink).toHaveBeenCalledTimes(1); // no second refusal
+    expect((join.mock.calls[0]?.[1] as FormData).get("email")).toBe("nobody@example.com");
+  });
+
   it("'Mettimi in lista' joins the waitlist with the refused address, from the login, and shows the answer", async () => {
     magicLink.mockResolvedValue(REFUSED);
     join.mockResolvedValue({ status: "joined", email: "nobody@example.com" });
