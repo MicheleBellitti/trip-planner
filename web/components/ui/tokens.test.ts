@@ -32,8 +32,20 @@ function hexTokens(selector: string): Tokens {
 }
 
 // Dark ("Carta notturna") is the default on :root; light ("Carta di giorno") only where pinned.
-const dark = hexTokens(':root,\n[data-theme="dark"]');
-const light = hexTokens('\n[data-theme="light"]');
+const DARK_BLOCK = ':root,\n[data-theme="dark"]';
+const LIGHT_BLOCK = '\n[data-theme="light"]';
+const dark = hexTokens(DARK_BLOCK);
+const light = hexTokens(LIGHT_BLOCK);
+
+/** A `--name: rgb(r g b / a);` declaration of a theme block, as its channels and alpha. */
+function alphaToken(selector: string, name: string): { rgb: [number, number, number]; alpha: number } {
+  const start = css.indexOf(`${selector} {`);
+  const body = css.slice(start, css.indexOf("}", start));
+  const match = body.match(new RegExp(`--${name}:\\s*rgb\\((\\d+) (\\d+) (\\d+) / ([\\d.]+)\\);`));
+  expect(match, `--${name} in ${selector.trim()}`).toBeTruthy();
+  const [, r, g, b, a] = match!;
+  return { rgb: [Number(r), Number(g), Number(b)], alpha: Number(a) };
+}
 
 function channel(value: number): number {
   const c = value / 255;
@@ -125,11 +137,24 @@ describe("design tokens", () => {
     expect(implemented).toEqual(documented);
   });
 
-  for (const [theme, tokens] of [
-    ["light", light],
-    ["dark", dark],
+  for (const [theme, tokens, block] of [
+    ["light", light, LIGHT_BLOCK],
+    ["dark", dark, DARK_BLOCK],
   ] as const) {
     describe(`${theme} theme contrast`, () => {
+      it("keeps selected text readable: ink on the selection over ground and surface", () => {
+        // The scrim has no pair: it is non-text under a sheet, and over a cover photo the contrast
+        // depends on the photo, which no token can promise.
+        const selection = alphaToken(block, "selection");
+        for (const bg of ["ground", "surface"]) {
+          const back = rgb(tokens[bg]!);
+          const blend = [0, 1, 2].map((i) =>
+            Math.round(selection.alpha * selection.rgb[i]! + (1 - selection.alpha) * back[i]!),
+          ) as [number, number, number];
+          expect(contrast(tokens.ink!, blend), `ink on selection over ${bg}`).toBeGreaterThanOrEqual(TEXT);
+        }
+      });
+
       it.each(PAIRS)("%s on %s is at least %s:1", (fg, bg, minimum) => {
         expect(tokens[fg], fg).toBeDefined();
         expect(tokens[bg], bg).toBeDefined();

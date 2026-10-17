@@ -380,6 +380,7 @@ WCAG 2.x ratios, measured on the background each element actually sits on (2026-
 | success on surface / ground / success-wash | 5.28 / 4.88 / 4.79 | 7.71 / 8.53 / 7.37 | 4.5 |
 | ink / ink-2 on success-wash | 13.65 / 5.55 | 11.28 / 5.59 | 4.5 |
 | on-line on coordinatore / voli / alloggio / attività / spostamenti | 9.96 / 6.28 / 5.55 / 6.34 / 5.45 | 6.87 / 5.49 / 5.42 / 5.37 / 5.74 | 4.5 |
+| ink on selection, over ground / surface | 10.62 / 11.44 | 7.82 / 7.22 | 4.5 |
 | on-line at 92 % on the plate, blended on 8-bit channels (worst) | 4.87 (spostamenti) | 4.77 (attività) | 4.5 |
 | line strokes on surface (worst) | 5.45 (spostamenti) | 4.85 (attività) | 3 |
 | line strokes on ground (worst) | 5.04 (spostamenti) | 5.37 (attività) | 3 |
@@ -1008,7 +1009,7 @@ day-by-day list stays the primary content and says everything the map does.
   `mixColors` computes them). **Water is the one cool tone**: in light it is that grey leaned 12 %
   toward `line-flights` (`WATER_COOL`), so the Tagus is told from land at a glance and a quarter on
   its bank is not "in the river" (land against water 1.44:1, was 1.22:1); the day lines keep
-  at least 3.64:1 over it (spostamenti, the worst) in light, 5.4:1 in dark (`style.test.ts`
+  at least 3.49:1 over it (spostamenti, the worst) in light, 3.98:1 in dark (attività there; `style.test.ts`
   recomputes both); in dark water stays the darkest step. No POIs, no road names, no shields, no rail. Labels are only
   places (city, town, district, neighbourhood) and water names, in Noto Sans (the glyphs
   OpenFreeMap serves), `ink-2` with a ground halo, Italian names first. Dark is the same
