@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import evalList from "../components/evals/__fixtures__/list.json";
 import evalRun from "../components/evals/__fixtures__/run-accepted.json";
@@ -12,6 +12,7 @@ import {
   UnauthorizedError,
   type ApiClientOptions,
 } from "./api";
+import { SIGNED_IN_KEY } from "./returning";
 import { APP_ERROR_CODES, COVER_UNAVAILABLE_CODE, PLAN_ERROR_CODES } from "./schemas/api";
 
 const PLAN_ID = happyPath.plan_id;
@@ -501,5 +502,28 @@ describe("the eval history", () => {
     const { api } = client(json(200, { runs: [{ id: "not-a-uuid" }] }));
 
     expect((await failure(api.listEvalRuns())).kind).toBe("invalid_response");
+  });
+});
+
+describe("the returning-visitor mark", () => {
+  afterEach(() => localStorage.clear());
+
+  it("is set by a successful authenticated call", async () => {
+    const { api } = client(json(200, { plans: [] }));
+    await api.listPlans();
+    expect(localStorage.getItem(SIGNED_IN_KEY)).toBe("1");
+  });
+
+  it("is not set by the health check, which needs no sign-in", async () => {
+    const { api } = client(json(200, { status: "ok" }));
+    await api.health();
+    expect(localStorage.getItem(SIGNED_IN_KEY)).toBeNull();
+  });
+
+  it("is cleared by a 401, so an expired session sees the landing next time", async () => {
+    localStorage.setItem(SIGNED_IN_KEY, "1");
+    const { api } = client(json(401, envelope("not_authenticated", "Accedi a TripTracker per usare il planner.")));
+    await failure(api.listPlans());
+    expect(localStorage.getItem(SIGNED_IN_KEY)).toBeNull();
   });
 });

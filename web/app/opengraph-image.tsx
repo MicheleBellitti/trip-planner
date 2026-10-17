@@ -4,7 +4,7 @@ import path from "node:path";
 import { ImageResponse } from "next/og";
 
 import { BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand";
-import { markDataUri, NIGHT } from "@/lib/brand-mark";
+import { CONVERGING_DESTINATION, CONVERGING_PATHS, CONVERGING_VIEWBOX, markDataUri, NIGHT } from "@/lib/brand-mark";
 
 export const alt = `${BRAND_NAME}: ${BRAND_TAGLINE}`;
 export const size = { width: 1200, height: 630 };
@@ -12,17 +12,18 @@ export const contentType = "image/png";
 
 /** The five agent lines converging on a destination, as at the end of the landing hero. No text:
  * the inner SVG is rasterised without fonts. 1056 × 150 units. */
+const { cx, cy } = CONVERGING_DESTINATION;
 const CONVERGING_LINES = [
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1056 150">`,
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${CONVERGING_VIEWBOX}">`,
   `<g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="7">`,
-  `<path d="M0 75 H990" stroke="${NIGHT.coordinator}" stroke-width="9"/>`,
-  `<path d="M0 15 H930 L990 75" stroke="${NIGHT.flights}"/>`,
-  `<path d="M0 45 H960 L990 75" stroke="${NIGHT.lodging}"/>`,
-  `<path d="M0 105 H960 L990 75" stroke="${NIGHT.activities}"/>`,
-  `<path d="M120 135 H930 L990 75" stroke="${NIGHT.transport}"/>`,
+  `<path d="${CONVERGING_PATHS.coordinator}" stroke="${NIGHT.coordinator}" stroke-width="9"/>`,
+  `<path d="${CONVERGING_PATHS.flights}" stroke="${NIGHT.flights}"/>`,
+  `<path d="${CONVERGING_PATHS.lodging}" stroke="${NIGHT.lodging}"/>`,
+  `<path d="${CONVERGING_PATHS.activities}" stroke="${NIGHT.activities}"/>`,
+  `<path d="${CONVERGING_PATHS.transport}" stroke="${NIGHT.transport}"/>`,
   `</g>`,
-  `<circle cx="990" cy="75" r="26" fill="${NIGHT.ground}" stroke="${NIGHT.ink}" stroke-width="7"/>`,
-  `<circle cx="990" cy="75" r="9" fill="${NIGHT.ink}"/>`,
+  `<circle cx="${cx}" cy="${cy}" r="26" fill="${NIGHT.ground}" stroke="${NIGHT.ink}" stroke-width="7"/>`,
+  `<circle cx="${cx}" cy="${cy}" r="9" fill="${NIGHT.ink}"/>`,
   `</svg>`,
 ].join("");
 

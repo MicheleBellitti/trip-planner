@@ -28,6 +28,22 @@ export const NIGHT = {
 
 export type MarkColors = Record<"ground" | "ink" | "coordinator" | "flights" | "lodging", string>;
 
+/** The five agent lines entering a destination, 1056 × 150 units with the destination at (990, 75):
+ * the landing's closing (`ConvergingLines`) and the link preview draw these paths. Like a transit
+ * diagram's hub, each line comes in from its own direction (above, upper left, left, lower left,
+ * below), so none is drawn over another. */
+export const CONVERGING_VIEWBOX = "0 0 1056 150";
+/** The phone's crop: the last 400 units, so the lines keep their weight at 360 px. */
+export const CONVERGING_VIEWBOX_NARROW = "656 0 400 150";
+export const CONVERGING_DESTINATION = { cx: 990, cy: 75 } as const;
+export const CONVERGING_PATHS = {
+  coordinator: "M0 75 H990",
+  flights: "M0 15 H990 V75",
+  lodging: "M0 45 H960 L990 75",
+  activities: "M0 105 H960 L990 75",
+  transport: "M120 135 H990 V75",
+} as const;
+
 /** The mark as a standalone SVG document, for images (the apple icon, the link preview). */
 export function markSvg(colors: MarkColors = NIGHT): string {
   const g = MARK_GEOMETRY;

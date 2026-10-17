@@ -58,7 +58,7 @@ backend/                 FastAPI service (uv, Python 3.12). The package is backe
   claude-lock.<profile>.json   one lockfile per profile, written by `ant apply` (not committed
                                yet: the first apply is docs/deploy.md step 7)
 web/                     Next.js 16 (App Router), TypeScript strict, Tailwind 4, Zod 4 (web/README.md)
-  app/                     routes: / (plans), /new (request form), /plans/[id], /evals (eval history),
+  app/                     routes: / (landing, public), /plans (plans), /new (request form), /plans/[id], /evals (eval history),
                            /evals/[id], /dev/ui (dev only)
   components/ui/           the design system's primitives (DatePair, Timeline, ToolChip, ...)
   lib/                     typed API client, SSE + timeline reducer (lib/plan-events), schemas
