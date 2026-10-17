@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { ImageResponse } from "next/og";
 
-import { BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand";
+import { BRAND_NAME, BRAND_TAGLINE, taglineLines } from "@/lib/brand";
 import { CONVERGING_DESTINATION, CONVERGING_PATHS, CONVERGING_VIEWBOX, markDataUri, NIGHT } from "@/lib/brand-mark";
 
 export const alt = `${BRAND_NAME}: ${BRAND_TAGLINE}`;
@@ -53,7 +53,11 @@ export default function OpengraphImage() {
           <img src={markDataUri()} width={56} height={56} alt="" />
           {BRAND_NAME}
         </div>
-        <div style={{ display: "flex", fontSize: 96, lineHeight: 0.98, maxWidth: 780 }}>{BRAND_TAGLINE}</div>
+        <div style={{ display: "flex", flexDirection: "column", fontSize: 96, lineHeight: 0.98 }}>
+          {taglineLines(BRAND_TAGLINE).map((line) => (
+            <span key={line}>{line}</span>
+          ))}
+        </div>
         <img src={`data:image/svg+xml;base64,${btoa(CONVERGING_LINES)}`} width={1056} height={150} alt="" />
       </div>
     ),

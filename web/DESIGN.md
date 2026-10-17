@@ -289,7 +289,8 @@ read CSS variables use `NIGHT`, the night values, which a test keeps equal to `g
   **`/favicon.ico`** (`app/favicon.ico/route.tsx`): the same, as a 32 px PNG prerendered at build
   time, for the clients that ask for it by name. **Home-screen icon** (`app/apple-icon.tsx`): the
   full mark on the night ground, 180 px.
-- **Link preview** (`app/opengraph-image.tsx`): mark and name, the tagline, the five lines
+- **Link preview** (`app/opengraph-image.tsx`): mark and name, the tagline on two lines broken by
+  `taglineLines()` (before its article: "Ogni viaggio ha / il suo atlante."), the five lines
   converging on a destination; 1200 × 630, rendered at build time with the vendored Semi
   Condensed 700.
 - **Tagline**: "Ogni viaggio ha il suo atlante." (`BRAND_TAGLINE`): the landing hero, the
@@ -596,6 +597,9 @@ layout, not a stretched phone.
   moves to the next field; only the budget, the last one, sends the form. The error summary
   appears from three problems (or one with no field of its own), lists the fields by name as
   links, and takes the focus; with one or two problems the focus goes to the field.
+- **`/plans` ends on its help** (`PlansFooter`): after the list and its photo credit, a rule and
+  "Come funziona Atlas", a link to the landing's section (`/#come-funziona`, which shows the landing
+  even to a signed-in browser). The page no longer ends on a credit line.
 - **The home list is a line** ("Plan rail"): a 3 px ink rail down the left of the card, clipped by
   its corners, and each plan a station on it, the plan's status glyph as its node (`PlanStatusGlyph`,
   20 px on a surface disc that hides the rail; the running plan's is the large ink ring, 18 px with
