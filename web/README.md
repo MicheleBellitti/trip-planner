@@ -108,11 +108,16 @@ components/states/         the states that need words: budget paused, ended (fai
 components/home/           the plan list ("Plan rail"), empty invitation, site header
 components/request/        the request form: model, validation, summary, trip outline, failure copy
 lib/api.ts                 typed backend client: errors, 401 -> the login (this app's or TripTracker's), 429, 503
-lib/auth.ts                the app's own accounts: Better Auth server (Postgres, magic link, Google, allowlist)
+lib/auth.ts                the app's own accounts: Better Auth server (Postgres, magic link, Google, invitations)
 lib/auth-client.ts         its browser client; lib/auth-policy.ts the sign-up allowlist; lib/return-to.ts
-lib/me.ts                  GET /me: whether the signed-in user manages the planner (the header's "Valutazioni")
-lib/server/                server-only: the accounts' configuration, the sign-in email through Resend
+lib/me.ts                  GET /me: whether the signed-in user manages the planner (the header's "Valutazioni", "Inviti")
+lib/waitlist-policy.ts     the waitlist's rules (pure); lib/invitation-email.ts the invitation
+lib/server/                server-only: the accounts' configuration, the shared pg pool, the waitlist queries,
+                           the emails through Resend (sign-in link, invitation), the admin check (GET /me)
+app/actions/waitlist.ts    server actions: join the waitlist (public), invite (admins)
 components/auth/           the login form and the signed-out header; app/login the page
+components/waitlist/       the waitlist form and its outcomes (the landing's closing, the login's refusal)
+components/admin/          the invitations page's body; app/admin/waitlist the page (admins only)
 lib/request-form.ts        form metadata from schema/request.json + validation (Italian)
 lib/plan-events/           usePlanEvents (SSE), the timeline reducer, labels, detail keys, virtualization
 lib/schemas/generated/     Zod schemas + types generated from ../schema (never edit by hand)

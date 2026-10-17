@@ -23,6 +23,7 @@ from app.db import (
     PlanRecord,
     PlanStatus,
     UserRecord,
+    WaitlistRecord,
 )
 from tests.conftest import run_alembic
 
@@ -455,4 +456,30 @@ async def test_session_tokens_are_unique_and_verifications_round_trip(
         AuthSessionRecord(id="ses_2", user_id="usr_test", token="tok_1", expires_at=tomorrow())
     )
     with pytest.raises(IntegrityError):
+        await db_session.commit()
+
+
+async def test_waitlist_round_trip_with_defaults(db_session: AsyncSession) -> None:
+    """A request from the landing: no note, not invited, timestamps with an offset (the web app
+    writes the rows; the backend only migrates the table)."""
+    db_session.add(WaitlistRecord(email="friend@example.com", source="landing"))
+    await db_session.commit()
+    db_session.expunge_all()
+
+    stored = await db_session.get_one(WaitlistRecord, "friend@example.com")
+
+    assert stored.note == ""
+    assert stored.source == "landing"
+    assert stored.invited_at is None
+    assert stored.invited_by is None
+    assert stored.invitation_sent_at is None
+    assert stored.created_at.tzinfo is not None
+    assert stored.updated_at.tzinfo is not None
+
+    stored.invited_at = dt.datetime.now(dt.UTC)
+    stored.invited_by = "michele@example.com"
+    await db_session.commit()
+    db_session.expunge_all()
+    db_session.add(WaitlistRecord(email="friend@example.com", source="admin"))
+    with pytest.raises(IntegrityError):  # one row per address
         await db_session.commit()

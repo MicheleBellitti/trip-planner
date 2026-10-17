@@ -77,8 +77,15 @@ export function TextInput({ className, type = "text", ...props }: ComponentProps
   return <input type={type} className={cx(CONTROL, "min-h-11 w-full px-3", className)} {...props} />;
 }
 
-export function TextArea({ className, rows = 3, ...props }: ComponentPropsWithoutRef<"textarea">) {
-  return <textarea rows={rows} className={cx(CONTROL, "min-h-24 w-full resize-y px-3 py-2.5", className)} {...props} />;
+/** Two rows get a two-line box (64 px); three or more the usual 96 px. `ref` is an ordinary prop. */
+export function TextArea({ className, rows = 3, ...props }: ComponentProps<"textarea">) {
+  return (
+    <textarea
+      rows={rows}
+      className={cx(CONTROL, rows <= 2 ? "min-h-16" : "min-h-24", "w-full resize-y px-3 py-2.5", className)}
+      {...props}
+    />
+  );
 }
 
 /** A native select (the phone's own picker), with the caret drawn from the icon sprite. */

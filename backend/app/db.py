@@ -230,6 +230,30 @@ class AuthVerificationRecord(Base):
     updated_at: Mapped[dt.datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 
 
+class WaitlistRecord(Base):
+    """An address that asked for an invitation, or that was invited (the web app's closed beta).
+
+    One row per address (`email` is the key, trimmed and lower-cased by the web app). A row with
+    `invited_at` NULL is a request waiting on the landing's or the login's waitlist; once an
+    admin invites it (`invited_at`, `invited_by`), the web app's sign-up policy lets that address
+    create an account (web/lib/auth.ts, web/lib/server/waitlist.ts), and the invitation email's
+    departure is recorded in `invitation_sent_at`. `source` says where the row came from
+    ("landing", "login" or "admin"); `note` is what the person wrote, at most a few lines. The
+    web app writes and reads the table; the backend only migrates it (Alembic owns every table).
+    """
+
+    __tablename__ = "waitlist"
+
+    email: Mapped[str] = mapped_column(Text, primary_key=True)
+    note: Mapped[str] = mapped_column(Text, default="", server_default=text("''"))
+    source: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[dt.datetime] = mapped_column(server_default=func.now())
+    invited_at: Mapped[dt.datetime | None]
+    invited_by: Mapped[str | None] = mapped_column(Text)
+    invitation_sent_at: Mapped[dt.datetime | None]
+    updated_at: Mapped[dt.datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+
 class FxRateRecord(Base):
     """Cached exchange rate: units of `currency` per 1 EUR on `date`, from `source`.
 

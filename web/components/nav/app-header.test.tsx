@@ -29,23 +29,42 @@ afterEach(() => {
 });
 
 describe("AppHeader", () => {
-  it("draws the eval history's station only for the users who manage the planner", () => {
+  it("draws the eval history's and the invitations' stations only for the users who manage the planner", () => {
     isAdmin.mockReturnValue(false);
     const { unmount } = render(<AppHeader current="plans" />);
     const nav = screen.getByRole("navigation", { name: "Sezioni" });
     expect(within(nav).getByRole("link", { name: "Piani" })).toBeTruthy();
     expect(within(nav).queryByRole("link", { name: "Valutazioni" })).toBeNull();
+    expect(within(nav).queryByRole("link", { name: "Inviti" })).toBeNull();
     unmount();
 
     isAdmin.mockReturnValue(null); // not known yet: nothing appears and vanishes
     render(<AppHeader current="plans" />);
     expect(screen.queryByRole("link", { name: "Valutazioni" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Inviti" })).toBeNull();
+    cleanup();
+
+    isAdmin.mockReturnValue(true);
+    render(<AppHeader current="plans" />); // an admin: Piani, Valutazioni, Inviti, in that order
+    const labels = within(screen.getByRole("navigation", { name: "Sezioni" }))
+      .getAllByRole("link")
+      .map((link) => [link.textContent, link.getAttribute("href")]);
+    expect(labels).toEqual([
+      ["Piani", ROUTES.plans],
+      ["Valutazioni", ROUTES.evals],
+      ["Inviti", ROUTES.invites],
+    ]);
   });
 
-  it("on the eval pages the station is always there, as the current one, whoever is looking", () => {
+  it("on the admins' own pages their station is always there, as the current one, whoever is looking", () => {
     isAdmin.mockReturnValue(false);
     render(<AppHeader current="evals" />);
     expect(screen.getByRole("link", { name: "Valutazioni" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.queryByRole("link", { name: "Inviti" })).toBeNull();
+    cleanup();
+    render(<AppHeader current="invites" />);
+    expect(screen.getByRole("link", { name: "Inviti" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.queryByRole("link", { name: "Valutazioni" })).toBeNull();
   });
 
   it("links the lockup to the plans and draws both sections as stations, the current one filled", () => {

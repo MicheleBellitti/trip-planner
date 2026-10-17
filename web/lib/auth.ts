@@ -4,11 +4,12 @@ import { betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 import { magicLink } from "better-auth/plugins";
-import { Pool } from "pg";
 
-import { isSignupAllowed } from "./auth-policy";
+import { isSignupAllowed, normalizeEmail } from "./auth-policy";
 import { readAuthConfig, type AuthServerConfig } from "./server/auth-config";
+import { getPool } from "./server/db";
 import { MAGIC_LINK_MINUTES, sendMagicLink } from "./server/send-magic-link";
+import { isInvited } from "./server/waitlist";
 
 /**
  * The app's own accounts: Better Auth 1.7, served by app/api/auth/[...all]/route.ts.
@@ -22,30 +23,34 @@ import { MAGIC_LINK_MINUTES, sendMagicLink } from "./server/send-magic-link";
  *   to AUTH_COOKIE_DOMAIN so the API subdomain receives it. The backend verifies it against the
  *   `auth_sessions` table of the shared database (backend/app/auth.py `verify_atlas_session`):
  *   no call back to this app, so a sign-out is effective on its next request.
- * - Sign-up is gated by AUTH_ALLOWED_EMAILS (lib/auth-policy.ts): the magic-link request is
- *   refused before any email leaves, and `user.create` is refused for every provider (Google's
- *   address is only known at its callback). Existing accounts always sign in.
+ * - Sign-up is by invitation: an address may create an account when it is in AUTH_ALLOWED_EMAILS
+ *   (lib/auth-policy.ts: the bootstrap list and the `*` of a public launch) or when an admin
+ *   invited it on the waitlist (lib/server/waitlist.ts `isInvited`, the day-to-day list). The
+ *   magic-link request is refused before any email leaves, and `user.create` is refused for every
+ *   provider (Google's address is only known at its callback). Existing accounts always sign in.
  *
  * `auth` is null when the accounts are not configured (`readAuthConfig`): the route answers 503
  * and the login page says so.
  */
-export const SIGNUP_REFUSED_MESSAGE = "Questo indirizzo non è abilitato: l'accesso è su invito.";
+export const SIGNUP_REFUSED_MESSAGE = "Questo indirizzo non ha ancora un invito.";
 
 export const COOKIE_PREFIX = "atlas";
 
 const DAY_SECONDS = 60 * 60 * 24;
 
 function build(config: AuthServerConfig) {
-  const refuseUnlessAllowed = (email: unknown) => {
-    if (!isSignupAllowed(typeof email === "string" ? email : null, config.allowList)) {
-      throw new APIError("FORBIDDEN", { message: SIGNUP_REFUSED_MESSAGE, code: "SIGNUP_NOT_ALLOWED" });
-    }
+  const pool = getPool(config.databaseUrl);
+  const refuseUnlessAllowed = async (email: unknown) => {
+    const address = typeof email === "string" ? email : null;
+    if (isSignupAllowed(address, config.allowList)) return;
+    if (address && (await isInvited(pool, normalizeEmail(address)))) return;
+    throw new APIError("FORBIDDEN", { message: SIGNUP_REFUSED_MESSAGE, code: "SIGNUP_NOT_ALLOWED" });
   };
   return betterAuth({
     appName: "Atlas",
     baseURL: config.baseUrl,
     secret: config.secret,
-    database: new Pool({ connectionString: config.databaseUrl }),
+    database: pool,
     user: {
       modelName: "users",
       fields: { emailVerified: "email_verified", createdAt: "created_at", updatedAt: "updated_at" },
@@ -108,14 +113,14 @@ function build(config: AuthServerConfig) {
         if (typeof email !== "string") return;
         const existing = await ctx.context.internalAdapter.findUserByEmail(email);
         if (existing) return;
-        refuseUnlessAllowed(email);
+        await refuseUnlessAllowed(email);
       }),
     },
     databaseHooks: {
       user: {
         create: {
           before: async (user) => {
-            refuseUnlessAllowed(user.email);
+            await refuseUnlessAllowed(user.email);
             return { data: user };
           },
         },
