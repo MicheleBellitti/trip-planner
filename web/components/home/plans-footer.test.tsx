@@ -7,6 +7,13 @@ import { PlansFooter } from "./plans-footer";
 
 vi.mock("@/components/home/plan-list", () => ({ PlanList: () => <div data-testid="list" /> }));
 vi.mock("@/components/nav/app-header", () => ({ AppHeader: () => <header /> }));
+// The footer's link is a full load, never a client navigation: rendered on the client, the landing
+// would create its skip script there (React refuses and logs it). Any next/link use fails here.
+vi.mock("next/link", () => ({
+  default: () => {
+    throw new Error("next/link");
+  },
+}));
 
 afterEach(cleanup);
 
