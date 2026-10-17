@@ -7,6 +7,8 @@
  *   `ApiError` of kind `invalid_response`, never data the UI trusts.
  * - Errors use the envelope `{"detail": {"code", "message", "data"}}` with an Italian `message`,
  *   shown as is. FastAPI's 422 keeps its own shape (`{"detail": [issues]}`) for the form.
+ * - A 2xx marks the browser as signed in (lib/returning.ts) and a 401 clears the mark: "/" skips the
+ *   landing for a returning visitor.
  * - 401 sends the browser to TripTracker's login, which brings the user back here:
  *   `<NEXT_PUBLIC_TRIPTRACKER_URL>/accedi?returnTo=<current page URL, encoded>`.
  * - 429 `monthly_limit_reached` carries the month's spend and limit (US cents).
@@ -20,6 +22,7 @@
 
 import { getConfig, stripTrailingSlash } from "./config";
 import { formatUsd } from "./format";
+import { markSignedIn, markSignedOut } from "./returning";
 import {
   ContinueResponseSchema,
   COVER_UNAVAILABLE_CODE,
@@ -290,6 +293,7 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
     const body = envelope.success ? envelope.data.detail : null;
     const init = { status, code: body?.code ?? null, message: body?.message ?? null, data: body?.data ?? null };
     if (status === 401) {
+      markSignedOut();
       const url = login();
       onUnauthorized(url);
       return new UnauthorizedError(init, url);
@@ -325,6 +329,8 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
     if (!response.ok) {
       throw errorFromResponse(response.status, payload);
     }
+    // Any 2xx from an authenticated endpoint proves a session: "/" may skip the landing next time.
+    if (path !== "/health") markSignedIn();
     const parsed = parser.safeParse(payload);
     if (!parsed.success) {
       throw new ApiError({ kind: "invalid_response", status: response.status });

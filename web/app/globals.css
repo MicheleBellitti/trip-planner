@@ -232,6 +232,7 @@
 
   --container-page: 92.5rem; /* 1480px */
   --container-prose: 40rem;
+  --container-landing: 76rem; /* the landing's measure, narrower than the app's page */
 
   --ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
 
