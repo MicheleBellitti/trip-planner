@@ -2,19 +2,23 @@
 
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
+import { joinWaitlistAction } from "@/app/actions/waitlist";
 import { StatePanel } from "@/components/states/state-panel";
 import { Button } from "@/components/ui/button";
 import { Field, TextInput } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
+import { WAITLIST_FAILED, WAITLIST_SUBMIT, WaitlistOutcome } from "@/components/waitlist/waitlist-form";
 import { authClient } from "@/lib/auth-client";
+import { BRAND_NAME } from "@/lib/brand";
 import { safeReturnTo } from "@/lib/return-to";
 import { ROUTES } from "@/lib/routes";
+import type { JoinOutcome } from "@/lib/waitlist-policy";
+import { JOIN_IDLE } from "@/lib/waitlist-state";
 
 /** The one sentence about the link, reused wherever it is described. */
 export const LINK_VALIDITY = "Vale cinque minuti e funziona una volta sola.";
-export const INVITE_ONLY_ERROR = "Questo indirizzo non è abilitato.";
-export const INVITE_ONLY_HELP =
-  "L'accesso è su invito: usa l'indirizzo a cui è arrivato, o chiedi a chi ti ha invitato di abilitarlo.";
+export const INVITE_ONLY_ERROR = "Questo indirizzo non ha ancora un invito.";
+export const INVITE_ONLY_HELP = `${BRAND_NAME} è su invito: mettiti in lista e ti scriviamo quando c'è posto.`;
 export const INVALID_EMAIL_ERROR = "Scrivi un indirizzo email completo.";
 export const TOO_MANY_REQUESTS_ERROR = "Troppi tentativi: aspetta un minuto e riprova.";
 export const SEND_FAILED_ERROR = "Non è stato possibile inviare il link. Riprova.";
@@ -57,8 +61,11 @@ interface ClientError {
   code?: string;
 }
 
-/** `sent` is a new object on every send, so the focus effect fires again on a resend. */
-type Phase = { kind: "form" } | { kind: "sent"; email: string; again: boolean };
+/** `sent` is a new object on every send, so the focus effect fires again on a resend; `listed` is
+ * the waitlist's answer after a refused address asked to join. */
+type Phase = { kind: "form" } | { kind: "sent"; email: string; again: boolean } | { kind: "listed"; email: string; outcome: JoinOutcome };
+
+type Busy = "link" | "google" | "list" | null;
 
 interface LoginFormProps {
   /** The page to come back to after signing in (lib/api.ts `loginUrl`); reduced to a same-origin path. */
@@ -68,23 +75,30 @@ interface LoginFormProps {
   /** False when the server has no accounts database: the lede and the reason, no form. */
   configured: boolean;
   googleEnabled: boolean;
+  /** How the sent state leaves once the link was used elsewhere; the tests inject it. */
+  navigate?: (url: string) => void;
 }
 
 /**
  * Sign in: an email for the link, or Google. No passwords (PRODUCT.md). One lede says why the user
  * is here when it knows (`returnTo`), what the link is and how long it lasts. An address problem
- * (shape, not invited) is a Field error on the input; everything else (an expired link, too many
- * tries, a failure) is a Notice that answers the user's own action. The "sent" state keeps the
- * address on screen, says where to look, and can send another link or change the address. Focus
- * follows every transition: the input on an error and on the way back, the panel whenever a link
- * leaves. The verb is always "inviare".
+ * (shape, not invited) is a Field error on the input; a refused address also gets the way in,
+ * "Mettimi in lista" (app/actions/waitlist.ts), whose answer replaces the form. Everything else (an
+ * expired link, too many tries, a failure) is a Notice that answers the user's own action. The
+ * "sent" state keeps the address on screen, says where to look, can send another link or change
+ * the address, and heals itself: when the tab comes back into view it asks whether the link was
+ * used elsewhere and, if so, goes where the user was headed. Focus follows every transition: the
+ * input on an error and on the way back, the panel whenever a link leaves. The verb is always
+ * "inviare".
  */
-export function LoginForm({ returnTo, errorCode, configured, googleEnabled }: LoginFormProps) {
+export function LoginForm({ returnTo, errorCode, configured, googleEnabled, navigate }: LoginFormProps) {
   const [phase, setPhase] = useState<Phase>({ kind: "form" });
   const [email, setEmail] = useState("");
   const [fieldError, setFieldError] = useState<ReactNode>(null);
   const [notice, setNotice] = useState<SignInNotice | null>(() => signInError(errorCode));
-  const [busy, setBusy] = useState<"link" | "google" | null>(null);
+  const [busy, setBusy] = useState<Busy>(null);
+  /** The address the server refused: the way in is the waitlist, offered beside the field. */
+  const [refusedAddress, setRefusedAddress] = useState<string | null>(null);
   // Bumped whenever focus should land on the input after the next render (an error, the way back
   // from the sent state): an effect does it once the field is mounted and enabled again.
   const [focusInput, setFocusInput] = useState(0);
@@ -134,6 +148,32 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled }: Lo
   const errorCallbackURL = () =>
     returnTo ? `${ROUTES.login}?returnTo=${encodeURIComponent(callbackURL())}` : ROUTES.login;
 
+  // The link usually opens in another tab, or in the mail app's own browser, and this tab would
+  // say "Controlla la posta" forever. Each time it comes back into view it asks whether a session
+  // now exists and, if so, goes where the user was headed, so the 401 heals where it happened.
+  useEffect(() => {
+    if (phase.kind !== "sent") return;
+    let checking = false;
+    const check = async () => {
+      if (checking || document.visibilityState !== "visible") return;
+      checking = true;
+      try {
+        const { data } = await authClient.getSession();
+        if (data?.session) (navigate ?? ((url: string) => window.location.assign(url)))(safeReturnTo(returnTo, window.location.origin));
+      } catch {
+        // The next return to the tab asks again.
+      } finally {
+        checking = false;
+      }
+    };
+    document.addEventListener("visibilitychange", check);
+    window.addEventListener("focus", check);
+    return () => {
+      document.removeEventListener("visibilitychange", check);
+      window.removeEventListener("focus", check);
+    };
+  }, [phase.kind, returnTo, navigate]);
+
   /** Sends the link to `address`; `again` marks a resend from the sent state. */
   async function send(address: string, again: boolean) {
     setBusy("link");
@@ -146,15 +186,42 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled }: Lo
     });
     setBusy(null);
     if (error) {
-      failed(error, { inSentState: again, action: "link" });
+      failed(error, { inSentState: again, action: "link", address });
       return;
     }
     setPhase({ kind: "sent", email: address, again });
   }
 
-  function failed(error: ClientError, { inSentState, action }: { inSentState: boolean; action: "link" | "google" }) {
+  /** The refused address asks to join the waitlist (source "login"); the answer replaces the form. */
+  async function joinList(address: string) {
+    setBusy("list");
+    setNotice(null);
+    const data = new FormData();
+    data.set("email", address);
+    data.set("source", "login");
+    const state = await joinWaitlistAction(JOIN_IDLE, data);
+    setBusy(null);
+    if (state.status === "idle" || state.status === "error") {
+      setNotice({ title: WAITLIST_FAILED });
+      return;
+    }
+    if (state.status === "already_invited" || state.status === "already_registered") {
+      // The door is open after all: the link goes out as if the first try had worked.
+      setRefusedAddress(null);
+      setFieldError(null);
+      void send(address, false);
+      return;
+    }
+    setPhase({ kind: "listed", email: state.email, outcome: state.status });
+  }
+
+  function failed(
+    error: ClientError,
+    { inSentState, action, address }: { inSentState: boolean; action: "link" | "google"; address: string | null },
+  ) {
     if (error.code === "SIGNUP_NOT_ALLOWED" || error.status === 403) {
       if (inSentState) setPhase({ kind: "form" });
+      setRefusedAddress(address);
       setFieldError(
         <>
           <strong className="font-semibold">{INVITE_ONLY_ERROR}</strong> {INVITE_ONLY_HELP}
@@ -191,9 +258,35 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled }: Lo
     });
     if (error) {
       setBusy(null);
-      failed(error, { inSentState: false, action: "google" });
+      failed(error, { inSentState: false, action: "google", address: null });
     }
     // On success the browser is leaving for Google: the button stays busy until then.
+  }
+
+  if (phase.kind === "listed") {
+    return (
+      <WaitlistOutcome
+        outcome={phase.outcome}
+        email={phase.email}
+        actions={
+          <Button
+            variant="quiet"
+            size="sm"
+            icon="arrow-left"
+            onClick={() => {
+              setRefusedAddress(null);
+              setFieldError(null);
+              setPhase({ kind: "form" });
+              selectOnFocus.current = true;
+              setFocusInput((tick) => tick + 1);
+            }}
+            className="-ml-3 min-h-11 sm:min-h-8"
+          >
+            Cambia indirizzo
+          </Button>
+        }
+      />
+    );
   }
 
   if (phase.kind === "sent") {
@@ -245,7 +338,8 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled }: Lo
             </dd>
             <dt className="sr-only">Cosa puoi fare</dt>
             <dd className="m-0 mt-1.5 max-w-prose text-small text-ink-2">
-              Non lo vedi? Guarda nella posta indesiderata, o chiedine un altro.
+              Non lo vedi? Guarda nella posta indesiderata, o chiedine un altro. Se lo apri da un altro posto,
+              questa pagina ti porta avanti da sola.
             </dd>
           </div>
         </StatePanel>
@@ -285,23 +379,38 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled }: Lo
                 onChange={(event) => {
                   setEmail(event.target.value);
                   if (fieldError) setFieldError(null);
+                  if (refusedAddress) setRefusedAddress(null);
                 }}
                 disabled={busy !== null}
               />
             )}
           </Field>
-          <Button
-            type="submit"
-            variant="primary"
-            icon="arrow-right"
-            busy={busy === "link"}
-            disabled={busy !== null}
-            // 44 px on the phone, like the field above it; 40 px and its own width from 640 px (DESIGN.md,
-            // Buttons; the grid would otherwise stretch it).
-            className="min-h-11 w-full sm:min-h-10 sm:w-auto sm:justify-self-start"
-          >
-            {busy === "link" ? "Invio il link…" : "Inviami il link"}
-          </Button>
+          <div className="grid gap-2.5 sm:flex sm:flex-wrap sm:items-center">
+            <Button
+              type="submit"
+              variant="primary"
+              icon="arrow-right"
+              busy={busy === "link"}
+              disabled={busy !== null}
+              // 44 px on the phone, like the field above it; 40 px and its own width from 640 px (DESIGN.md,
+              // Buttons; the grid would otherwise stretch it).
+              className="min-h-11 w-full sm:min-h-10 sm:w-auto"
+            >
+              {busy === "link" ? "Invio il link…" : "Inviami il link"}
+            </Button>
+            {refusedAddress ? (
+              <Button
+                type="button"
+                variant="secondary"
+                busy={busy === "list"}
+                disabled={busy !== null}
+                onClick={() => void joinList(refusedAddress)}
+                className="min-h-11 w-full sm:min-h-10 sm:w-auto"
+              >
+                {busy === "list" ? "Invio…" : WAITLIST_SUBMIT}
+              </Button>
+            ) : null}
+          </div>
         </form>
       ) : null}
       {configured && googleEnabled ? (

@@ -8,18 +8,19 @@ import { iconButtonClasses } from "@/components/ui/icon-button";
 import { Wordmark } from "@/components/ui/wordmark";
 import { ROUTES } from "@/lib/routes";
 
-import { EvalsStation } from "./evals-station";
+import { AdminStations } from "./admin-stations";
 import { Station } from "./station";
 
-/** The app's sections. "new" is the request form: it has no nav item, and no "Nuovo piano" there. */
-export type AppSection = "plans" | "evals" | "new";
+/** The app's sections. "new" is the request form: it has no nav item, and no "Nuovo piano" there;
+ * "evals" and "invites" are the admins' (AdminStations). */
+export type AppSection = "plans" | "evals" | "invites" | "new";
 
 /**
  * The header's bar (DESIGN.md, Navigation): the lockup as the link to the plans, the sections drawn
  * as stations on one line (the current one is the "you are here" ring), then `trailing` (AppHeader
  * puts the bare theme toggle there), then "Nuovo piano", always last and always a secondary action
- * (each view keeps its single primary). "Piani" is everyone's; "Valutazioni" (EvalsStation) is drawn
- * only for the users who manage the planner. One line, at most 72 px, no menu drawer at 393 px, 44 px targets under a finger (the 40 px
+ * (each view keeps its single primary). "Piani" is everyone's; "Valutazioni" and "Inviti" (AdminStations)
+ * are drawn only for the users who manage the planner. One line, at most 72 px, no menu drawer at 393 px, 44 px targets under a finger (the 40 px
  * icon controls grow). `compact` is the live screen's slim top row; it has no toggle (the sticky
  * control bar carries it), and this file imports none, so the plan page ships no second copy.
  */
@@ -45,7 +46,7 @@ export function AppHeaderBar({
           <nav aria-label="Sezioni">
             <ul className="flex">
               <Station href={ROUTES.plans} label="Piani" current={current === "plans"} />
-              <EvalsStation current={current === "evals"} />
+              <AdminStations current={current} />
             </ul>
           </nav>
           {trailing}

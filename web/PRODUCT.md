@@ -166,6 +166,12 @@ Taken by Michele on 2026-10-12. They replace the first pass's open questions.
 - **2026-10-17: the landing**, approved from a mockup: "Accedi" only in the header and the
   closing, the line map before the legend on the phone, one choreographed moment (the map). Until
   `/demo` exists (step 3) its demo calls to action are off (`DEMO_READY`).
+- **2026-10-17: by invitation, with a waitlist.** A stranger leaves an address (and, if they
+  like, two lines about the trip) on the landing's closing or on the login's refusal; Michele
+  invites from `/admin/waitlist` and the person gets an email with the login page. The refusal
+  on `/login` says "non ha ancora un invito" and offers the list in place rather than hiding
+  whether an address is invited; the invitation email names the address in its body and never
+  in a URL.
 
 ## Brand Commitments
 

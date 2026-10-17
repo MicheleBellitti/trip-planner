@@ -9,8 +9,8 @@ const webDir = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    // Mirrors tsconfig.json "paths": "@/*" -> "./*".
-    alias: { "@": webDir },
+    // Mirrors tsconfig.json "paths": "@/*" -> "./*"; `server-only` would throw outside RSC.
+    alias: { "@": webDir, "server-only": path.join(webDir, "test/server-only.ts") },
   },
   test: {
     environment: "jsdom",

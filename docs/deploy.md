@@ -504,11 +504,13 @@ also issue and renew their own certificates without interference.
    not resolve outside Railway), `BETTER_AUTH_SECRET` (`openssl rand -base64 32`),
    `BETTER_AUTH_URL=https://atlas.bellittim.com`, `AUTH_COOKIE_DOMAIN=bellittim.com` (so
    `atlas.api` receives the `__Secure-atlas.session_token` cookie; its `atlas` prefix keeps it
-   apart from TripTracker's), `AUTH_ALLOWED_EMAILS` (who may sign up), `RESEND_API_KEY` and
-   `AUTH_EMAIL_FROM` (a sender on a domain verified at Resend), and optionally
+   apart from TripTracker's), `AUTH_ALLOWED_EMAILS` (who may sign up without an invitation: your
+   own address; everyone else is invited from `/admin/waitlist`, which emails them the login page),
+   `RESEND_API_KEY` and `AUTH_EMAIL_FROM` (a sender on a domain verified at Resend), and optionally
    `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (OAuth client with redirect URI
    `https://atlas.bellittim.com/api/auth/callback/google`). The tables already exist: the
-   backend's `alembic upgrade head` (migration `600fbb922f91`) creates them. On Railway set
+   backend's `alembic upgrade head` (migrations `600fbb922f91` and `609ccf5bdc99`, the waitlist)
+   creates them. On Railway set
    `AUTH_MODE=atlas` on the `backend` service at the same time, and `ADMIN_EMAILS` to your
    address (in this mode nobody reads `/evals` otherwise); the backend then verifies the cookie
    against the `auth_sessions` table of the shared database instead of asking TripTracker, every

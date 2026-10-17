@@ -1,6 +1,8 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { WAITLIST_FAILED } from "@/components/waitlist/waitlist-form";
+
 import {
   GENERIC_SIGN_IN_ERROR,
   SEND_FAILED_ERROR,
@@ -17,10 +19,21 @@ import {
 
 const magicLink = vi.fn();
 const social = vi.fn();
+const getSession = vi.fn();
+const join = vi.fn();
 
 vi.mock("@/lib/auth-client", () => ({
-  authClient: { signIn: { magicLink: (...args: unknown[]) => magicLink(...args), social: (...args: unknown[]) => social(...args) } },
+  authClient: {
+    signIn: { magicLink: (...args: unknown[]) => magicLink(...args), social: (...args: unknown[]) => social(...args) },
+    getSession: (...args: unknown[]) => getSession(...args),
+  },
 }));
+
+vi.mock("@/app/actions/waitlist", () => ({
+  joinWaitlistAction: (...args: unknown[]) => join(...args),
+}));
+
+const REFUSED = { data: null, error: { status: 403, code: "SIGNUP_NOT_ALLOWED", message: "x" } };
 
 const LABEL = "Indirizzo email";
 
@@ -39,6 +52,9 @@ describe("LoginForm", () => {
   beforeEach(() => {
     magicLink.mockReset();
     social.mockReset();
+    getSession.mockReset();
+    getSession.mockResolvedValue({ data: null, error: null });
+    join.mockReset();
   });
 
   afterEach(cleanup);
@@ -132,8 +148,8 @@ describe("LoginForm", () => {
     await waitFor(() => expect(document.activeElement?.contains(heading)).toBe(true)); // focus never falls to the document
   });
 
-  it("a refused address is an error on the field, with the invite rule and what to do, and focus goes back to it", async () => {
-    magicLink.mockResolvedValue({ data: null, error: { status: 403, code: "SIGNUP_NOT_ALLOWED", message: "x" } });
+  it("a refused address is an error on the field, with the invite rule and the way in, and focus goes back to it", async () => {
+    magicLink.mockResolvedValue(REFUSED);
     renderForm();
 
     typeAndSubmit("nobody@example.com");
@@ -144,10 +160,77 @@ describe("LoginForm", () => {
     expect(error.textContent).toContain(INVITE_ONLY_HELP);
     expect(input.getAttribute("aria-describedby")).toContain(error.id);
     expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByRole("button", { name: "Mettimi in lista" })).toBeTruthy();
     await waitFor(() => expect(document.activeElement).toBe(input));
 
     fireEvent.change(input, { target: { value: "nobody2@example.com" } });
     expect(input.getAttribute("aria-invalid")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Mettimi in lista" })).toBeNull(); // another address: another try first
+  });
+
+  it("'Mettimi in lista' joins the waitlist with the refused address, from the login, and shows the answer", async () => {
+    magicLink.mockResolvedValue(REFUSED);
+    join.mockResolvedValue({ status: "joined", email: "nobody@example.com" });
+    renderForm({ returnTo: "/plans/abc" });
+    typeAndSubmit("nobody@example.com");
+    await screen.findByRole("button", { name: "Mettimi in lista" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Mettimi in lista" }));
+
+    const heading = await screen.findByRole("heading", { name: "Sei in lista" });
+    const data = join.mock.calls[0]?.[1] as FormData;
+    expect(data.get("email")).toBe("nobody@example.com");
+    expect(data.get("source")).toBe("login");
+    expect(screen.getByRole("status").textContent).toContain("nobody@example.com");
+    await waitFor(() => expect(document.activeElement?.contains(heading)).toBe(true));
+
+    fireEvent.click(screen.getByRole("button", { name: "Cambia indirizzo" }));
+    const input = screen.getByLabelText(LABEL) as HTMLInputElement;
+    expect(input.value).toBe("nobody@example.com");
+    expect(input.getAttribute("aria-invalid")).toBeNull();
+  });
+
+  it("an address the list already knows as invited gets its link after all", async () => {
+    magicLink.mockResolvedValueOnce(REFUSED).mockResolvedValueOnce(sent);
+    join.mockResolvedValue({ status: "already_invited", email: "late@example.com" });
+    renderForm();
+    typeAndSubmit("late@example.com");
+    fireEvent.click(await screen.findByRole("button", { name: "Mettimi in lista" }));
+
+    await screen.findByRole("heading", { name: "Controlla la posta" });
+    expect(magicLink).toHaveBeenCalledTimes(2);
+  });
+
+  it("a failed join is an alert, and the form stays", async () => {
+    magicLink.mockResolvedValue(REFUSED);
+    join.mockResolvedValue({ status: "error", error: "failed" });
+    renderForm();
+    typeAndSubmit("nobody@example.com");
+    fireEvent.click(await screen.findByRole("button", { name: "Mettimi in lista" }));
+
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain(WAITLIST_FAILED));
+    expect(screen.getByRole("button", { name: "Mettimi in lista" })).toBeTruthy();
+  });
+
+  it("the sent tab heals itself: back in view with a session, it goes where the user was headed", async () => {
+    magicLink.mockResolvedValue(sent);
+    const navigate = vi.fn();
+    renderForm({ returnTo: "/plans/abc?tab=piano", navigate });
+    typeAndSubmit("a@example.com");
+    await screen.findByRole("heading", { name: "Controlla la posta" });
+
+    Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    await waitFor(() => expect(getSession).toHaveBeenCalledTimes(1));
+    expect(navigate).not.toHaveBeenCalled(); // no session yet: the link was not used
+
+    getSession.mockResolvedValue({ data: { session: { id: "ses_1" }, user: { email: "a@example.com" } }, error: null });
+    window.dispatchEvent(new Event("focus"));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/plans/abc?tab=piano"));
+
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(getSession).toHaveBeenCalledTimes(2); // hidden: nothing to ask
   });
 
   it("an address without a shape never leaves the browser", () => {

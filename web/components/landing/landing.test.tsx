@@ -13,6 +13,7 @@ import { LandingClose } from "./landing-close";
 import { LandingHero } from "./landing-hero";
 
 vi.mock("@/components/ui/theme-toggle", () => ({ ThemeToggle: () => <button type="button">Tema</button> }));
+vi.mock("@/app/actions/waitlist", () => ({ joinWaitlistAction: vi.fn() }));
 
 afterEach(cleanup);
 
@@ -140,18 +141,24 @@ describe("how it works", () => {
 });
 
 describe("the closing", () => {
-  it("until the demo exists, says Atlas is by invitation and offers to sign in", () => {
+  it("until the demo exists, says Atlas is by invitation, offers the waitlist and then sign in", () => {
     const { container } = render(<LandingClose demoReady={false} />);
     expect(screen.getByRole("heading", { level: 2, name: "Atlas è su invito." })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Accedi" }).getAttribute("href")).toBe(ROUTES.plans);
+    const form = screen.getByLabelText("Indirizzo email").closest("form")!;
+    expect(form.querySelector('input[name="source"]')?.getAttribute("value")).toBe("landing");
+    expect(screen.getByRole("button", { name: "Mettimi in lista" })).toBeTruthy();
+    const signIn = screen.getByRole("link", { name: "Accedi" });
+    expect(signIn.getAttribute("href")).toBe(ROUTES.plans);
+    expect(form.compareDocumentPosition(signIn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); // the list first
     expect(container.querySelector(`a[href="${ROUTES.demo}"]`)).toBeNull();
   });
 
-  it("with the demo, offers it first, then sign in, and says access is by invitation", () => {
+  it("with the demo, offers it first, then sign in, and the waitlist under 'Accesso su invito.'", () => {
     render(<LandingClose demoReady />);
     const links = screen.getAllByRole("link");
     expect(links.map((link) => link.getAttribute("href"))).toEqual([ROUTES.demo, ROUTES.plans]);
-    expect(screen.getByText("Accesso su invito.")).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 3, name: "Accesso su invito." })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Mettimi in lista" })).toBeTruthy();
   });
 
   it("puts no demo link anywhere on today's landing, and ends with a footer", () => {
