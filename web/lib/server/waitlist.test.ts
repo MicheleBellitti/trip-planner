@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { invite, isInvited, joinWaitlist, listWaitlist, markInvitationSent, type Queryable } from "./waitlist";
+import { invite, isInvited, joinWaitlist, listWaitlist, markInvitationSent, removeRequest, type Queryable } from "./waitlist";
 
 /** A database that answers each query in turn and records what it was asked. */
 function fakeDb(...answers: unknown[][]): Queryable & { calls: { text: string; values: unknown[] | undefined }[] } {
@@ -62,6 +62,13 @@ describe("the waitlist queries", () => {
     expect(db.calls[0]?.text).toContain("invited_at = COALESCE(waitlist.invited_at, now())");
     expect(db.calls[0]?.values).toEqual(["a@b.co", "", "me@x.it"]);
     await expect(invite(fakeDb([]), { email: "a@b.co", by: "me@x.it" })).rejects.toThrow(/no row/);
+  });
+
+  it("removeRequest deletes a pending row only, and says whether one went", async () => {
+    const db = fakeDb([{ email: "a@b.co" }]);
+    expect(await removeRequest(db, "a@b.co")).toBe(true);
+    expect(db.calls[0]).toEqual({ text: "DELETE FROM waitlist WHERE email = $1 AND invited_at IS NULL RETURNING email", values: ["a@b.co"] });
+    expect(await removeRequest(fakeDb([]), "invited@b.co")).toBe(false);
   });
 
   it("markInvitationSent stamps the row", async () => {

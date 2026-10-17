@@ -1,14 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { INVITE_IDLE, JOIN_IDLE } from "@/lib/waitlist-state";
+import { INVITE_IDLE, JOIN_IDLE, REMOVE_IDLE } from "@/lib/waitlist-state";
 
-import { inviteAction, joinWaitlistAction } from "./waitlist";
+import { inviteAction, joinWaitlistAction, removeRequestAction } from "./waitlist";
 
 const currentCaller = vi.fn();
 const readAuthConfig = vi.fn();
 const joinWaitlist = vi.fn();
 const invite = vi.fn();
 const markInvitationSent = vi.fn();
+const removeRequest = vi.fn();
 const sendInvitation = vi.fn();
 const revalidatePath = vi.fn();
 const pool = { query: vi.fn() };
@@ -20,6 +21,7 @@ vi.mock("@/lib/server/waitlist", () => ({
   joinWaitlist: (...args: unknown[]) => joinWaitlist(...args),
   invite: (...args: unknown[]) => invite(...args),
   markInvitationSent: (...args: unknown[]) => markInvitationSent(...args),
+  removeRequest: (...args: unknown[]) => removeRequest(...args),
 }));
 vi.mock("@/lib/server/send-invitation", () => ({ sendInvitation: (...args: unknown[]) => sendInvitation(...args) }));
 vi.mock("next/cache", () => ({ revalidatePath: (...args: unknown[]) => revalidatePath(...args) }));
@@ -33,7 +35,7 @@ function form(fields: Record<string, string>): FormData {
 }
 
 beforeEach(() => {
-  for (const mock of [currentCaller, readAuthConfig, joinWaitlist, invite, markInvitationSent, sendInvitation, revalidatePath]) mock.mockReset();
+  for (const mock of [currentCaller, readAuthConfig, joinWaitlist, invite, markInvitationSent, removeRequest, sendInvitation, revalidatePath]) mock.mockReset();
   readAuthConfig.mockReturnValue(CONFIG);
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
@@ -94,5 +96,23 @@ describe("inviteAction", () => {
     sendInvitation.mockRejectedValue(new Error("Resend refused"));
     expect(await inviteAction(INVITE_IDLE, form({ email: "a@b.co" }))).toEqual({ status: "invited", email: "a@b.co", emailSent: false, alreadyInvited: false });
     expect(markInvitationSent).not.toHaveBeenCalled();
+  });
+});
+
+describe("removeRequestAction", () => {
+  it("is for admins only and removes a pending request, refreshing the page", async () => {
+    currentCaller.mockResolvedValue({ email: "someone@example.com", isAdmin: false });
+    expect(await removeRequestAction(REMOVE_IDLE, form({ email: "a@b.co" }))).toEqual({ status: "error", error: "forbidden" });
+    expect(removeRequest).not.toHaveBeenCalled();
+
+    currentCaller.mockResolvedValue({ email: "me@example.com", isAdmin: true });
+    removeRequest.mockResolvedValue(true);
+    expect(await removeRequestAction(REMOVE_IDLE, form({ email: " A@b.co " }))).toEqual({ status: "removed", email: "a@b.co" });
+    expect(removeRequest).toHaveBeenCalledWith(pool, "a@b.co");
+    expect(revalidatePath).toHaveBeenCalledWith("/admin/waitlist");
+
+    removeRequest.mockResolvedValue(false); // already invited, or gone
+    expect(await removeRequestAction(REMOVE_IDLE, form({ email: "a@b.co" }))).toEqual({ status: "error", error: "failed" });
+    expect(await removeRequestAction(REMOVE_IDLE, form({ email: "nope" }))).toEqual({ status: "error", error: "invalid_email" });
   });
 });

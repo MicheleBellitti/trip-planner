@@ -10,6 +10,7 @@ import {
   INVITE_ONLY_ERROR,
   INVITE_ONLY_HELP,
   LINK_VALIDITY,
+  LISTED_HINT,
   LoginForm,
   SIGN_IN_ERRORS,
   TOO_MANY_REQUESTS_ERROR,
@@ -160,12 +161,15 @@ describe("LoginForm", () => {
     expect(error.textContent).toContain(INVITE_ONLY_HELP);
     expect(input.getAttribute("aria-describedby")).toContain(error.id);
     expect(screen.queryByRole("alert")).toBeNull();
-    expect(screen.getByRole("button", { name: "Mettimi in lista" })).toBeTruthy();
+    // The way in is the primary now; the action that just failed steps back.
+    expect(screen.getByRole("button", { name: "Mettimi in lista" }).className).toMatch(/\bbg-action\b/);
+    expect(screen.getByRole("button", { name: "Inviami il link" }).className).not.toMatch(/\bbg-action\b/);
     await waitFor(() => expect(document.activeElement).toBe(input));
 
     fireEvent.change(input, { target: { value: "nobody2@example.com" } });
     expect(input.getAttribute("aria-invalid")).toBeNull();
     expect(screen.queryByRole("button", { name: "Mettimi in lista" })).toBeNull(); // another address: another try first
+    expect(screen.getByRole("button", { name: "Inviami il link" }).className).toMatch(/\bbg-action\b/);
   });
 
   it("'Mettimi in lista' joins the waitlist with the refused address, from the login, and shows the answer", async () => {
@@ -182,6 +186,7 @@ describe("LoginForm", () => {
     expect(data.get("email")).toBe("nobody@example.com");
     expect(data.get("source")).toBe("login");
     expect(screen.getByRole("status").textContent).toContain("nobody@example.com");
+    expect(screen.getByText(LISTED_HINT)).toBeTruthy(); // the h1 still says "Accedi": this says when
     await waitFor(() => expect(document.activeElement?.contains(heading)).toBe(true));
 
     fireEvent.click(screen.getByRole("button", { name: "Cambia indirizzo" }));

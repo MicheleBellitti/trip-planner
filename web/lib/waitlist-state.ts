@@ -21,3 +21,10 @@ export type InviteState =
   | { status: "error"; error: InviteError };
 
 export const INVITE_IDLE: InviteState = { status: "idle" };
+
+export type RemoveState =
+  | { status: "idle" }
+  | { status: "removed"; email: string }
+  | { status: "error"; error: Exclude<InviteError, "note_too_long"> };
+
+export const REMOVE_IDLE: RemoveState = { status: "idle" };

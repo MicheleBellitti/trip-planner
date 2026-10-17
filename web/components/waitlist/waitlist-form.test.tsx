@@ -57,16 +57,46 @@ describe("WaitlistForm", () => {
     expect(screen.queryByRole("link", { name: "Accedi" })).toBeNull();
   });
 
-  it("an address problem is an error on the field, and what was typed stays", async () => {
+  it("an address problem is an error on the field, which takes focus, and what was typed stays", async () => {
     join.mockResolvedValue({ status: "error", error: "invalid_email" });
     render(<WaitlistForm source="login" />);
 
     submit("friend@", "nota");
 
-    await waitFor(() => expect(screen.getByLabelText(WAITLIST_EMAIL_LABEL).getAttribute("aria-invalid")).toBe("true"));
+    const input = screen.getByLabelText(WAITLIST_EMAIL_LABEL) as HTMLInputElement;
+    await waitFor(() => expect(input.getAttribute("aria-invalid")).toBe("true"));
     expect(screen.getByText(WAITLIST_INVALID_EMAIL)).toBeTruthy();
-    expect((screen.getByLabelText(WAITLIST_EMAIL_LABEL) as HTMLInputElement).value).toBe("friend@");
+    expect(input.value).toBe("friend@");
     expect((screen.getByLabelText(/Il prossimo viaggio/) as HTMLTextAreaElement).value).toBe("nota");
+    await waitFor(() => expect(document.activeElement).toBe(input));
+  });
+
+  it("a note too long is an error on the note, which takes focus", async () => {
+    join.mockResolvedValue({ status: "error", error: "note_too_long" });
+    render(<WaitlistForm source="landing" />);
+
+    submit("friend@example.com", "x".repeat(10));
+
+    const note = screen.getByLabelText(/Il prossimo viaggio/);
+    await waitFor(() => expect(note.getAttribute("aria-invalid")).toBe("true"));
+    await waitFor(() => expect(document.activeElement).toBe(note));
+  });
+
+  it("'Cambia indirizzo' brings the form back with the address kept and selected", async () => {
+    join.mockResolvedValue({ status: "joined", email: "friend@example.com" });
+    render(<WaitlistForm source="landing" signInHint />);
+    submit("friend@example.com");
+    await screen.findByRole("heading", { name: WAITLIST_OUTCOMES.joined.title });
+    expect(screen.queryByRole("link", { name: "Accedi" })).toBeNull(); // the hint went with the form
+
+    const select = vi.spyOn(HTMLInputElement.prototype, "select");
+    fireEvent.click(screen.getByRole("button", { name: "Cambia indirizzo" }));
+
+    const input = screen.getByLabelText(WAITLIST_EMAIL_LABEL) as HTMLInputElement;
+    expect(input.value).toBe("friend@example.com");
+    await waitFor(() => expect(document.activeElement).toBe(input));
+    expect(select).toHaveBeenCalled();
+    expect(screen.getByRole("link", { name: "Accedi" })).toBeTruthy();
   });
 
   it("a failure is an alert above the form", async () => {
@@ -86,8 +116,10 @@ describe("WaitlistForm", () => {
       expect(screen.getByRole("link", { name: "Accedi" }).getAttribute("href")).toBe(ROUTES.login);
       cleanup();
     }
-    render(<WaitlistOutcome outcome="already_listed" email="friend@example.com" />);
+    render(<WaitlistOutcome outcome="already_listed" email="friend@example.com" hint="Torna con lo stesso indirizzo." />);
     expect(screen.getByRole("status").textContent).toContain("Abbiamo già friend@example.com");
+    expect(screen.getByText("Torna con lo stesso indirizzo.")).toBeTruthy();
     expect(screen.queryByRole("link")).toBeNull();
+    expect(WAITLIST_OUTCOMES.already_listed.icon).toBe("info"); // nothing was done: not a check
   });
 });

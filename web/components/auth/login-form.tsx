@@ -18,7 +18,9 @@ import { JOIN_IDLE } from "@/lib/waitlist-state";
 /** The one sentence about the link, reused wherever it is described. */
 export const LINK_VALIDITY = "Vale cinque minuti e funziona una volta sola.";
 export const INVITE_ONLY_ERROR = "Questo indirizzo non ha ancora un invito.";
-export const INVITE_ONLY_HELP = `${BRAND_NAME} è su invito: mettiti in lista e ti scriviamo quando c'è posto.`;
+export const INVITE_ONLY_HELP = `${BRAND_NAME} è su invito: se ne hai uno, usa l'indirizzo a cui è arrivato; altrimenti mettiti in lista e ti scriviamo quando c'è posto.`;
+/** After "Sei in lista" on this page: what the h1 "Accedi" still promises. */
+export const LISTED_HINT = "Quando ti scriviamo, torna qui con lo stesso indirizzo.";
 export const INVALID_EMAIL_ERROR = "Scrivi un indirizzo email completo.";
 export const TOO_MANY_REQUESTS_ERROR = "Troppi tentativi: aspetta un minuto e riprova.";
 export const SEND_FAILED_ERROR = "Non è stato possibile inviare il link. Riprova.";
@@ -32,7 +34,11 @@ export interface SignInNotice {
 
 /** The lede already says how long a link lasts: the notice only says what to do. */
 const LINK_SPENT: SignInNotice = { title: "Il link non è più valido.", body: "Chiedine un altro qui sotto." };
-const INVITE_ONLY: SignInNotice = { title: INVITE_ONLY_ERROR, body: INVITE_ONLY_HELP };
+/** A refusal that came back from a callback (Google): the form below is the way to the list. */
+const INVITE_ONLY: SignInNotice = {
+  title: INVITE_ONLY_ERROR,
+  body: "Scrivi qui sotto l'indirizzo con cui vuoi entrare: se non ha un invito, potrai metterti in lista.",
+};
 
 /** What Better Auth puts in `?error=` when a magic link or a Google sign-in fails, in Italian. */
 export const SIGN_IN_ERRORS: Record<string, SignInNotice> = {
@@ -268,6 +274,7 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled, navi
       <WaitlistOutcome
         outcome={phase.outcome}
         email={phase.email}
+        hint={LISTED_HINT}
         actions={
           <Button
             variant="quiet"
@@ -385,10 +392,12 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled, navi
               />
             )}
           </Field>
+          {/* While an address stands refused, the way in is the primary and the failed action steps
+              back; typing another address clears `refusedAddress` and undoes the swap. */}
           <div className="grid gap-2.5 sm:flex sm:flex-wrap sm:items-center">
             <Button
               type="submit"
-              variant="primary"
+              variant={refusedAddress ? "secondary" : "primary"}
               icon="arrow-right"
               busy={busy === "link"}
               disabled={busy !== null}
@@ -401,7 +410,7 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled, navi
             {refusedAddress ? (
               <Button
                 type="button"
-                variant="secondary"
+                variant="primary"
                 busy={busy === "list"}
                 disabled={busy !== null}
                 onClick={() => void joinList(refusedAddress)}

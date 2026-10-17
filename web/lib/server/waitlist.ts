@@ -125,3 +125,12 @@ export async function invite(
 export async function markInvitationSent(db: Queryable, email: string): Promise<void> {
   await db.query("UPDATE waitlist SET invitation_sent_at = now(), updated_at = now() WHERE email = $1", [email]);
 }
+
+/** Removes a pending request (never an invitation). True when a row went. */
+export async function removeRequest(db: Queryable, email: string): Promise<boolean> {
+  const { rows } = await db.query<{ email: string }>(
+    "DELETE FROM waitlist WHERE email = $1 AND invited_at IS NULL RETURNING email",
+    [email],
+  );
+  return rows.length > 0;
+}
