@@ -17,6 +17,7 @@ export const INVITE_ONLY_HELP =
   "L'accesso è su invito: usa l'indirizzo a cui è arrivato, o chiedi a chi ti ha invitato di abilitarlo.";
 export const INVALID_EMAIL_ERROR = "Scrivi un indirizzo email completo.";
 export const TOO_MANY_REQUESTS_ERROR = "Troppi tentativi: aspetta un minuto e riprova.";
+export const SEND_FAILED_ERROR = "Non è stato possibile inviare il link. Riprova.";
 export const GENERIC_SIGN_IN_ERROR = "Non è stato possibile accedere. Riprova.";
 export const UNCONFIGURED_MESSAGE = "Gli account non sono configurati su questo server.";
 
@@ -94,9 +95,22 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled }: Lo
     if (phase.kind === "sent") sentRef.current?.focus();
   }, [phase]);
 
+  // Selecting the kept address on the way back from the sent state lets typing replace it.
+  const selectOnFocus = useRef(false);
   useEffect(() => {
-    if (focusInput > 0) inputRef.current?.focus();
+    if (focusInput === 0) return;
+    inputRef.current?.focus();
+    if (selectOnFocus.current) {
+      inputRef.current?.select();
+      selectOnFocus.current = false;
+    }
   }, [focusInput]);
+
+  // A failed resend (too many tries, a failure) leaves the busy button disabled: focus would fall
+  // to the document, so it goes back to the panel, where the alert is.
+  useEffect(() => {
+    if (phase.kind === "sent" && notice) sentRef.current?.focus();
+  }, [notice, phase.kind]);
 
   // A one-field page: on a desktop the field is ready to type into. Never on a phone, where the
   // keyboard would cover the words, and never over a notice the user should read first.
@@ -116,6 +130,9 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled }: Lo
   }, [errorCode]);
 
   const callbackURL = () => safeReturnTo(returnTo, window.location.origin);
+  /** Where a spent link or a cancelled Google sign-in lands: this page, still knowing the way back. */
+  const errorCallbackURL = () =>
+    returnTo ? `${ROUTES.login}?returnTo=${encodeURIComponent(callbackURL())}` : ROUTES.login;
 
   /** Sends the link to `address`; `again` marks a resend from the sent state. */
   async function send(address: string, again: boolean) {
@@ -125,17 +142,17 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled }: Lo
     const { error } = await authClient.signIn.magicLink({
       email: address,
       callbackURL: callbackURL(),
-      errorCallbackURL: ROUTES.login,
+      errorCallbackURL: errorCallbackURL(),
     });
     setBusy(null);
     if (error) {
-      failed(error, again);
+      failed(error, { inSentState: again, action: "link" });
       return;
     }
     setPhase({ kind: "sent", email: address, again });
   }
 
-  function failed(error: ClientError, inSentState: boolean) {
+  function failed(error: ClientError, { inSentState, action }: { inSentState: boolean; action: "link" | "google" }) {
     if (error.code === "SIGNUP_NOT_ALLOWED" || error.status === 403) {
       if (inSentState) setPhase({ kind: "form" });
       setFieldError(
@@ -146,7 +163,8 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled }: Lo
       setFocusInput((tick) => tick + 1);
       return;
     }
-    setNotice({ title: error.status === 429 ? TOO_MANY_REQUESTS_ERROR : GENERIC_SIGN_IN_ERROR });
+    const failure = action === "link" ? SEND_FAILED_ERROR : GENERIC_SIGN_IN_ERROR;
+    setNotice({ title: error.status === 429 ? TOO_MANY_REQUESTS_ERROR : failure });
     if (!inSentState) setFocusInput((tick) => tick + 1);
   }
 
@@ -169,11 +187,11 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled }: Lo
     const { error } = await authClient.signIn.social({
       provider: "google",
       callbackURL: callbackURL(),
-      errorCallbackURL: ROUTES.login,
+      errorCallbackURL: errorCallbackURL(),
     });
     if (error) {
       setBusy(null);
-      failed(error, false);
+      failed(error, { inSentState: false, action: "google" });
     }
     // On success the browser is leaving for Google: the button stays busy until then.
   }
@@ -184,7 +202,7 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled }: Lo
       // user on the news.
       <div ref={sentRef} tabIndex={-1} className="rounded-md outline-none">
         <StatePanel
-          icon="check-circle"
+          icon="sign-in"
           title="Controlla la posta"
           headingId="login-sent"
           footer={notice ? <Notice tone="error" role="alert" title={notice.title}>{notice.body}</Notice> : null}
@@ -209,6 +227,7 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled }: Lo
                 onClick={() => {
                   setNotice(null);
                   setPhase({ kind: "form" });
+                  selectOnFocus.current = true;
                   setFocusInput((tick) => tick + 1);
                 }}
                 className="min-h-11 sm:min-h-8"
@@ -236,10 +255,8 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled }: Lo
 
   return (
     <div className="grid gap-5">
-      <p className="max-w-prose text-small text-ink-2">
-        {returnTo
-          ? "Accedi per tornare dove eri: ti inviamo un link, senza password. "
-          : "Ti inviamo un link per entrare, senza password. "}
+      <p className="max-w-prose text-pretty text-small text-ink-2">
+        {returnTo ? "Accedi per tornare dove eri: ti inviamo un link. " : "Ti inviamo un link per entrare, senza password. "}
         {LINK_VALIDITY}
       </p>
       {!configured ? (

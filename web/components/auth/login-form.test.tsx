@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   GENERIC_SIGN_IN_ERROR,
+  SEND_FAILED_ERROR,
   INVALID_EMAIL_ERROR,
   INVITE_ONLY_ERROR,
   INVITE_ONLY_HELP,
@@ -55,7 +56,9 @@ describe("LoginForm", () => {
 
   it("says why the user is here and promises the way back when it knows where they were", () => {
     renderForm({ returnTo: "/plans/abc" });
-    expect(screen.getByText(/Accedi per tornare dove eri/).textContent).toContain(LINK_VALIDITY);
+    const lede = screen.getByText(/Accedi per tornare dove eri/);
+    expect(lede.textContent).toContain(LINK_VALIDITY);
+    expect(lede.textContent!.length).toBeLessThanOrEqual(100); // two lines at 393 px, like the placeholder
   });
 
   it("hides Google when the server has no client", () => {
@@ -73,7 +76,8 @@ describe("LoginForm", () => {
     expect(magicLink).toHaveBeenCalledWith({
       email: "Someone@Example.com",
       callbackURL: "/plans/abc?tab=piano",
-      errorCallbackURL: "/login",
+      // A spent link lands here still knowing the way back.
+      errorCallbackURL: "/login?returnTo=%2Fplans%2Fabc%3Ftab%3Dpiano",
     });
     expect(screen.getByText("Someone@Example.com")).toBeTruthy();
     expect(screen.getByText(/Abbiamo inviato un link a/).textContent).toContain(LINK_VALIDITY);
@@ -105,9 +109,13 @@ describe("LoginForm", () => {
     expect(news.getAttribute("aria-live")).toBe("polite");
     await waitFor(() => expect(document.activeElement?.contains(news)).toBe(true));
 
+    // `selectionStart` is null on type=email inputs (the spec excludes them), so the call is spied.
+    const select = vi.spyOn(HTMLInputElement.prototype, "select");
     fireEvent.click(screen.getByRole("button", { name: "Cambia indirizzo" }));
-    expect(screen.getByLabelText(LABEL)).toHaveProperty("value", "a@example.com");
-    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(LABEL)));
+    const input = screen.getByLabelText(LABEL) as HTMLInputElement;
+    expect(input.value).toBe("a@example.com");
+    await waitFor(() => expect(document.activeElement).toBe(input));
+    expect(select).toHaveBeenCalledTimes(1); // typing replaces the kept address
   });
 
   it("a rate limit on the resend is an alert inside the sent panel", async () => {
@@ -116,10 +124,12 @@ describe("LoginForm", () => {
     typeAndSubmit("a@example.com");
     await screen.findByRole("heading", { name: "Controlla la posta" });
 
+    (document.activeElement as HTMLElement | null)?.blur();
     fireEvent.click(screen.getByRole("button", { name: "Inviane un altro" }));
 
     await waitFor(() => expect(screen.getByRole("alert").textContent).toContain(TOO_MANY_REQUESTS_ERROR));
-    expect(screen.getByRole("heading", { name: "Controlla la posta" })).toBeTruthy();
+    const heading = screen.getByRole("heading", { name: "Controlla la posta" });
+    await waitFor(() => expect(document.activeElement?.contains(heading)).toBe(true)); // focus never falls to the document
   });
 
   it("a refused address is an error on the field, with the invite rule and what to do, and focus goes back to it", async () => {
@@ -159,7 +169,8 @@ describe("LoginForm", () => {
 
     magicLink.mockResolvedValueOnce({ data: null, error: { status: 500, message: "x" } });
     fireEvent.submit(screen.getByLabelText(LABEL).closest("form")!);
-    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain(GENERIC_SIGN_IN_ERROR));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain(SEND_FAILED_ERROR));
+    expect(SEND_FAILED_ERROR).not.toBe(GENERIC_SIGN_IN_ERROR); // the link failed to leave; access did not fail
   });
 
   it("shows Better Auth's callback error codes in Italian, with what to do", () => {
@@ -178,7 +189,13 @@ describe("LoginForm", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Continua con Google" }));
 
-    await waitFor(() => expect(social).toHaveBeenCalledWith({ provider: "google", callbackURL: "/evals", errorCallbackURL: "/login" }));
+    await waitFor(() =>
+      expect(social).toHaveBeenCalledWith({
+        provider: "google",
+        callbackURL: "/evals",
+        errorCallbackURL: "/login?returnTo=%2Fevals",
+      }),
+    );
     expect(screen.getByRole("button", { name: "Apro Google…" })).toHaveProperty("disabled", true);
   });
 
