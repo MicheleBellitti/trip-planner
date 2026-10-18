@@ -13,7 +13,7 @@ import { clientIp } from "./server/request-ip";
 import { MAGIC_LINK_MINUTES, sendMagicLink } from "./server/send-magic-link";
 import { verifyTurnstile } from "./server/turnstile";
 import { CHALLENGE_FAILED_MESSAGE, TURNSTILE_ACTIONS, TURNSTILE_HEADER } from "./turnstile";
-import { isInvited } from "./server/waitlist";
+import { signInStanding } from "./server/waitlist";
 
 /**
  * The app's own accounts: Better Auth 1.7, served by app/api/auth/[...all]/route.ts.
@@ -30,7 +30,7 @@ import { isInvited } from "./server/waitlist";
  *   stays exempt from the rate limit until no deployed backend asks it any more (`rateLimit`).
  * - Sign-up is by invitation: an address may create an account when it is in AUTH_ALLOWED_EMAILS
  *   (lib/auth-policy.ts: the bootstrap list and the `*` of a public launch) or when an admin
- *   invited it on the waitlist (lib/server/waitlist.ts `isInvited`, the day-to-day list).
+ *   invited it on the waitlist (lib/server/waitlist.ts `signInStanding`, the day-to-day list).
  *   `user.create` is refused for every provider (Google's address is only known at its callback).
  *   Existing accounts always sign in.
  * - No enumeration (Michele, 2026-10-18: "uguale per tutti"): a magic-link request answers the
@@ -57,8 +57,8 @@ const DAY_SECONDS = 60 * 60 * 24;
 /** What the accounts need besides the configuration; lib/auth.test.ts passes an in-memory database. */
 export interface AuthDependencies {
   database: BetterAuthOptions["database"];
-  /** True when the normalized address was invited on the waitlist. */
-  isInvited: (email: string) => Promise<boolean>;
+  /** Whether the normalized address has an account and whether it was invited, in one lookup. */
+  standing: (email: string) => Promise<{ hasAccount: boolean; invited: boolean }>;
   /** Runs a task once the response has left: Next's `after()` in the app (the auth route handler
    * runs inside Next's request scope, where `after` is allowed); the tests record the tasks. */
   defer: (task: () => Promise<void>) => void;
@@ -70,11 +70,16 @@ export function redactAddresses(message: string): string {
 }
 
 export function buildAuth(config: AuthServerConfig, deps: AuthDependencies) {
-  /** True when `email` may create an account: the allow list, or an invitation. */
-  const mayCreateAccount = async (email: unknown): Promise<boolean> => {
-    const address = typeof email === "string" ? email : null;
-    if (isSignupAllowed(address, config.allowList)) return true;
-    return address !== null && (await deps.isInvited(normalizeEmail(address)));
+  /**
+   * Whether `email` may sign in (an account, the allow list, an invitation) and whether it may
+   * create an account (the allow list, an invitation). The one lookup always runs, before the
+   * decision: every address costs the same queries, so the answer's timing tells nothing.
+   */
+  const decide = async (email: unknown): Promise<{ maySignIn: boolean; mayCreate: boolean }> => {
+    const address = typeof email === "string" ? normalizeEmail(email) : "";
+    const { hasAccount, invited } = await deps.standing(address);
+    const mayCreate = isSignupAllowed(address, config.allowList) || (address !== "" && invited);
+    return { maySignIn: hasAccount || mayCreate, mayCreate };
   };
   return betterAuth({
     appName: "Atlas",
@@ -138,13 +143,12 @@ export function buildAuth(config: AuthServerConfig, deps: AuthDependencies) {
     plugins: [
       magicLink({
         expiresIn: MAGIC_LINK_MINUTES * 60,
-        sendMagicLink: async ({ email, url }, ctx) => {
+        sendMagicLink: async ({ email, url }) => {
           // The same answer for every address (no enumeration): one that may not sign in gets no
           // email, and the request still answers 200. The decision is taken here; the email itself
           // leaves after the response, so an enabled address does not answer later than a refused
           // one (Resend's round trip would tell them apart). Never log the address.
-          const existing = ctx ? await ctx.context.internalAdapter.findUserByEmail(email) : null;
-          if (!existing && !(await mayCreateAccount(email))) {
+          if (!(await decide(email)).maySignIn) {
             console.info("[auth] magic link withheld: the address may not sign up");
             return;
           }
@@ -183,7 +187,7 @@ export function buildAuth(config: AuthServerConfig, deps: AuthDependencies) {
       user: {
         create: {
           before: async (user) => {
-            if (!(await mayCreateAccount(user.email))) {
+            if (!(await decide(user.email)).mayCreate) {
               throw new APIError("FORBIDDEN", { message: SIGNUP_REFUSED_MESSAGE, code: "SIGNUP_NOT_ALLOWED" });
             }
             return { data: user };
@@ -198,7 +202,7 @@ export const authConfig = readAuthConfig();
 
 function build(config: AuthServerConfig) {
   const pool = getPool(config.databaseUrl);
-  return buildAuth(config, { database: pool, isInvited: (email) => isInvited(pool, email), defer: after });
+  return buildAuth(config, { database: pool, standing: (email) => signInStanding(pool, email), defer: after });
 }
 
 export const auth = authConfig ? build(authConfig) : null;

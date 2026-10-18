@@ -1,13 +1,13 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { inviteAction, removeRequestAction } from "@/app/actions/waitlist";
+import { inviteAction, removeRequestAction, resendInvitationAction } from "@/app/actions/waitlist";
 
 import type { WaitlistRow } from "@/lib/server/waitlist";
 
 import { formatDay, INVITE_ERRORS, inviteOutcome, REMOVE_ERRORS, removeOutcome, SOURCE_LABELS, WaitlistAdmin } from "./waitlist-admin";
 
-vi.mock("@/app/actions/waitlist", () => ({ inviteAction: vi.fn(), removeRequestAction: vi.fn() }));
+vi.mock("@/app/actions/waitlist", () => ({ inviteAction: vi.fn(), removeRequestAction: vi.fn(), resendInvitationAction: vi.fn() }));
 
 const row = (overrides: Partial<WaitlistRow>): WaitlistRow => ({
   email: "a@example.com",
@@ -17,6 +17,7 @@ const row = (overrides: Partial<WaitlistRow>): WaitlistRow => ({
   invitedAt: null,
   invitedBy: null,
   invitationSentAt: null,
+  invitationSentClaim: null,
   registered: false,
   ...overrides,
 });
@@ -30,7 +31,7 @@ describe("WaitlistAdmin", () => {
         rows={[
           row({ email: "pending@example.com", note: "Lisbona\nad aprile", source: "login" }),
           row({ email: "unsent@example.com", source: "admin", invitedAt: "2026-10-16T10:00:00Z", invitedBy: "me@example.com" }),
-          row({ email: "done@example.com", invitedAt: "2026-10-15T10:00:00Z", invitedBy: "me@example.com", invitationSentAt: "2026-10-15T10:00:01Z", registered: true }),
+          row({ email: "done@example.com", invitedAt: "2026-10-15T10:00:00Z", invitedBy: "me@example.com", invitationSentAt: "2026-10-15T10:00:01Z", invitationSentClaim: "2026-10-15 10:00:01.000042+00", registered: true }),
         ]}
       />,
     );
@@ -176,6 +177,35 @@ describe("WaitlistAdmin", () => {
   it("marks a pending request whose address already has an account", () => {
     render(<WaitlistAdmin rows={[row({ email: "member@example.com", registered: true })]} />);
     expect(screen.getByRole("listitem").textContent).toContain("ha un account");
+  });
+
+  it("offers a quiet \"Invia di nuovo\" on a sent invitation, sending the stamp it shows", async () => {
+    vi.mocked(resendInvitationAction).mockResolvedValue({ status: "invited", email: "sent@example.com", delivery: "resent" });
+    render(
+      <WaitlistAdmin
+        rows={[
+          row({ email: "sent@example.com", invitedAt: "2026-10-15T10:00:00Z", invitationSentAt: "2026-10-15T10:00:01Z", invitationSentClaim: "2026-10-15 10:00:01.000042+00" }),
+          row({ email: "member@example.com", invitedAt: "2026-10-15T10:00:00Z", invitationSentAt: "2026-10-15T10:00:01Z", invitationSentClaim: "2026-10-15 10:00:02.5+00", registered: true }),
+        ]}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /member@example\.com/ })).toBeNull(); // an account: nothing to resend
+    const again = screen.getByRole("button", { name: "Invia di nuovo l'invito a sent@example.com" });
+    expect(again.textContent).toBe("Invia di nuovo");
+    expect(again.className).not.toMatch(/\bbg-action\b|amber|due/); // quiet, never the deadline colour
+    fireEvent.click(again);
+    await screen.findByText("Invito inviato di nuovo a sent@example.com.");
+    const data = vi.mocked(resendInvitationAction).mock.calls[0]?.[1] as FormData;
+    expect(data.get("email")).toBe("sent@example.com");
+    expect(data.get("sent")).toBe("2026-10-15 10:00:01.000042+00");
+  });
+
+  it("words each outcome of a re-send", () => {
+    expect(inviteOutcome({ status: "invited", email: "a@b.co", delivery: "resend_skipped" })?.text).toContain("Nessuna nuova email a a@b.co");
+    expect(inviteOutcome({ status: "invited", email: "a@b.co", delivery: "resend_failed" })).toEqual({
+      tone: "warning",
+      text: "L'email per a@b.co non è partita di nuovo: riprova con «Invia di nuovo».",
+    });
   });
 
   it("writes dates in the planner's home time zone, whatever the machine's", () => {

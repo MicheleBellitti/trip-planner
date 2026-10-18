@@ -38,18 +38,29 @@ async function runDeferred() {
 
 function setup(invited: string[] = []) {
   const now = new Date();
-  const db: Record<string, Record<string, unknown>[]> = {
+  const tables: Record<string, Record<string, unknown>[]> = {
     users: [{ id: "u1", name: "", email: "member@example.com", email_verified: true, image: null, created_at: now, updated_at: now }],
     auth_sessions: [],
     auth_accounts: [],
     auth_verifications: [],
   };
+  // Every read of a table and every standing lookup, in order: what a request costs.
+  const lookups: string[] = [];
+  const db = new Proxy(tables, {
+    get(target, key: string) {
+      if (key in target) lookups.push(`table:${key}`);
+      return target[key];
+    },
+  });
   const auth = buildAuth(config, {
     database: memoryAdapter(db),
-    isInvited: async (email) => invited.includes(email),
+    standing: async (email) => {
+      lookups.push("standing");
+      return { hasAccount: tables.users!.some((user) => user.email === email), invited: invited.includes(email) };
+    },
     defer: (task) => void deferred.push(task),
   });
-  return { auth, db };
+  return { auth, lookups };
 }
 
 async function requestLink(auth: ReturnType<typeof setup>["auth"], email: string) {
@@ -81,6 +92,20 @@ describe("the magic-link request (no account enumeration)", () => {
     await runDeferred();
     expect(sendMagicLink).toHaveBeenCalledTimes(1);
     expect(sendMagicLink.mock.calls[0]?.[1].email).toBe("member@example.com");
+  });
+
+  it("makes the same lookups for an account, an allowed, an invited and an unknown address", async () => {
+    const { auth, lookups } = setup(["guest@example.com"]);
+    const costs: string[][] = [];
+    for (const email of ["member@example.com", "boss@example.com", "guest@example.com", "stranger@example.com"]) {
+      lookups.length = 0;
+      expect((await requestLink(auth, email)).status).toBe(200);
+      costs.push([...lookups]);
+    }
+    expect(costs[0]).toContain("standing");
+    expect(costs[0]!.filter((lookup) => lookup === "standing")).toHaveLength(1);
+    for (const cost of costs) expect(cost).toEqual(costs[0]);
+    expect(deferred).toHaveLength(3); // the stranger gets nothing, and paid the same to find out
   });
 
   it("sends the link to an address on the allow list or invited on the waitlist", async () => {
