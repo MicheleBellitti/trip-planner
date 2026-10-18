@@ -31,6 +31,7 @@ ALL_VARIABLES = (
     "GIT_SHA",
     "EVALS_INGEST_TOKEN",
     "RAILWAY_GIT_COMMIT_SHA",
+    "LINK_CHECK_ENABLED",
 )
 
 
@@ -93,6 +94,7 @@ def test_defaults_are_production_safe(bare_env: pytest.MonkeyPatch) -> None:
     assert settings.lockfile_path == BACKEND_DIR / "claude-lock.production.json"
     assert settings.git_sha is None
     assert settings.log_level == "INFO"
+    assert settings.link_check_enabled is True
 
 
 def test_production_needs_an_explicit_agent_profile(bare_env: pytest.MonkeyPatch) -> None:
@@ -502,3 +504,14 @@ def test_quota_defaults() -> None:
     assert (settings.max_continues_per_plan, settings.max_running_plans) == (2, 8)
     assert (settings.plan_create_limit_per_user, settings.plan_create_limit_per_ip) == (5, 20)
     assert (settings.plan_create_window_seconds, settings.max_streams_per_user) == (600, 4)
+
+
+# --- LINK_CHECK_ENABLED -----------------------------------------------------------------------
+
+
+def test_link_check_settings(make_settings: MakeSettings) -> None:
+    assert Settings.model_fields["link_check_enabled"].default is True
+    assert make_settings(link_check_enabled="false").link_check_enabled is False
+    assert make_settings(link_check_enabled="true").link_check_enabled is True
+    settings = make_settings(frontend_origin="https://atlas.example/")
+    assert settings.link_check_user_agent == "AtlasLinkCheck/1.0 (+https://atlas.example)"
