@@ -74,7 +74,8 @@ export interface PlanViewProps {
    * no photo. */
   loadCover?: CoverLoader;
   /** The plan's hand-off in place of "Apri in TripTracker" (the demo's "Pianifica il tuo
-   * viaggio"): a heading for screen readers, a sentence and an in-app link. */
+   * viaggio"): a heading for screen readers, a sentence, an in-app link and, if given, a quieter
+   * second one. */
   handoff?: PlanHandoff;
   /** A notice above the plan (the demo's: the prices are an example). */
   notice?: ReactNode;
@@ -87,6 +88,8 @@ export interface PlanHandoff {
   text: string;
   label: string;
   href: string;
+  /** A second, quiet link beside the first (the demo's "Accedi" for the invited). */
+  secondary?: { label: string; href: string };
 }
 
 type Fetched = { planId: string; ok: true; trip: unknown } | { planId: string; ok: false };
@@ -217,9 +220,16 @@ export function PlanView({
         {ownHandoff.title}
       </h2>
       <p className="max-w-prose text-small text-ink-2">{ownHandoff.text}</p>
-      <LinkButton href={ownHandoff.href} variant="secondary" className="mt-3 w-full sm:w-auto lg:w-full">
-        {ownHandoff.label}
-      </LinkButton>
+      <div className="mt-3 flex flex-wrap gap-2 lg:flex-col">
+        <LinkButton href={ownHandoff.href} variant="secondary" className="w-full sm:w-auto lg:w-full">
+          {ownHandoff.label}
+        </LinkButton>
+        {ownHandoff.secondary ? (
+          <LinkButton href={ownHandoff.secondary.href} variant="quiet" className="w-full sm:w-auto lg:w-full">
+            {ownHandoff.secondary.label}
+          </LinkButton>
+        ) : null}
+      </div>
     </section>
   ) : importUrl ? (
     <section

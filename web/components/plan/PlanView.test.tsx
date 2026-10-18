@@ -71,6 +71,27 @@ describe("PlanView", () => {
     expect(screen.queryByRole("link", { name: /Apri in TripTracker/ })).toBeNull();
   });
 
+  it("draws the hand-off's second link beside the first when it is given one", () => {
+    render(
+      <PlanView
+        detail={happyDetail()}
+        trip={happyTrip()}
+        loadTrip={unused}
+        handoff={{
+          title: "Il tuo viaggio",
+          text: "Su invito.",
+          label: "Mettiti in lista",
+          href: "/#lista",
+          secondary: { label: "Accedi", href: "/login" },
+        }}
+      />,
+    );
+    const first = screen.getAllByRole("link", { name: "Mettiti in lista" });
+    const second = screen.getAllByRole("link", { name: "Accedi" });
+    expect(second).toHaveLength(first.length);
+    for (const link of second) expect(link.getAttribute("href")).toBe("/login");
+  });
+
   it("puts a notice above the plan when it is given one", () => {
     const { container } = render(
       <PlanView detail={happyDetail()} trip={happyTrip()} loadTrip={unused} notice={<p>Una corsa registrata.</p>} />,

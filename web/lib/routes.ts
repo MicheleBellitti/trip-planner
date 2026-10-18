@@ -15,6 +15,10 @@ export const ROUTES = {
   invites: "/admin/waitlist",
 } as const;
 
+/** The landing's waitlist (its "Accesso su invito." heading), where a stranger asks for a place. */
+export const WAITLIST_ANCHOR = "lista";
+export const WAITLIST_HREF = `${ROUTES.home}#${WAITLIST_ANCHOR}`;
+
 /** The public demo run exists (step 3): the landing offers "Guarda una corsa" → /demo. Off, the
  * landing falls back to "Scopri come funziona", so no button can lead to a 404. */
 export const DEMO_READY = true;

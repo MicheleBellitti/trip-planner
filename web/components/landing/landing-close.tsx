@@ -1,7 +1,7 @@
 import { LinkButton } from "@/components/ui/button";
 import { WaitlistForm } from "@/components/waitlist/waitlist-form";
 import { BRAND_NAME } from "@/lib/brand";
-import { DEMO_READY, ROUTES } from "@/lib/routes";
+import { DEMO_READY, ROUTES, WAITLIST_ANCHOR } from "@/lib/routes";
 
 import { ConvergingLines } from "./converging-lines";
 
@@ -32,7 +32,7 @@ export function LandingClose({ demoReady = DEMO_READY }: { demoReady?: boolean }
               Accedi
             </LinkButton>
           </div>
-          <h3 id="landing-waitlist-title" className="mt-10 font-cond text-heading font-semibold">
+          <h3 id={WAITLIST_ANCHOR} className="mt-10 scroll-mt-6 font-cond text-heading font-semibold">
             Accesso su invito.
           </h3>
           <p className="mt-1.5 max-w-[34em] text-small text-ink-2">
