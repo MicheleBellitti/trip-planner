@@ -50,7 +50,9 @@ function gutter(ts: string, startedAt: number | null): string {
 }
 
 export const laneCardId = (agent: LaneView["agent"]) => `lane-${agent}`;
-const ids = (agent: LaneView["agent"]) => ({ bodyId: `lane-${agent}-body`, nameId: `lane-${agent}-name` });
+/** The phone card's collapsible body (closed, it stays in the DOM, 0 px tall). */
+export const laneBodyId = (agent: LaneView["agent"]) => `lane-${agent}-body`;
+const ids = (agent: LaneView["agent"]) => ({ bodyId: laneBodyId(agent), nameId: `lane-${agent}-name` });
 
 /** The roundel, the name and the state: two words and a glyph for screen readers. */
 function HeadContent({ view, desktop }: { view: LaneView; desktop: boolean }) {

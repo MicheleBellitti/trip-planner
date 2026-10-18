@@ -12,7 +12,7 @@ import { AgentRoundel } from "@/components/ui/agent";
 import { Icon } from "@/components/ui/icon";
 import { AGENT_LABELS } from "@/lib/plan-events/labels";
 
-import { AgentLane, JumpToLatest, LaneColumn, LaneHead, laneCardId } from "./agent-lane";
+import { AgentLane, JumpToLatest, LaneColumn, LaneHead, laneBodyId, laneCardId } from "./agent-lane";
 import { useLaneLayout } from "./hooks";
 import { laneToOpen, type LaneView } from "./stations";
 
@@ -134,8 +134,12 @@ export function AgentLanes({
   // itself before it opens), or the coordinator's newest station on wider layouts.
   const cameraTarget = useCallback((): HTMLElement | null => {
     if (layout !== "stack") return coordinatorEnd.current;
-    const card = document.getElementById(laneCardId(followed));
-    return card?.querySelector<HTMLElement>("[data-lane-end]") ?? card;
+    // The end marker lives in the card's collapsible body, which is in the DOM even closed: aim at
+    // it only once the body shows (open and grown past 0 px), else at the card, still opening.
+    const body = document.getElementById(laneBodyId(followed));
+    const shown = body !== null && !body.hasAttribute("inert") && body.getBoundingClientRect().height > 0;
+    const end = shown ? body.querySelector<HTMLElement>("[data-lane-end]") : null;
+    return end ?? document.getElementById(laneCardId(followed));
   }, [layout, followed]);
   // Until when a scroll is the camera's own (a smooth move takes a few hundred ms).
   const cameraUntil = useRef(0);

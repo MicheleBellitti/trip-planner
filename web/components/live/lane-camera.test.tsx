@@ -12,6 +12,8 @@ import { buildLaneViews } from "./stations";
 const events = backend.events as unknown as UIEvent[];
 const at = (count: number) => reducePlanEvents(events.slice(0, count));
 const scrolled = vi.fn();
+/** The elements the camera scrolled into view, in order. */
+let targets: Element[] = [];
 
 function lanes(count: number, follow: LaneFollow) {
   const state = at(count);
@@ -38,7 +40,9 @@ function screenWidth(desktop: boolean) {
 
 beforeEach(() => {
   scrolled.mockReset();
+  targets = [];
   Element.prototype.scrollIntoView = function (this: Element, options?: boolean | ScrollIntoViewOptions) {
+    targets.push(this);
     // The card a scrolled element belongs to (the card, or its body's end marker).
     scrolled((this.closest("[id^='lane-']")?.id ?? this.tagName).replace(/-body$/, ""), options);
   };
@@ -58,6 +62,26 @@ describe("the demo's camera", () => {
     const ids = scrolled.mock.calls.map(([id]) => id as string);
     expect([laneCardId("flights"), laneCardId("lodging")]).toContain(ids.at(-1));
     for (const [, options] of scrolled.mock.calls) expect(options).toMatchObject({ block: "nearest" });
+  });
+
+  it("on the phone, aims at the card while its body is still 0 px tall, at its newest station once it shows", () => {
+    screenWidth(false);
+    const { rerender } = render(lanes(10, "show"));
+    // jsdom lays nothing out: every body is 0 px tall, as one that is closed or just opening.
+    targets = [];
+    rerender(lanes(14, "show"));
+    const opening = targets.at(-1)!;
+    expect(opening.tagName).toBe("SECTION");
+    expect(opening.id).toMatch(/^lane-(flights|lodging)$/);
+    // Grown open: the body has a height, so the camera follows its end marker.
+    const body = document.getElementById(`${opening.id}-body`)!;
+    body.getBoundingClientRect = () => ({ top: 0, bottom: 400, height: 400 }) as DOMRect;
+    targets = [];
+    rerender(lanes(15, "show"));
+    rerender(lanes(16, "show"));
+    const grown = targets.at(-1);
+    expect(grown?.hasAttribute("data-lane-end")).toBe(true);
+    expect(grown?.closest("section")?.id).toBe(opening.id);
   });
 
   it("live, never moves the page for the viewer", () => {
