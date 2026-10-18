@@ -36,12 +36,15 @@ Better Auth facts (docs/triptracker/schema-notes.md §6 and §8 C1-C5; the same 
 both providers):
 
 - Cookie names: `__Secure-<prefix>.session_token` when the provider runs on https, plain
-  `<prefix>.session_token` in local http development. Both are accepted, the `__Secure-`
-  one first. The value is signed (`<token>.<hmac>`). On the TripTracker path it is hashed whole
-  for the cache key and forwarded untouched; on the atlas path the token before the dot is
-  looked up (`session_token`): Better Auth's own `getSession` checks the signature and then
-  looks the token up, and the token alone (32 random alphanumerics) is the secret, so a forged
-  signature with an unknown token finds no row.
+  `<prefix>.session_token` in local http development. In production with an https provider
+  only the `__Secure-` name is accepted (`Settings.secure_session_cookie_only`): the plain name
+  has none of the prefix's guarantees, so a sibling `bellittim.com` host could plant one
+  (cookie tossing). Elsewhere both are accepted, the `__Secure-` one first. The value is
+  signed (`<token>.<hmac>`). On the TripTracker path it is hashed whole for the cache key and
+  forwarded untouched; on the atlas path the token before the dot is looked up
+  (`session_token`): Better Auth's own `getSession` checks the signature and then looks the
+  token up, and the token alone (32 random alphanumerics) is the secret, so a forged signature
+  with an unknown token finds no row.
 - Only the provider's Better Auth cookies (names starting with `__Secure-<prefix>.` or
   `<prefix>.`) are forwarded, never the browser's other cookies, and never the other
   provider's. No `Set-Cookie` from the answer is relayed.
@@ -118,10 +121,14 @@ DEFAULT_COOKIE_PREFIX = TRIPTRACKER_COOKIE_PREFIX
 """Better Auth's default prefix; the pure helpers below assume it unless told otherwise."""
 
 
-def session_cookie_names(prefix: str = DEFAULT_COOKIE_PREFIX) -> tuple[str, str]:
+def session_cookie_names(
+    prefix: str = DEFAULT_COOKIE_PREFIX, *, secure_only: bool = False
+) -> tuple[str, ...]:
     """Accepted session cookie names for a Better Auth cookie `prefix`, in order of preference:
-    the `__Secure-` one (https) first, then the plain one (local http development)."""
-    return (f"__Secure-{prefix}.session_token", f"{prefix}.session_token")
+    the `__Secure-` one (https) first, then the plain one (local http development), unless
+    `secure_only` (`Settings.secure_session_cookie_only`: production over https)."""
+    secure = f"__Secure-{prefix}.session_token"
+    return (secure,) if secure_only else (secure, f"{prefix}.session_token")
 
 
 def forwarded_cookie_prefixes(prefix: str = DEFAULT_COOKIE_PREFIX) -> tuple[str, str]:
@@ -248,14 +255,16 @@ def _request_cookie_pairs(request: Request) -> list[tuple[str, str]]:
     return pairs
 
 
-def session_cookie(request: Request, prefix: str = DEFAULT_COOKIE_PREFIX) -> tuple[str, str] | None:
-    """(cookie name, raw value) of the first present name in `session_cookie_names(prefix)`,
-    or None.
+def session_cookie(
+    request: Request, prefix: str = DEFAULT_COOKIE_PREFIX, *, secure_only: bool = False
+) -> tuple[str, str] | None:
+    """(cookie name, raw value) of the first present name in
+    `session_cookie_names(prefix, secure_only=secure_only)`, or None.
 
     The value is read from the raw header (the first occurrence of the name), untouched; an
     empty value counts as absent."""
     pairs = _request_cookie_pairs(request)
-    for name in session_cookie_names(prefix):
+    for name in session_cookie_names(prefix, secure_only=secure_only):
         for cookie_name, value in pairs:
             if cookie_name == name and value:
                 return name, value
@@ -617,7 +626,8 @@ async def current_user(request: Request) -> CurrentUser:
 
     Reads `Settings` from `request.app.state.settings`. With AUTH_MODE=local it returns
     `CurrentUser(settings.local_user_email)` without I/O. Otherwise: no session cookie of the
-    configured provider (`settings.auth_cookie_prefix`), or a value that cannot be one
+    configured provider (`settings.auth_cookie_prefix`; only the `__Secure-` name with
+    `settings.secure_session_cookie_only`), or a value that cannot be one
     (`plausible_session_token`) -> 401 `not_authenticated` without asking anyone. Then the
     provider: AUTH_MODE=atlas looks the cookie's token up in the shared database
     (`verify_atlas_session`, through `request.app.state.session_factory`); AUTH_MODE=triptracker
@@ -634,7 +644,7 @@ async def current_user(request: Request) -> CurrentUser:
         return CurrentUser(email=local_email)
     messages = auth_messages(settings)
     prefix = settings.auth_cookie_prefix
-    cookie = session_cookie(request, prefix)
+    cookie = session_cookie(request, prefix, secure_only=settings.secure_session_cookie_only)
     if cookie is None or not plausible_session_token(cookie[1]):
         raise auth_error(AuthErrorCode.NOT_AUTHENTICATED, messages)
     if settings.auth_mode == "atlas":

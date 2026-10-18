@@ -1005,7 +1005,10 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
     The signature half of the cookie is not checked: Better Auth's own `getSession` checks it
     and then looks the token up, and the 32-character random token alone is the secret, so a
     forged signature with an unknown token finds no row; a database error is 503
-    `auth_unavailable`. Access: in `atlas` mode every account
+    `auth_unavailable`. Only the `__Secure-atlas.session_token` name is accepted in production
+    with an https `FRONTEND_ORIGIN` (`Settings.secure_session_cookie_only`, both modes): the
+    plain name carries no `__Secure-` guarantee, so a sibling `*.bellittim.com` host could plant
+    it (cookie tossing); development over http keeps accepting both. Access: in `atlas` mode every account
     may plan (`Settings.may_use_planner`): the web app's `AUTH_ALLOWED_EMAILS` already decided
     who could sign up, and a second list on Railway would have to be kept in step by hand.
     Ownership (`sessions.plan_owner_filter`, `owns_plan`, `get_user_plan(..., settings=)`): in

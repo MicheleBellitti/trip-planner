@@ -124,6 +124,15 @@ def test_session_cookie_accepts_the_local_http_name_and_ignores_empty_values() -
     assert session_cookie(make_request([])) is None
 
 
+def test_secure_only_accepts_just_the_secure_name() -> None:
+    assert session_cookie_names(secure_only=True) == (SECURE_COOKIE,)
+    assert session_cookie_names("atlas", secure_only=True) == (ATLAS_SECURE_COOKIE,)
+    plain_only = make_request([("Cookie", f"{PLAIN_COOKIE}={SIGNED_TOKEN}")])
+    assert session_cookie(plain_only, secure_only=True) is None
+    both = make_request([("Cookie", f"{PLAIN_COOKIE}=planted.sig; {SECURE_COOKIE}={SIGNED_TOKEN}")])
+    assert session_cookie(both, secure_only=True) == (SECURE_COOKIE, SIGNED_TOKEN)
+
+
 def test_only_better_auth_cookies_are_forwarded_untouched_and_in_order() -> None:
     request = make_request(
         [
@@ -1212,6 +1221,56 @@ async def test_an_implausible_atlas_cookie_never_reaches_the_database(
         response = await client.get("/me", headers={"Cookie": f"{ATLAS_PLAIN_COOKIE}=no-dot-here"})
 
     assert response.status_code == 401  # 503 would mean the lookup was attempted
+
+
+def test_only_production_over_https_refuses_the_plain_cookie_name(
+    make_settings: Callable[..., Settings],
+) -> None:
+    production = {"anthropic_api_key": "sk-test", "agent_profile": "production"}
+    assert make_settings(
+        environment="production", auth_mode="atlas", **production
+    ).secure_session_cookie_only
+    assert make_settings(
+        environment="production", auth_mode="triptracker", **production
+    ).secure_session_cookie_only
+    assert not make_settings(auth_mode="atlas").secure_session_cookie_only  # development
+    assert not make_settings(
+        auth_mode="atlas", frontend_origin="http://localhost:3000"
+    ).secure_session_cookie_only
+
+
+async def test_in_production_an_atlas_cookie_under_the_plain_name_is_refused(
+    make_settings: Callable[..., Settings], db_session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """Cookie tossing: a sibling `*.bellittim.com` host can set `atlas.session_token` (no
+    `__Secure-` guarantees), so in production only the `__Secure-` name stands for a session."""
+    await add_atlas_session(db_session_factory)
+    settings = make_settings(
+        environment="production",
+        auth_mode="atlas",
+        anthropic_api_key="sk-test",
+        agent_profile="production",
+    )
+    app = atlas_app(settings, db_session_factory)
+
+    async with asgi_client(app) as client:
+        plain = await client.get("/me", headers={"Cookie": f"{ATLAS_PLAIN_COOKIE}={SIGNED_TOKEN}"})
+        secure = await client.get(
+            "/me", headers={"Cookie": f"{ATLAS_SECURE_COOKIE}={SIGNED_TOKEN}"}
+        )
+        # A planted plain cookie beside the real one changes nothing: the secure one is read.
+        both = await client.get(
+            "/me",
+            headers={
+                "Cookie": f"{ATLAS_PLAIN_COOKIE}=planted.sig; {ATLAS_SECURE_COOKIE}={SIGNED_TOKEN}"
+            },
+        )
+
+    assert plain.status_code == 401
+    assert plain.json()["detail"]["code"] == "not_authenticated"
+    assert secure.status_code == 200
+    assert both.status_code == 200
+    assert both.json() == {"email": "test@example.com", "id": "usr_1"}
 
 
 # --- the admin role -------------------------------------------------------------------------------
