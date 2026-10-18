@@ -2,13 +2,14 @@
 
 import { Button, LinkButton } from "@/components/ui/button";
 import { BRAND_NAME } from "@/lib/brand";
-import { ROUTES } from "@/lib/routes";
+import { ROUTES, WAITLIST_HREF } from "@/lib/routes";
 
 /**
  * The demo's bar (spec, "Demo"), in place of "Interrompi": what this run is, then "Ricomincia",
  * "2×" and "Salta al piano" while it plays; once it ends, "Ricomincia" and the demo's own ask
  * where the arrival lands: "Pianifica il tuo viaggio" for a browser that has signed in before,
- * "Accedi" for anyone else, honest that access is by invitation. Its
+ * "Mettiti in lista" for anyone else, honest that access is by invitation (the plan's hand-off
+ * also offers "Accedi" to the invited). Its
  * own row in the live header's state group, so it fits a phone beside nothing else.
  */
 export function DemoBar({
@@ -36,15 +37,15 @@ export function DemoBar({
           Ricomincia
         </Button>
         {done ? (
-          // A browser that has signed in before plans a trip; anyone else signs in (by invitation):
-          // the form would only send them to the login after they filled it in.
+          // A browser that has signed in before plans a trip; anyone else is shown the waitlist (access
+          // is by invitation): the form would only send them to the login after they filled it in.
           signedIn ? (
             <LinkButton href={ROUTES.newPlan} variant="primary" size="sm" className="pointer-coarse:min-h-11">
               Pianifica il tuo viaggio
             </LinkButton>
           ) : (
-            <LinkButton href={ROUTES.plans} variant="primary" size="sm" icon="sign-in" className="pointer-coarse:min-h-11">
-              Accedi
+            <LinkButton href={WAITLIST_HREF} variant="primary" size="sm" className="pointer-coarse:min-h-11">
+              Mettiti in lista
             </LinkButton>
           )
         ) : (

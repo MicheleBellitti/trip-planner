@@ -8,7 +8,7 @@ import { REPLAY_SETTLE_MS } from "@/lib/demo/use-replay-events";
 import backend from "@/lib/plan-events/__fixtures__/backend/happy-path.json";
 import { SETTLE_MS } from "@/components/live/hooks";
 import { PLAN_STATE_ID } from "@/components/live/live-header";
-import { ROUTES } from "@/lib/routes";
+import { ROUTES, WAITLIST_HREF } from "@/lib/routes";
 
 import { DemoPlanScreen } from "./demo-plan-screen";
 
@@ -164,14 +164,29 @@ describe("DemoPlanScreen", () => {
     expect(screen.queryByRole("link", { name: /TripTracker/ })).toBeNull();
     expect(document.body.textContent).toContain("prezzi e disponibilità sono un esempio");
   });
-  it("ends with its own ask in the bar: 'Accedi' for a visitor, honest about the invitation", async () => {
+  it("ends with its own ask in the bar: the waitlist for a visitor, honest about the invitation", async () => {
     render(<DemoPlanScreen />);
     await advance(WHOLE_RUN);
     const bar = screen.getByRole("group", { name: "Stato del piano" });
-    expect(within(bar).getByRole("link", { name: "Accedi" }).getAttribute("href")).toBe(ROUTES.plans);
+    expect(within(bar).getByRole("link", { name: "Mettiti in lista" }).getAttribute("href")).toBe(WAITLIST_HREF);
     expect(within(bar).queryByRole("link", { name: "Pianifica il tuo viaggio" })).toBeNull();
     expect(bar.textContent).toContain(`${BRAND_NAME} è su invito`);
-    expect(document.body.textContent).toContain(`${BRAND_NAME} è su invito: con un invito`);
+  });
+
+  it("hands a visitor the waitlist and the invited 'Accedi', and never names TripTracker", async () => {
+    render(<DemoPlanScreen />);
+    await advance(WHOLE_RUN);
+    expect(document.body.textContent).toContain(
+      `${BRAND_NAME} è su invito. Mettiti in lista e ti scriviamo quando c'è posto; se hai già un invito, accedi.`,
+    );
+    const handoff = screen.getAllByRole("region", { name: "Il tuo viaggio" });
+    for (const region of handoff) expect(region.textContent).not.toContain("TripTracker");
+    const waitlist = screen.getAllByRole("link", { name: "Mettiti in lista" });
+    for (const link of waitlist) expect(link.getAttribute("href")).toBe(WAITLIST_HREF);
+    const signIn = screen.getAllByRole("link", { name: "Accedi" });
+    expect(signIn.length).toBeGreaterThan(0);
+    for (const link of signIn) expect([ROUTES.login, ROUTES.plans]).toContain(link.getAttribute("href"));
+    expect(signIn.some((link) => link.getAttribute("href") === ROUTES.login)).toBe(true);
   });
 
   it("offers 'Pianifica il tuo viaggio' to a browser that has signed in before", async () => {

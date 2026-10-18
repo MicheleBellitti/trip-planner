@@ -22,7 +22,7 @@ import { DEMO_REQUEST } from "@/lib/demo/request";
 import { formatElapsed } from "@/lib/format";
 import { useReplayEvents } from "@/lib/demo/use-replay-events";
 import backend from "@/lib/plan-events/__fixtures__/backend/happy-path.json";
-import { ROUTES } from "@/lib/routes";
+import { ROUTES, WAITLIST_HREF } from "@/lib/routes";
 import type { Cover, PlanDetail } from "@/lib/schemas/api";
 import type { UIEvent } from "@/lib/schemas/generated/ui-event";
 
@@ -41,7 +41,8 @@ const DETAIL = { ...detailJson, request: DEMO_REQUEST, import_url: null } as unk
 const COVER = coverJson as Cover;
 const loadCover: CoverLoader = async () => COVER;
 
-/** The finished plan's hand-off, in TripTracker's place: plan a trip, or sign in (by invitation). */
+/** The finished plan's hand-off, in TripTracker's place: plan a trip, or, for a visitor, the
+ * waitlist first and "Accedi" for the invited. */
 const PLAN_HANDOFF = {
   title: "Il tuo viaggio",
   text: "Descrivi il tuo viaggio: cinque agenti lo pianificano così, con le date entro cui prenotare.",
@@ -50,9 +51,10 @@ const PLAN_HANDOFF = {
 };
 const SIGN_IN_HANDOFF = {
   title: "Il tuo viaggio",
-  text: `${BRAND_NAME} è su invito: con un invito, accedi con il tuo account TripTracker e pianifica il prossimo viaggio.`,
-  label: "Accedi",
-  href: ROUTES.plans,
+  text: `${BRAND_NAME} è su invito. Mettiti in lista e ti scriviamo quando c'è posto; se hai già un invito, accedi.`,
+  label: "Mettiti in lista",
+  href: WAITLIST_HREF,
+  secondary: { label: "Accedi", href: ROUTES.login },
 };
 
 const NOTICE = (
