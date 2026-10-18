@@ -115,6 +115,21 @@ def test_deterministic_failures_block_even_for_requests_not_in_the_baseline() ->
     assert any("not in the baseline" in note for note in comparison.notes)
 
 
+def test_compare_does_not_block_on_a_check_missing_from_the_baseline() -> None:
+    run = base_run()
+    run["requests"][0]["checks"].append(
+        {
+            "name": "dead_links",
+            "status": "warn",
+            "blocking": False,
+            "message": "1 dead",
+            "details": ["a.example http_404 (homepage: yes)"],
+        }
+    )
+    comparison = compare.compare(run, baseline())
+    assert not comparison.blocked
+
+
 def test_aborted_or_empty_run_blocks() -> None:
     assert compare.compare(results(*base_run()["requests"], aborted=True), baseline()).blocked
     assert compare.compare(results(), baseline()).blocked

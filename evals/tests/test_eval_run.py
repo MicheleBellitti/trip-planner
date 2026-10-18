@@ -212,6 +212,7 @@ def plan_row(status: str, **overrides: Any) -> SimpleNamespace:
         "failure_reason": None,
         "submit_attempts": 1,
         "cost_cents": 38,
+        "link_health": {} if status == "ready" else None,
         "plan": fixture("plan_lisbon_ok.json") if status == "ready" else None,
         "trip": fixture("trip_lisbon_ok.json") if status == "ready" else None,
         "agent_versions": {

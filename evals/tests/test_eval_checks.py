@@ -72,8 +72,30 @@ def ok_trip() -> Json:
     return json.loads((FIXTURES / "trip_lisbon_ok.json").read_text(encoding="utf-8"))
 
 
+def _verdict(status: str = "ok", reason: str = "ok", *, fallback: str | None = None) -> Json:
+    return {
+        "status": status,
+        "reason": reason,
+        "http_status": None,
+        "fallback": fallback,
+        "fallback_allowed": fallback is not None,
+        "checked_at": "2026-10-18T10:00:00+00:00",
+    }
+
+
+HEALTHY_LINKS: Json = {
+    "https://a.example/x": _verdict(),
+    "https://b.example/y": _verdict(),
+    "https://c.example/z": _verdict("unknown", "timeout"),
+}
+
 OK_METADATA = checks.RunMetadata(
-    profile="development", status="ready", submit_attempts=1, cost_cents=41, web_search_requests=12
+    profile="development",
+    status="ready",
+    submit_attempts=1,
+    cost_cents=41,
+    web_search_requests=12,
+    link_health=HEALTHY_LINKS,
 )
 
 
@@ -268,6 +290,22 @@ VIOLATIONS: dict[str, Violation] = {
         checks.RunMetadata(status="ready", submit_attempts=1),
         expected_status="warn",
     ),
+    "dead_link": Violation(
+        checks.DEAD_LINKS,
+        _nothing,
+        checks.RunMetadata(
+            status="ready",
+            submit_attempts=1,
+            cost_cents=41,
+            web_search_requests=12,
+            link_health={
+                "https://www.A.example/secret/path?q=1": _verdict(
+                    "dead", "http_404", fallback="https://www.a.example/"
+                )
+            },
+        ),
+        expected_status="warn",
+    ),
     "wrong_travelers": Violation(checks.MATCHES_REQUEST, _wrong_travelers),
     "wrong_dates": Violation(checks.MATCHES_REQUEST, _wrong_dates),
     "preference_not_mentioned": Violation(checks.MATCHES_REQUEST, _no_museum),
@@ -307,7 +345,7 @@ def test_violating_fixture_fails_every_blocking_rule() -> None:
     metadata = checks.RunMetadata(status="ready", submit_attempts=3, cost_cents=90)
     results = run_all(plan, trip, metadata)
     failing = {name for name, r in results.items() if r.blocks}
-    assert failing == set(checks.CHECK_NAMES) - {checks.COST_VS_ESTIMATE}
+    assert failing == set(checks.CHECK_NAMES) - {checks.COST_VS_ESTIMATE, checks.DEAD_LINKS}
     assert results[checks.COST_VS_ESTIMATE].status == "warn"
     assert not results[checks.COST_VS_ESTIMATE].blocks
 
@@ -370,6 +408,7 @@ def test_no_plan_fails_schema_and_attempts_and_skips_content_checks() -> None:
         checks.LINKS_ALLOWED,
         checks.NO_EMPTY_DAYS,
         checks.MATCHES_REQUEST,
+        checks.DEAD_LINKS,
     ):
         assert results[name].status == "skip", name
 
@@ -470,3 +509,45 @@ def test_details_are_capped() -> None:
     result = run_all(plan, ok_trip())[checks.LINKS_ALLOWED]
     assert len(result.details) == checks.MAX_DETAILS + 1
     assert result.details[-1] == "... and 10 more"
+
+
+# --- dead_links ---------------------------------------------------------------------------------
+
+
+def test_dead_links_passes_with_none_dead() -> None:
+    result = run_all(ok_plan(), ok_trip())[checks.DEAD_LINKS]
+    assert result.status == "pass"
+    assert result.message == "3 link(s) checked, none dead"
+    assert not result.blocking
+
+
+def test_dead_links_warns_with_hosts_and_reasons() -> None:
+    metadata = checks.RunMetadata(
+        status="ready",
+        submit_attempts=1,
+        cost_cents=41,
+        web_search_requests=12,
+        link_health={
+            "https://www.A.example/secret/path?q=1": _verdict(
+                "dead", "http_404", fallback="https://a.example/"
+            ),
+            "https://b.example/ok": _verdict(),
+        },
+    )
+    result = run_all(ok_plan(), ok_trip(), metadata)[checks.DEAD_LINKS]
+    assert result.status == "warn"
+    assert result.blocking is False
+    assert not result.blocks
+    assert result.details == ["a.example http_404 (homepage: yes)"]
+
+
+def test_dead_links_skips_without_a_plan_or_without_verdicts() -> None:
+    no_plan = run_all(None, None)[checks.DEAD_LINKS]
+    assert no_plan.status == "skip"
+    unchecked = run_all(
+        ok_plan(),
+        ok_trip(),
+        checks.RunMetadata(status="ready", submit_attempts=1, cost_cents=41),
+    )[checks.DEAD_LINKS]
+    assert unchecked.status == "skip"
+    assert "not checked" in unchecked.message

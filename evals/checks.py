@@ -33,10 +33,11 @@ import re
 import sys
 import unicodedata
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import cache
 from pathlib import Path
 from typing import Any, Literal, Protocol, cast
+from urllib.parse import urlsplit
 
 EVALS_DIR = Path(__file__).resolve().parent
 REPO_DIR = EVALS_DIR.parent
@@ -66,6 +67,7 @@ NO_EMPTY_DAYS = "no_empty_days"
 SUBMIT_ATTEMPTS = "submit_plan_attempts"
 COST_VS_ESTIMATE = "cost_and_searches_vs_estimate"
 MATCHES_REQUEST = "matches_request"
+DEAD_LINKS = "dead_links"
 
 CHECK_NAMES: tuple[str, ...] = (
     SCHEMA_VALID,
@@ -77,6 +79,7 @@ CHECK_NAMES: tuple[str, ...] = (
     SUBMIT_ATTEMPTS,
     COST_VS_ESTIMATE,
     MATCHES_REQUEST,
+    DEAD_LINKS,
 )
 
 MAX_SUBMIT_ATTEMPTS = 2
@@ -153,6 +156,8 @@ class RunMetadata:
     """Session list cost in US cents (`session.usage.list_cost`), None when unknown."""
     web_search_requests: int | None = None
     """`usage.server_tool_use.web_search_requests` of the session, None when unknown."""
+    link_health: Mapping[str, Any] | None = None
+    """`plans.link_health` (URL to verdict), None when the links were not checked."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -729,6 +734,41 @@ def _date_problems(expect: Expectations, start: dt.date | None, end: dt.date | N
     return problems
 
 
+def check_dead_links(
+    request: PlanRequest,
+    plan: Mapping[str, Any] | None,
+    trip: Mapping[str, Any] | None,
+    metadata: RunMetadata,
+) -> CheckResult:
+    """Counts the links the backend found dead when it accepted the plan. Never blocks: a
+    dead link is a warning (the web app shows a fallback), not a failed plan."""
+    if plan is None:
+        return replace(_no_plan(DEAD_LINKS, metadata), blocking=False)
+    if metadata.link_health is None:
+        return _result(DEAD_LINKS, "skip", "links were not checked", blocking=False)
+    lines: list[str] = []
+    for url, verdict in metadata.link_health.items():
+        if not isinstance(verdict, Mapping) or verdict.get("status") != "dead":
+            continue
+        host = (urlsplit(url).hostname or "?").lower().removeprefix("www.")
+        homepage = "yes" if verdict.get("fallback_allowed") else "no"
+        lines.append(f"{host} {verdict.get('reason') or 'dead'} (homepage: {homepage})")
+    if lines:
+        return _result(
+            DEAD_LINKS,
+            "warn",
+            f"{len(lines)} of {len(metadata.link_health)} link(s) dead",
+            lines,
+            blocking=False,
+        )
+    return _result(
+        DEAD_LINKS,
+        "pass",
+        f"{len(metadata.link_health)} link(s) checked, none dead",
+        blocking=False,
+    )
+
+
 # --- running them all ---------------------------------------------------------------------------
 
 
@@ -744,6 +784,7 @@ CHECKS: Mapping[str, Check] = {
     SUBMIT_ATTEMPTS: check_submit_attempts,
     COST_VS_ESTIMATE: check_cost_vs_estimate,
     MATCHES_REQUEST: check_matches_request,
+    DEAD_LINKS: check_dead_links,
 }
 
 
@@ -775,7 +816,7 @@ def run_checks(
                     name,
                     "error",
                     f"check crashed: {type(error).__name__}: {error}",
-                    blocking=name != COST_VS_ESTIMATE,
+                    blocking=name not in (COST_VS_ESTIMATE, DEAD_LINKS),
                 )
             )
     return results
