@@ -29,6 +29,8 @@ export const CHALLENGE_WAIT_MS = 6000;
 const CHALLENGE_FAILED_CODE = "CHALLENGE_FAILED";
 export const INVALID_EMAIL_ERROR = "Scrivi un indirizzo email completo.";
 export const TOO_MANY_REQUESTS_ERROR = "Troppi tentativi: aspetta un minuto e riprova.";
+/** The link request itself failed (the network, the server): the email leaves after the answer
+ * (lib/auth.ts), so a failed send never comes back here; the sent state's NO_LINK_HINT covers it. */
 export const SEND_FAILED_ERROR = "Non è stato possibile inviare il link. Riprova.";
 export const GENERIC_SIGN_IN_ERROR = "Non è stato possibile accedere. Riprova.";
 export const UNCONFIGURED_MESSAGE = "Gli account non sono configurati su questo server.";
