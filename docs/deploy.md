@@ -509,7 +509,10 @@ also issue and renew their own certificates without interference.
    the app refuses to start in production without it, because a host-only cookie never reaches
    `atlas.api`, every API call answers 401 and `/login` and the page bounce the user back and
    forth; with it `atlas.api` receives the `__Secure-atlas.session_token` cookie, whose `atlas`
-   prefix keeps it apart from TripTracker's), `AUTH_ALLOWED_EMAILS` (who may sign up; with
+   prefix keeps it apart from TripTracker's; accepted risk: a cookie scoped to the whole
+   domain can be planted by any other https host under `bellittim.com`, so keep every such host
+   yours and free of XSS until the API moves behind a host-only cookie, issue #17),
+   `AUTH_ALLOWED_EMAILS` (who may sign up; with
    `AUTH_MODE=atlas` it is the only list: every account may plan, the backend's
    `PLANNER_ALLOWED_EMAILS` is not consulted), `RESEND_API_KEY` and
    `AUTH_EMAIL_FROM` (a sender on a domain verified at Resend), and optionally
