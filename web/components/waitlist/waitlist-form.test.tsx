@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ROUTES } from "@/lib/routes";
@@ -20,6 +20,23 @@ const join = vi.fn();
 vi.mock("@/app/actions/waitlist", () => ({
   joinWaitlistAction: (...args: unknown[]) => join(...args),
 }));
+// The widget stands in: with a site key it hands over "tok-1" when drawn; a reset asks for a new
+// token, which the test hands over itself (`issue`), as the real widget does a moment later.
+let issue: ((token: string | null) => void) | null = null;
+const turnstileReset = vi.fn();
+vi.mock("@/components/ui/turnstile", async () => {
+  const { useEffect, useImperativeHandle } = await import("react");
+  return {
+    Turnstile: ({ onToken, ref }: { onToken: (token: string | null) => void; ref?: React.Ref<{ reset(): void }> }) => {
+      useImperativeHandle(ref, () => ({ reset: turnstileReset }), []);
+      useEffect(() => {
+        issue = onToken;
+        if (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY) onToken("tok-1");
+      }, [onToken]);
+      return null;
+    },
+  };
+});
 
 function submit(email: string, note = "") {
   fireEvent.change(screen.getByLabelText(WAITLIST_EMAIL_LABEL), { target: { value: email } });
@@ -28,8 +45,35 @@ function submit(email: string, note = "") {
 }
 
 describe("WaitlistForm", () => {
-  beforeEach(() => join.mockReset());
+  beforeEach(() => {
+    join.mockReset();
+    turnstileReset.mockReset();
+    delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+  });
   afterEach(cleanup);
+
+  it("never sends a spent challenge token again: after a refusal the next submit waits for the fresh one", async () => {
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "site-key";
+    join.mockResolvedValueOnce({ status: "error", error: "challenge_failed" });
+    join.mockResolvedValueOnce({ status: "error", error: "challenge_failed" });
+    join.mockResolvedValueOnce({ status: "received", email: "friend@example.com" });
+    render(<WaitlistForm source="landing" />);
+
+    submit("friend@example.com");
+    await screen.findByRole("alert");
+    expect((join.mock.calls[0]?.[1] as FormData).get("cf-turnstile-response")).toBe("tok-1");
+    expect(turnstileReset).toHaveBeenCalledTimes(1);
+
+    // Sent again before the widget answered the reset: no token rather than the redeemed one.
+    fireEvent.submit(screen.getByLabelText(WAITLIST_EMAIL_LABEL).closest("form")!);
+    await waitFor(() => expect(join).toHaveBeenCalledTimes(2));
+    expect((join.mock.calls[1]?.[1] as FormData).get("cf-turnstile-response")).toBe("");
+
+    act(() => issue?.("tok-2"));
+    fireEvent.submit(screen.getByLabelText(WAITLIST_EMAIL_LABEL).closest("form")!);
+    await screen.findByRole("heading", { name: WAITLIST_RECEIVED_TITLE });
+    expect((join.mock.calls[2]?.[1] as FormData).get("cf-turnstile-response")).toBe("tok-2");
+  });
 
   it("asks for the address and an optional note, says what the address is for, and names its source", () => {
     const { container } = render(<WaitlistForm source="landing" />);

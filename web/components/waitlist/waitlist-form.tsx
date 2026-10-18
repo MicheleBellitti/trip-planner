@@ -165,13 +165,15 @@ function JoinForm({
   const [edited, setEdited] = useState({ email: false, note: false });
   const emailRef = useRef<HTMLInputElement>(null);
   const noteRef = useRef<HTMLTextAreaElement>(null);
-  // The Turnstile token travels in a hidden field; a token is spent by one submit, so the widget
-  // is reset after every answer and a fresh one follows.
+  // The Turnstile token travels in a hidden field; a token is spent by one submit, so it leaves
+  // the field as the form is sent (it is already in the FormData) and the widget is reset after
+  // every answer: the next submit carries the fresh one, never the spent one.
   const [challenge, setChallenge] = useState<string | null>(null);
   const turnstile = useRef<TurnstileHandle>(null);
 
   function send(data: FormData) {
     setEdited({ email: false, note: false });
+    setChallenge(null);
     formAction(data);
   }
 
