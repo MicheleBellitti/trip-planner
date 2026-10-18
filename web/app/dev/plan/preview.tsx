@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
+import type { CoverLoader } from "@/components/plan/cover/cover-store";
 import { PlanView, type TripLoader } from "@/components/plan/PlanView";
 import happyDetail from "@/components/plan/__fixtures__/happy-path.detail.json";
 import happyTrip from "@/components/plan/__fixtures__/happy-path.trip.json";
@@ -43,8 +44,12 @@ function useQuery(): URLSearchParams | null {
   return useMemo(() => (search === null ? null : new URLSearchParams(search)), [search]);
 }
 
+/** The running backend's Trip and cover, as the plan page reads them (PlanView imports no client). */
+const liveLoadTrip: TripLoader = (planId, signal) => api.getTrip(planId, { signal });
+const liveLoadCover: CoverLoader = (planId) => api.getCover(planId);
+
 /** `?plan=<id>`: a plan of the running backend, read with lib/api like the plan page does;
- * PlanView then reads its Trip itself (GET /plans/{id}/trip). */
+ * PlanView reads its Trip and cover through the loaders above. */
 function useLivePlan(planId: string | null): { planId: string; detail: PlanDetail | null; error: string | null } | null {
   const [live, setLive] = useState<{ planId: string; detail: PlanDetail | null; error: string | null } | null>(null);
   useEffect(() => {
@@ -189,7 +194,7 @@ export function PlanPreview() {
                   {live.detail.title}
                 </h1>
               </div>
-              <PlanView detail={live.detail} />
+              <PlanView detail={live.detail} loadTrip={liveLoadTrip} loadCover={liveLoadCover} />
             </>
           ) : (
             <p className="text-small text-ink-2">{live?.error ?? "Carico il piano…"}</p>
@@ -207,6 +212,7 @@ export function PlanPreview() {
               detail={data.detail}
               trip={data.trip}
               loadTrip={loadTrip}
+              loadCover={liveLoadCover}
               timeline={
                 <Disclosure variant="section" summary="Il lavoro degli agenti" meta="32 eventi">
                   <p className="text-small text-ink-2">Qui la pagina mette la timeline del giro, chiusa.</p>

@@ -1,5 +1,6 @@
 import { LinkButton } from "@/components/ui/button";
 import { WaitlistForm } from "@/components/waitlist/waitlist-form";
+import { BRAND_NAME } from "@/lib/brand";
 import { DEMO_READY, ROUTES } from "@/lib/routes";
 
 import { ConvergingLines } from "./converging-lines";
@@ -20,8 +21,8 @@ export function LandingClose({ demoReady = DEMO_READY }: { demoReady?: boolean }
             Guarda una corsa intera, senza account.
           </h2>
           <p className="mt-2.5 max-w-[34em] text-lede text-ink-2">
-            Una corsa registrata, riprodotta con i veri componenti di Atlas: gli agenti al lavoro, il costo che
-            sale, il piano finito con le sue prenotazioni. Dura meno di un minuto e non costa nulla.
+            Una corsa registrata, riprodotta con i veri componenti di {BRAND_NAME}: gli agenti al lavoro, il costo
+            della corsa, il piano finito con le sue prenotazioni. Dura meno di un minuto e non costa nulla.
           </p>
           <div className="mt-5.5 flex flex-wrap gap-2.5">
             <LinkButton href={ROUTES.demo} variant="primary" icon="play" className="pointer-coarse:min-h-11">
@@ -42,7 +43,7 @@ export function LandingClose({ demoReady = DEMO_READY }: { demoReady?: boolean }
       ) : (
         <>
           <h2 id="landing-close-title" className="font-cond text-display font-semibold lg:text-display-lg">
-            Atlas è su invito.
+            {BRAND_NAME} è su invito.
           </h2>
           <p className="mt-2.5 max-w-[34em] text-lede text-ink-2">
             Lascia il tuo indirizzo: ti scriviamo quando c&apos;è posto. Se hai già un invito, accedi e pianifica il

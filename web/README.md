@@ -94,7 +94,7 @@ CI (`ci-web.yml`) runs `gen:schemas --check`, lint, typecheck, test and build; `
 ## Structure
 
 ```
-app/                       routes: / (landing, public), /plans (plans), /new (request form), /plans/[id] (live + finished plan),
+app/                       routes: / (landing, public), /demo (demo run, public), /plans (plans), /new (request form), /plans/[id] (live + finished plan),
                            /dev/ui and /dev/plan (development only), not-found.tsx
 components/ui/             the design system's primitives (Button, Chip, Timeline, DatePair, CostMeter,
                            Disclosure, Field, Notice, Sheet, Toast, ...) and the tokens' tests
@@ -183,6 +183,16 @@ error boundary's chunk now carries its own copy of the theme toggle and the mark
 some pages need lives apart: the path builders in `lib/page-paths.ts`, the mark's geometry in
 `lib/mark-geometry.ts` (not `lib/brand-mark.ts`), the tagline's line break in
 `lib/tagline-lines.ts`.
+
+Re-measured on 2026-10-18 for the demo (step 3), at the branch's last commit: `/demo` is 179.5 KB
+gzip (ungated; it was 199.7 before `lib/plan-events/detail.ts` stopped importing the zod enums, which
+pulled zod and every schema onto its first load). The live pages grow by about 2 KB with almost none
+of their own code: `/plans/[id]` 195.5 (was 192.8; the lanes' demo camera is about 0.3 of it),
+`/plans` 178.9, `/new` 178.8, `/evals` 178.3. Cause: Turbopack groups modules by the set of routes
+that load them, and `/demo` reuses part of what used to be one shared chunk (the live screen, the ui
+primitives) but not the rest (the API client, zod), so that chunk is split and two files compress
+worse than one. Keeping it whole would mean loading the API client on `/demo`, which the spec
+forbids. The 190 gate on `/plans/[id]` is still Michele's decision.
 
 ## Accessibility
 

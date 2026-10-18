@@ -220,7 +220,7 @@ Where things live:
 | Product name ("Atlas"), tagline, description, site URL | `web/lib/brand.ts` (`BRAND_NAME`, `BRAND_TAGLINE`, `BRAND_DESCRIPTION`, `BRAND_URL`), nowhere else |
 | The mark's geometry and its fixed night colours | `web/lib/brand-mark.ts`; drawn by `components/ui/mark.tsx` |
 | Tab icon, home-screen icon, link preview | `web/app/icon.svg`, `web/app/apple-icon.tsx`, `web/app/opengraph-image.tsx` (font: `web/assets/fonts/`, OFL) |
-| Links between pages | `web/lib/routes.ts` (`ROUTES`, and `DEMO_READY` until step 3 builds /demo), never a hand-written path |
+| Links between pages | `web/lib/routes.ts` (`ROUTES`, `DEMO_READY`) and `web/lib/page-paths.ts`, never a hand-written path |
 | The landing (`/`, public) | `web/app/page.tsx`, `web/components/landing/` |
 | Returning visitors skip the landing | `web/lib/returning.ts` (the mark), `web/lib/skip-landing.ts` (the decision, the inline script) |
 | The app header | `web/components/nav/app-header.tsx` |
@@ -916,12 +916,13 @@ Its only client JavaScript is the theme toggle and `next/link`. Components live 
   back). A link to a part of the page (`/#come-funziona`) always shows the landing: that is how a
   signed-in browser still reaches it, and what to share. Blocked storage or an unreadable referrer
   fail safe: the landing shows. Client-side navigation never runs it.
-- **Public header** (`PublicHeader`): the lockup to `/`, "Come funziona" (a jump down the page,
-  hidden below 480 px), the bare theme toggle, "Accedi" to `/plans` (which sends a signed-out
-  visitor to TripTracker's login and back).
+- **Public header** (`PublicHeader`, the landing's and the demo's): the lockup to `/`, "Come
+  funziona" (`/#come-funziona`, hidden below 480 px), the bare theme toggle (not on `/demo`, whose
+  control bar carries one), "Accedi" to `/plans` (which sends a signed-out visitor to TripTracker's
+  login and back).
 - **Hero**: the tagline in `font-hero text-hero` (Semi Condensed 700), the lede in `text-lede`, one
-  call to action: "Guarda una corsa" once `/demo` exists, "Scopri come funziona" until then
-  (`DEMO_READY`). "Accedi" lives in the header and the closing, never in the hero. The legend names
+  call to action: "Guarda una corsa" → `/demo` (`DEMO_READY`; off, it falls back to "Scopri come
+  funziona", so no button can lead to a 404). "Accedi" lives in the header and the closing, never in the hero. The legend names
   the five lines in run order with their jobs; on the phone the line map comes before it.
 - **Line map** (`LineMap`): horizontal from 768 px, vertical below (the lines converge at the
   bottom, like the phone's lanes). Each line carries its name at its head (`AGENT_LABELS`,
@@ -952,6 +953,43 @@ Its only client JavaScript is the theme toggle and `next/link`. Components live 
   del fornitore.").
 - **Motion**: the line map is a named exception to The Report, Don't Perform Rule, for the landing
   (and the demo in step 3) only: it presents the product. Nothing else on the landing moves.
+
+## Demo
+
+`/demo` is public and prerendered: the recorded `happy-path` run replayed in the browser through
+the live screen's own view (`PlanScreenView`), then the real finished plan. Decided with Michele
+from a mockup on a real demo run, 2026-10-17. Components live in `web/components/demo/`, the
+replay in `web/lib/demo/`.
+
+- **No backend.** The events, the plan, the Trip and the cover (`lib/demo/cover.json`) are in the
+  bundle. Neither API client is evaluated in its module graph: the shared components (PlanView,
+  the cover store) have no default loaders, the live pages pass their own, and the demo passes its
+  copies; `lib/plan-events/detail.ts` checks its enums against the labels' lists, not zod. A test
+  mocks both clients to throw.
+- **The replay** (`useReplayEvents`): the recorded gaps clamped to 80 ms–2.5 s and scaled to 45 s,
+  the events re-stamped on the replay's clock, which is also the elapsed time and the lanes' clock.
+  It starts by itself after the live baseline settles, pauses while the page is hidden and never
+  leaps more than a second; 2× rescales what is left.
+- **The camera** (`AgentLanes follow="show"`): while the visitor only watches, the work stays on
+  screen. On the phone the open card follows the agent at work, even on screen, and comes into
+  view when the work moves to it; on wider layouts the coordinator's newest station stays in view.
+  `block: "nearest"` moves the page only when something is out of view, smoothly unless reduced
+  motion is asked; the first scroll, key or toggle hands the page back. Live, `follow="reader"`
+  never moves anything under a reader.
+- **Demo bar** (`DemoBar`), a row of its own in the live header's state group, in place of
+  "Interrompi". While it plays: "Corsa dimostrativa: dati di esempio, gratis per te", "Ricomincia"
+  (remounts the run and moves the focus to the plan's state), "2×" (named "Velocità doppia",
+  pressed) and "Salta al piano". When it ends, where the arrival lands: "Fine della corsa
+  dimostrativa. Atlas è su invito.", "Ricomincia" and the ask, "Pianifica il tuo viaggio" → `/new`
+  for a browser that has signed in before (the returning-visitor mark), "Accedi" → `/plans`
+  otherwise, since the form would only send a visitor to the login after it was filled in.
+- **The story agrees.** The detail carries the request the run was given (`lib/demo/request.ts`:
+  children of 9 and 6, 2.800 €; the landing's samples say the same), and the finished line gives
+  the recorded run's own figures, "Corsa registrata: durata 1:17 · costo 0,41 $", not the replay's
+  45 s. The plan's relative dates read on the recording's day (PlanView `now`, `PlanNowContext`),
+  so the showcase never turns amber or past. A notice says the prices are an example, the
+  hand-off below the plan matches the bar's ask in place of "Apri in TripTracker", and the
+  booking links stay the real, allowlisted ones.
 
 ## Map
 
