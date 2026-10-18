@@ -5,7 +5,8 @@ session cookie and decides who the user is; every state-changing request must ca
 `Origin: FRONTEND_ORIGIN`, because the SameSite=Lax cookie is sent from any bellittim.com
 subdomain. "Ambiente locale": with `AUTH_MODE=local` (development only, enforced by Settings)
 the user is the first allowed email, with no I/O. Tests: tests/test_auth.py (no cookie 401,
-email not allowed 403, wrong Origin 403, cache expired after 60 s, the atlas session table).
+email not allowed 403, wrong Origin 403; on the TripTracker path the cache expired after 60 s;
+on the atlas path the session table, read on every request with no cache).
 
 Two identity providers, both Better Auth, chosen by `AUTH_MODE` (`Settings.auth_origin` and
 `Settings.auth_cookie_prefix`), verified in two different ways:

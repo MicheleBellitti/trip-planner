@@ -188,10 +188,12 @@ class EventRecord(Base):
 class AuthSessionRecord(Base):
     """A Better Auth session of the web app's own accounts (its core `session` model).
 
-    The web app writes and reads these; the backend never does (it asks the web app's
-    get-session endpoint, app/auth.py), but Alembic owns the table like every other one, so one
-    `alembic upgrade head` prepares a database for both services (`tests/test_db.py` keeps the
-    models and the migrations together). `token` is the session token the signed cookie carries.
+    The web app writes these (sign-in, sign-out, the daily `updateAge` extension). The backend
+    only reads them: with AUTH_MODE=atlas `auth.verify_atlas_session` looks the cookie's token up
+    here (`token`, unique, so one indexed query) with `expires_at` after now, joined to `users`,
+    and never writes. Alembic owns the table like every other one, so one `alembic upgrade head`
+    prepares a database for both services (`tests/test_db.py` keeps the models and the
+    migrations together). `token` is the session token the signed cookie carries.
     """
 
     __tablename__ = "auth_sessions"
