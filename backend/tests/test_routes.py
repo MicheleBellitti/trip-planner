@@ -335,7 +335,7 @@ QUOTA = quota.UserQuota(
             quota.QuotaReachedError("plans", QUOTA),
             429,
             "quota_plans_reached",
-            "hai già creato 10 piani su 10",
+            "hai già creato tutti i piani previsti (10 su 10)",
             None,
         ),
         (
@@ -402,7 +402,7 @@ async def test_create_plan_is_rate_limited_per_user(
     body = detail(third)
     assert body["code"] == "too_many_requests"
     assert body["data"] == {"retry_after_seconds": 600}
-    assert "riprova tra 600 secondi" in body["message"]
+    assert "riprova tra 600 s." in body["message"]
     assert third.headers["Retry-After"] == "600"
 
 

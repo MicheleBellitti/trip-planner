@@ -180,15 +180,15 @@ PLAN_ERROR_MESSAGES: dict[PlanErrorCode, str] = {
         "creare il mese prossimo."
     ),
     PlanErrorCode.QUOTA_PLANS_REACHED: (
-        "Questo mese hai già creato {plans_used} piani su {plans_limit}: il prossimo si potrà "
-        "creare il mese prossimo."
+        "Questo mese hai già creato tutti i piani previsti ({plans_used} su {plans_limit}): il "
+        "prossimo si potrà creare il mese prossimo."
     ),
     PlanErrorCode.QUOTA_CENTS_REACHED: (
         "Questo mese i tuoi piani hanno già impegnato {cents_used} su {cents_limit}: il "
         "prossimo si potrà creare il mese prossimo."
     ),
     PlanErrorCode.TOO_MANY_REQUESTS: (
-        "Troppe richieste in poco tempo: riprova tra {retry_after_seconds} secondi."
+        "Troppe richieste in poco tempo: riprova tra {retry_after_seconds} s."
     ),
     PlanErrorCode.PLANNER_BUSY: (
         "Il planner è al completo in questo momento: riprova tra qualche minuto. Nessun costo "
