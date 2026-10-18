@@ -84,8 +84,8 @@ P14_BUDGET_CENTS = 25
 """P14's cap per session: two Haiku sessions of a few cents each, so P14 alone stays at 50 cents
 in the worst case."""
 P14_WAIT_SECONDS = 240.0
-"""How long P14 leaves the custom tool unanswered: the choice cards' timeout
-(`CHOICE_TIMEOUT_SECONDS`, docs/superpowers/specs/2026-10-18-plan-creation-ux-design.md §2)."""
+"""How long P14 leaves the custom tool unanswered: the choice cards' timeout, 240 s
+(`CHOICE_TIMEOUT_SECONDS` in the plan-creation design, §2; that spec is not on main yet)."""
 P14_INTERRUPT_AFTER_SECONDS = 20.0
 """How long P14's second session waits on the custom tool before the interrupt."""
 P14_POLL_SECONDS = 20.0

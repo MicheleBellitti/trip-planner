@@ -619,8 +619,8 @@ uv run python ../scripts/probe_session.py --yes --only P4,P5      # or a subset
 unset ANTHROPIC_API_KEY
 ```
 
-- Each session is capped at the development profile's budget (60 cents; P9 uses 3 to reach
-  the budget pause). No new session starts once the sessions' list cost reaches
+- Each session is capped at the development profile's budget (100 cents; P9 uses 3 to reach
+  the budget pause, P14 25). No new session starts once the sessions' list cost reaches
   `--max-total-cents` (default 150, so $1.50; the dry run prints the worst case, at most one
   session's budget above it). Every resource it creates is named `probe-<stamp>-...` and
   removed at the end.
