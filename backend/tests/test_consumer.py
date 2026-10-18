@@ -57,6 +57,7 @@ from app.consumer import (
     check_result_writes,
     decide_idle,
     dedupe_key,
+    evaluate_submission,
     is_terminal_error,
     lane_for,
     load_events_after,
@@ -70,6 +71,7 @@ from app.db import EventRecord, PlanRecord, PlanStatus
 from app.events import AgentName, EventKind, UIEvent
 from app.fx import FxConverter, FxRates
 from app.hub import PlanEnded, PlanHub
+from app.link_health import NO_LINK_CHECKS, LinkHealth, LinkHealthMap
 from app.ma_client import PRIMARY_SCOPE, RawEvent, SessionNotFoundError
 from app.mapping import SeededTripIds
 from app.plan import Plan
@@ -215,7 +217,8 @@ def harness_factory(
     make_settings: Callable[..., Settings],
     http: httpx.AsyncClient,
 ) -> HarnessFactory:
-    """`build(fake, trip_schema=None, fx=None)`: a `Harness` with real collaborators
+    """`build(fake, trip_schema=None, fx=None, link_checker=None)`: a `Harness` with real
+    collaborators
     (`TripSchemaStore` over the vendored trip.json through a file:// URL, an offline
     `FxConverter`, `PlanHub`); also used by test_consumer_resume.py."""
     settings = make_settings(trip_schema_url=DEV_FALLBACK_SCHEMA_PATH.as_uri())
@@ -225,6 +228,7 @@ def harness_factory(
         *,
         trip_schema: Any = None,
         fx: Any = None,
+        link_checker: Any = None,
     ) -> Harness:
         sleeps: list[float] = []
 
@@ -247,6 +251,7 @@ def harness_factory(
             now=lambda: NOW,
             ids=lambda: SeededTripIds(7),
             sleep=record_sleep,
+            link_checker=link_checker or NO_LINK_CHECKS,
         )
         return Harness(factory, fake, deps, hub, sleeps)
 
@@ -545,6 +550,144 @@ def test_translate_submission_rejects_a_trip_that_fails_trip_json() -> None:
     assert outcome.errors[0].startswith("title:")
     assert "TripTracker's own schema" in outcome.message
     assert outcome.message.splitlines()[1] == f"- {outcome.errors[0]}"
+
+
+DEAD_BOOKING_LINK = valid_plan_input()["bookings"][0]["link"]
+
+
+def dead_link_health() -> LinkHealthMap:
+    return LinkHealthMap(
+        {
+            DEAD_BOOKING_LINK: LinkHealth(
+                "dead",
+                "http_404",
+                404,
+                fallback="https://www.expedia.it/",
+                fallback_allowed=True,
+                checked_at=NOW,
+            )
+        }
+    )
+
+
+class StubLinkChecker:
+    """A link checker that returns a fixed map and records its calls."""
+
+    def __init__(self, health: LinkHealthMap, *, wait_for: asyncio.Event | None = None) -> None:
+        self.health = health
+        self.calls = 0
+        self.closed = False
+        self._wait_for = wait_for
+
+    async def check_plan(self, plan: Plan) -> LinkHealthMap:
+        self.calls += 1
+        if self._wait_for is not None:
+            await asyncio.wait_for(self._wait_for.wait(), timeout=5)
+        return self.health
+
+    async def aclose(self) -> None:
+        self.closed = True
+
+
+class SignalFx(FxConverter):
+    """The real offline converter, which sets an event once its prefetch has started."""
+
+    def __init__(self, started: asyncio.Event, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._started = started
+
+    async def prefetch(self, keys: Any) -> FxRates:
+        self._started.set()
+        return await super().prefetch(keys)
+
+
+def test_translate_submission_passes_health_to_the_trip_and_the_outcome() -> None:
+    plan = Plan.model_validate(valid_plan_input())
+    health = dead_link_health()
+    outcome = translate_submission(
+        plan,
+        schema=dev_schema(),
+        fx=FxRates(),
+        now=NOW,
+        ids=SeededTripIds(1),
+        health=health,
+    )
+    assert isinstance(outcome, Accepted)
+    assert outcome.link_health == health.to_json()
+    assert outcome.trip["bookings"][0]["url"] == "https://www.expedia.it/"
+    json.dumps(outcome.link_health)  # JSON-ready, as stored in plans.link_health
+
+
+def test_translate_submission_without_health_has_an_empty_verdict_map() -> None:
+    plan = Plan.model_validate(valid_plan_input())
+    outcome = translate_submission(
+        plan, schema=dev_schema(), fx=FxRates(), now=NOW, ids=SeededTripIds(1)
+    )
+    assert isinstance(outcome, Accepted)
+    assert outcome.link_health == {}
+
+
+async def test_accepted_plan_stores_link_health(harness: HarnessFactory) -> None:
+    checker = StubLinkChecker(dead_link_health())
+    fake = scenario("happy_path")
+    h = harness(fake, link_checker=checker)
+    plan_id = await h.create_plan()
+    assert await h.run(plan_id) is PlanStatus.READY
+    record = await h.plan(plan_id)
+    assert checker.calls == 1
+    assert record.link_health == dead_link_health().to_json()
+    assert record.trip is not None
+    assert record.trip["bookings"][0]["url"] == "https://www.expedia.it/"
+
+
+async def test_accepted_plan_without_checks_stores_an_empty_verdict_map(
+    harness: HarnessFactory,
+) -> None:
+    fake = scenario("happy_path")
+    h = harness(fake)
+    plan_id = await h.create_plan()
+    assert await h.run(plan_id) is PlanStatus.READY
+    assert (await h.plan(plan_id)).link_health == {}
+
+
+async def test_rejected_plan_stores_no_link_health(harness: HarnessFactory) -> None:
+    checker = StubLinkChecker(dead_link_health())
+    fake = scenario("three_rejections_failed")
+    h = harness(fake, link_checker=checker)
+    plan_id = await h.create_plan()
+    assert await h.run(plan_id) is PlanStatus.FAILED
+    assert (await h.plan(plan_id)).link_health is None
+
+
+async def test_link_check_runs_with_fx_and_schema_concurrently(
+    harness: HarnessFactory,
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """The checker waits for the FX prefetch to start: sequential awaits would deadlock."""
+    fx_started = asyncio.Event()
+    async with offline_http() as http:
+        fx = SignalFx(fx_started, session_factory=db_session_factory, http=http, offline=True)
+        checker = StubLinkChecker(LinkHealthMap.empty(), wait_for=fx_started)
+        fake = scenario("happy_path")
+        h = harness(fake, fx=fx, link_checker=checker)
+        plan_id = await h.create_plan()
+        assert await h.run(plan_id) is PlanStatus.READY
+    assert checker.calls == 1
+
+
+async def test_schema_unavailable_still_propagates_with_a_link_checker(
+    harness: HarnessFactory,
+) -> None:
+    checker = StubLinkChecker(LinkHealthMap.empty())
+    with pytest.raises(TripSchemaUnavailableError):
+        await evaluate_submission(
+            valid_plan_input(),
+            deps=harness(
+                FakeManagedAgentsClient(),
+                trip_schema=UnavailableSchemaStore(),
+                link_checker=checker,
+            ).deps,
+        )
 
 
 def results_write(fake: FakeManagedAgentsClient, agent: str) -> str:

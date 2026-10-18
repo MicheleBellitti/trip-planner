@@ -38,6 +38,7 @@ from app.consumer import (
 from app.db import EventRecord, PlanRecord, PlanStatus, UserRecord
 from app.fx import FxConverter
 from app.hub import PlanHub
+from app.link_health import NO_LINK_CHECKS, HttpLinkChecker
 from app.lockfile import load_roster
 from app.ma_client import ApiRejectedError, ApiUnavailableError, ManagedAgentsError
 from app.quota import ContinueLimitReachedError, PlannerBusyError, QuotaReachedError
@@ -1234,6 +1235,82 @@ async def test_start_planner_with_a_client_resolves_the_roster(
         finally:
             await stop_planner(services)
     assert fake.closed
+
+
+@pytest.mark.parametrize(
+    ("overrides", "start_kwargs"),
+    [
+        ({"link_check_enabled": False}, {}),
+        ({"link_check_enabled": True}, {"fx_offline": True}),
+    ],
+)
+async def test_start_planner_builds_no_checker_when_disabled_or_offline(
+    make_settings: Callable[..., Settings],
+    db_session_factory: async_sessionmaker[AsyncSession],
+    overrides: dict[str, Any],
+    start_kwargs: dict[str, Any],
+) -> None:
+    settings = planner_settings(make_settings, **overrides)
+    async with httpx.AsyncClient() as http:
+        services = await start_planner(
+            settings,
+            session_factory=db_session_factory,
+            http=http,
+            client=FakeManagedAgentsClient(),
+            **start_kwargs,
+        )
+        try:
+            assert services.link_checker is NO_LINK_CHECKS
+            assert services.require_ready().deps.link_checker is NO_LINK_CHECKS
+        finally:
+            await stop_planner(services)
+
+
+async def test_start_planner_builds_no_checker_in_demo_mode(
+    make_settings: Callable[..., Settings],
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    settings = planner_settings(make_settings, link_check_enabled=True, demo_mode=True)
+    async with httpx.AsyncClient() as http:
+        services = await start_planner(settings, session_factory=db_session_factory, http=http)
+        try:
+            assert services.link_checker is NO_LINK_CHECKS
+        finally:
+            await stop_planner(services)
+
+
+async def test_start_planner_builds_and_stop_planner_closes_the_http_checker(
+    make_settings: Callable[..., Settings],
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    settings = planner_settings(make_settings, link_check_enabled=True)
+    async with httpx.AsyncClient() as http:
+        services = await start_planner(
+            settings,
+            session_factory=db_session_factory,
+            http=http,
+            client=FakeManagedAgentsClient(),
+        )
+        assert isinstance(services.link_checker, HttpLinkChecker)
+        assert services.require_ready().deps.link_checker is services.link_checker
+        closed: list[bool] = []
+        real_aclose = services.link_checker.aclose
+
+        async def spy() -> None:
+            closed.append(True)
+            await real_aclose()
+
+        services.link_checker.aclose = spy  # type: ignore[method-assign]
+        services.registry = None  # the failing step below must not matter
+        failing = FakeManagedAgentsClient()
+
+        async def boom() -> None:
+            raise RuntimeError("close failed")
+
+        failing.aclose = boom  # type: ignore[method-assign]
+        services.client = failing
+        await stop_planner(services)
+    assert closed == [True]
 
 
 async def test_start_planner_resumes_running_plans_with_the_real_registry(

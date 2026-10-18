@@ -141,6 +141,8 @@ class PlanRecord(Base):
     # The accepted Plan (submit_plan input) and the TripTracker Trip translated from it.
     plan: Mapped[JsonObject | None]
     trip: Mapped[JsonObject | None]
+    # The link check's verdicts for the accepted plan (url -> verdict); NULL until accepted.
+    link_health: Mapped[JsonObject | None]
     # Cumulative Managed Agents list cost, US cents (never euro).
     cost_cents: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     # The session's current budget cap, US cents: set with session_id at start, raised by

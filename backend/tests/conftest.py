@@ -56,6 +56,8 @@ TEST_ENV: dict[str, str] = {
     "TRIP_SCHEMA_URL": "https://viaggi.bellittim.com/schema/trip.json",
     "DATABASE_URL": TEST_DATABASE_URL,
     "AGENT_PROFILE": "development",
+    # No test builds a real link checker by accident; a test that wants one sets it itself.
+    "LINK_CHECK_ENABLED": "false",
     # Never a real key in tests. Blank rather than unset: an unset variable would let Settings
     # read a developer's backend/.env.
     "ANTHROPIC_API_KEY": "",

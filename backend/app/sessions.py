@@ -63,6 +63,7 @@ from app.db import PlanRecord, PlanStatus
 from app.events import AgentName, EventKind
 from app.fx import FxConverter
 from app.hub import PlanHub
+from app.link_health import NO_LINK_CHECKS, LinkHealthChecker, build_link_checker
 from app.lockfile import LockfileError, Roster, load_roster
 from app.ma_client import AgentPin, ManagedAgentsError, SdkManagedAgentsClient, archive_when_idle
 from app.triptracker_schema import DEV_FALLBACK_SCHEMA_PATH, TripSchemaStore
@@ -260,6 +261,9 @@ class PlannerServices:
     `SHUTDOWN_CLEANUP_GRACE_SECONDS` before cancelling."""
     demo_scenarios: tuple[str, ...] = ()
     """DEMO_MODE only: the scenario names POST /plans?demo_scenario= accepts (empty otherwise)."""
+    link_checker: LinkHealthChecker = NO_LINK_CHECKS
+    """Checks the delivered plans' URLs; `NO_LINK_CHECKS` in demo mode, offline or when
+    LINK_CHECK_ENABLED is false. `stop_planner` closes it."""
 
     def require_ready(self) -> ReadyPlanner:
         """The ready parts, or `PlannerUnavailableError` listing what is missing."""
@@ -350,6 +354,10 @@ async def start_planner(
             reasons.append(str(exc))
             log.error("lockfile_unavailable", reason=str(exc), agent_profile=settings.agent_profile)
 
+    link_checker: LinkHealthChecker = NO_LINK_CHECKS
+    if settings.link_check_enabled and not demo and not fx_offline:
+        link_checker = build_link_checker(settings, now=clock.now)
+
     registry: ConsumerRegistry | None = None
     if client is not None:
         deps = ConsumerDeps(
@@ -360,6 +368,7 @@ async def start_planner(
             trip_schema=trip_schema,
             fx=fx,
             now=clock.now,
+            link_checker=link_checker,
         )
         registry = ConsumerRegistry(deps)
 
@@ -376,6 +385,7 @@ async def start_planner(
         registry=registry,
         unavailable_reasons=reasons,
         demo_scenarios=scenarios,
+        link_checker=link_checker,
     )
     if trip_schema.current() is None:
         services.background_tasks.append(
@@ -422,8 +432,8 @@ def demo_roster(profile: AgentProfile) -> Roster:
 async def stop_planner(services: PlannerServices) -> None:
     """Shutdown: let in-flight session cleanups finish (at most
     `SHUTDOWN_CLEANUP_GRACE_SECONDS`), cancel the background tasks, `registry.aclose()` (plans
-    stay `running`, the next process resumes them), `client.aclose()`. The shared httpx client
-    and the DB engine belong to main.py and are closed there."""
+    stay `running`, the next process resumes them), `client.aclose()`, `link_checker.aclose()`.
+    The shared httpx client and the DB engine belong to main.py and are closed there."""
     cleanups = [task for task in services.cleanup_tasks if not task.done()]
     if cleanups:
         await asyncio.wait(cleanups, timeout=SHUTDOWN_CLEANUP_GRACE_SECONDS)
@@ -443,6 +453,10 @@ async def stop_planner(services: PlannerServices) -> None:
             await services.client.aclose()
         except Exception:
             log.exception("managed_agents_client_close_failed")
+    try:
+        await services.link_checker.aclose()
+    except Exception:
+        log.exception("link_checker_close_failed")
 
 
 # --- the lifecycle ------------------------------------------------------------------------------
