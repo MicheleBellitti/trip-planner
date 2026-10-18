@@ -13,6 +13,7 @@ import contextlib
 import copy
 import datetime as dt
 import json
+import logging
 import uuid
 from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
@@ -22,8 +23,11 @@ from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
+import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from structlog.testing import LogCapture
+from structlog.typing import EventDict
 
 from app import consumer as consumer_module
 from app.config import Settings
@@ -686,6 +690,62 @@ async def test_schema_unavailable_still_propagates_with_a_link_checker(
                 FakeManagedAgentsClient(),
                 trip_schema=UnavailableSchemaStore(),
                 link_checker=checker,
+            ).deps,
+        )
+
+
+class RaisingLinkChecker:
+    """A link checker with a bug: `check_plan` raises (its message names a URL)."""
+
+    async def check_plan(self, plan: Plan) -> LinkHealthMap:
+        raise RuntimeError("check of https://secret.example/x failed")
+
+    async def aclose(self) -> None:
+        return None
+
+
+@pytest.fixture
+def consumer_logs(monkeypatch: pytest.MonkeyPatch) -> list[EventDict]:
+    """Every consumer log entry at any level, independent of the global configuration."""
+    capture = LogCapture()
+    logger = structlog.wrap_logger(
+        structlog.PrintLogger(),
+        processors=[capture],
+        wrapper_class=structlog.make_filtering_bound_logger(logging.DEBUG),
+    )
+    monkeypatch.setattr(consumer_module, "log", logger)
+    return capture.entries
+
+
+async def test_a_failing_link_check_never_rejects_the_plan(
+    harness: HarnessFactory, consumer_logs: list[EventDict]
+) -> None:
+    """The FX prefetch and the trip.json load are unaffected: the plan is accepted with no
+    verdicts, and the failure is logged once, by its class only."""
+    outcome = await evaluate_submission(
+        valid_plan_input(),
+        deps=harness(FakeManagedAgentsClient(), link_checker=RaisingLinkChecker()).deps,
+    )
+    assert isinstance(outcome, Accepted)
+    assert outcome.link_health == {}
+    assert outcome.trip["bookings"][0]["url"] == DEAD_BOOKING_LINK
+    failures = [entry for entry in consumer_logs if entry["event"] == "link_check_failed"]
+    assert failures == [
+        {"event": "link_check_failed", "error": "RuntimeError", "log_level": "warning"}
+    ]
+    assert "secret.example" not in repr(consumer_logs)
+
+
+async def test_schema_unavailable_still_propagates_when_the_link_check_fails(
+    harness: HarnessFactory,
+) -> None:
+    with pytest.raises(TripSchemaUnavailableError):
+        await evaluate_submission(
+            valid_plan_input(),
+            deps=harness(
+                FakeManagedAgentsClient(),
+                trip_schema=UnavailableSchemaStore(),
+                link_checker=RaisingLinkChecker(),
             ).deps,
         )
 

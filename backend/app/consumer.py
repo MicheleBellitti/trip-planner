@@ -1080,21 +1080,33 @@ async def evaluate_submission(
     tool_input: Mapping[str, Any], *, deps: ConsumerDeps
 ) -> SubmitOutcome:
     """The I/O wrapper: `parse_submission`, then the FX prefetch, `deps.trip_schema.require()`
-    and `deps.link_checker.check_plan(plan)` together, then `translate_submission(...,
+    and the link check (`_check_links`) together, then `translate_submission(...,
     now=deps.now(), ids=deps.ids(), health=...)`. `TripSchemaUnavailableError` propagates (the
     plan fails with a backend reason; it does not count as the agent's attempt). A link never
-    rejects the plan."""
+    rejects the plan, and neither does a failing link check."""
     parsed = parse_submission(tool_input)
     if isinstance(parsed, Rejected):
         return parsed
     rates, schema, health = await _gather_all(
         deps.fx.prefetch(fx_keys(parsed)),
         deps.trip_schema.require(),
-        deps.link_checker.check_plan(parsed),
+        _check_links(deps.link_checker, parsed),
     )
     return translate_submission(
         parsed, schema=schema, fx=rates, now=deps.now(), ids=deps.ids(), health=health
     )
+
+
+async def _check_links(checker: LinkHealthChecker, plan: Plan) -> LinkHealthMap:
+    """`checker.check_plan(plan)`, which never fails because of a URL. An unexpected failure (a
+    bug) is logged once, by its class only (the message could carry a URL), and gives no
+    verdicts, so it never cancels the FX prefetch or the trip.json load beside it.
+    Cancellation propagates."""
+    try:
+        return await checker.check_plan(plan)
+    except Exception as exc:
+        log.warning("link_check_failed", error=type(exc).__name__)
+        return LinkHealthMap.empty()
 
 
 async def _gather_all[A, B, C](
