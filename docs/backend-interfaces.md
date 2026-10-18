@@ -1061,7 +1061,12 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
     web offers no "Continua" at the cap). The checks and the insert of the `plans` row run in
     one transaction that first takes a transaction-level advisory lock (`quota.lock_checks`,
     key `0x41544C53`, distinct from the plan leases'): two requests cannot both pass a check
-    the other one's insert would have failed. The rate limits are in-process sliding windows
+    the other one's insert would have failed. "Continua" takes the same lock and admission (the
+    extra counted, the running cap included: it turns a paused plan back into a running one) and
+    reserves in the same transaction: the row turns `running` with its cap raised by the extra
+    before the session is touched, so the next start or "Continua" already counts it; a failure
+    to raise the session's budget puts the row back (`budget_paused`, the old cap), and the
+    timeline's "continued" event and `continues` follow only once the budget was raised. The rate limits are in-process sliding windows
     (`POST /plans` per user and per client IP, `PLAN_CREATE_*`) and a per-user count of open
     event streams (`MAX_STREAMS_PER_USER`), 429 `too_many_requests` with `Retry-After`: one
     replica runs the backend, a redeploy starts them over, and the quotas, not the windows,

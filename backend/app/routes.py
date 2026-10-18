@@ -1120,6 +1120,7 @@ async def interrupt_plan(
         409: {"model": ErrorResponse},
         429: {"model": ErrorResponse},
         502: {"model": ErrorResponse},
+        503: {"model": ErrorResponse},
     },
 )
 async def continue_plan(
@@ -1127,8 +1128,9 @@ async def continue_plan(
 ) -> ContinueResponse:
     """The "Continua con 2 $ in piu'" button: `sessions.continue_plan` (only from
     `budget_paused`, else 409); the plan's cap on "Continua" -> 409 `continue_limit_reached`;
-    the user's quota -> 429 `quota_cents_reached`; the monthly limit -> 429; API failure -> 502
-    and the plan stays `budget_paused`."""
+    the user's quota -> 429 `quota_cents_reached`; the monthly limit -> 429; the running cap
+    (`MAX_RUNNING_PLANS`) -> 503 `planner_busy` with Retry-After; API failure -> 502 and the plan
+    stays `budget_paused`."""
     try:
         budget_cents = await sessions.continue_plan(plan_id, user, services=planner)
     except consumer.PlanNotFoundError:
@@ -1148,6 +1150,12 @@ async def continue_plan(
         raise plan_error(
             PlanErrorCode.MONTHLY_LIMIT_REACHED,
             data={"spent_cents": exc.spent_cents, "limit_cents": exc.limit_cents},
+        ) from None
+    except quota.PlannerBusyError as exc:
+        raise plan_error(
+            PlanErrorCode.PLANNER_BUSY,
+            data={"running": exc.running, "limit": exc.limit},
+            retry_after_seconds=quota.PLANNER_BUSY_RETRY_SECONDS,
         ) from None
     except sessions.PlannerUnavailableError as exc:
         log.error("continue_planner_unavailable", plan_id=str(plan_id), reasons=exc.reasons)

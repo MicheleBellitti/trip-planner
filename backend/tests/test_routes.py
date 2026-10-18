@@ -747,6 +747,20 @@ async def test_continue_over_the_monthly_limit_is_429(
     assert detail(response)["data"] == {"spent_cents": 4900, "limit_cents": 5000}
 
 
+async def test_continue_when_the_planner_is_full_is_503_planner_busy(
+    api: Api, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    patch_sessions(monkeypatch, "continue_plan", error=quota.PlannerBusyError(8, 8))
+
+    response = await api.client.post(f"/plans/{uuid.uuid4()}/continue", headers=POST_HEADERS)
+
+    assert response.status_code == 503
+    body = detail(response)
+    assert body["code"] == "planner_busy"
+    assert body["data"] == {"retry_after_seconds": 60, "running": 8, "limit": 8}
+    assert response.headers["Retry-After"] == "60"
+
+
 @pytest.mark.parametrize("action", ["interrupt", "continue"])
 async def test_interrupt_and_continue_need_the_frontend_origin(
     api: Api, monkeypatch: pytest.MonkeyPatch, action: str

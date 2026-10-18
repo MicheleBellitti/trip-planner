@@ -1570,3 +1570,163 @@ async def test_continue_counts_itself_on_the_plan(
 
     plan = await load_plan(planner.session_factory, plan_id)
     assert (plan.status, plan.budget_cents, plan.continues) == (PlanStatus.RUNNING, 260, 1)
+
+
+# --- "Continua" reserves its extra before the session is touched -------------------------------
+
+
+@pytest.fixture
+async def ceiling_planner(
+    make_settings: Callable[..., Settings],
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> AsyncIterator[Planner]:
+    """A 1500-cent month for everyone, no per-user limit in the way, 3 plans running at once."""
+    settings = planner_settings(
+        make_settings,
+        monthly_limit_cents=1500,
+        user_monthly_cents=100_000,
+        user_monthly_plans=100,
+        max_running_plans=3,
+    )
+    async with open_planner(settings, db_session_factory) as opened:
+        yield opened
+
+
+def hold_retrieve(planner: Planner, monkeypatch: pytest.MonkeyPatch) -> tuple[Any, Any]:
+    """Make the next `retrieve_session` (step 2 of "Continua") wait: returns (entered, release)."""
+    entered, release = asyncio.Event(), asyncio.Event()
+    original = planner.fake.retrieve_session
+
+    async def held(session_id: str) -> Any:
+        if not entered.is_set():  # only the first call waits
+            entered.set()
+            await release.wait()
+        return await original(session_id)
+
+    monkeypatch.setattr(planner.fake, "retrieve_session", held)
+    return entered, release
+
+
+async def test_a_continue_in_flight_reserves_its_extra_against_a_new_start(
+    ceiling_planner: Planner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(sessions, "CONTINUE_RESUME_WAIT_SECONDS", 3600.0)
+    factory = ceiling_planner.session_factory
+    await insert_plan(
+        factory, status=PlanStatus.READY, cost_cents=1200, created_at=OCTOBER, user_email="x@a.it"
+    )
+    paused = await insert_plan(
+        factory, status=PlanStatus.BUDGET_PAUSED, cost_cents=60, created_at=OCTOBER
+    )
+    entered, release = hold_retrieve(ceiling_planner, monkeypatch)
+
+    continuing = asyncio.create_task(continue_plan(paused, USER, services=ceiling_planner.services))
+    await asyncio.wait_for(entered.wait(), 5)
+    # 1200 + 60 + the continue's 200 = 1460: a start's 60 would make 1520. Without the
+    # reservation the start would see 1260 and pass.
+    try:
+        with pytest.raises(MonthlyLimitReachedError):
+            await start_plan(REQUEST, USER, services=ceiling_planner.services)
+    finally:
+        release.set()
+    assert await continuing == 260
+
+    plan = await load_plan(factory, paused)
+    assert (plan.status, plan.budget_cents, plan.continues) == (PlanStatus.RUNNING, 260, 1)
+    assert ceiling_planner.fake.created == []
+
+
+async def test_a_continue_in_flight_reserves_its_extra_against_another_continue(
+    ceiling_planner: Planner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(sessions, "CONTINUE_RESUME_WAIT_SECONDS", 3600.0)
+    factory = ceiling_planner.session_factory
+    await insert_plan(
+        factory, status=PlanStatus.READY, cost_cents=1080, created_at=OCTOBER, user_email="x@a.it"
+    )
+    first = await insert_plan(
+        factory, status=PlanStatus.BUDGET_PAUSED, cost_cents=60, created_at=OCTOBER
+    )
+    second = await insert_plan(
+        factory, status=PlanStatus.BUDGET_PAUSED, cost_cents=60, created_at=OCTOBER
+    )
+    entered, release = hold_retrieve(ceiling_planner, monkeypatch)
+
+    continuing = asyncio.create_task(continue_plan(first, USER, services=ceiling_planner.services))
+    await asyncio.wait_for(entered.wait(), 5)
+    # 1080 + 120 + 200 = 1400 with the first one's extra reserved: another 200 would make 1600.
+    try:
+        with pytest.raises(MonthlyLimitReachedError):
+            await continue_plan(second, USER, services=ceiling_planner.services)
+    finally:
+        release.set()
+    await continuing
+
+    plan = await load_plan(factory, second)
+    assert (plan.status, plan.budget_cents, plan.continues) == (PlanStatus.BUDGET_PAUSED, 60, 0)
+    assert len(ceiling_planner.fake.budget_updates) == 1
+
+
+async def test_a_continue_in_flight_counts_as_running_for_the_cap(
+    ceiling_planner: Planner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(sessions, "CONTINUE_RESUME_WAIT_SECONDS", 3600.0)
+    factory = ceiling_planner.session_factory
+    for owner in ("a@example.com", "b@example.com"):
+        await insert_plan(factory, status=PlanStatus.RUNNING, created_at=OCTOBER, user_email=owner)
+    paused = await insert_plan(
+        factory, status=PlanStatus.BUDGET_PAUSED, cost_cents=60, created_at=OCTOBER
+    )
+    entered, release = hold_retrieve(ceiling_planner, monkeypatch)
+
+    continuing = asyncio.create_task(continue_plan(paused, USER, services=ceiling_planner.services))
+    await asyncio.wait_for(entered.wait(), 5)
+    try:
+        with pytest.raises(PlannerBusyError) as caught:
+            await start_plan(REQUEST, USER, services=ceiling_planner.services)
+    finally:
+        release.set()
+    assert (caught.value.running, caught.value.limit) == (3, 3)
+    await continuing
+
+
+async def test_continue_respects_the_running_cap(ceiling_planner: Planner) -> None:
+    factory = ceiling_planner.session_factory
+    for owner in ("a@example.com", "b@example.com", "c@example.com"):
+        await insert_plan(factory, status=PlanStatus.RUNNING, created_at=OCTOBER, user_email=owner)
+    paused = await insert_plan(
+        factory, status=PlanStatus.BUDGET_PAUSED, cost_cents=60, created_at=OCTOBER
+    )
+
+    with pytest.raises(PlannerBusyError):
+        await continue_plan(paused, USER, services=ceiling_planner.services)
+
+    assert ceiling_planner.fake.calls_of("retrieve_session") == []
+    assert ceiling_planner.fake.budget_updates == []
+    plan = await load_plan(factory, paused)
+    assert (plan.status, plan.budget_cents, plan.continues) == (PlanStatus.BUDGET_PAUSED, 60, 0)
+
+
+@pytest.mark.parametrize("failing", ["retrieve_session", "update_budget"])
+async def test_a_failed_continue_gives_its_reservation_back(
+    ceiling_planner: Planner, failing: str
+) -> None:
+    factory = ceiling_planner.session_factory
+    await insert_plan(
+        factory, status=PlanStatus.READY, cost_cents=1200, created_at=OCTOBER, user_email="x@a.it"
+    )
+    paused = await insert_plan(
+        factory, status=PlanStatus.BUDGET_PAUSED, cost_cents=60, created_at=OCTOBER
+    )
+    ceiling_planner.fake.fail_next(failing, ApiRejectedError("refused", status_code=400))
+
+    with pytest.raises(ApiRejectedError):
+        await continue_plan(paused, USER, services=ceiling_planner.services)
+
+    plan = await load_plan(factory, paused)
+    assert (plan.status, plan.budget_cents, plan.continues) == (PlanStatus.BUDGET_PAUSED, 60, 0)
+    titles = [event.title for event in await load_events(factory, paused)]
+    assert TITLE_CONTINUED not in titles
+    # 1200 + 60 + a start's 60 = 1320: the released 200 no longer stands in the way.
+    await start_plan(REQUEST, USER, services=ceiling_planner.services)
+    assert len(ceiling_planner.fake.created) == 1

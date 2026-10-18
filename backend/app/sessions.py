@@ -883,30 +883,40 @@ async def continue_plan(
 ) -> int:
     """POST /plans/{id}/continue ("Continua con 2 $ in piu'"). Returns the new budget (cents).
 
-    Only from `budget_paused` (else `PlanStateError`). Then the economics (app/quota.py): the
-    plan's "Continua" count against `MAX_CONTINUES_PER_PLAN` (`ContinueLimitReachedError`), the
-    user's monthly cents with the extra included unless they are an admin (`QuotaReachedError`),
-    the global ceiling with the running plans' budgets reserved and the extra included
-    (`MonthlyLimitReachedError`). Then, per notes §2d (a `budget_reached` session accepts no
-    `user.message`; only a budget update lets it go on):
+    Only from `budget_paused` (else `PlanStateError`), and only below `MAX_CONTINUES_PER_PLAN`
+    (`ContinueLimitReachedError`). A consumer of the paused plan still winding down is stopped
+    first. Then, per notes §2d (a `budget_reached` session accepts no `user.message`; only a
+    budget update lets it go on):
 
-    1. `info = client.retrieve_session(sid)`; consumed = `info.usage.list_cost_cents` (fallback
+    1. The economics and the reservation (`_reserve_continue`), in one transaction holding the
+       quota lock (`quota.lock_checks`) like a start's: the user's monthly cents with the extra
+       included unless they are an admin (`QuotaReachedError`), the global ceiling with the
+       running plans' budgets reserved and the extra included (`MonthlyLimitReachedError`), the
+       running cap (`PlannerBusyError`: the plan is about to run again). The same transaction
+       turns the row `running` with `budget_cents = max(cap, cost) + extra_cents`, so every
+       later admission counts this plan's extra and its place among the running plans before
+       the session is touched; nothing is shown on the timeline yet.
+    2. `info = client.retrieve_session(sid)`; consumed = `info.usage.list_cost_cents` (fallback
        `plans.cost_cents`); new budget = `max(cap, consumed) + extra_cents` (the cost may
        overshoot the cap by one request per thread, so base it on consumption), where `cap`
        is `plans.budget_cents` read with the status (`info.budget_cents` when NULL): a request
        that somehow raced another one repeats the same cap and never compounds it.
-    2. `client.update_budget(sid, new_budget)` (`budget_not_raised` cannot happen with this
-       formula; any `ApiRejectedError` propagates, the plan stays `budget_paused`).
-    3. Status `budget_paused` -> `running` with `TITLE_CONTINUED`: `set_plan_status(...,
-       budget_cents=new_budget, continues_increment=1, event_key=f"continue:{new_budget}")`,
-       which also stores the new cap in `plans.budget_cents`, counts the "Continua" in
-       `plans.continues` and restarts `plans.running_since` (the stuck check's 45 minutes).
-       The key is unique per "Continua" because every one raises the budget; if
-       `status_applied` is False (a concurrent change won) raise `PlanStateError`. Then
-       `registry.start(...)` in resume mode (the old `budget_reached` idle is already stored,
-       so it is not acted on).
-    4. [INFERRED, probe P9] if the session is still idle after `CONTINUE_RESUME_WAIT_SECONDS`,
+    3. `client.update_budget(sid, new_budget)` (`budget_not_raised` cannot happen with this
+       formula). Any failure of steps 2-3 (an `ApiRejectedError`, a timeout, a cancellation)
+       gives the reservation back (`_release_continue`: `budget_paused` and the old cap again)
+       and propagates.
+    4. `TITLE_CONTINUED`: `set_plan_status(..., budget_cents=new_budget, continues_increment=1,
+       event_key=f"continue:{new_budget}")`, which stores the final cap in
+       `plans.budget_cents`, counts the "Continua" in `plans.continues` and restarts
+       `plans.running_since` (the stuck check's 45 minutes). The key is unique per "Continua"
+       because every one raises the budget; if `status_applied` is False (a concurrent change
+       won) raise `PlanStateError`. Then `registry.start(...)` in resume mode (the old
+       `budget_reached` idle is already stored, so it is not acted on).
+    5. [INFERRED, probe P9] if the session is still idle after `CONTINUE_RESUME_WAIT_SECONDS`,
        send `CONTINUE_MESSAGE` as a `user.message`.
+
+    A process that dies between steps 1 and 4 leaves the plan `running` with no consumer: the
+    next start resumes it, and the stuck check ends it if the session never moves again.
 
     Everything from the status read to the restart runs under the plan's lock
     (`PlannerServices.plan_locks`): a second "Continua" (double click, two tabs) or an
@@ -949,8 +959,10 @@ async def _admit_continue(
     now: dt.datetime,
     extra_cents: int,
 ) -> None:
-    """The economics of a "Continua" (`continue_plan`'s docstring), under the plan's lock: a
-    paused plan reserves nothing (its cost reached its budget), so the extra is what counts."""
+    """The economics of a "Continua" (`continue_plan`'s docstring), on a connection that holds
+    the quota lock: a paused plan reserves nothing (its cost reached its budget), so the extra
+    is what counts; and the plan is about to run again, so the running cap applies as for a
+    start."""
     budget = settings.session_budget_cents
     if not user_is_admin(user, settings):
         mine = await quota.month_usage(
@@ -973,6 +985,74 @@ async def _admit_continue(
             limit_cents=settings.monthly_limit_cents,
         )
         raise MonthlyLimitReachedError(everyone.cents, settings.monthly_limit_cents)
+    running = await quota.running_plans(db)
+    if running >= settings.max_running_plans:
+        log.warning("planner_busy", running=running, limit=settings.max_running_plans)
+        raise quota.PlannerBusyError(running, settings.max_running_plans)
+
+
+async def _reserve_continue(
+    plan: PlanRecord,
+    user: CurrentUser,
+    *,
+    services: PlannerServices,
+    now: dt.datetime,
+    extra_cents: int,
+) -> int:
+    """Step 1 of `continue_plan`: in one transaction holding the quota lock, the admission
+    (`_admit_continue`) and the **reservation**: the row turns `running` with its cap raised to
+    `max(cap, cost) + extra_cents` (no timeline event yet), so the next admission, a start or
+    another "Continua", already counts this plan's extra and its place among the running plans
+    before the lock is released. Returns the reserved cap. `PlanStateError` when the plan is no
+    longer `budget_paused` (a change from another process won)."""
+    settings = services.settings
+    cap = plan.budget_cents or 0
+    reserved_cap = max(cap, plan.cost_cents) + extra_cents
+    async with services.session_factory() as db:
+        await quota.lock_checks(db)
+        await _admit_continue(db, user, settings=settings, now=now, extra_cents=extra_cents)
+        moved = await db.scalar(
+            update(PlanRecord)
+            .where(
+                PlanRecord.id == plan.id,
+                PlanRecord.status == PlanStatus.BUDGET_PAUSED.value,
+                PlanRecord.continues < settings.max_continues_per_plan,
+            )
+            .values(
+                status=PlanStatus.RUNNING.value,
+                budget_cents=reserved_cap,
+                running_since=func.now(),
+            )
+            .returning(PlanRecord.id)
+        )
+        if moved is None:
+            await db.rollback()
+            raise PlanStateError(
+                plan.id, await _current_status(services, plan.id), (PlanStatus.BUDGET_PAUSED,)
+            )
+        await db.commit()
+    return reserved_cap
+
+
+async def _release_continue(
+    services: PlannerServices, plan: PlanRecord, *, reserved_cap: int
+) -> None:
+    """Give a reservation back after the session's budget could not be raised: the row returns to
+    `budget_paused` with its old cap, unless something else changed it since. Never raises."""
+    try:
+        async with services.session_factory() as db:
+            await db.execute(
+                update(PlanRecord)
+                .where(
+                    PlanRecord.id == plan.id,
+                    PlanRecord.status == PlanStatus.RUNNING.value,
+                    PlanRecord.budget_cents == reserved_cap,
+                )
+                .values(status=PlanStatus.BUDGET_PAUSED.value, budget_cents=plan.budget_cents)
+            )
+            await db.commit()
+    except Exception as exc:
+        log.error("continue_release_failed", plan_id=str(plan.id), error=type(exc).__name__)
 
 
 async def _continue_session(
@@ -994,25 +1074,35 @@ async def _continue_session(
             limit=settings.max_continues_per_plan,
         )
         raise quota.ContinueLimitReachedError(plan.continues, settings.max_continues_per_plan)
-    async with services.session_factory() as db:
-        await _admit_continue(
-            db, user, settings=settings, now=ready.deps.now(), extra_cents=extra_cents
-        )
+    if ready.registry.get(plan_id) is not None:
+        # The paused consumer is still winding down: it stops before the row turns running, so
+        # none of its late status changes can apply to the plan once it runs again.
+        await ready.registry.stop(plan_id)
+    reserved_cap = await _reserve_continue(
+        plan, user, services=services, now=ready.deps.now(), extra_cents=extra_cents
+    )
 
     bound = log.bind(plan_id=str(plan_id), session_id=session_id)
-    info = await ready.client.retrieve_session(session_id)
-    consumed = info.usage.list_cost_cents
-    if consumed is None:
-        consumed = plan.cost_cents
-    cap = plan.budget_cents if plan.budget_cents is not None else info.budget_cents or 0
-    new_budget = max(cap, consumed) + extra_cents
-    await ready.client.update_budget(session_id, new_budget)
+    try:
+        info = await ready.client.retrieve_session(session_id)
+        consumed = info.usage.list_cost_cents
+        if consumed is None:
+            consumed = plan.cost_cents
+        cap = plan.budget_cents if plan.budget_cents is not None else info.budget_cents or 0
+        new_budget = max(cap, consumed) + extra_cents
+        await ready.client.update_budget(session_id, new_budget)
+    except BaseException:
+        # Nothing was raised on the session (or it is unknown and the next "Continua" repeats the
+        # same cap): the reservation goes back, the plan is paused again.
+        await _release_continue(services, plan, reserved_cap=reserved_cap)
+        raise
 
     result = await set_plan_status(
         services.session_factory,
         services.hub,
         plan_id,
-        StatusChange(PlanStatus.RUNNING, reason=None, only_from=(PlanStatus.BUDGET_PAUSED,)),
+        # The reservation already turned the row `running`.
+        StatusChange(PlanStatus.RUNNING, reason=None, only_from=(PlanStatus.RUNNING,)),
         title=TITLE_CONTINUED,
         event_key=f"continue:{new_budget}",
         budget_cents=new_budget,
@@ -1024,8 +1114,6 @@ async def _continue_session(
         )
     bound.info("plan_continued", budget_cents=new_budget, consumed_cents=consumed)
 
-    if ready.registry.get(plan_id) is not None:
-        await ready.registry.stop(plan_id)  # the paused consumer is still winding down
     ready.registry.start(plan_id, session_id)
     _spawn(
         services,
