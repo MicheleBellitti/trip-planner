@@ -179,9 +179,15 @@ the round found were fixed after it and verified, not re-scored.
 
 ## Questions for Michele
 
-- The landing's "Hai già un account" tells anyone whether an address has an Atlas account (the
+- ~~The landing's "Hai già un account" tells anyone whether an address has an Atlas account (the
   login's refusal already does, one step later). Keep it, or fold it into "Hai già un invito" so
-  the form never distinguishes an account from an invitation?
+  the form never distinguishes an account from an invitation?~~ **Decided 2026-10-18: "uguale per
+  tutti".** No answer distinguishes an address any more. The join always answers "Ricevuto: Se
+  … è già abilitato puoi accedere subito; altrimenti ti scriviamo lì quando c'è posto." The
+  magic-link request answers as sent for every address (no email for one that may not sign in),
+  and the sent state says "Se … è abilitato, ti arriva un link." with "Non arriva niente? Mettiti
+  in lista" and the join beside it. The field's invite refusal is gone; Google's refusal (after
+  OAuth, the account is the caller's own) keeps its notice.
 - The note could seed the first request ("Il prossimo viaggio"): keep it for triage only, or
   prefill the request form from it after sign-up?
 - One invitation email for everyone: a person who asked ("ti avevamo in lista") and a cold invite

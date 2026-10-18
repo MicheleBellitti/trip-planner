@@ -4,25 +4,38 @@
  * and the types on both sides.
  */
 
-import type { JoinInputError, JoinOutcome } from "./waitlist-policy";
+import type { JoinInputError } from "./waitlist-policy";
 
+/**
+ * A public join answers "received" whatever happened to the address (new, already listed, already
+ * invited, already registered, on AUTH_ALLOWED_EMAILS): the page never tells a stranger whether an
+ * address has an account or an invitation (Michele, 2026-10-18: "uguale per tutti"). The query's
+ * own outcome (lib/waitlist-policy.ts `JoinOutcome`) stays on the server, for the logs.
+ */
 /** Why a join was refused besides the input: the challenge was not passed (Turnstile), too many
- * joins from this address in a short time (the server's window), no accounts configured, or a
- * failure. */
+ * joins from this address or this client in a short time (the server's windows), no accounts
+ * configured, or a failure. None of them depends on what the list holds. */
 export type JoinRefusal = "challenge_failed" | "too_many_requests" | "unavailable" | "failed";
 
 export type JoinState =
   | { status: "idle" }
-  | { status: JoinOutcome; email: string }
+  | { status: "received"; email: string }
   | { status: "error"; error: JoinInputError | JoinRefusal };
 
 export const JOIN_IDLE: JoinState = { status: "idle" };
 
 export type InviteError = "invalid_email" | "note_too_long" | "signed_out" | "forbidden" | "unavailable" | "failed";
 
+/**
+ * What happened to the invitation's email: it left; it had already left (or another admin is
+ * sending it right now); the address already has an account, so nothing is sent; or it did not
+ * leave (the claim is given back, "Invia l'email" tries again).
+ */
+export type InviteDelivery = "sent" | "already_sent" | "has_account" | "failed";
+
 export type InviteState =
   | { status: "idle" }
-  | { status: "invited"; email: string; emailSent: boolean; alreadyInvited: boolean }
+  | { status: "invited"; email: string; delivery: InviteDelivery }
   | { status: "error"; error: InviteError };
 
 export const INVITE_IDLE: InviteState = { status: "idle" };

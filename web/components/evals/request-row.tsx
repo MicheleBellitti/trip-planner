@@ -115,7 +115,7 @@ export function RequestRow({ request }: { request: EvalRequestResult }) {
         {request.failure_reason || request.error || request.timed_out ? (
           <Notice tone="error" className="mb-4 max-w-[48rem]" title="Il piano non è arrivato in fondo">
             {request.failure_reason ? <p>{request.failure_reason}</p> : null}
-            {request.timed_out ? <p>Il tempo massimo della valutazione è finito prima del piano.</p> : null}
+            {request.timed_out ? <p>Il tempo massimo del collaudo è finito prima del piano.</p> : null}
             {request.error ? (
               <p lang="en" className="break-words">
                 {request.error}

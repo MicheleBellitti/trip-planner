@@ -419,7 +419,7 @@ describe("PlanScreen, other states", () => {
       for (const event of BUDGET.filter((candidate) => candidate.seq > 20 && candidate.seq <= 34)) source.send(event);
     });
     await flush(800);
-    expect(liveRegion().textContent).toContain("Piano: budget raggiunto");
+    expect(liveRegion().textContent).toContain("Piano: limite raggiunto");
   });
 
   it("explains the monthly limit (429) and leaves only the interrupt", async () => {

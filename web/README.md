@@ -113,13 +113,13 @@ components/request/        the request form: model, validation, summary, trip ou
 lib/api.ts                 typed backend client: errors, 401 -> the login (this app's or TripTracker's), 429, 503
 lib/auth.ts                the app's own accounts: Better Auth server (Postgres, magic link, Google, invitations)
 lib/auth-client.ts         its browser client; lib/auth-policy.ts the sign-up allowlist; lib/return-to.ts
-lib/me.ts                  GET /me: whether the signed-in user manages the planner (the header's "Valutazioni", "Inviti")
+lib/me.ts                  GET /me: whether the signed-in user manages the planner (the header's "Collaudi", "Inviti")
 lib/waitlist-policy.ts     the waitlist's rules (pure); lib/invitation-email.ts the invitation
 lib/server/                server-only: the accounts' configuration, the shared pg pool, the waitlist queries,
                            the emails through Resend (sign-in link, invitation), the admin check (GET /me)
 app/actions/waitlist.ts    server actions: join the waitlist (public), invite (admins)
 components/auth/           the login form and the signed-out header; app/login the page
-components/waitlist/       the waitlist form and its outcomes (the landing's closing, the login's refusal)
+components/waitlist/       the waitlist form and its one answer (the landing's closing, the login's sent state)
 components/admin/          the invitations page's body; app/admin/waitlist the page (admins only)
 lib/request-form.ts        form metadata from schema/request.json + validation (Italian)
 lib/plan-events/           usePlanEvents (SSE), the timeline reducer, labels, detail keys, virtualization
@@ -178,6 +178,14 @@ Re-measured on 2026-10-17 for the front door (step 2): `/` is now the public lan
 (the list moved to `/plans`, 176.5 KB); `/plans/[id]` is 192.4 KB, unchanged from the branch's start
 (the eval history, PR #3, had added 0.2 KB). The landing skip's script strings live in
 `lib/skip-landing.ts`, so the API client carries only the mark's two functions.
+
+Re-measured on 2026-10-17 for the step 1 polish, at the branch's last commit: `/plans/[id]` is
+192.8 KB (+0.4: the theme swap's transition guard, the small mark's geometry and the header line's
+fixed overhang), `/` 140.3, `/plans` 176.9, `/new` 177.1, `/evals/[id]` 186.7 (+1.2, ungated: its
+error boundary's chunk now carries its own copy of the theme toggle and the mark). Turbopack keeps every export of a module a page loads, so code only
+some pages need lives apart: the path builders in `lib/page-paths.ts`, the mark's geometry in
+`lib/mark-geometry.ts` (not `lib/brand-mark.ts`), the tagline's line break in
+`lib/tagline-lines.ts`.
 
 ## Accessibility
 

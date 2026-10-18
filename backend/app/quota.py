@@ -12,7 +12,7 @@ Money is US cents of Managed Agents list cost, like everywhere in the backend (n
   requests sent together would all pass a check that only knows cost already recorded.
 - The **per-user quota** (`USER_MONTHLY_PLANS`, `USER_MONTHLY_CENTS`) is checked before every
   plan start and every "Continua" for the plans of the signed-in user
-  (`sessions.plan_owner_filter`); admins (`Settings.is_admin`) are exempt from it, never from the
+  (`sessions.plan_owner_filter`); admins (`auth.user_is_admin`) are exempt from it, never from the
   global ceiling, the running cap or the rate limits.
 - The **global ceiling** gets the same reservation, and a start is refused when the new plan's
   own budget would not fit under it (`usage.cents + session_budget > limit`).

@@ -22,6 +22,7 @@ from typing import Any, cast
 import httpx
 import pytest
 from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app import clock, sessions
@@ -54,6 +55,7 @@ from app.sessions import (
     PlannerServices,
     PlannerUnavailableError,
     PlanStateError,
+    UserGoneError,
     build_brief,
     continue_plan,
     get_user_plan,
@@ -372,6 +374,58 @@ async def test_start_plan_stores_the_users_id_only_with_the_apps_own_accounts(
         plan = await load_plan(triptracker.session_factory, plan_id)
         assert plan.user_id is None
         assert plan.user_email == USER.email
+
+
+async def test_start_plan_for_a_deleted_account_is_user_gone_not_a_crash(
+    make_settings: Callable[..., Settings],
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    # The session cache can keep a verified user for up to 15 minutes after the account (and its
+    # users row) is gone: the plans.user_id foreign key refuses the insert.
+    settings = planner_settings(make_settings, auth_mode="atlas")
+    async with open_planner(settings, db_session_factory) as atlas:
+        with pytest.raises(UserGoneError):
+            await start_plan(
+                REQUEST, CurrentUser(USER.email, "usr_deleted"), services=atlas.services
+            )
+        assert atlas.fake.created == []  # nothing spent
+        assert atlas.registry.started == []
+        async with atlas.session_factory() as db:
+            assert list(await db.scalars(select(PlanRecord.id))) == []
+            assert list(await db.scalars(select(EventRecord.plan_id))) == []
+
+
+class _FakeAsyncpgError(Exception):
+    """asyncpg's error: it names the constraint."""
+
+    def __init__(self, constraint_name: str | None) -> None:
+        super().__init__("fake")
+        self.constraint_name = constraint_name
+
+
+class _FakeAdaptedError(Exception):
+    """SQLAlchemy's asyncpg adapter error: the SQLSTATE, raised from asyncpg's error."""
+
+    def __init__(self, sqlstate: str, constraint_name: str | None) -> None:
+        super().__init__("fake")
+        self.sqlstate = sqlstate
+        self.__cause__ = _FakeAsyncpgError(constraint_name)
+
+
+@pytest.mark.parametrize(
+    ("sqlstate", "constraint", "expected"),
+    [
+        ("23503", "fk_plans_user_id_users", True),
+        ("23503", "fk_events_plan_id_plans", False),  # another foreign key
+        ("23505", "fk_plans_user_id_users", False),  # not a foreign key violation
+        ("23503", None, False),
+    ],
+)
+def test_only_the_plans_user_foreign_key_is_user_gone(
+    sqlstate: str, constraint: str | None, expected: bool
+) -> None:
+    error = IntegrityError("INSERT INTO plans ...", {}, _FakeAdaptedError(sqlstate, constraint))
+    assert sessions.is_plans_user_fk_violation(error) is expected
 
 
 async def test_start_plan_uses_the_brief_date_in_rome(planner: Planner) -> None:
@@ -695,10 +749,10 @@ async def test_with_the_apps_own_accounts_ownership_goes_by_user_id_then_by_lega
     db_session: AsyncSession,
 ) -> None:
     """AUTH_MODE=atlas: a plan is the user's when `plans.user_id` is their id, or when it has no
-    id (a plan from before the switch) and carries their email. A plan with another user's id is
-    never theirs, whatever its email says."""
+    id (a plan from before the switch) and carries their verified email. A plan with another
+    user's id is never theirs, whatever its email says."""
     atlas = make_settings(auth_mode="atlas")
-    me = CurrentUser(USER.email, "usr_me")
+    me = CurrentUser(USER.email, "usr_me", email_verified=True)
     db_session.add_all(
         [
             UserRecord(id="usr_me", email=USER.email),
@@ -720,6 +774,17 @@ async def test_with_the_apps_own_accounts_ownership_goes_by_user_id_then_by_lega
         select(PlanRecord.id).where(sessions.plan_owner_filter(me, settings=atlas))
     )
     assert set(listed) == {mine, legacy}
+
+    # An account that never verified the address keeps its own plans, but the address alone
+    # does not hand it the legacy plans stored by that email.
+    unverified = CurrentUser(USER.email, "usr_me", email_verified=False)
+    assert (await get_user_plan(db_session, mine, unverified, settings=atlas)).id == mine
+    with pytest.raises(PlanNotFoundError):
+        await get_user_plan(db_session, legacy, unverified, settings=atlas)
+    listed = await db_session.scalars(
+        select(PlanRecord.id).where(sessions.plan_owner_filter(unverified, settings=atlas))
+    )
+    assert set(listed) == {mine}
 
     # Outside atlas mode the id means nothing (TripTracker's ids are not rows of `users`):
     # the email alone decides, as before the switch.

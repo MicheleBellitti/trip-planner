@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { connection } from "next/server";
 import { Suspense } from "react";
 
 import { WaitlistAdmin } from "@/components/admin/waitlist-admin";
@@ -11,7 +12,7 @@ import { ROUTES } from "@/lib/routes";
 import { currentCaller, type Caller } from "@/lib/server/admin";
 import { readAuthConfig } from "@/lib/server/auth-config";
 import { getPool } from "@/lib/server/db";
-import { listWaitlist } from "@/lib/server/waitlist";
+import { listWaitlist, WAITLIST_LIST_LIMIT } from "@/lib/server/waitlist";
 
 export const metadata: Metadata = { title: "Inviti", robots: { index: false } };
 
@@ -42,6 +43,9 @@ export default function InvitesPage() {
 }
 
 async function Gate() {
+  // Request time first, outside the try: during the prerender this waits and is abandoned by
+  // Next itself, rather than surfacing as a failed admin check below.
+  await connection();
   let caller: Caller;
   try {
     caller = await currentCaller();
@@ -63,8 +67,8 @@ async function Gate() {
       </Notice>
     );
   }
-  const rows = await listWaitlist(getPool(config.databaseUrl));
-  return <WaitlistAdmin rows={rows} />;
+  const { rows, truncated } = await listWaitlist(getPool(config.databaseUrl), WAITLIST_LIST_LIMIT);
+  return <WaitlistAdmin rows={rows} truncatedAt={truncated ? WAITLIST_LIST_LIMIT : null} />;
 }
 
 /** The add form and a few rows, in their final rhythm, while the request-time part arrives. */

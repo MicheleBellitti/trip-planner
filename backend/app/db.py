@@ -87,6 +87,16 @@ class UserRecord(Base):
     on new plans (`PlanRecord.user_id`). Deleting a user deletes their plans, sessions and
     linked accounts (ON DELETE CASCADE): the "delete my account" path of the data-rights work.
     `name` is Better Auth's required display name; a magic-link sign-up leaves it empty.
+
+    No code deletes a `users` row yet. The future delete-account path must not just delete it:
+    the cascade removes `plans` rows and nothing else, so it would leave their Managed Agents
+    sessions behind (still running, or kept past the retention with nothing pointing at them
+    until the orphan sweep). Before deleting the row it must, for every plan of that user, stop
+    the plan's consumer and delete its session the way `jobs._delete_old_plan` does (session
+    first, then row; a session that cannot be deleted yet keeps the account for a retry). It
+    must also accept that the deleted plans' `cost_cents` leave `sessions.monthly_spend_cents()`,
+    so the month's spend drops by what that user spent (keep a per-month total first if the
+    monthly limit has to keep counting it).
     """
 
     __tablename__ = "users"
@@ -115,6 +125,8 @@ class PlanRecord(Base):
     # The owner's `users.id` when the user signed in with the web app's own accounts
     # (AUTH_MODE=atlas, `Settings.plans_carry_user_id`); NULL for plans of TripTracker's one user
     # and of AUTH_MODE=local. Ownership is still decided by `user_email` until the switch.
+    # ON DELETE CASCADE is deliberate: a deleted account takes its plans with it. Whoever deletes
+    # a `users` row deletes these plans' sessions first (`UserRecord`'s docstring).
     user_id: Mapped[str | None] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
@@ -178,10 +190,12 @@ class EventRecord(Base):
 class AuthSessionRecord(Base):
     """A Better Auth session of the web app's own accounts (its core `session` model).
 
-    The web app writes and reads these; the backend never does (it asks the web app's
-    get-session endpoint, app/auth.py), but Alembic owns the table like every other one, so one
-    `alembic upgrade head` prepares a database for both services (`tests/test_db.py` keeps the
-    models and the migrations together). `token` is the session token the signed cookie carries.
+    The web app writes these (sign-in, sign-out, the daily `updateAge` extension). The backend
+    only reads them: with AUTH_MODE=atlas `auth.verify_atlas_session` looks the cookie's token up
+    here (`token`, unique, so one indexed query) with `expires_at` after now, joined to `users`,
+    and never writes. Alembic owns the table like every other one, so one `alembic upgrade head`
+    prepares a database for both services (`tests/test_db.py` keeps the models and the
+    migrations together). `token` is the session token the signed cookie carries.
     """
 
     __tablename__ = "auth_sessions"

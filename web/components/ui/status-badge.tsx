@@ -107,7 +107,7 @@ export function PlanStatusGlyph({ status, size = "md" }: { status: PlanStatus; s
 
 /**
  * A plan's status as a word and a glyph: In corso (an ink ring, the live station), Pronto,
- * Budget raggiunto, Interrotto, and the two failures in error red (Non riuscito, Bloccato).
+ * Limite raggiunto, Interrotto, and the two failures in error red (Non riuscito, Bloccato).
  * `size="lg"` is the live header's condensed title size.
  */
 export function PlanStatusBadge({

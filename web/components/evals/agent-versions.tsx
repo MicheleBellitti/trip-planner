@@ -34,7 +34,7 @@ export function AgentVersions({ versions, className }: { versions: EvalAgentVers
   if (versions === null) {
     return (
       <p className={className}>
-        <span className="text-small text-ink-2">Questa valutazione non ha registrato le versioni degli agenti.</span>
+        <span className="text-small text-ink-2">Questo collaudo non ha registrato le versioni degli agenti.</span>
       </p>
     );
   }

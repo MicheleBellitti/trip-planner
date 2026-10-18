@@ -69,7 +69,16 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app import clock, consumer, evals_store, quota, ratelimit, sessions
-from app.auth import CurrentUser, CurrentUserDep, RequireAdmin, RequireOrigin
+from app.auth import (
+    AuthErrorCode,
+    CurrentUser,
+    CurrentUserDep,
+    RequireAdmin,
+    RequireOrigin,
+    auth_error,
+    auth_messages,
+    user_is_admin,
+)
 from app.config import AgentProfile, Settings
 from app.covers import Cover, CoverErrorCode, CoverResolver
 from app.db import DbSession, PlanRecord, PlanStatus
@@ -823,11 +832,11 @@ me_router = APIRouter(tags=["me"])
 
 @me_router.get("/me", responses=_ERRORS)
 async def me(user: CurrentUserDep, settings: SettingsDep, db: DbSession) -> MeResponse:
-    """Who is signed in, whether they may read the eval history (`Settings.is_admin`: the web
-    app shows the "Valutazioni" section only to admins) and, unless they are exempt, their
-    month against the quota (`quota.month_usage` of their plans, read without the lock). No
-    personal data beyond the email the cookie already stands for."""
-    is_admin = settings.is_admin(user.email)
+    """Who is signed in, whether they may read the eval history (`auth.user_is_admin`: the web
+    app shows the "Collaudi" section only to admins) and, unless they are exempt, their month
+    against the quota (`quota.month_usage` of their plans, read without the lock). No personal
+    data beyond the email the cookie already stands for."""
+    is_admin = user_is_admin(user, settings)
     allowance: QuotaView | None = None
     if not is_admin:
         now = clock.now()
@@ -874,8 +883,9 @@ async def create_plan(
     user's quota), `MonthlyLimitReachedError` -> 429 `monthly_limit_reached` (data:
     spent_cents, limit_cents), `PlannerBusyError` -> 503 `planner_busy` (Retry-After),
     `PlannerUnavailableError`/`TripSchemaUnavailableError` -> 503 `planner_unavailable`,
-    `ManagedAgentsError` or a start `TimeoutError` -> 502 `agents_unavailable`.
-    `demo_scenario`: `check_demo_scenario`."""
+    `ManagedAgentsError` or a start `TimeoutError` -> 502 `agents_unavailable`,
+    `UserGoneError` (the account was deleted while its session was still cached) -> 401
+    `not_authenticated`. `demo_scenario`: `check_demo_scenario`."""
     check_demo_scenario(demo_scenario, settings=settings, planner=planner)
     try:
         plan_id = await sessions.start_plan(
@@ -898,6 +908,8 @@ async def create_plan(
     except sessions.PlannerUnavailableError as exc:
         log.error("plan_refused_planner_unavailable", reasons=exc.reasons)
         raise plan_error(PlanErrorCode.PLANNER_UNAVAILABLE) from None
+    except sessions.UserGoneError:
+        raise auth_error(AuthErrorCode.NOT_AUTHENTICATED, auth_messages(settings)) from None
     except TripSchemaUnavailableError as exc:
         log.error("plan_refused_trip_schema_unavailable", error=str(exc))
         raise plan_error(PlanErrorCode.PLANNER_UNAVAILABLE) from None

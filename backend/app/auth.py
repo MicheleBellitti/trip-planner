@@ -5,7 +5,8 @@ session cookie and decides who the user is; every state-changing request must ca
 `Origin: FRONTEND_ORIGIN`, because the SameSite=Lax cookie is sent from any bellittim.com
 subdomain. "Ambiente locale": with `AUTH_MODE=local` (development only, enforced by Settings)
 the user is the first allowed email, with no I/O. Tests: tests/test_auth.py (no cookie 401,
-email not allowed 403, wrong Origin 403, cache expired after 60 s, the atlas session table).
+email not allowed 403, wrong Origin 403; on the TripTracker path the cache expired after 60 s;
+on the atlas path the session table, read on every request with no cache).
 
 Two identity providers, both Better Auth, chosen by `AUTH_MODE` (`Settings.auth_origin` and
 `Settings.auth_cookie_prefix`), verified in two different ways:
@@ -28,19 +29,23 @@ Two identity providers, both Better Auth, chosen by `AUTH_MODE` (`Settings.auth_
   budget, the stale window and the signed-out cache is this path's.
 
 Roles: `require_admin` (`RequireAdmin`) guards the eval history: the user must be one of
-`Settings.admins` (ADMIN_EMAILS; outside `atlas` mode the allowed users by default), else 403
-`admin_only`. `GET /me` tells the web app whether to show that section.
+`Settings.admins` (ADMIN_EMAILS; outside `atlas` mode the allowed users by default) and, in
+`atlas` mode, have a verified email (`user_is_admin`), else 403 `admin_only`. `GET /me` tells
+the web app whether to show that section.
 
 Better Auth facts (docs/triptracker/schema-notes.md §6 and §8 C1-C5; the same library serves
 both providers):
 
 - Cookie names: `__Secure-<prefix>.session_token` when the provider runs on https, plain
-  `<prefix>.session_token` in local http development. Both are accepted, the `__Secure-`
-  one first. The value is signed (`<token>.<hmac>`). On the TripTracker path it is hashed whole
-  for the cache key and forwarded untouched; on the atlas path the token before the dot is
-  looked up (`session_token`): Better Auth's own `getSession` checks the signature and then
-  looks the token up, and the token alone (32 random alphanumerics) is the secret, so a forged
-  signature with an unknown token finds no row.
+  `<prefix>.session_token` in local http development. In production with an https provider
+  only the `__Secure-` name is accepted (`Settings.secure_session_cookie_only`): the plain name
+  has none of the prefix's guarantees, so a sibling `bellittim.com` host could plant one
+  (cookie tossing). Elsewhere both are accepted, the `__Secure-` one first. The value is
+  signed (`<token>.<hmac>`). On the TripTracker path it is hashed whole for the cache key and
+  forwarded untouched; on the atlas path the token before the dot is looked up
+  (`session_token`): Better Auth's own `getSession` checks the signature and then looks the
+  token up, and the token alone (32 random alphanumerics) is the secret, so a forged signature
+  with an unknown token finds no row.
 - Only the provider's Better Auth cookies (names starting with `__Secure-<prefix>.` or
   `<prefix>.`) are forwarded, never the browser's other cookies, and never the other
   provider's. No `Set-Cookie` from the answer is relayed.
@@ -117,10 +122,14 @@ DEFAULT_COOKIE_PREFIX = TRIPTRACKER_COOKIE_PREFIX
 """Better Auth's default prefix; the pure helpers below assume it unless told otherwise."""
 
 
-def session_cookie_names(prefix: str = DEFAULT_COOKIE_PREFIX) -> tuple[str, str]:
+def session_cookie_names(
+    prefix: str = DEFAULT_COOKIE_PREFIX, *, secure_only: bool = False
+) -> tuple[str, ...]:
     """Accepted session cookie names for a Better Auth cookie `prefix`, in order of preference:
-    the `__Secure-` one (https) first, then the plain one (local http development)."""
-    return (f"__Secure-{prefix}.session_token", f"{prefix}.session_token")
+    the `__Secure-` one (https) first, then the plain one (local http development), unless
+    `secure_only` (`Settings.secure_session_cookie_only`: production over https)."""
+    secure = f"__Secure-{prefix}.session_token"
+    return (secure,) if secure_only else (secure, f"{prefix}.session_token")
 
 
 def forwarded_cookie_prefixes(prefix: str = DEFAULT_COOKIE_PREFIX) -> tuple[str, str]:
@@ -215,6 +224,11 @@ class CurrentUser:
     auth_user_id: str | None = None
     """The provider's Better Auth `user.id`; None in AUTH_MODE=local. It is one of this
     backend's `users.id` only with AUTH_MODE=atlas (`Settings.plans_carry_user_id`)."""
+    email_verified: bool = False
+    """`users.email_verified` (AUTH_MODE=atlas): the account proved it owns `email` (a magic
+    link, or Google saying so). Only that mode consults it: without it the email grants neither
+    the legacy plans stored by email (`sessions.plan_owner_filter`) nor the admin role
+    (`user_is_admin`), though the plans stored with the user's id stay theirs."""
 
 
 def auth_error(
@@ -242,14 +256,16 @@ def _request_cookie_pairs(request: Request) -> list[tuple[str, str]]:
     return pairs
 
 
-def session_cookie(request: Request, prefix: str = DEFAULT_COOKIE_PREFIX) -> tuple[str, str] | None:
-    """(cookie name, raw value) of the first present name in `session_cookie_names(prefix)`,
-    or None.
+def session_cookie(
+    request: Request, prefix: str = DEFAULT_COOKIE_PREFIX, *, secure_only: bool = False
+) -> tuple[str, str] | None:
+    """(cookie name, raw value) of the first present name in
+    `session_cookie_names(prefix, secure_only=secure_only)`, or None.
 
     The value is read from the raw header (the first occurrence of the name), untouched; an
     empty value counts as absent."""
     pairs = _request_cookie_pairs(request)
-    for name in session_cookie_names(prefix):
+    for name in session_cookie_names(prefix, secure_only=secure_only):
         for cookie_name, value in pairs:
             if cookie_name == name and value:
                 return name, value
@@ -452,6 +468,7 @@ class SessionVerifier:
             f"{settings.auth_origin}{GET_SESSION_PATH}", params=GET_SESSION_PARAMS
         )
         self._messages = auth_messages(settings)
+        self._require_user_id = settings.plans_carry_user_id
         self._http = http
         self.cache = cache if cache is not None else SessionCache()
         self.budget = budget if budget is not None else VerificationBudget()
@@ -525,7 +542,7 @@ class SessionVerifier:
             return _UNAVAILABLE
         else:
             try:
-                user = parse_get_session(response.json())
+                user = parse_get_session(response.json(), require_user_id=self._require_user_id)
             except ValueError:  # json.JSONDecodeError included
                 log.warning("auth_get_session_malformed", status=response.status_code)
                 return _UNAVAILABLE
@@ -548,11 +565,12 @@ async def verify_atlas_session(
     """The owner of an `atlas` session cookie, read from the shared database (AUTH_MODE=atlas).
 
     One query: the `auth_sessions` row whose `token` is the cookie's `session_token` and whose
-    `expires_at` is after `now` (default `clock.now()`), joined to its `users` row. None when
-    there is no such row: signed out, revoked, expired, or a token that was never issued (a
-    forged cookie). No cache, so a sign-out is effective on the next request. Never writes:
-    Better Auth's `updateAge` refresh happens on the web app's own visits. Database errors
-    propagate (`current_user` turns them into 503 `auth_unavailable`).
+    `expires_at` is after `now` (default `clock.now()`), joined to its `users` row (the id, the
+    email and whether it is verified). None when there is no such row: signed out, revoked,
+    expired, or a token that was never issued (a forged cookie). No cache, so a sign-out is
+    effective on the next request. Never writes: Better Auth's `updateAge` refresh happens on
+    the web app's own visits. Database errors propagate (`current_user` turns them into 503
+    `auth_unavailable`).
     """
     token = session_token(raw_cookie_value)
     if not token:
@@ -561,20 +579,25 @@ async def verify_atlas_session(
     async with session_factory() as db:
         row = (
             await db.execute(
-                select(UserRecord.id, UserRecord.email)
+                select(UserRecord.id, UserRecord.email, UserRecord.email_verified)
                 .join(AuthSessionRecord, AuthSessionRecord.user_id == UserRecord.id)
                 .where(AuthSessionRecord.token == token, AuthSessionRecord.expires_at > moment)
             )
         ).first()
     if row is None:
         return None
-    user_id, email = row
-    return CurrentUser(email=email.strip().lower(), auth_user_id=user_id)
+    user_id, email, email_verified = row
+    return CurrentUser(
+        email=email.strip().lower(), auth_user_id=user_id, email_verified=bool(email_verified)
+    )
 
 
-def parse_get_session(body: Any) -> CurrentUser | None:
+def parse_get_session(body: Any, *, require_user_id: bool = False) -> CurrentUser | None:
     """Pure: Better Auth's get-session JSON -> `CurrentUser` (email lower-cased), None for a
-    `null` body. Raises ValueError when a non-null body has no `user.email` string."""
+    `null` body. Raises ValueError when a non-null body has no `user.email` string, and, with
+    `require_user_id` (`Settings.plans_carry_user_id`: new plans store it in `plans.user_id`),
+    when it has no non-empty `user.id` string: such an answer is malformed, never a user
+    without an id."""
     if body is None:
         return None
     if not isinstance(body, dict):
@@ -590,6 +613,9 @@ def parse_get_session(body: Any) -> CurrentUser | None:
         msg = "get-session user has no email"
         raise ValueError(msg)
     user_id = fields.get("id")
+    if require_user_id and not (isinstance(user_id, str) and user_id):
+        msg = "get-session user has no id"
+        raise ValueError(msg)
     return CurrentUser(
         email=email.strip().lower(),
         auth_user_id=user_id if isinstance(user_id, str) and user_id else None,
@@ -601,7 +627,8 @@ async def current_user(request: Request) -> CurrentUser:
 
     Reads `Settings` from `request.app.state.settings`. With AUTH_MODE=local it returns
     `CurrentUser(settings.local_user_email)` without I/O. Otherwise: no session cookie of the
-    configured provider (`settings.auth_cookie_prefix`), or a value that cannot be one
+    configured provider (`settings.auth_cookie_prefix`; only the `__Secure-` name with
+    `settings.secure_session_cookie_only`), or a value that cannot be one
     (`plausible_session_token`) -> 401 `not_authenticated` without asking anyone. Then the
     provider: AUTH_MODE=atlas looks the cookie's token up in the shared database
     (`verify_atlas_session`, through `request.app.state.session_factory`); AUTH_MODE=triptracker
@@ -618,7 +645,7 @@ async def current_user(request: Request) -> CurrentUser:
         return CurrentUser(email=local_email)
     messages = auth_messages(settings)
     prefix = settings.auth_cookie_prefix
-    cookie = session_cookie(request, prefix)
+    cookie = session_cookie(request, prefix, secure_only=settings.secure_session_cookie_only)
     if cookie is None or not plausible_session_token(cookie[1]):
         raise auth_error(AuthErrorCode.NOT_AUTHENTICATED, messages)
     if settings.auth_mode == "atlas":
@@ -681,12 +708,22 @@ RequireOrigin = Depends(require_origin)
 """`dependencies=[RequireOrigin]` on state-changing routes."""
 
 
+def user_is_admin(user: CurrentUser, settings: Settings) -> bool:
+    """Whether `user` holds the admin role: their email is one of `Settings.admins` and, with
+    AUTH_MODE=atlas, verified (`CurrentUser.email_verified`): an account that never proved it
+    owns an admin's address is no admin. TripTracker's and the local mode's users are trusted
+    by their allowlisted email, as before."""
+    if settings.auth_mode == "atlas" and not user.email_verified:
+        return False
+    return settings.is_admin(user.email)
+
+
 async def require_admin(request: Request, user: CurrentUserDep) -> None:
     """FastAPI dependency of the eval history (`GET /evals/runs*`): the signed-in user must be
-    one of `Settings.admins`, else 403 `admin_only`. Runs after `current_user` (shared within the
-    request by FastAPI's dependency cache), so a signed-out caller still gets its 401."""
+    an admin (`user_is_admin`), else 403 `admin_only`. Runs after `current_user` (shared within
+    the request by FastAPI's dependency cache), so a signed-out caller still gets its 401."""
     settings: Settings = request.app.state.settings
-    if not settings.is_admin(user.email):
+    if not user_is_admin(user, settings):
         raise auth_error(AuthErrorCode.ADMIN_ONLY, auth_messages(settings))
 
 

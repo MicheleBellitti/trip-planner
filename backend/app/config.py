@@ -476,6 +476,15 @@ class Settings(BaseSettings):
         return ATLAS_COOKIE_PREFIX if self.auth_mode == "atlas" else TRIPTRACKER_COOKIE_PREFIX
 
     @property
+    def secure_session_cookie_only(self) -> bool:
+        """True in production when the provider runs on https: only the `__Secure-` session
+        cookie name counts (`auth.session_cookie`). The plain `<prefix>.session_token` carries
+        none of the `__Secure-` guarantees, so a sibling host of the shared cookie domain could
+        plant one (cookie tossing); Better Auth over https never sets it. Development and an
+        http provider keep accepting the plain name."""
+        return self.is_production and self.auth_origin.startswith("https://")
+
+    @property
     def plans_carry_user_id(self) -> bool:
         """True when the signed-in user's id is one of the web app's own `users.id`, so a new
         plan may store it in `plans.user_id` (a foreign key). TripTracker's ids never are."""
@@ -505,7 +514,8 @@ class Settings(BaseSettings):
         return [] if self.auth_mode == "atlas" else self.planner_allowed_emails
 
     def is_admin(self, email: str | None) -> bool:
-        """True when `email` is one of `admins` (trimmed, case insensitive)."""
+        """True when `email` is one of `admins` (trimmed, case insensitive). The role itself is
+        `auth.user_is_admin`, which also wants a verified email with AUTH_MODE=atlas."""
         if not email:
             return False
         return email.strip().lower() in self.admins

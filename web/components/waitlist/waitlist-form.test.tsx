@@ -9,7 +9,7 @@ import {
   WAITLIST_FAILED,
   WAITLIST_INVALID_EMAIL,
   WAITLIST_NOTE_LABEL,
-  WAITLIST_OUTCOMES,
+  WAITLIST_RECEIVED_TITLE,
   WAITLIST_SUBMIT,
   WaitlistForm,
   WaitlistOutcome,
@@ -42,19 +42,21 @@ describe("WaitlistForm", () => {
   });
 
   it("sends what was typed to the action and replaces itself with the answer, focused", async () => {
-    join.mockResolvedValue({ status: "joined", email: "friend@example.com" });
+    join.mockResolvedValue({ status: "received", email: "friend@example.com" });
     render(<WaitlistForm source="landing" />);
 
     submit(" Friend@Example.com ", "Lisbona ad aprile");
 
-    const heading = await screen.findByRole("heading", { name: WAITLIST_OUTCOMES.joined.title });
+    const heading = await screen.findByRole("heading", { name: WAITLIST_RECEIVED_TITLE });
     const data = join.mock.calls[0]?.[1] as FormData;
     expect(data.get("email")).toBe("Friend@Example.com"); // the email input trims; the action lower-cases
     expect(data.get("note")).toBe("Lisbona ad aprile");
     expect(data.get("source")).toBe("landing");
-    expect(screen.getByRole("status").textContent).toBe("Ti scriviamo a friend@example.com quando c'è posto. Nessun altro messaggio da noi.");
+    expect(screen.getByRole("status").textContent).toBe(
+      "Se friend@example.com è già abilitato puoi accedere subito; altrimenti ti scriviamo lì quando c'è posto.",
+    );
     await waitFor(() => expect(document.activeElement?.contains(heading)).toBe(true));
-    expect(screen.queryByRole("link", { name: "Accedi" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Accedi" })).toBeNull(); // no sign-in hint asked for
   });
 
   it("an address problem is an error on the field, which takes focus, and what was typed stays", async () => {
@@ -83,11 +85,13 @@ describe("WaitlistForm", () => {
   });
 
   it("'Cambia indirizzo' brings the form back with the address kept and selected, and the note as it was", async () => {
-    join.mockResolvedValue({ status: "joined", email: "friend@example.com" });
+    join.mockResolvedValue({ status: "received", email: "friend@example.com" });
     render(<WaitlistForm source="landing" signInHint />);
     submit("friend@example.com", "Lisbona ad aprile");
-    await screen.findByRole("heading", { name: WAITLIST_OUTCOMES.joined.title });
-    expect(screen.queryByRole("link", { name: "Accedi" })).toBeNull(); // the hint went with the form
+    await screen.findByRole("heading", { name: WAITLIST_RECEIVED_TITLE });
+    // The hint went with the form; the answer offers "Accedi" in its place, once.
+    expect(screen.getAllByRole("link", { name: "Accedi" })).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "Accedi" }).getAttribute("href")).toBe(ROUTES.login);
 
     const select = vi.spyOn(HTMLInputElement.prototype, "select");
     fireEvent.click(screen.getByRole("button", { name: "Cambia indirizzo" }));
@@ -123,17 +127,27 @@ describe("WaitlistForm", () => {
     expect(screen.getByRole("button", { name: WAITLIST_SUBMIT })).toBeTruthy();
   });
 
-  it("an address that may already enter is told so, with the way in", () => {
-    for (const outcome of ["already_invited", "already_registered"] as const) {
-      render(<WaitlistOutcome outcome={outcome} email="friend@example.com" />);
-      expect(screen.getByRole("heading", { name: WAITLIST_OUTCOMES[outcome].title })).toBeTruthy();
-      expect(screen.getByRole("link", { name: "Accedi" }).getAttribute("href")).toBe(ROUTES.login);
-      cleanup();
-    }
-    render(<WaitlistOutcome outcome="already_listed" email="friend@example.com" hint="Torna con lo stesso indirizzo." />);
-    expect(screen.getByRole("status").textContent).toContain("Abbiamo già friend@example.com");
+  it("a rejected action (a dropped connection, a redeploy) is the same alert, and the form works again", async () => {
+    join.mockRejectedValueOnce(new Error("Failed to find Server Action"));
+    render(<WaitlistForm source="landing" />);
+
+    submit("friend@example.com");
+
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain(WAITLIST_FAILED));
+    expect((screen.getByLabelText(WAITLIST_EMAIL_LABEL) as HTMLInputElement).value).toBe("friend@example.com");
+    join.mockResolvedValueOnce({ status: "received", email: "friend@example.com" });
+    fireEvent.submit(screen.getByLabelText(WAITLIST_EMAIL_LABEL).closest("form")!);
+    await screen.findByRole("heading", { name: WAITLIST_RECEIVED_TITLE });
+  });
+
+  it("says the same thing for every address: the panel takes only the address, never an outcome", () => {
+    render(<WaitlistOutcome email="friend@example.com" hint="Torna con lo stesso indirizzo." />);
+    expect(screen.getByRole("heading", { name: WAITLIST_RECEIVED_TITLE })).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toContain("Se friend@example.com è già abilitato");
     expect(screen.getByText("Torna con lo stesso indirizzo.")).toBeTruthy();
     expect(screen.queryByRole("link")).toBeNull();
-    expect(WAITLIST_OUTCOMES.already_listed.icon).toBe("info"); // nothing was done: not a check
+    cleanup();
+    render(<WaitlistOutcome email="friend@example.com" signIn />);
+    expect(screen.getByRole("link", { name: "Accedi" }).getAttribute("href")).toBe(ROUTES.login);
   });
 });

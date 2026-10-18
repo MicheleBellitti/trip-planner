@@ -84,16 +84,28 @@ export async function joinWaitlist(db: Queryable, input: JoinInput): Promise<Joi
   return result.inserted ? "joined" : "already_listed";
 }
 
-/** Every row, the pending requests first (newest first), then the invitations (newest first). */
-export async function listWaitlist(db: Queryable): Promise<WaitlistRow[]> {
+/** The most rows the admin page reads at once: a public form can grow the table without bound
+ * (the rate limit on the join is PR #14's), and the page renders every row it gets. */
+export const WAITLIST_LIST_LIMIT = 500;
+
+/**
+ * The first `limit` rows, the pending requests first (newest first), then the invitations (newest
+ * first); `truncated` says that more rows exist (one more is read to know it).
+ */
+export async function listWaitlist(
+  db: Queryable,
+  limit: number = WAITLIST_LIST_LIMIT,
+): Promise<{ rows: WaitlistRow[]; truncated: boolean }> {
   const { rows } = await db.query<RawRow>(
     `SELECT w.email, w.note, w.source, w.created_at, w.invited_at, w.invited_by, w.invitation_sent_at,
             (u.id IS NOT NULL) AS registered
        FROM waitlist w
        LEFT JOIN users u ON lower(u.email) = w.email
-      ORDER BY (w.invited_at IS NULL) DESC, w.created_at DESC`,
+      ORDER BY (w.invited_at IS NULL) DESC, w.created_at DESC
+      LIMIT $1`,
+    [limit + 1],
   );
-  return rows.map(row);
+  return { rows: rows.slice(0, limit).map(row), truncated: rows.length > limit };
 }
 
 /**
@@ -121,9 +133,30 @@ export async function invite(
   return row(result);
 }
 
-/** Records that the invitation email left for `email` (the admin page shows it). */
-export async function markInvitationSent(db: Queryable, email: string): Promise<void> {
-  await db.query("UPDATE waitlist SET invitation_sent_at = now(), updated_at = now() WHERE email = $1", [email]);
+/**
+ * Claims the sending of `email`'s invitation, before the email leaves: one atomic UPDATE stamps
+ * `invitation_sent_at` only while it is unset, so of two admins (or tabs) inviting at once exactly
+ * one gets the claim and sends. Returns the claim (the stamp, as Postgres's exact text, for
+ * `releaseInvitation`), or null when the invitation was already sent or is being sent.
+ */
+export async function claimInvitation(db: Queryable, email: string): Promise<string | null> {
+  const { rows } = await db.query<{ claim: string }>(
+    `UPDATE waitlist SET invitation_sent_at = now(), updated_at = now()
+      WHERE email = $1 AND invited_at IS NOT NULL AND invitation_sent_at IS NULL
+      RETURNING invitation_sent_at::text AS claim`,
+    [email],
+  );
+  return rows[0]?.claim ?? null;
+}
+
+/** Gives back a claim whose email did not leave, so the admin can send it again ("Invia l'email").
+ * Only that claim: a later one (another admin's retry) is left alone. */
+export async function releaseInvitation(db: Queryable, email: string, claim: string): Promise<void> {
+  await db.query(
+    `UPDATE waitlist SET invitation_sent_at = NULL, updated_at = now()
+      WHERE email = $1 AND invitation_sent_at = $2::timestamptz`,
+    [email, claim],
+  );
 }
 
 /** Removes a pending request (never an invitation). True when a row went. */

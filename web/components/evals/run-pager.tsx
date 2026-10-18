@@ -31,7 +31,7 @@ export function RunPager({
   const hasOlder = page < count;
   if (!hasNewer && !hasOlder) return null;
   return (
-    <nav aria-label="Pagine delle valutazioni" className={cx("flex items-center justify-between gap-3", className)}>
+    <nav aria-label="Pagine dei collaudi" className={cx("flex items-center justify-between gap-3", className)}>
       <End href={hasNewer ? pageHref(page - 1) : null} direction="newer" />
       <p className="text-meta text-ink-2 sm:hidden">
         Pagina {page} di {count}

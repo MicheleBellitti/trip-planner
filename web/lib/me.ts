@@ -2,30 +2,34 @@
 
 /**
  * Who the signed-in user is to the backend (GET /me): whether they manage the planner
- * (`is_admin`, the backend's ADMIN_EMAILS: the header's "Valutazioni" and "Inviti" stations, which
+ * (`is_admin`, the backend's ADMIN_EMAILS: the header's "Collaudi" and "Inviti" stations, which
  * only admins see) and their month against the per-user quota (`quota`: the usage line on the
  * plans page and under the request form, null for the users exempt from it). Every page asks again
  * when it mounts, so the figures follow the plan just created or continued; the readers of one page
  * share the request in flight, and the last answer is drawn at once while the fresh one is on its
  * way. The admin flag is also kept in sessionStorage so the next page of the same tab draws the
  * stations without waiting (a per-viewer convenience: a missing or blocked storage only costs the
- * wait). The quota is never stored: it changes with every plan. A 401 is "not an admin, no quota"
- * and never redirects from here: the page's own calls do that.
+ * wait). The quota is never stored: it changes with every plan. Only an answer is kept: a failed
+ * request is unknown, leaves the last answer and the tab's flag in place, and the next caller asks
+ * again. A 401 is "not an admin, no quota" and never redirects from here (the page's own calls do
+ * that); like every 401 it also forgets the stored flag (`markSignedOut`, lib/returning.ts), as a
+ * sign-out does.
  */
 
 import { useEffect, useSyncExternalStore } from "react";
 
-import { ApiError, createApiClient } from "./api";
+import { ApiError, createApiClient, UnauthorizedError } from "./api";
+import { ADMIN_KEY } from "./returning";
 import { ADMIN_ONLY_CODE, type Me, type Quota } from "./schemas/api";
 
-export const ADMIN_KEY = "atlas-admin";
+export { ADMIN_KEY };
 
 /** The eval history's 403 for a signed-in user who is not an admin (routes `admin_only`). */
 export function isAdminOnly(error: unknown): boolean {
   return error instanceof ApiError && error.status === 403 && error.code === ADMIN_ONLY_CODE;
 }
 
-/** What the page knows once GET /me answered; a failure reads as a plain user with no quota. */
+/** What the page knows once GET /me answered (a 401 reads as a plain user with no quota). */
 export interface Identity {
   isAdmin: boolean;
   quota: Quota | null;
@@ -40,7 +44,7 @@ const NOBODY: Identity = { isAdmin: false, quota: null };
 let known: Identity | null = null;
 const listeners = new Set<() => void>();
 /** The request in flight, shared by the readers that mount together. */
-let pending: Promise<Identity> | null = null;
+let pending: Promise<Identity | null> | null = null;
 
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
@@ -71,21 +75,28 @@ function remember(isAdmin: boolean): void {
   }
 }
 
-/** The answer of GET /me: a fresh request, unless one is already on its way; any failure means a
- * plain user. */
-export function fetchMe(): Promise<Identity> {
+/**
+ * The answer of GET /me: a fresh request, unless one is already on its way. A 401 is a plain user
+ * with no quota (the API client has already forgotten the stored flag); any other failure is null,
+ * unknown: nothing is published or stored, so the last answer and what the tab remembered stand.
+ */
+export function fetchMe(): Promise<Identity | null> {
   if (pending) return pending;
-  const request: Promise<Identity> = createApiClient({ onUnauthorized: () => undefined })
+  const request: Promise<Identity | null> = createApiClient({ onUnauthorized: () => undefined })
     .me()
     .then(
-      (me: Me): Identity => ({ isAdmin: me.is_admin, quota: me.quota }),
-      () => NOBODY,
+      (me: Me): Identity => {
+        const identity = { isAdmin: me.is_admin, quota: me.quota };
+        remember(identity.isAdmin);
+        publish(identity);
+        return identity;
+      },
+      (error: unknown): Identity | null => {
+        if (!(error instanceof UnauthorizedError)) return null;
+        publish(NOBODY);
+        return NOBODY;
+      },
     )
-    .then((identity) => {
-      remember(identity.isAdmin);
-      publish(identity);
-      return identity;
-    })
     .finally(() => {
       if (pending === request) pending = null;
     });
@@ -93,9 +104,9 @@ export function fetchMe(): Promise<Identity> {
   return request;
 }
 
-/** The admin flag alone, from the same shared request. */
-export function fetchIsAdmin(): Promise<boolean> {
-  return fetchMe().then((identity) => identity.isAdmin);
+/** The admin flag alone, from the same shared request: null when unknown. */
+export function fetchIsAdmin(): Promise<boolean | null> {
+  return fetchMe().then((identity) => (identity === null ? null : identity.isAdmin));
 }
 
 /** Tests: forget the request in flight and the last answer. */
@@ -108,9 +119,9 @@ function subscribeToNothing(): () => void {
   return () => undefined;
 }
 
-/** The last answer while the fresh one is on its way (null on the first page of the load), then
- * the fresh one. Pages that need the quota read this; the header reads `useIsAdmin`, which also
- * knows what the tab remembered. */
+/** The last answer while the fresh one is on its way (null on the first page of the load, or
+ * while nothing answered), then the fresh one. Pages that need the quota read this; the header
+ * reads `useIsAdmin`, which also knows what the tab remembered. */
 export function useMe(): Identity | null {
   const identity = useSyncExternalStore(subscribe, () => known, () => null);
   useEffect(() => {
@@ -127,7 +138,7 @@ export function useRememberedAdmin(): boolean | null {
 }
 
 /** null until known, then the answer: what this tab remembered, replaced by this page's own
- * answer once it arrives. */
+ * answer once it arrives (a failure other than a 401 leaves the remembered value in place). */
 export function useIsAdmin(): boolean | null {
   const stored = useRememberedAdmin();
   const fetched = useMe();

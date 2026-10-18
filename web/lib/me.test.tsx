@@ -42,9 +42,12 @@ describe("fetchMe", () => {
     expect(sessionStorage.getItem("atlas-admin")).toBe("1");
   });
 
-  it("reads a failure as a plain user", async () => {
+  it("reads a failure as unknown and keeps the last answer", async () => {
+    me.mockResolvedValueOnce(ADMIN);
+    await fetchMe();
     me.mockRejectedValueOnce(new Error("down"));
-    await expect(fetchMe()).resolves.toEqual({ isAdmin: false, quota: null });
+    await expect(fetchMe()).resolves.toBeNull();
+    expect(sessionStorage.getItem("atlas-admin")).toBe("1");
   });
 });
 

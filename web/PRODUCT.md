@@ -166,12 +166,21 @@ Taken by Michele on 2026-10-12. They replace the first pass's open questions.
 - **2026-10-17: the landing**, approved from a mockup: "Accedi" only in the header and the
   closing, the line map before the legend on the phone, one choreographed moment (the map). Until
   `/demo` exists (step 3) its demo calls to action are off (`DEMO_READY`).
+- **2026-10-17: the step 1 polish**, from a mockup: the header's station line stays local to the
+  sections, 2 px from 1080 px with the same overhang on both sides; at 28 px and below the mark
+  draws a smaller station and thicker strokes, so it reads as an "A" rather than a compass; the
+  eval history is called "Collaudi" on screen.
 - **2026-10-17: by invitation, with a waitlist.** A stranger leaves an address (and, if they
-  like, two lines about the trip) on the landing's closing or on the login's refusal; Michele
-  invites from `/admin/waitlist` and the person gets an email with the login page. The refusal
-  on `/login` says "non ha ancora un invito" and offers the list in place rather than hiding
-  whether an address is invited; the invitation email names the address in its body and never
-  in a URL.
+  like, two lines about the trip) on the landing's closing or on the login's sent state; Michele
+  invites from `/admin/waitlist` and the person gets an email with the login page. The
+  invitation email names the address in its body and never in a URL.
+- **2026-10-18: the same answer for everyone ("uguale per tutti").** No page tells a stranger
+  whether an address has an account or an invitation. A magic-link request always answers as
+  sent (an address that may not sign in gets no email), and the sent state says "Se l'indirizzo
+  è abilitato ti arriva un link" and offers the list to everyone; a join always answers
+  "Ricevuto" with one sentence true in every case. The distinctions stay on the server (logs)
+  and on the admin page. Google's refusal still says "non ha ancora un invito": it needs the
+  Google account itself.
 - **2026-10-18: fair use, said before it bites.** Every account has a month (plans and spend),
   shown as one quiet line on the plans page and under the request form, never as a meter or a
   warning colour; a refusal names the limit, the figures and the day the month turns, and the

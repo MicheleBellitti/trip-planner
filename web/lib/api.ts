@@ -14,7 +14,7 @@
  *   `/login?returnTo=<current page URL, encoded>` in atlas mode, TripTracker's
  *   `<NEXT_PUBLIC_TRIPTRACKER_URL>/accedi?returnTo=...` otherwise.
  * - 403 `admin_only`: the eval history is for the backend's ADMIN_EMAILS; `me()` says whether
- *   the signed-in user is one (the header shows "Valutazioni" only to them).
+ *   the signed-in user is one (the header shows "Collaudi" only to them).
  * - 429 `monthly_limit_reached` carries the month's spend and limit (US cents).
  * - 503 `planner_unavailable`: the planner can't start plans (nothing was spent).
  * - 404 `demo_unavailable`: `createPlan`'s development-only `demoScenario` reached a backend
@@ -130,8 +130,8 @@ function evalNotFound(error: unknown): unknown {
     code: error.code,
     message:
       error.code === "not_found"
-        ? "La cronologia delle valutazioni non è disponibile su questo planner."
-        : "Questa valutazione non c'è.",
+        ? "La cronologia dei collaudi non è disponibile su questo planner."
+        : "Questo collaudo non c'è.",
   });
 }
 

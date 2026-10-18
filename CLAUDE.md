@@ -355,13 +355,14 @@ CI must pass before merge.
   by invitation: the web app's `AUTH_ALLOWED_EMAILS` bootstrap list or an invited row of the
   `waitlist` table, which admins manage at `/admin/waitlist`; `PLANNER_ALLOWED_EMAILS` is not consulted);
   the user's id is stored in `plans.user_id` and ownership goes by it (`sessions.plan_owner_filter`;
-  rows from before the switch, without an id, by email). `triptracker` (TripTracker's accounts at
+  rows from before the switch, without an id, by email, only when `users.email_verified`).
+  `triptracker` (TripTracker's accounts at
   `TRIPTRACKER_ORIGIN`, cookie prefix `better-auth`): the cookie is forwarded to
   `/api/auth/get-session?disableRefresh=true` (a check never refreshes the session), cached for
   60 s, and the email must be in `PLANNER_ALLOWED_EMAILS` (empty lets nobody in). `ADMIN_EMAILS`
   is the admin role: who reads `/evals/runs*` (403 `admin_only` otherwise; empty means the allowed
-  users outside `atlas` mode, nobody in it). `GET /me` tells the web app the email and the admin
-  flag; the header shows "Valutazioni" only to admins. The web app mirrors the mode with
+  users outside `atlas` mode, nobody in it; in `atlas` mode the email must also be verified). `GET /me` tells the web app the email and the admin
+  flag; the header shows "Collaudi" only to admins. The web app mirrors the mode with
   `NEXT_PUBLIC_AUTH_MODE` (where a 401 sends the browser). State-changing requests must send
   `Origin: FRONTEND_ORIGIN`. CORS allows `FRONTEND_ORIGIN` only, plus `TRIPTRACKER_ORIGIN`
   read-only on `GET /plans/{id}/trip`.
