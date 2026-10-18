@@ -110,7 +110,11 @@ function ActionSide({
     return (
       <div className="min-w-0 text-meta text-ink-2">
         <p className="font-semibold">Pagina non trovata</p>
-        <p>Cerca l&apos;offerta sul sito del fornitore.</p>
+        <p className="[overflow-wrap:anywhere]">
+          {action.host ? `Cerca l'offerta su ${action.host}.` : "Cerca l'offerta sul sito del fornitore."}
+        </p>
+        {vendor ? <p>{`Prenota direttamente con ${vendor}.`}</p> : null}
+        <PhoneLine phone={phone} />
       </div>
     );
   }
@@ -136,15 +140,22 @@ function ActionSide({
           `Prenota direttamente con ${vendor}.`
         ) : null}
       </p>
-      {phone ? (
-        <p>
-          Telefono{" "}
-          <a href={`tel:${phone.replace(/[^\d+]/g, "")}`} className="rounded-xs text-ink underline underline-offset-[0.2em]">
-            {phone}
-          </a>
-        </p>
-      ) : null}
+      <PhoneLine phone={phone} />
     </div>
+  );
+}
+
+/** "Telefono +351 ...", the number a `tel:` link (the only anchor of a booking without a usable
+ * link); nothing without a phone. */
+function PhoneLine({ phone }: { phone: string | null }) {
+  if (!phone) return null;
+  return (
+    <p>
+      Telefono{" "}
+      <a href={`tel:${phone.replace(/[^\d+]/g, "")}`} className="rounded-xs text-ink underline underline-offset-[0.2em]">
+        {phone}
+      </a>
+    </p>
   );
 }
 

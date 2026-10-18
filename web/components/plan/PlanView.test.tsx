@@ -490,17 +490,36 @@ describe("PlanView reading the Trip", () => {
       expect(document.querySelector('a[href="https://www.aerobus.pt/"]')).toBeNull();
     });
 
-    it("a dead booking link without a fallback shows no button and the search hint", () => {
+    it("a dead booking link without a fallback shows no button, the site to search, the vendor and the phone", () => {
       const detail = happyDetail();
-      const link = detail.plan!.bookings[0]!.link!;
-      detail.link_health = deadHome(link, null);
+      const booking = detail.plan!.bookings[0]!;
+      booking.phone = "+351 21 000 0000";
+      detail.link_health = deadHome(booking.link!, null);
       render(<PlanView detail={detail} trip={happyTrip()} loadTrip={unused} />);
       expect(screen.getAllByRole("link", { name: /^Prenota su / })).toHaveLength(1);
       const rows = bookingRows();
       const row = rows.find((r) => r.textContent?.includes("Pagina non trovata")) as HTMLElement;
-      expect(within(row).getByText("Pagina non trovata")).toBeTruthy();
-      expect(within(row).getByText("Cerca l'offerta sul sito del fornitore.")).toBeTruthy();
+      const action = within(row).getByText("Pagina non trovata").parentElement as HTMLElement;
+      expect(within(action).getByText("Cerca l'offerta su expedia.it.")).toBeTruthy();
+      expect(within(action).getByText("Prenota direttamente con TAP Air Portugal.")).toBeTruthy();
+      const phone = within(action).getByRole("link", { name: "+351 21 000 0000" });
+      expect(phone.getAttribute("href")).toBe("tel:+351210000000");
+      expect([...action.querySelectorAll("a")]).toEqual([phone]);
       expect(row.querySelector("a[target]")).toBeNull();
+    });
+
+    it("a dead booking link that does not parse sends the reader to the supplier's site", () => {
+      const detail = happyDetail();
+      const booking = detail.plan!.bookings[0]!;
+      booking.link = "expedia senza indirizzo";
+      detail.link_health = deadHome(booking.link, null);
+      render(<PlanView detail={detail} trip={happyTrip()} loadTrip={unused} />);
+      const row = bookingRows().find((r) => r.textContent?.includes("Pagina non trovata")) as HTMLElement;
+      const action = within(row).getByText("Pagina non trovata").parentElement as HTMLElement;
+      expect(within(action).getByText("Cerca l'offerta sul sito del fornitore.")).toBeTruthy();
+      expect(within(action).getByText("Prenota direttamente con TAP Air Portugal.")).toBeTruthy();
+      expect(action.querySelector("a")).toBeNull();
+      expect(screen.getAllByRole("link", { name: /^Prenota su / })).toHaveLength(1);
     });
 
     it("renders an older plan without link_health exactly as before", () => {
