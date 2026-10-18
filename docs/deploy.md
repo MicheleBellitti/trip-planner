@@ -524,7 +524,9 @@ also issue and renew their own certificates without interference.
    `https://atlas.bellittim.com/api/auth/callback/google`), and `NEXT_PUBLIC_TURNSTILE_SITE_KEY` /
    `TURNSTILE_SECRET_KEY` (Cloudflare dashboard > Turnstile > Add widget, hostname
    `atlas.bellittim.com`, managed mode: the challenge on the waitlist join and the magic-link
-   request; without them no widget is drawn and nothing is checked). The tables already exist:
+   request; without them no widget is drawn and nothing is checked; set both, before the build that
+   inlines the site key: one alone is logged as an error and checks nothing; the server also checks
+   each token's form and that it was issued on `BETTER_AUTH_URL`'s hostname). The tables already exist:
    the backend's `alembic upgrade head` (migrations `600fbb922f91`, `609ccf5bdc99` the waitlist,
    `22bb438487ee` the "Continua" count) creates them. On Railway set
    `AUTH_MODE=atlas` on the `backend` service at the same time, and `ADMIN_EMAILS` to your

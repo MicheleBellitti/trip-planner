@@ -10,7 +10,7 @@ import { Notice } from "@/components/ui/notice";
 import { Turnstile, type TurnstileHandle } from "@/components/ui/turnstile";
 import { WAITLIST_FAILED, WAITLIST_SUBMIT, WAITLIST_TOO_MANY, WaitlistOutcome } from "@/components/waitlist/waitlist-form";
 import { authClient } from "@/lib/auth-client";
-import { CHALLENGE_FAILED_MESSAGE, TURNSTILE_FIELD, TURNSTILE_HEADER, turnstileSiteKey } from "@/lib/turnstile";
+import { CHALLENGE_FAILED_MESSAGE, TURNSTILE_ACTIONS, TURNSTILE_FIELD, TURNSTILE_HEADER, turnstileSiteKey } from "@/lib/turnstile";
 import { safeReturnTo } from "@/lib/return-to";
 import { ROUTES } from "@/lib/routes";
 import { JOIN_IDLE } from "@/lib/waitlist-state";
@@ -423,7 +423,7 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled, navi
           </div>
         </StatePanel>
         {/* The form's widget left with the form: this one issues the token of the next request. */}
-        <Turnstile ref={turnstile} onToken={onChallenge} action="login" className="mt-4" />
+        <Turnstile ref={turnstile} onToken={onChallenge} action={TURNSTILE_ACTIONS.login} className="mt-4" />
       </div>
     );
   }
@@ -465,7 +465,7 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled, navi
               />
             )}
           </Field>
-          <Turnstile ref={turnstile} onToken={onChallenge} action="login" />
+          <Turnstile ref={turnstile} onToken={onChallenge} action={TURNSTILE_ACTIONS.login} />
           <Button
             type="submit"
             variant="primary"

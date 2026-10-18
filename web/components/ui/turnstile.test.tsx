@@ -23,7 +23,7 @@ afterEach(cleanup);
 describe("Turnstile", () => {
   it("renders nothing and never calls back without a site key", () => {
     const onToken = vi.fn();
-    render(<Turnstile onToken={onToken} />);
+    render(<Turnstile onToken={onToken} action="login" />);
     expect(screen.queryByTestId("turnstile")).toBeNull();
     expect(document.querySelector("script[src*='challenges.cloudflare.com']")).toBeNull();
     expect(onToken).not.toHaveBeenCalled();

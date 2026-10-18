@@ -12,7 +12,7 @@ import { getPool } from "./server/db";
 import { clientIp } from "./server/request-ip";
 import { MAGIC_LINK_MINUTES, sendMagicLink } from "./server/send-magic-link";
 import { verifyTurnstile } from "./server/turnstile";
-import { CHALLENGE_FAILED_MESSAGE, TURNSTILE_HEADER } from "./turnstile";
+import { CHALLENGE_FAILED_MESSAGE, TURNSTILE_ACTIONS, TURNSTILE_HEADER } from "./turnstile";
 import { isInvited } from "./server/waitlist";
 
 /**
@@ -172,6 +172,7 @@ export function buildAuth(config: AuthServerConfig, deps: AuthDependencies) {
         const verdict = await verifyTurnstile(
           requestHeaders?.get(TURNSTILE_HEADER) ?? null,
           requestHeaders ? clientIp(requestHeaders) : null,
+          TURNSTILE_ACTIONS.login,
         );
         if (verdict === "failed") {
           throw new APIError("BAD_REQUEST", { code: CHALLENGE_FAILED_CODE, message: CHALLENGE_FAILED_MESSAGE });

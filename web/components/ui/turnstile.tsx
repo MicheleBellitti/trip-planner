@@ -12,7 +12,7 @@
 
 import { useEffect, useImperativeHandle, useRef, type Ref } from "react";
 
-import { TURNSTILE_SCRIPT_URL, turnstileSiteKey } from "@/lib/turnstile";
+import { TURNSTILE_SCRIPT_URL, turnstileSiteKey, type TurnstileAction } from "@/lib/turnstile";
 
 import { DEFAULT_THEME, isThemeName, THEME_EVENT, type ThemeName } from "./theme";
 
@@ -36,8 +36,9 @@ export interface TurnstileHandle {
 interface TurnstileProps {
   onToken: (token: string | null) => void;
   ref?: Ref<TurnstileHandle>;
-  /** Cloudflare's `action`: which form, for its analytics (letters, digits, `-` and `_`). */
-  action?: string;
+  /** Cloudflare's `action`: which form (lib/turnstile.ts `TURNSTILE_ACTIONS`); the server checks
+   * that a token comes back from the form it was issued for. */
+  action: TurnstileAction;
   className?: string;
 }
 

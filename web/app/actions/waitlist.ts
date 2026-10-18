@@ -13,7 +13,7 @@ import { clientIp } from "@/lib/server/request-ip";
 import { sendInvitation } from "@/lib/server/send-invitation";
 import { verifyTurnstile } from "@/lib/server/turnstile";
 import { claimInvitation, invite, joinWaitlist, releaseInvitation, removeRequest, type Queryable } from "@/lib/server/waitlist";
-import { TURNSTILE_FIELD } from "@/lib/turnstile";
+import { TURNSTILE_ACTIONS, TURNSTILE_FIELD } from "@/lib/turnstile";
 import { parseJoinInput } from "@/lib/waitlist-policy";
 import type { InviteDelivery, InviteState, JoinState, RemoveState } from "@/lib/waitlist-state";
 
@@ -33,7 +33,7 @@ export async function joinWaitlistAction(_previous: JoinState, formData: FormDat
   const ip = clientIp(await headers());
   if (!joinWindow.hit(ip ?? "unknown").allowed) return { status: "error", error: "too_many_requests" };
   const token = formData.get(TURNSTILE_FIELD);
-  if ((await verifyTurnstile(typeof token === "string" ? token : null, ip)) === "failed") {
+  if ((await verifyTurnstile(typeof token === "string" ? token : null, ip, TURNSTILE_ACTIONS.waitlist)) === "failed") {
     return { status: "error", error: "challenge_failed" };
   }
   const parsed = parseJoinInput({ email: formData.get("email"), note: formData.get("note"), source: formData.get("source") });

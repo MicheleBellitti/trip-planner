@@ -65,7 +65,7 @@ describe("joinWaitlistAction", () => {
     verifyTurnstile.mockResolvedValue("failed");
     data.set("cf-turnstile-response", "tok-1");
     expect(await joinWaitlistAction(JOIN_IDLE, data)).toEqual({ status: "error", error: "challenge_failed" });
-    expect(verifyTurnstile).toHaveBeenCalledWith("tok-1", "203.0.113.9");
+    expect(verifyTurnstile).toHaveBeenCalledWith("tok-1", "203.0.113.9", "waitlist");
     expect(joinWaitlist).not.toHaveBeenCalled();
 
     verifyTurnstile.mockResolvedValue("passed");

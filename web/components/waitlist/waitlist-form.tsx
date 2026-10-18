@@ -10,7 +10,7 @@ import { Field, TextArea, TextInput } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
 import { Turnstile, type TurnstileHandle } from "@/components/ui/turnstile";
 import { ROUTES } from "@/lib/routes";
-import { CHALLENGE_FAILED_MESSAGE, TURNSTILE_FIELD } from "@/lib/turnstile";
+import { CHALLENGE_FAILED_MESSAGE, TURNSTILE_ACTIONS, TURNSTILE_FIELD } from "@/lib/turnstile";
 import { WAITLIST_NOTE_MAX, type WaitlistSource } from "@/lib/waitlist-policy";
 import { JOIN_IDLE, type JoinState } from "@/lib/waitlist-state";
 
@@ -275,7 +275,7 @@ function JoinForm({
         )}
       </Field>
       <p className="text-meta text-ink-2">{WAITLIST_CONSENT}</p>
-      <Turnstile ref={turnstile} onToken={setChallenge} action="waitlist" />
+      <Turnstile ref={turnstile} onToken={setChallenge} action={TURNSTILE_ACTIONS.waitlist} />
       <Button
         type="submit"
         variant="primary"
