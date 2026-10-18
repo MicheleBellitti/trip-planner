@@ -1,23 +1,35 @@
-"""Who is calling: the TripTracker session behind the request, and the Origin check.
+"""Who is calling: the Better Auth session behind the request, and the Origin check.
 
 Spec: "Autenticazione e domini" ("Nel backend del planner"): `current_user()` reads Better Auth's
-session cookie (`__Secure-better-auth.session_token` in production), forwards it to
-`TRIPTRACKER_ORIGIN/api/auth/get-session?disableRefresh=true`, caches the answer 60 seconds
-keyed by the token's hash (a revoked session stops working within a minute); the email must be
-in `PLANNER_ALLOWED_EMAILS` (empty means nobody); every state-changing request must carry
+session cookie, forwards it to the identity provider's
+`/api/auth/get-session?disableRefresh=true`, caches the answer 60 seconds keyed by the token's
+hash (a revoked session stops working within a minute); the email must be in
+`PLANNER_ALLOWED_EMAILS` (empty means nobody); every state-changing request must carry
 `Origin: FRONTEND_ORIGIN`, because the SameSite=Lax cookie is sent from any bellittim.com
 subdomain. "Ambiente locale": with `AUTH_MODE=local` (development only, enforced by Settings)
 the user is the first allowed email, with no network call. Tests: tests/test_auth.py (no cookie
 401, email not allowed 403, wrong Origin 403, cache expired after 60 s).
 
-Better Auth facts (docs/triptracker/schema-notes.md §6 and §8 C1-C5):
+Two identity providers, both Better Auth, chosen by `AUTH_MODE` (`Settings.auth_origin` and
+`Settings.auth_cookie_prefix`):
 
-- Cookie names: `__Secure-better-auth.session_token` when TripTracker runs on https, plain
-  `better-auth.session_token` in local http development. Both are accepted, the `__Secure-`
+- `triptracker`: TripTracker's accounts at `TRIPTRACKER_ORIGIN`, cookie prefix `better-auth`
+  (the spec's original design, one user).
+- `atlas`: the web app's own accounts (web/lib/auth.ts) at `FRONTEND_ORIGIN`, cookie prefix
+  `atlas`, so the two cookies never collide on the shared `bellittim.com` domain. Only here is
+  the provider's `user.id` one of this backend's `users.id`, stored with new plans
+  (`Settings.plans_carry_user_id`).
+
+Better Auth facts (docs/triptracker/schema-notes.md §6 and §8 C1-C5; the same library serves
+both providers):
+
+- Cookie names: `__Secure-<prefix>.session_token` when the provider runs on https, plain
+  `<prefix>.session_token` in local http development. Both are accepted, the `__Secure-`
   one first. The value is signed (`<token>.<hmac>`): it is hashed whole for the cache key and
   forwarded untouched.
-- Only Better Auth cookies (names starting with `__Secure-better-auth.` or `better-auth.`) are
-  forwarded, never the browser's other cookies. No `Set-Cookie` from the answer is relayed.
+- Only the provider's Better Auth cookies (names starting with `__Secure-<prefix>.` or
+  `<prefix>.`) are forwarded, never the browser's other cookies, and never the other
+  provider's. No `Set-Cookie` from the answer is relayed.
 - `GET /api/auth/get-session` answers 200 with `{"session": {...}, "user": {"email", ...}}`, or
   200 with the JSON body `null` when signed out (not 401), or 503 when TripTracker's accounts
   are not configured. The body contains `session.token`: never log the body or the cookie.
@@ -33,14 +45,15 @@ Better Auth facts (docs/triptracker/schema-notes.md §6 and §8 C1-C5):
   and lower-cased (`Settings.is_email_allowed`).
 
 Errors use FastAPI's `HTTPException` with `detail = {"code": <AuthErrorCode>, "message":
-<Italian text>}`, the API's error envelope (`routes.ErrorBody`). A 401 makes the web app send the
-user to `TRIPTRACKER_ORIGIN/accedi?returnTo=<current page>`.
+<Italian text>}`, the API's error envelope (`routes.ErrorBody`); the wording names TripTracker
+only with AUTH_MODE=triptracker (`auth_messages`). A 401 makes the web app send the user to the
+provider's login with `returnTo=<current page>`.
 
 Unknown cookies cannot lock the real user out (decision 19). Every get-session call leaves from
-the planner's one egress IP, and TripTracker's Better Auth rate-limits it per IP and path (100
-requests in a burst whose requests are less than 10 s apart; `api/rate-limiter` in better-auth
-1.7.3). So, without throttling, random cookie values would exhaust that bucket and every
-verification would get 429. The defences:
+the planner's one egress IP, and Better Auth rate-limits it per IP and path (100 requests in a
+burst whose requests are less than 10 s apart; `api/rate-limiter` in better-auth 1.7.3, the
+default the web app may relax for its own get-session). So, without throttling, random cookie
+values would exhaust that bucket and every verification would get 429. The defences:
 
 - `VerificationBudget` keeps outbound calls well under that limit. Unknown tokens may use only
   part of each burst; revalidating a user verified before may use the rest. Over budget means
@@ -72,18 +85,30 @@ import httpx
 import structlog
 from fastapi import Depends, HTTPException, Request
 
-from app.config import normalize_origin
+from app.config import TRIPTRACKER_COOKIE_PREFIX, normalize_origin
 
 if TYPE_CHECKING:
     from app.config import Settings
 
-SESSION_COOKIE_NAMES: tuple[str, ...] = (
-    "__Secure-better-auth.session_token",
-    "better-auth.session_token",
-)
-"""Accepted session cookie names, in order of preference."""
+DEFAULT_COOKIE_PREFIX = TRIPTRACKER_COOKIE_PREFIX
+"""Better Auth's default prefix; the pure helpers below assume it unless told otherwise."""
 
-FORWARDED_COOKIE_PREFIXES: tuple[str, ...] = ("__Secure-better-auth.", "better-auth.")
+
+def session_cookie_names(prefix: str = DEFAULT_COOKIE_PREFIX) -> tuple[str, str]:
+    """Accepted session cookie names for a Better Auth cookie `prefix`, in order of preference:
+    the `__Secure-` one (https) first, then the plain one (local http development)."""
+    return (f"__Secure-{prefix}.session_token", f"{prefix}.session_token")
+
+
+def forwarded_cookie_prefixes(prefix: str = DEFAULT_COOKIE_PREFIX) -> tuple[str, str]:
+    """Name prefixes of the cookies forwarded to the provider: its Better Auth cookies only."""
+    return (f"__Secure-{prefix}.", f"{prefix}.")
+
+
+SESSION_COOKIE_NAMES: tuple[str, ...] = session_cookie_names()
+"""TripTracker's session cookie names (the default prefix), in order of preference."""
+
+FORWARDED_COOKIE_PREFIXES: tuple[str, ...] = forwarded_cookie_prefixes()
 GET_SESSION_PATH = "/api/auth/get-session"
 GET_SESSION_PARAMS: dict[str, str] = {"disableRefresh": "true"}
 """Query of every get-session call: check the session, never refresh it (module docstring)."""
@@ -131,7 +156,20 @@ AUTH_ERROR_MESSAGES: dict[AuthErrorCode, str] = {
         "Non riesco a verificare l'accesso con TripTracker. Riprova tra poco."
     ),
 }
-"""Italian messages shown by the web app (user-facing copy)."""
+"""Italian messages shown by the web app (user-facing copy), AUTH_MODE=triptracker wording."""
+
+ATLAS_AUTH_ERROR_MESSAGES: dict[AuthErrorCode, str] = {
+    **AUTH_ERROR_MESSAGES,
+    AuthErrorCode.NOT_AUTHENTICATED: "Accedi per usare il planner.",
+    AuthErrorCode.AUTH_UNAVAILABLE: "Non riesco a verificare l'accesso. Riprova tra poco.",
+}
+"""The same, when the accounts are the web app's own (AUTH_MODE=atlas or local)."""
+
+
+def auth_messages(settings: Settings) -> dict[AuthErrorCode, str]:
+    """The error wording for the configured identity provider."""
+    return AUTH_ERROR_MESSAGES if settings.auth_mode == "triptracker" else ATLAS_AUTH_ERROR_MESSAGES
+
 
 AUTH_ERROR_STATUS: dict[AuthErrorCode, int] = {
     AuthErrorCode.NOT_AUTHENTICATED: 401,
@@ -147,16 +185,20 @@ class CurrentUser:
 
     email: str
     """Lower-cased and trimmed; always in PLANNER_ALLOWED_EMAILS."""
-    triptracker_user_id: str | None = None
-    """Better Auth's `user.id`; None in AUTH_MODE=local."""
+    auth_user_id: str | None = None
+    """The provider's Better Auth `user.id`; None in AUTH_MODE=local. It is one of this
+    backend's `users.id` only with AUTH_MODE=atlas (`Settings.plans_carry_user_id`)."""
 
 
-def auth_error(code: AuthErrorCode) -> HTTPException:
-    """The `HTTPException` for `code`: status 401/403/503 and the error envelope as detail.
-    401 also carries `WWW-Authenticate: Cookie` for well-behaved clients."""
+def auth_error(
+    code: AuthErrorCode, messages: dict[AuthErrorCode, str] = AUTH_ERROR_MESSAGES
+) -> HTTPException:
+    """The `HTTPException` for `code`: status 401/403/503 and the error envelope as detail,
+    worded from `messages` (`auth_messages(settings)`). 401 also carries
+    `WWW-Authenticate: Cookie` for well-behaved clients."""
     status = AUTH_ERROR_STATUS[code]
     headers = {"WWW-Authenticate": "Cookie"} if status == 401 else None
-    detail = {"code": code.value, "message": AUTH_ERROR_MESSAGES[code], "data": None}
+    detail = {"code": code.value, "message": messages[code], "data": None}
     return HTTPException(status_code=status, detail=detail, headers=headers)
 
 
@@ -173,26 +215,28 @@ def _request_cookie_pairs(request: Request) -> list[tuple[str, str]]:
     return pairs
 
 
-def session_cookie(request: Request) -> tuple[str, str] | None:
-    """(cookie name, raw value) of the first present name in `SESSION_COOKIE_NAMES`, or None.
+def session_cookie(request: Request, prefix: str = DEFAULT_COOKIE_PREFIX) -> tuple[str, str] | None:
+    """(cookie name, raw value) of the first present name in `session_cookie_names(prefix)`,
+    or None.
 
     The value is read from the raw header (the first occurrence of the name), untouched; an
     empty value counts as absent."""
     pairs = _request_cookie_pairs(request)
-    for name in SESSION_COOKIE_NAMES:
+    for name in session_cookie_names(prefix):
         for cookie_name, value in pairs:
             if cookie_name == name and value:
                 return name, value
     return None
 
 
-def forwarded_cookie_header(request: Request) -> str:
-    """The `Cookie` header sent to TripTracker: only the Better Auth cookies of the request,
-    values untouched, in their original order."""
+def forwarded_cookie_header(request: Request, prefix: str = DEFAULT_COOKIE_PREFIX) -> str:
+    """The `Cookie` header sent to the provider: only its Better Auth cookies
+    (`forwarded_cookie_prefixes(prefix)`), values untouched, in their original order."""
+    prefixes = forwarded_cookie_prefixes(prefix)
     return "; ".join(
         f"{name}={value}"
         for name, value in _request_cookie_pairs(request)
-        if name.startswith(FORWARDED_COOKIE_PREFIXES)
+        if name.startswith(prefixes)
     )
 
 
@@ -357,7 +401,7 @@ class VerificationBudget:
 
 
 class _Unavailable:
-    """TripTracker could not say who owns the cookie (error, or no budget)."""
+    """The provider could not say who owns the cookie (error, or no budget)."""
 
 
 _UNAVAILABLE = _Unavailable()
@@ -365,8 +409,9 @@ _Outcome = CurrentUser | None | _Unavailable
 
 
 class SessionVerifier:
-    """Asks TripTracker who owns a session cookie. One per process (`app.state.session_verifier`,
-    built by `sessions.start_planner`), sharing the application's httpx client."""
+    """Asks the identity provider (`Settings.auth_origin`) who owns a session cookie. One per
+    process (`app.state.session_verifier`, built by `sessions.start_planner`), sharing the
+    application's httpx client."""
 
     def __init__(
         self,
@@ -377,15 +422,17 @@ class SessionVerifier:
         budget: VerificationBudget | None = None,
     ) -> None:
         self._url = httpx.URL(
-            f"{settings.triptracker_origin}{GET_SESSION_PATH}", params=GET_SESSION_PARAMS
+            f"{settings.auth_origin}{GET_SESSION_PATH}", params=GET_SESSION_PARAMS
         )
+        self._messages = auth_messages(settings)
+        self._require_user_id = settings.plans_carry_user_id
         self._http = http
         self.cache = cache if cache is not None else SessionCache()
         self.budget = budget if budget is not None else VerificationBudget()
         self._pending: dict[str, asyncio.Task[_Outcome]] = {}
 
     async def verify(self, cookie_header: str, cache_key: str) -> CurrentUser | None:
-        """The user for this cookie, from the cache or from `GET {TRIPTRACKER_ORIGIN}{
+        """The user for this cookie, from the cache or from `GET {Settings.auth_origin}{
         GET_SESSION_PATH}?disableRefresh=true` with `Cookie: cookie_header`
         (`HTTP_TIMEOUT_SECONDS`, no redirects).
 
@@ -403,7 +450,7 @@ class SessionVerifier:
             return cached
         pending = self._pending.get(cache_key)
         if pending is None:
-            pending = asyncio.ensure_future(self._ask_triptracker(cookie_header, cache_key))
+            pending = asyncio.ensure_future(self._ask_provider(cookie_header, cache_key))
             self._pending[cache_key] = pending
             pending.add_done_callback(lambda task: self._forget(cache_key, task))
         # Shielded: a client that disconnects does not cancel the call other requests share.
@@ -412,7 +459,7 @@ class SessionVerifier:
             return outcome
         stale = self.cache.get_stale(cache_key)
         if stale is None:
-            raise auth_error(AuthErrorCode.AUTH_UNAVAILABLE)
+            raise auth_error(AuthErrorCode.AUTH_UNAVAILABLE, self._messages)
         log.info("auth_stale_user_served")
         return stale
 
@@ -422,8 +469,8 @@ class SessionVerifier:
         if not task.cancelled():
             task.exception()  # retrieved, so a crash is never reported as "never retrieved"
 
-    async def _ask_triptracker(self, cookie_header: str, cache_key: str) -> _Outcome:
-        """One budgeted get-session call; caches what TripTracker said, or `_UNAVAILABLE`."""
+    async def _ask_provider(self, cookie_header: str, cache_key: str) -> _Outcome:
+        """One budgeted get-session call; caches what the provider said, or `_UNAVAILABLE`."""
         known = self.cache.get_stale(cache_key) is not None
         if not self.budget.try_acquire(known=known):
             if self.budget.refused == 1:
@@ -452,7 +499,7 @@ class SessionVerifier:
             return _UNAVAILABLE
         else:
             try:
-                user = parse_get_session(response.json())
+                user = parse_get_session(response.json(), require_user_id=self._require_user_id)
             except ValueError:  # json.JSONDecodeError included
                 log.warning("auth_get_session_malformed", status=response.status_code)
                 return _UNAVAILABLE
@@ -460,9 +507,12 @@ class SessionVerifier:
         return user
 
 
-def parse_get_session(body: Any) -> CurrentUser | None:
+def parse_get_session(body: Any, *, require_user_id: bool = False) -> CurrentUser | None:
     """Pure: Better Auth's get-session JSON -> `CurrentUser` (email lower-cased), None for a
-    `null` body. Raises ValueError when a non-null body has no `user.email` string."""
+    `null` body. Raises ValueError when a non-null body has no `user.email` string, and, with
+    `require_user_id` (`Settings.plans_carry_user_id`: new plans store it in `plans.user_id`),
+    when it has no non-empty `user.id` string: such an answer is malformed, never a user
+    without an id."""
     if body is None:
         return None
     if not isinstance(body, dict):
@@ -478,9 +528,12 @@ def parse_get_session(body: Any) -> CurrentUser | None:
         msg = "get-session user has no email"
         raise ValueError(msg)
     user_id = fields.get("id")
+    if require_user_id and not (isinstance(user_id, str) and user_id):
+        msg = "get-session user has no id"
+        raise ValueError(msg)
     return CurrentUser(
         email=email.strip().lower(),
-        triptracker_user_id=user_id if isinstance(user_id, str) and user_id else None,
+        auth_user_id=user_id if isinstance(user_id, str) and user_id else None,
     )
 
 
@@ -488,29 +541,34 @@ async def current_user(request: Request) -> CurrentUser:
     """FastAPI dependency for every endpoint except /health.
 
     Reads `Settings` from `request.app.state.settings`. With AUTH_MODE=local it returns
-    `CurrentUser(settings.local_user_email)` without I/O. Otherwise: no session cookie, or a
-    value that cannot be one (`plausible_session_token`) -> 401 `not_authenticated` without
-    asking TripTracker; `SessionVerifier.verify` (from `request.app.state.session_verifier`)
-    None -> 401; email not allowed -> 403 `email_not_allowed`; TripTracker failure with no
-    recently verified user for the cookie (or no verifier because the lifespan did not run)
-    -> 503. Binds `user_email` to nothing in the logs (the email is personal data).
+    `CurrentUser(settings.local_user_email)` without I/O. Otherwise: no session cookie of the
+    configured provider (`settings.auth_cookie_prefix`), or a value that cannot be one
+    (`plausible_session_token`) -> 401 `not_authenticated` without asking the provider;
+    `SessionVerifier.verify` (from `request.app.state.session_verifier`) None -> 401; email not
+    allowed -> 403 `email_not_allowed`; a provider failure with no recently verified user for
+    the cookie (or no verifier because the lifespan did not run) -> 503. Binds `user_email` to
+    nothing in the logs (the email is personal data).
     """
     settings: Settings = request.app.state.settings
     local_email = settings.local_user_email
     if local_email is not None:
         return CurrentUser(email=local_email)
-    cookie = session_cookie(request)
+    messages = auth_messages(settings)
+    prefix = settings.auth_cookie_prefix
+    cookie = session_cookie(request, prefix)
     if cookie is None or not plausible_session_token(cookie[1]):
-        raise auth_error(AuthErrorCode.NOT_AUTHENTICATED)
+        raise auth_error(AuthErrorCode.NOT_AUTHENTICATED, messages)
     verifier: SessionVerifier | None = getattr(request.app.state, "session_verifier", None)
     if verifier is None:
         log.error("auth_verifier_missing")
-        raise auth_error(AuthErrorCode.AUTH_UNAVAILABLE)
-    user = await verifier.verify(forwarded_cookie_header(request), token_cache_key(cookie[1]))
+        raise auth_error(AuthErrorCode.AUTH_UNAVAILABLE, messages)
+    user = await verifier.verify(
+        forwarded_cookie_header(request, prefix), token_cache_key(cookie[1])
+    )
     if user is None:
-        raise auth_error(AuthErrorCode.NOT_AUTHENTICATED)
+        raise auth_error(AuthErrorCode.NOT_AUTHENTICATED, messages)
     if not settings.is_email_allowed(user.email):
-        raise auth_error(AuthErrorCode.EMAIL_NOT_ALLOWED)
+        raise auth_error(AuthErrorCode.EMAIL_NOT_ALLOWED, messages)
     return user
 
 
@@ -536,7 +594,7 @@ async def require_origin(request: Request) -> None:
         return
     settings: Settings = request.app.state.settings
     if not origin_allowed(request.headers.get("origin"), settings.frontend_origin):
-        raise auth_error(AuthErrorCode.BAD_ORIGIN)
+        raise auth_error(AuthErrorCode.BAD_ORIGIN, auth_messages(settings))
 
 
 CurrentUserDep = Annotated[CurrentUser, Depends(current_user)]

@@ -437,14 +437,15 @@ clear error.
    | `AGENT_PROFILE` | `production` | yes | yes | required in production; selects `backend/claude-lock.production.json` |
    | `SESSION_BUDGET_CENTS` | `400` | yes | | US cents per session; empty = the profile's default (400) |
    | `MONTHLY_LIMIT_CENTS` | `5000` | yes | | POST /plans refuses new plans at or above it |
-   | `PLANNER_ALLOWED_EMAILS` | your TripTracker login email | yes | | empty means nobody; never commit it |
+   | `PLANNER_ALLOWED_EMAILS` | your TripTracker login email | yes | | empty means nobody; never commit it. With `AUTH_MODE=atlas`, change it together with the web app's `AUTH_ALLOWED_EMAILS` (step 5) |
    | `FRONTEND_ORIGIN` | `https://atlas.bellittim.com` | yes | | the only CORS origin and the required `Origin` on POST |
    | `TRIPTRACKER_ORIGIN` | `https://viaggi.bellittim.com` | yes | | session check, `trip.json`, CORS of `GET /plans/{id}/trip` |
    | `TRIP_SCHEMA_URL` | **`file:///app/pinned/trip.schema.json`** until TripTracker serves `/schema/trip.json`, then unset | yes | | the pinned copy `backend/pinned/trip.schema.json` ships in the image (`tests/` doesn't) and equals the test fixture (a backend test checks it); production never falls back on its own: without this setting POST /plans answers 503 until TripTracker serves the schema |
    | `EVALS_INGEST_TOKEN` | a random token ("Eval history" below) | yes | | sealed; optional. Empty (the default) disables `POST /evals/runs` (404); the same value goes in both GitHub environments |
    | `LOG_LEVEL` | `INFO` | yes | yes | |
    | `WIKIMEDIA_CONTACT_URL` | an https page or `mailto:` where Wikimedia can reach you | yes | | optional; empty = `FRONTEND_ORIGIN` (Wikimedia's User-Agent policy for the cover photos) |
-   | `AUTH_MODE`, `LOCKFILE_PATH`, `GIT_SHA` | leave unset | | | `triptracker`; `backend/claude-lock.<AGENT_PROFILE>.json`; Railway sets `RAILWAY_GIT_COMMIT_SHA` |
+   | `AUTH_MODE` | leave unset (`triptracker`), or `atlas` once the web app runs its own accounts (step 5) | yes | | `atlas` verifies the `__Secure-atlas.session_token` cookie at `FRONTEND_ORIGIN` and stores the user's id on plans |
+   | `LOCKFILE_PATH`, `GIT_SHA` | leave unset | | | `backend/claude-lock.<AGENT_PROFILE>.json`; Railway sets `RAILWAY_GIT_COMMIT_SHA` |
    | `PORT`, `FORWARDED_ALLOW_IPS` | leave unset | | | Railway injects `PORT`; the image sets `FORWARDED_ALLOW_IPS=*` |
 
    To try the deployed backend on the cheap roster before day 4, set `AGENT_PROFILE=development`,
@@ -489,9 +490,34 @@ also issue and renew their own certificates without interference.
    |---|---|
    | `NEXT_PUBLIC_API_URL` | `https://atlas.api.bellittim.com` |
    | `NEXT_PUBLIC_TRIPTRACKER_URL` | `https://viaggi.bellittim.com` |
+   | `NEXT_PUBLIC_AUTH_MODE` | `triptracker` today; `atlas` together with the backend's `AUTH_MODE=atlas` (below) |
 
    `NEXT_PUBLIC_*` values are inlined into the public bundle at build time: never a secret
    there. Changing one needs a redeploy.
+
+   **The app's own accounts (`AUTH_MODE=atlas`, `web/lib/auth.ts`).** The web app then runs
+   Better Auth itself and needs server-side variables (web/.env.example, "Accounts"), set for
+   Production only: `DATABASE_URL` (Railway's Postgres, reachable from Vercel only through the
+   database service's **public TCP proxy**: Postgres > Settings > Networking > TCP Proxy, then
+   the `DATABASE_PUBLIC_URL` it shows, with `?uselibpqcompat=true&sslmode=require`; the private
+   URL of step 3 does not resolve outside Railway. node-postgres alone treats `sslmode=require`
+   as verify-full, which refuses the proxy's self-signed certificate; `uselibpqcompat=true`
+   gives it libpq's meaning, encrypted without verifying the certificate),
+   `BETTER_AUTH_SECRET` (`openssl rand -base64 32`),
+   `BETTER_AUTH_URL=https://atlas.bellittim.com`, `AUTH_COOKIE_DOMAIN=bellittim.com` (required:
+   the app refuses to start in production without it, because a host-only cookie never reaches
+   `atlas.api`, every API call answers 401 and `/login` and the page bounce the user back and
+   forth; with it `atlas.api` receives the `__Secure-atlas.session_token` cookie, whose `atlas`
+   prefix keeps it apart from TripTracker's), `AUTH_ALLOWED_EMAILS` (who may sign up; **change
+   it together with the backend's `PLANNER_ALLOWED_EMAILS`**: an address only in the web's list
+   signs in and then gets 403 `email_not_allowed` from the API, one only in the backend's can
+   never sign up), `RESEND_API_KEY` and
+   `AUTH_EMAIL_FROM` (a sender on a domain verified at Resend), and optionally
+   `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (OAuth client with redirect URI
+   `https://atlas.bellittim.com/api/auth/callback/google`). The tables already exist: the
+   backend's `alembic upgrade head` (migration `600fbb922f91`) creates them. On Railway set
+   `AUTH_MODE=atlas` on the `backend` service at the same time; the backend then verifies the
+   cookie at `FRONTEND_ORIGIN/api/auth/get-session` instead of TripTracker's.
 3. Domains: add `atlas.bellittim.com`; Vercel shows the CNAME target for Cloudflare.
 4. Git: production branch `main`, a preview for every PR (spec). Settings > Git > Ignored
    Build Step, custom command `git diff --quiet HEAD^ HEAD -- . ../schema` skips builds when

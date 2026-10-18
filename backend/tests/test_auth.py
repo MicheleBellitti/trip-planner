@@ -23,6 +23,7 @@ import time_machine
 from fastapi import FastAPI, HTTPException, Request
 
 from app.auth import (
+    ATLAS_AUTH_ERROR_MESSAGES,
     AUTH_ERROR_MESSAGES,
     GET_SESSION_PARAMS,
     GET_SESSION_PATH,
@@ -40,12 +41,15 @@ from app.auth import (
     SessionVerifier,
     VerificationBudget,
     auth_error,
+    auth_messages,
     current_user,
     forwarded_cookie_header,
+    forwarded_cookie_prefixes,
     origin_allowed,
     parse_get_session,
     plausible_session_token,
     session_cookie,
+    session_cookie_names,
     token_cache_key,
 )
 from app.config import Settings
@@ -170,11 +174,26 @@ def test_cache_key_is_the_sha256_of_the_raw_signed_value() -> None:
 def test_parse_get_session() -> None:
     assert parse_get_session(None) is None
     assert parse_get_session(session_body(email="  Test@Example.COM ")) == CurrentUser(
-        email="test@example.com", triptracker_user_id="usr_1"
+        email="test@example.com", auth_user_id="usr_1"
     )
     for malformed in ({}, {"user": None}, {"user": {"email": ""}}, {"user": {"email": 3}}, []):
         with pytest.raises(ValueError, match="get-session"):
             parse_get_session(malformed)
+    # Without `require_user_id` (TripTracker's provider) a missing id is tolerated.
+    assert parse_get_session({"user": {"email": "a@example.com"}}) == CurrentUser("a@example.com")
+
+
+def test_parse_get_session_requires_the_id_when_plans_store_it() -> None:
+    assert parse_get_session(session_body(), require_user_id=True) == CurrentUser(
+        email="test@example.com", auth_user_id="usr_1"
+    )
+    assert parse_get_session(None, require_user_id=True) is None  # signed out stays signed out
+    for user_id in (None, "", 7, ["usr_1"]):
+        body = {"user": {"email": "a@example.com", "id": user_id}}
+        with pytest.raises(ValueError, match="get-session user has no id"):
+            parse_get_session(body, require_user_id=True)
+    with pytest.raises(ValueError, match="get-session user has no id"):
+        parse_get_session({"user": {"email": "a@example.com"}}, require_user_id=True)
 
 
 def test_auth_errors_use_the_api_envelope() -> None:
@@ -478,7 +497,7 @@ def auth_app(settings: Settings, verifier: SessionVerifier | None) -> FastAPI:
 
     @app.get("/me")
     async def me(user: CurrentUserDep) -> dict[str, str | None]:
-        return {"email": user.email, "id": user.triptracker_user_id}
+        return {"email": user.email, "id": user.auth_user_id}
 
     @app.post("/change", dependencies=[RequireOrigin])
     async def change(user: CurrentUserDep) -> dict[str, str]:
@@ -927,3 +946,162 @@ async def test_an_implausible_cookie_is_401_without_asking_triptracker(
             assert response.json()["detail"]["code"] == "not_authenticated"
 
     assert route.call_count == 0
+
+
+# --- AUTH_MODE=atlas: the web app's own accounts ------------------------------------------------
+
+ATLAS_GET_SESSION_URL = f"{FRONTEND}{GET_SESSION_PATH}?disableRefresh=true"
+ATLAS_SECURE_COOKIE = "__Secure-atlas.session_token"
+ATLAS_PLAIN_COOKIE = "atlas.session_token"
+
+
+@pytest.fixture
+def atlas_settings(make_settings: Callable[..., Settings]) -> Settings:
+    return make_settings(auth_mode="atlas")
+
+
+def test_cookie_names_follow_the_prefix() -> None:
+    assert session_cookie_names() == (SECURE_COOKIE, PLAIN_COOKIE)
+    assert session_cookie_names("atlas") == (ATLAS_SECURE_COOKIE, ATLAS_PLAIN_COOKIE)
+    assert forwarded_cookie_prefixes() == ("__Secure-better-auth.", "better-auth.")
+    assert forwarded_cookie_prefixes("atlas") == ("__Secure-atlas.", "atlas.")
+
+
+def test_the_mode_decides_the_provider(make_settings: Callable[..., Settings]) -> None:
+    atlas = make_settings(auth_mode="atlas")
+    assert atlas.auth_origin == FRONTEND
+    assert atlas.auth_cookie_prefix == "atlas"
+    assert atlas.plans_carry_user_id is True
+
+    triptracker = make_settings(auth_mode="triptracker")
+    assert triptracker.auth_origin == TRIPTRACKER
+    assert triptracker.auth_cookie_prefix == "better-auth"
+    assert triptracker.plans_carry_user_id is False
+
+    local = make_settings(auth_mode="local")
+    assert local.plans_carry_user_id is False
+
+
+def test_messages_name_triptracker_only_in_its_mode(make_settings: Callable[..., Settings]) -> None:
+    assert auth_messages(make_settings(auth_mode="triptracker")) is AUTH_ERROR_MESSAGES
+    assert auth_messages(make_settings(auth_mode="atlas")) is ATLAS_AUTH_ERROR_MESSAGES
+    assert auth_messages(make_settings(auth_mode="local")) is ATLAS_AUTH_ERROR_MESSAGES
+    assert set(ATLAS_AUTH_ERROR_MESSAGES) == set(AuthErrorCode)
+    assert all("TripTracker" not in text for text in ATLAS_AUTH_ERROR_MESSAGES.values())
+    assert "TripTracker" in AUTH_ERROR_MESSAGES[AuthErrorCode.NOT_AUTHENTICATED]
+    error = auth_error(AuthErrorCode.NOT_AUTHENTICATED, ATLAS_AUTH_ERROR_MESSAGES)
+    assert error.detail == {
+        "code": "not_authenticated",
+        "message": "Accedi per usare il planner.",
+        "data": None,
+    }
+
+
+def test_pure_helpers_take_the_prefix() -> None:
+    request = make_request(
+        [
+            (
+                "cookie",
+                f"theme=dark; {SECURE_COOKIE}=tt.sig; {ATLAS_PLAIN_COOKIE}=at.sig; atlas.other=x",
+            )
+        ]
+    )
+    assert session_cookie(request) == (SECURE_COOKIE, "tt.sig")
+    assert session_cookie(request, "atlas") == (ATLAS_PLAIN_COOKIE, "at.sig")
+    assert forwarded_cookie_header(request) == f"{SECURE_COOKIE}=tt.sig"
+    assert (
+        forwarded_cookie_header(request, "atlas") == f"{ATLAS_PLAIN_COOKIE}=at.sig; atlas.other=x"
+    )
+
+
+async def test_atlas_mode_asks_the_web_app_and_forwards_only_its_cookies(
+    atlas_settings: Settings, http: httpx.AsyncClient, mock_tt: respx.MockRouter
+) -> None:
+    route = mock_tt.get(ATLAS_GET_SESSION_URL).respond(200, json=session_body())
+    app = auth_app(atlas_settings, SessionVerifier(atlas_settings, http))
+    cookie = f"{SECURE_COOKIE}={SIGNED_TOKEN}; {ATLAS_SECURE_COOKIE}={SIGNED_TOKEN}; theme=dark"
+
+    async with asgi_client(app) as client:
+        response = await client.get("/me", headers={"Cookie": cookie})
+
+    assert response.status_code == 200
+    assert response.json() == {"email": "test@example.com", "id": "usr_1"}
+    assert route.call_count == 1
+    assert route.calls.last.request.headers["cookie"] == f"{ATLAS_SECURE_COOKIE}={SIGNED_TOKEN}"
+    assert str(route.calls.last.request.url) == ATLAS_GET_SESSION_URL
+
+
+async def test_atlas_mode_ignores_triptrackers_cookie(
+    atlas_settings: Settings, http: httpx.AsyncClient, mock_tt: respx.MockRouter
+) -> None:
+    route = mock_tt.get(ATLAS_GET_SESSION_URL).respond(200, json=session_body())
+    app = auth_app(atlas_settings, SessionVerifier(atlas_settings, http))
+
+    async with asgi_client(app) as client:
+        response = await client.get("/me", headers={"Cookie": f"{SECURE_COOKIE}={SIGNED_TOKEN}"})
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == {
+        "code": "not_authenticated",
+        "message": ATLAS_AUTH_ERROR_MESSAGES[AuthErrorCode.NOT_AUTHENTICATED],
+        "data": None,
+    }
+    assert route.call_count == 0
+
+
+async def test_atlas_mode_failures_do_not_name_triptracker(
+    atlas_settings: Settings, http: httpx.AsyncClient, mock_tt: respx.MockRouter
+) -> None:
+    mock_tt.get(ATLAS_GET_SESSION_URL).respond(503)
+    app = auth_app(atlas_settings, SessionVerifier(atlas_settings, http))
+
+    async with asgi_client(app) as client:
+        response = await client.get(
+            "/me", headers={"Cookie": f"{ATLAS_PLAIN_COOKIE}={SIGNED_TOKEN}"}
+        )
+
+    assert response.status_code == 503
+    assert (
+        response.json()["detail"]["message"]
+        == "Non riesco a verificare l'accesso. Riprova tra poco."
+    )
+
+
+async def test_atlas_mode_treats_a_user_without_an_id_as_a_malformed_answer(
+    atlas_settings: Settings, http: httpx.AsyncClient, mock_tt: respx.MockRouter
+) -> None:
+    # New plans store the id in plans.user_id: a user without one is never let through as NULL.
+    body = session_body()
+    del body["user"]["id"]
+    route = mock_tt.get(ATLAS_GET_SESSION_URL).respond(200, json=body)
+    verifier = SessionVerifier(atlas_settings, http)
+    app = auth_app(atlas_settings, verifier)
+
+    async with asgi_client(app) as client:
+        response = await client.get(
+            "/me", headers={"Cookie": f"{ATLAS_PLAIN_COOKIE}={SIGNED_TOKEN}"}
+        )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == {
+        "code": "auth_unavailable",
+        "message": ATLAS_AUTH_ERROR_MESSAGES[AuthErrorCode.AUTH_UNAVAILABLE],
+        "data": None,
+    }
+    assert route.call_count == 1
+    assert len(verifier.cache) == 0  # a malformed answer is never cached
+
+
+async def test_triptracker_mode_still_accepts_a_user_without_an_id(
+    triptracker_settings: Settings, http: httpx.AsyncClient, mock_tt: respx.MockRouter
+) -> None:
+    assert triptracker_settings.plans_carry_user_id is False
+    route = mock_tt.get(GET_SESSION_URL).respond(200, json={"user": {"email": "test@example.com"}})
+    app = auth_app(triptracker_settings, SessionVerifier(triptracker_settings, http))
+
+    async with asgi_client(app) as client:
+        response = await client.get("/me", headers={"Cookie": f"{SECURE_COOKIE}={SIGNED_TOKEN}"})
+
+    assert response.status_code == 200
+    assert response.json() == {"email": "test@example.com", "id": None}
+    assert route.call_count == 1

@@ -13,6 +13,8 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   poweredByHeader: false,
+  // The Postgres driver of the app's own accounts (lib/auth.ts) runs as a Node module, not bundled.
+  serverExternalPackages: ["pg"],
   turbopack: {
     root: webDir,
     rules: {

@@ -22,6 +22,7 @@ from typing import Any, cast
 import httpx
 import pytest
 from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app import clock, sessions
@@ -34,7 +35,7 @@ from app.consumer import (
     ConsumerRegistry,
     PlanNotFoundError,
 )
-from app.db import EventRecord, PlanRecord, PlanStatus
+from app.db import EventRecord, PlanRecord, PlanStatus, UserRecord
 from app.fx import FxConverter
 from app.hub import PlanHub
 from app.lockfile import load_roster
@@ -53,6 +54,7 @@ from app.sessions import (
     PlannerServices,
     PlannerUnavailableError,
     PlanStateError,
+    UserGoneError,
     build_brief,
     continue_plan,
     get_user_plan,
@@ -341,6 +343,86 @@ async def test_start_plan_creates_the_session_with_budget_pins_and_metadata(
         (0, "status", TITLE_PLAN_CREATED)
     ]
     assert events[0].ma_event_id == f"backend:{plan_id}:status:created"
+
+
+async def test_start_plan_stores_the_users_id_only_with_the_apps_own_accounts(
+    make_settings: Callable[..., Settings],
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    # AUTH_MODE=atlas: the provider's user id is one of this backend's users.id, so it is kept.
+    atlas_settings = planner_settings(make_settings, auth_mode="atlas")
+    async with open_planner(atlas_settings, db_session_factory) as atlas:
+        async with db_session_factory() as db:
+            db.add(UserRecord(id="usr_atlas_1", email=USER.email))
+            await db.commit()
+        plan_id = await start_plan(
+            REQUEST, CurrentUser(USER.email, "usr_atlas_1"), services=atlas.services
+        )
+        plan = await load_plan(atlas.session_factory, plan_id)
+        assert plan.user_id == "usr_atlas_1"
+        assert plan.user_email == USER.email
+
+    # AUTH_MODE=triptracker: TripTracker's user id is not a users.id and never goes there.
+    triptracker_settings = planner_settings(make_settings, auth_mode="triptracker")
+    async with open_planner(triptracker_settings, db_session_factory) as triptracker:
+        plan_id = await start_plan(
+            REQUEST, CurrentUser(USER.email, "tt_usr_9"), services=triptracker.services
+        )
+        plan = await load_plan(triptracker.session_factory, plan_id)
+        assert plan.user_id is None
+        assert plan.user_email == USER.email
+
+
+async def test_start_plan_for_a_deleted_account_is_user_gone_not_a_crash(
+    make_settings: Callable[..., Settings],
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    # The session cache can keep a verified user for up to 15 minutes after the account (and its
+    # users row) is gone: the plans.user_id foreign key refuses the insert.
+    settings = planner_settings(make_settings, auth_mode="atlas")
+    async with open_planner(settings, db_session_factory) as atlas:
+        with pytest.raises(UserGoneError):
+            await start_plan(
+                REQUEST, CurrentUser(USER.email, "usr_deleted"), services=atlas.services
+            )
+        assert atlas.fake.created == []  # nothing spent
+        assert atlas.registry.started == []
+        async with atlas.session_factory() as db:
+            assert list(await db.scalars(select(PlanRecord.id))) == []
+            assert list(await db.scalars(select(EventRecord.plan_id))) == []
+
+
+class _FakeAsyncpgError(Exception):
+    """asyncpg's error: it names the constraint."""
+
+    def __init__(self, constraint_name: str | None) -> None:
+        super().__init__("fake")
+        self.constraint_name = constraint_name
+
+
+class _FakeAdaptedError(Exception):
+    """SQLAlchemy's asyncpg adapter error: the SQLSTATE, raised from asyncpg's error."""
+
+    def __init__(self, sqlstate: str, constraint_name: str | None) -> None:
+        super().__init__("fake")
+        self.sqlstate = sqlstate
+        self.__cause__ = _FakeAsyncpgError(constraint_name)
+
+
+@pytest.mark.parametrize(
+    ("sqlstate", "constraint", "expected"),
+    [
+        ("23503", "fk_plans_user_id_users", True),
+        ("23503", "fk_events_plan_id_plans", False),  # another foreign key
+        ("23505", "fk_plans_user_id_users", False),  # not a foreign key violation
+        ("23503", None, False),
+    ],
+)
+def test_only_the_plans_user_foreign_key_is_user_gone(
+    sqlstate: str, constraint: str | None, expected: bool
+) -> None:
+    error = IntegrityError("INSERT INTO plans ...", {}, _FakeAdaptedError(sqlstate, constraint))
+    assert sessions.is_plans_user_fk_violation(error) is expected
 
 
 async def test_start_plan_uses_the_brief_date_in_rome(planner: Planner) -> None:

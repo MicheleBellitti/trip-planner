@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { SessionRefresh } from "@/components/auth/session-refresh";
 import { LinkButton } from "@/components/ui/button";
 import { cx } from "@/components/ui/cx";
 import { Icon } from "@/components/ui/icon";
@@ -23,6 +24,8 @@ const SECTIONS = [
  * (each view keeps its single primary). One line, at most 72 px, no menu drawer at 393 px, 44 px targets under a finger (the 40 px
  * icon controls grow). `compact` is the live screen's slim top row; it has no toggle (the sticky
  * control bar carries it), and this file imports none, so the plan page ships no second copy.
+ * Every signed-in page draws this bar, so it also carries SessionRefresh, which keeps the session
+ * sliding.
  */
 export function AppHeaderBar({
   current,
@@ -35,6 +38,7 @@ export function AppHeaderBar({
 }) {
   return (
     <header className={cx(!compact && "border-b border-rule")}>
+      <SessionRefresh />
       <div
         className={cx(
           "mx-auto flex max-w-page items-center justify-between gap-2 px-4 lg:px-7",

@@ -9,6 +9,8 @@ export const ROUTES = {
   newPlan: "/new",
   evals: "/evals",
   demo: "/demo",
+  /** The app's own sign-in (Better Auth, lib/auth.ts); takes `?returnTo=<same-origin page>`. */
+  login: "/login",
 } as const;
 
 /** The public demo run exists (step 3): the landing offers "Guarda una corsa" → /demo. Off, the

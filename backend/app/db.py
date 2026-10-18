@@ -1,8 +1,10 @@
 """Database schema (SQLAlchemy 2, async) and session plumbing.
 
 Tables follow the "Tabelle" section of the implementation doc: `plans`, `events`, `fx_rates`,
-plus `destination_covers` (the Wikimedia cover photo cache, app/covers.py) and `eval_runs`
-(the uploaded eval results, app/evals_store.py).
+plus `destination_covers` (the Wikimedia cover photo cache, app/covers.py), `eval_runs`
+(the uploaded eval results, app/evals_store.py) and the web app's own Better Auth tables
+(`users`, `auth_sessions`, `auth_accounts`, `auth_verifications`; web/lib/auth.ts writes them,
+the backend reads `users` and stores `users.id` on plans).
 Every change here ships with an Alembic migration in backend/migrations/ (one per PR);
 tests/test_db.py fails when the models and the migrations drift apart.
 """
@@ -77,6 +79,39 @@ class Base(DeclarativeBase):
     }
 
 
+class UserRecord(Base):
+    """An account of the web app's own Better Auth (web/lib/auth.ts; AUTH_MODE=atlas).
+
+    Better Auth's core `user` model, with snake_case columns through its `fields` mapping. The
+    web app writes these rows (sign-up, profile), the backend only reads them and stores `id`
+    on new plans (`PlanRecord.user_id`). Deleting a user deletes their plans, sessions and
+    linked accounts (ON DELETE CASCADE): the "delete my account" path of the data-rights work.
+    `name` is Better Auth's required display name; a magic-link sign-up leaves it empty.
+
+    No code deletes a `users` row yet. The future delete-account path must not just delete it:
+    the cascade removes `plans` rows and nothing else, so it would leave their Managed Agents
+    sessions behind (still running, or kept past the retention with nothing pointing at them
+    until the orphan sweep). Before deleting the row it must, for every plan of that user, stop
+    the plan's consumer and delete its session the way `jobs._delete_old_plan` does (session
+    first, then row; a session that cannot be deleted yet keeps the account for a retry). It
+    must also accept that the deleted plans' `cost_cents` leave `sessions.monthly_spend_cents()`,
+    so the month's spend drops by what that user spent (keep a per-month total first if the
+    monthly limit has to keep counting it).
+    """
+
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    name: Mapped[str] = mapped_column(Text, default="", server_default=text("''"))
+    email: Mapped[str] = mapped_column(Text, unique=True)
+    email_verified: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false")
+    )
+    image: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[dt.datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[dt.datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+
 class PlanRecord(Base):
     """One planning run: the request, its Managed Agents session, the result and its cost."""
 
@@ -87,6 +122,14 @@ class PlanRecord(Base):
         primary_key=True, default=uuid.uuid4, server_default=func.gen_random_uuid()
     )
     user_email: Mapped[str] = mapped_column(Text)
+    # The owner's `users.id` when the user signed in with the web app's own accounts
+    # (AUTH_MODE=atlas, `Settings.plans_carry_user_id`); NULL for plans of TripTracker's one user
+    # and of AUTH_MODE=local. Ownership is still decided by `user_email` until the switch.
+    # ON DELETE CASCADE is deliberate: a deleted account takes its plans with it. Whoever deletes
+    # a `users` row deletes these plans' sessions first (`UserRecord`'s docstring).
+    user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
     # Managed Agents session id; NULL until the session has been created.
     session_id: Mapped[str | None] = mapped_column(Text)
     agent_profile: Mapped[str] = mapped_column(Text)
@@ -140,6 +183,63 @@ class EventRecord(Base):
     cost_cents: Mapped[int | None] = mapped_column(Integer)
     # Managed Agents event id: unique, so a resumed consumer never stores an event twice.
     ma_event_id: Mapped[str | None] = mapped_column(Text, unique=True)
+
+
+class AuthSessionRecord(Base):
+    """A Better Auth session of the web app's own accounts (its core `session` model).
+
+    The web app writes and reads these; the backend never does (it asks the web app's
+    get-session endpoint, app/auth.py), but Alembic owns the table like every other one, so one
+    `alembic upgrade head` prepares a database for both services (`tests/test_db.py` keeps the
+    models and the migrations together). `token` is the session token the signed cookie carries.
+    """
+
+    __tablename__ = "auth_sessions"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    token: Mapped[str] = mapped_column(Text, unique=True)
+    expires_at: Mapped[dt.datetime]
+    ip_address: Mapped[str | None] = mapped_column(Text)
+    user_agent: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[dt.datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[dt.datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+
+class AuthAccountRecord(Base):
+    """A sign-in method linked to a user (Better Auth's core `account` model): the Google
+    account (`provider_id` "google", with its tokens) or the magic-link credential. The backend
+    never reads it; the web app owns it."""
+
+    __tablename__ = "auth_accounts"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    account_id: Mapped[str] = mapped_column(Text)
+    provider_id: Mapped[str] = mapped_column(Text)
+    access_token: Mapped[str | None] = mapped_column(Text)
+    refresh_token: Mapped[str | None] = mapped_column(Text)
+    id_token: Mapped[str | None] = mapped_column(Text)
+    access_token_expires_at: Mapped[dt.datetime | None]
+    refresh_token_expires_at: Mapped[dt.datetime | None]
+    scope: Mapped[str | None] = mapped_column(Text)
+    password: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[dt.datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[dt.datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+
+class AuthVerificationRecord(Base):
+    """A pending verification of Better Auth (its core `verification` model): a magic-link
+    token or an OAuth state, keyed by `identifier`, gone after `expires_at`. The web app owns it."""
+
+    __tablename__ = "auth_verifications"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    identifier: Mapped[str] = mapped_column(Text, index=True)
+    value: Mapped[str] = mapped_column(Text)
+    expires_at: Mapped[dt.datetime]
+    created_at: Mapped[dt.datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[dt.datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 
 
 class FxRateRecord(Base):
