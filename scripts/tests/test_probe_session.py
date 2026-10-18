@@ -7,7 +7,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import probe_session as ps
 import pytest
@@ -31,7 +31,7 @@ def no_client(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_every_probe_of_the_checklist_is_implemented() -> None:
-    assert tuple(f"P{n}" for n in range(1, 14)) == ps.PROBE_IDS
+    assert tuple(f"P{n}" for n in range(1, 15)) == ps.PROBE_IDS
     notes = (REPO_ROOT / "docs" / "managed-agents-notes.md").read_text(encoding="utf-8")
     for probe_id in ps.PROBE_IDS:
         assert f"| {probe_id} |" in notes
@@ -42,8 +42,9 @@ def test_only_parses_and_adds_dependencies() -> None:
     assert ps.parse_only("P7") == ["P6", "P7"]
     assert ps.parse_only("P13") == ["P8", "P13"]
     assert ps.parse_only(None) == list(ps.PROBE_IDS)
+    assert ps.parse_only("P14") == ["P14"]
     with pytest.raises(argparse.ArgumentTypeError):
-        ps.parse_only("P14")
+        ps.parse_only("P15")
 
 
 def test_parse_args_defaults_and_limits() -> None:
@@ -80,6 +81,25 @@ def test_dry_run_prints_the_plan_without_network(no_client: None, tmp_path: Path
         assert f"  {probe_id} " in out
     assert "each capped at 100 US cents" in out
     assert not any(tmp_path.iterdir())
+
+
+def test_dry_run_of_p14_alone_stays_under_a_dollar(no_client: None, tmp_path: Path) -> None:
+    code, out = run("--dry-run", "--only", "P14", "--report-dir", str(tmp_path))
+    assert code == 0
+    assert "  P14  Custom tool wait" in out
+    assert "  P14: ask_traveller (custom) left unanswered 240 s" in out
+    assert "each capped at 100 US cents (P14: 25)" in out
+    assert "worst case about 50 cents" in out
+    assert not any(tmp_path.iterdir())
+
+
+def test_p14_message_delegates_before_the_custom_tool() -> None:
+    text = ps.p14_message("probe-20261018120000-p14-worker")
+    assert text.index("Delegate") < text.index("call ask_traveller")
+    assert "without waiting for its report" in text
+    assert f"{ps.P14_SLEEPS} times" in text
+    assert ps.P14_TOOL["name"] == "ask_traveller"
+    assert ps.P14_TOOL["type"] == "custom"
 
 
 def test_without_yes_nothing_runs(no_client: None, tmp_path: Path) -> None:
@@ -186,6 +206,126 @@ def test_event_helpers() -> None:
         "lastminute.com",
     }
     assert ps.json_diff({"a": 1, "b": [1, 2]}, {"a": 1, "b": [1, 3], "c": 0}) == ["/b[1] changed"]
+
+
+def test_p14_helpers() -> None:
+    origin = ps.parse_time("2026-10-18T10:00:00Z")
+    assert origin == dt.datetime(2026, 10, 18, 10, tzinfo=dt.UTC)
+    assert ps.parse_time("2026-10-18T10:04:05.123456789Z") == dt.datetime(
+        2026, 10, 18, 10, 4, 5, 123456, tzinfo=dt.UTC
+    )
+    assert ps.parse_time("2026-10-18T10:00:00") is None  # naive: not a server timestamp
+    assert ps.parse_time(None) is None
+    assert ps.since("2026-10-18T10:04:05Z", origin) == "+245s"
+    assert ps.since("2026-10-18T09:59:58Z", origin) == "-2s"
+    assert ps.since("garbage", origin) == "?"
+    assert (
+        ps.label(
+            {
+                "type": "session.thread_status_idle",
+                "agent_name": "probe-20261018120000-p14-worker",
+                "stop_reason": {"type": "end_turn"},
+            }
+        )
+        == "session.thread_status_idle[p14-worker]:end_turn"
+    )
+    assert ps.label({"type": "user.custom_tool_result", "is_error": True}) == (
+        "user.custom_tool_result:is_error"
+    )
+    before = ps.cache_counts(
+        {
+            "input_tokens": 10,
+            "cache_read_input_tokens": 100,
+            "cache_creation": {"ephemeral_5m_input_tokens": 50, "ephemeral_1h_input_tokens": None},
+        }
+    )
+    after = ps.cache_counts(
+        {
+            "input_tokens": 12,
+            "cache_read_input_tokens": 900,
+            "cache_creation": {"ephemeral_5m_input_tokens": 80},
+        }
+    )
+    assert ps.counts_delta(before, after) == {
+        "input": 2,
+        "cache_read": 800,
+        "cache_write": 0,
+        "write_5m": 30,
+        "write_1h": 0,
+        "output": 0,
+    }
+    span = ps.cache_counts({"cache_creation_input_tokens": 7, "cache_read_input_tokens": 3})
+    assert (span["cache_write"], span["cache_read"]) == (7, 3)
+
+
+def test_cache_after_wait_places_requests_by_their_start() -> None:
+    """The 2026-10-18 run: the request that makes the custom tool call ends after the
+    `agent.custom_tool_use` event, so it must still count as the request before the wait."""
+
+    def span(kind: str, ident: str, at: str, **extra: Any) -> dict[str, Any]:
+        return {"type": f"span.model_request_{kind}", "id": ident, "processed_at": at, **extra}
+
+    history = [
+        span("start", "s1", "2026-10-18T17:00:55.899690Z"),
+        {
+            "type": "agent.custom_tool_use",
+            "id": "ask",
+            "processed_at": "2026-10-18T17:00:57.046615Z",
+        },
+        span(
+            "end",
+            "e1",
+            "2026-10-18T17:00:57.046616Z",
+            model_request_start_id="s1",
+            model_usage={"input_tokens": 4, "cache_creation_input_tokens": 6061},
+        ),
+        span("start", "w1", "2026-10-18T17:01:00Z", session_thread_id="sthr_worker"),
+        {"type": "user.custom_tool_result", "processed_at": "2026-10-18T17:04:58.549621Z"},
+        span("start", "s2", "2026-10-18T17:04:58.726929Z"),
+        span(
+            "end",
+            "e2",
+            "2026-10-18T17:04:59.579522Z",
+            model_request_start_id="s2",
+            model_usage={
+                "input_tokens": 2,
+                "cache_read_input_tokens": 6061,
+                "cache_creation_input_tokens": 378,
+            },
+        ),
+    ]
+    assert [start for start, _ in ps.primary_requests(history)] == [
+        ps.parse_time("2026-10-18T17:00:55.899690Z"),
+        ps.parse_time("2026-10-18T17:04:58.726929Z"),
+    ]
+    found = ps.cache_after_wait(
+        history,
+        ps.parse_time("2026-10-18T17:00:57.046615Z"),
+        ps.parse_time("2026-10-18T17:04:58.549621Z"),
+    )
+    assert found is not None
+    detail, verdict = found
+    assert "(prompt 6065)" in detail
+    assert "start-to-start gap 243 s" in detail
+    assert verdict.endswith("read 6061 of the earlier 6065-token prompt from the cache: WARM")
+    assert ps.cache_after_wait(history, None, None) is None
+
+
+def test_error_detail_keeps_the_api_message_only() -> None:
+    rejected = ValueError("ignored")
+    rejected.status_code = 400  # type: ignore[attr-defined]
+    rejected.body = {"error": {"type": "invalid_request_error", "message": "x" * 300}}  # type: ignore[attr-defined]
+
+    assert ps.error_detail(rejected) == "400 invalid_request_error: " + "x" * 200
+    assert ps.error_detail(ValueError("no body")) == "ValueError"
+
+
+def test_session_recorder_waits_for_recorded_events() -> None:
+    recorder = ps.SessionRecorder(cast(Any, None), "sesn_test")
+    recorder.events += [{"type": "a"}, {"type": "b"}, {"type": "a"}]
+    assert recorder.wait_for(lambda e: e["type"] == "a", timeout=0) == (0, {"type": "a"})
+    assert recorder.wait_for(lambda e: e["type"] == "a", after=1, timeout=0) == (2, {"type": "a"})
+    assert recorder.wait_for(lambda e: e["type"] == "c", timeout=0.05) is None
 
 
 def test_p5_step_4_fetches_a_url_only_the_model_builds() -> None:

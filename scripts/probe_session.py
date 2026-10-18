@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Live probes P1..P13 of docs/managed-agents-notes.md section 4, development profile only.
+"""Live probes P1..P14 of docs/managed-agents-notes.md section 4, development profile only.
 
 The probes answer what the docs and the SDK could not settle offline: MCP reachability and
 tool names (P4), web tools under `limited` networking (P5), inter-agent tools and thread reuse
 (P6), stream ids and cross-posts (P7), the custom-tool round trip (P8), budget pause and resume
 (P9), interrupt and cleanup races (P10), skill pinning (P11), `ant apply` and the `multiagent`
-update semantics (P12), and the usage fields (P13). Each finding lands in a Markdown report,
+update semantics (P12), the usage fields (P13), and a custom tool left waiting four minutes
+with a subagent at work (P14). Each finding lands in a Markdown report,
 docs/probes/<YYYY-MM-DD>.md, that the owners of the open seams read.
 
 It SPENDS REAL MONEY, so it never runs by itself:
@@ -17,8 +18,9 @@ It SPENDS REAL MONEY, so it never runs by itself:
 Guards: the development workspace only (ANTHROPIC_API_KEY from the environment, or the
 federation variables ANTHROPIC_IDENTITY_TOKEN_FILE, ANTHROPIC_FEDERATION_RULE_ID and
 ANTHROPIC_ORGANIZATION_ID; never production credentials), never from CI (refuses when CI is
-set), every session capped at the development profile's session budget (60 US cents; P9 uses
-3), and no new session once the sessions' list cost reaches --max-total-cents (default 150).
+set), every session capped at the development profile's session budget (100 US cents; P9
+uses 3, P14 25), and no new session once the sessions' list cost reaches --max-total-cents
+(default 150).
 Every resource it creates is named `probe-<stamp>-...` and removed at the end: sessions
 deleted, agents archived (agents have no delete), environments deleted, skills deleted. The
 raw SSE log goes to --sse-log, by default under the system temp directory and never into the
@@ -78,6 +80,29 @@ P5_PROMPT = (
     "geocoder: build its API URL yourself and web_fetch it directly, without searching first.\n"
     "Report for each step only: ok, or the error code."
 )
+P14_BUDGET_CENTS = 25
+"""P14's cap per session: two Haiku sessions of a few cents each, so P14 alone stays at 50 cents
+in the worst case."""
+P14_WAIT_SECONDS = 240.0
+"""How long P14 leaves the custom tool unanswered: the choice cards' timeout
+(`CHOICE_TIMEOUT_SECONDS`, docs/superpowers/specs/2026-10-18-plan-creation-ux-design.md §2)."""
+P14_INTERRUPT_AFTER_SECONDS = 20.0
+"""How long P14's second session waits on the custom tool before the interrupt."""
+P14_POLL_SECONDS = 20.0
+P14_SLEEPS = 6
+"""The worker's slow task: this many `sleep 30` bash calls, about three minutes, so it is still
+working when the coordinator starts waiting and, if it keeps running, done before the answer."""
+P14_TOOL: dict[str, Any] = {
+    "type": "custom",
+    "name": "ask_traveller",
+    "description": "Ask the traveller to choose. The traveller's answer is the tool result.",
+    "input_schema": {
+        "type": "object",
+        "properties": {"question": {"type": "string"}},
+        "required": ["question"],
+    },
+}
+P14_ANSWER = "The traveller chose: c1."
 URL_PATTERN = re.compile(r"https?://[^\s\"'<>\\)]+")
 PING = "_probe.ping"
 
@@ -90,6 +115,8 @@ class Probe:
     sessions: int
     """Sessions it creates (each capped at the session budget)."""
     run: Callable[[ProbeContext], ProbeResult]
+    budget_cents: int | None = None
+    """The cap of each of its sessions when it is not the profile's session budget."""
 
 
 @dataclass
@@ -443,6 +470,71 @@ class ThreadFollower(threading.Thread):
         self.join(timeout=5)
 
 
+class SessionRecorder(threading.Thread):
+    """Records the session stream (raw SSE) in the background, P14: the probe opens it before
+    sending anything, then sleeps, polls and answers on its own clock and waits on the recorded
+    events with wait_for(), so no timing depends on the server's heartbeats."""
+
+    def __init__(self, ctx: ProbeContext, session_id: str) -> None:
+        super().__init__(daemon=True)
+        self.ctx, self.session_id = ctx, session_id
+        self.events: list[dict[str, Any]] = []
+        self.opened = threading.Event()
+        self.error: str | None = None
+        self._changed = threading.Condition()
+        self._closed = False
+        self._response: Any = None
+
+    def run(self) -> None:
+        from anthropic import Stream
+
+        try:
+            with self.ctx.client.beta.sessions.events.with_streaming_response.stream(
+                self.session_id
+            ) as response:
+                self._response = response
+                self.opened.set()
+                for event in self.ctx._events(
+                    Stream.raw_events(response.http_response), f"session:{self.session_id}"
+                ):
+                    if event.get("type") == PING:
+                        continue
+                    event["_received_at"] = time.monotonic()
+                    with self._changed:
+                        self.events.append(event)
+                        self._changed.notify_all()
+        except Exception as exc:  # closed by stop(), or a real error
+            self.error = type(exc).__name__
+        finally:
+            self.opened.set()
+            with self._changed:
+                self._closed = True
+                self._changed.notify_all()
+
+    def wait_for(
+        self, predicate: Callable[[dict[str, Any]], bool], *, after: int = 0, timeout: float
+    ) -> tuple[int, dict[str, Any]] | None:
+        """The first recorded event from index `after` on that matches, waiting up to `timeout`
+        seconds for it; None on timeout or once the stream has closed."""
+        deadline = time.monotonic() + timeout
+        with self._changed:
+            while True:
+                for index in range(after, len(self.events)):
+                    if predicate(self.events[index]):
+                        return index, self.events[index]
+                after = max(after, len(self.events))
+                left = deadline - time.monotonic()
+                if left <= 0 or self._closed:
+                    return None
+                self._changed.wait(left)
+
+    def stop(self) -> None:
+        if self._response is not None:
+            with contextlib.suppress(Exception):
+                self._response.http_response.close()
+        self.join(timeout=5)
+
+
 # --- event helpers ----------------------------------------------------------------------------
 
 
@@ -509,6 +601,128 @@ def json_diff(sent: Any, echoed: Any, path: str = "") -> list[str]:
             for d in json_diff(a, b, f"{path}[{i}]")
         ]
     return [] if sent == echoed else [f"{path} changed"]
+
+
+def error_detail(exc: BaseException) -> str:
+    """error_status plus the API's own error message (never request content), shortened."""
+    body = getattr(exc, "body", None)
+    message = ""
+    if isinstance(body, Mapping):
+        error = body.get("error")
+        if isinstance(error, Mapping):
+            message = str(error.get("message") or "")
+    return f"{error_status(exc)}{': ' + message[:200] if message else ''}"
+
+
+def parse_time(value: Any) -> dt.datetime | None:
+    """An event's `processed_at` as an aware datetime (digits past microseconds dropped)."""
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        moment = dt.datetime.fromisoformat(re.sub(r"(\.\d{6})\d+", r"\1", value))
+    except ValueError:
+        return None
+    return moment if moment.tzinfo else None
+
+
+def since(value: Any, origin: dt.datetime | None) -> str:
+    """Seconds from `origin` to a `processed_at`, as "+12s"; "?" when either is unknown."""
+    moment = parse_time(value)
+    if moment is None or origin is None:
+        return "?"
+    return f"{(moment - origin).total_seconds():+.0f}s"
+
+
+def label(event: Mapping[str, Any]) -> str:
+    """An event as type[agent]:stop_reason (:is_error), with the probe stamp left out."""
+    text = str(event.get("type"))
+    agent = event.get("agent_name")
+    if agent:
+        text += "[" + re.sub(r"^probe-\d{14}-", "", str(agent)) + "]"
+    reason = stop_reason(event)
+    if reason:
+        text += f":{reason}"
+    if event.get("is_error"):
+        text += ":is_error"
+    return text
+
+
+def cache_counts(usage: Mapping[str, Any] | None) -> dict[str, int]:
+    """The token counts of a usage object (thread, session or span `model_usage`)."""
+    usage = usage or {}
+    creation = usage.get("cache_creation") or {}
+    return {
+        "input": int(usage.get("input_tokens") or 0),
+        "cache_read": int(usage.get("cache_read_input_tokens") or 0),
+        "cache_write": int(usage.get("cache_creation_input_tokens") or 0),
+        "write_5m": int(creation.get("ephemeral_5m_input_tokens") or 0),
+        "write_1h": int(creation.get("ephemeral_1h_input_tokens") or 0),
+        "output": int(usage.get("output_tokens") or 0),
+    }
+
+
+def counts_delta(before: Mapping[str, int], after: Mapping[str, int]) -> dict[str, int]:
+    return {key: after[key] - before.get(key, 0) for key in after}
+
+
+def primary_requests(
+    history: list[dict[str, Any]],
+) -> list[tuple[dt.datetime | None, dict[str, Any]]]:
+    """The primary thread's model requests as (start time, `span.model_request_end`), in order.
+    A request is placed by its start: the one that makes a custom tool call ends after the
+    `agent.custom_tool_use` event."""
+    spans = [
+        e
+        for e in history
+        if str(e.get("type")).startswith("span.model_request") and not e.get("session_thread_id")
+    ]
+    starts = {
+        e.get("id"): parse_time(e.get("processed_at"))
+        for e in spans
+        if e.get("type") == "span.model_request_start"
+    }
+    return [
+        (starts.get(e.get("model_request_start_id")), e)
+        for e in spans
+        if e.get("type") == "span.model_request_end"
+    ]
+
+
+def cache_after_wait(
+    history: list[dict[str, Any]], asked: dt.datetime | None, answered: dt.datetime | None
+) -> tuple[str, str] | None:
+    """P14's Q3 from the session history: the coordinator's last request started before the
+    custom tool call against its first request started after the answer. Returns (detail,
+    verdict), or None without a request on both sides."""
+    if asked is None or answered is None:
+        return None
+    requests = [(start, end) for start, end in primary_requests(history) if start]
+    before = next(((s, e) for s, e in reversed(requests) if s <= asked), None)
+    after = next(((s, e) for s, e in requests if s >= answered), None)
+    if before is None or after is None:
+        return None
+    b = cache_counts(before[1].get("model_usage"))
+    a = cache_counts(after[1].get("model_usage"))
+    prompt = b["input"] + b["cache_read"] + b["cache_write"]
+    gap = (after[0] - before[0]).total_seconds()
+    detail = (
+        f"coordinator request before the wait: input {b['input']}, cache_read {b['cache_read']}, "
+        f"cache_write {b['cache_write']} (prompt {prompt}); first request after the answer: input "
+        f"{a['input']}, cache_read {a['cache_read']}, cache_write {a['cache_write']}; "
+        f"start-to-start gap {gap:.0f} s"
+    )
+    warmth = (
+        "COLD (nothing read from the cache)"
+        if a["cache_read"] == 0
+        else "WARM"
+        if a["cache_read"] >= 0.8 * prompt
+        else "PARTLY warm"
+    )
+    verdict = (
+        f"the first coordinator request after a {gap:.0f} s start-to-start gap read "
+        f"{a['cache_read']} of the earlier {prompt}-token prompt from the cache: {warmth}"
+    )
+    return detail, verdict
 
 
 # --- the probes -------------------------------------------------------------------------------
@@ -1293,6 +1507,433 @@ def p13_usage(ctx: ProbeContext) -> ProbeResult:
     return result
 
 
+def p14_message(worker_name: str) -> str:
+    task = (
+        f"Run the bash command `sleep 30 && date -u +%T` {P14_SLEEPS} times, one bash call per "
+        f"run, each after the previous one has finished. Then reply with the {P14_SLEEPS} times."
+    )
+    return (
+        f"1. Delegate this task to {worker_name}: '{task}'\n"
+        f"2. Right after delegating, without waiting for its report, call {P14_TOOL['name']} "
+        "with the question 'Pick one'.\n"
+        f"3. When {P14_TOOL['name']} answers, reply 'ok'.\n"
+        f"4. When {worker_name}'s report arrives, reply 'done' and stop."
+    )
+
+
+def short_name(name: Any) -> str:
+    return re.sub(r"^probe-\d{14}-", "", str(name))
+
+
+def _is_ask(event: Mapping[str, Any]) -> bool:
+    return event.get("type") == "agent.custom_tool_use" and event.get("name") == P14_TOOL["name"]
+
+
+def _refers_to(event: Mapping[str, Any], tool_use_id: str) -> bool:
+    return tool_use_id in (event.get("custom_tool_use_id"), event.get("tool_use_id"))
+
+
+def _p14_agents(ctx: ProbeContext) -> tuple[dict[str, Any], dict[str, Any]]:
+    """A Haiku worker with bash only, and a Haiku coordinator with the stand-in for
+    `ask_traveller` and the worker as its only predefined subagent."""
+    worker = ctx.agent(
+        "p14-worker",
+        system="You are a probe worker. Do exactly what you are asked, one tool call at a time, "
+        "briefly.",
+        tools=[
+            {
+                "type": "agent_toolset_20260401",
+                "default_config": {"enabled": False},
+                "configs": [{"name": "bash", "enabled": True}],
+            }
+        ],
+    )
+    coordinator = ctx.agent(
+        "p14-coordinator",
+        system="You are a probe coordinator. Follow the user's numbered steps exactly, in order, "
+        "and briefly.",
+        tools=[
+            {
+                "type": "agent_toolset_20260401",
+                "default_config": {"enabled": False},
+                "configs": [{"name": "read", "enabled": True}],
+            },
+            dict(P14_TOOL),
+        ],
+        multiagent={
+            "type": "multiagent_20261001",
+            "subagents": {
+                "type": "enabled",
+                "inline_agents": {"type": "disabled"},
+                "predefined_agents": [
+                    {"type": "agent", "id": worker["id"], "version": worker["version"]}
+                ],
+            },
+            "workflows": {"type": "disabled"},
+            "advisor": {"type": "disabled"},
+        },
+    )
+    return worker, coordinator
+
+
+def _p14_answer(ctx: ProbeContext, session_id: str, tool_use_id: str) -> str:
+    try:
+        ctx.once.beta.sessions.events.send(
+            session_id,
+            events=[
+                {
+                    "type": "user.custom_tool_result",
+                    "custom_tool_use_id": tool_use_id,
+                    "content": [{"type": "text", "text": P14_ANSWER}],
+                    "is_error": False,
+                }
+            ],
+        )
+        return "accepted"
+    except Exception as exc:
+        return error_detail(exc)
+
+
+def _p14_statuses(ctx: ProbeContext, session_id: str) -> str:
+    """The session's status and each thread's, read from the API."""
+    try:
+        status = ctx.raw(ctx.client.beta.sessions.with_raw_response.retrieve(session_id))["status"]
+        threads = ctx.raw(ctx.client.beta.sessions.threads.with_raw_response.list(session_id)).get(
+            "data", []
+        )
+    except Exception as exc:
+        return f"status read failed {error_status(exc)}"
+    names = [
+        "primary"
+        if t.get("parent_thread_id") is None
+        else short_name((t.get("agent") or {}).get("name"))
+        for t in threads
+    ]
+    parts = sorted(f"{name}={t.get('status')}" for name, t in zip(names, threads, strict=True))
+    return f"session {status}, threads {', '.join(parts)}"
+
+
+def _p14_primary_usage(ctx: ProbeContext, session_id: str) -> dict[str, int] | None:
+    """The coordinator's (primary thread's) cumulative usage; None while the API has none."""
+    with contextlib.suppress(Exception):
+        threads = ctx.raw(ctx.client.beta.sessions.threads.with_raw_response.list(session_id)).get(
+            "data", []
+        )
+        primary = next((t for t in threads if t.get("parent_thread_id") is None), None)
+        if primary is not None:
+            detail = ctx.raw(
+                ctx.client.beta.sessions.threads.with_raw_response.retrieve(
+                    primary["id"], session_id=session_id
+                )
+            )
+            if detail.get("usage"):
+                return cache_counts(detail["usage"])
+    return None
+
+
+def _p14_wait(
+    ctx: ProbeContext, result: ProbeResult, worker: dict[str, Any], coordinator: dict[str, Any]
+) -> dict[str, str]:
+    """Session 1, Q1 and Q3: the worker while the custom tool waits P14_WAIT_SECONDS, then the
+    coordinator's first request after the answer."""
+    session_id = ctx.session(
+        coordinator,
+        ctx.environment("unrestricted"),
+        budget_cents=P14_BUDGET_CENTS,
+        label="p14-wait",
+    )
+    recorder = SessionRecorder(ctx, session_id)
+    recorder.start()
+    recorder.opened.wait(30)
+    polls: list[str] = []
+    extra_asks = 0
+    before: dict[str, int] | None = None
+    after: dict[str, int] | None = None
+    try:
+        ctx.send_message(session_id, p14_message(worker["name"]))
+        found = recorder.wait_for(_is_ask, timeout=TURN_TIMEOUT_SECONDS)
+        if found is None:
+            result.add(
+                f"wait session {session_id}: no {P14_TOOL['name']} call; last events "
+                f"{[label(e) for e in recorder.events[-12:]]}"
+            )
+            result.status = "unexpected"
+            return {}
+        index, ask = found
+        asked = float(ask["_received_at"])
+        recorder.wait_for(lambda e: e.get("type") == "session.status_idle", after=index, timeout=60)
+        before = _p14_primary_usage(ctx, session_id)
+        last = None
+        while (left := asked + P14_WAIT_SECONDS - time.monotonic()) > 0:
+            snapshot = _p14_statuses(ctx, session_id)
+            if snapshot != last:
+                polls.append(f"+{time.monotonic() - asked:.0f}s {snapshot}")
+                last = snapshot
+            time.sleep(min(P14_POLL_SECONDS, left))
+        answer = _p14_answer(ctx, session_id, ask["id"])
+        answered = time.monotonic() - asked
+        while True:  # another call of the tool is answered at once; stop at the final idle
+            found = recorder.wait_for(
+                lambda e: is_final_idle(e) or _is_ask(e),
+                after=index + 1,
+                timeout=TURN_TIMEOUT_SECONDS,
+            )
+            if found is None:
+                result.add(
+                    f"wait session: no final idle within {TURN_TIMEOUT_SECONDS:.0f} s of the answer"
+                )
+                result.status = "unexpected"
+                break
+            index, event = found
+            if not _is_ask(event):
+                break
+            extra_asks += 1
+            _p14_answer(ctx, session_id, event["id"])
+        after = _p14_primary_usage(ctx, session_id)
+        end_statuses = _p14_statuses(ctx, session_id)
+    finally:
+        recorder.stop()
+
+    history = ctx.history(session_id)
+    ask_id = str(ask["id"])
+    listed_ask = next((e for e in history if e.get("id") == ask_id), ask)
+    t_ask = parse_time(listed_ask.get("processed_at"))
+    echo = next(
+        (
+            e
+            for e in history
+            if e.get("type") == "user.custom_tool_result" and e.get("custom_tool_use_id") == ask_id
+        ),
+        None,
+    )
+    t_answer = parse_time(echo.get("processed_at")) if echo else None
+    created = [
+        e
+        for e in history
+        if e.get("type") == "session.thread_created" and e.get("agent_name") == worker["name"]
+    ]
+    result.add(
+        f"wait session {session_id}: {P14_TOOL['name']} call {ask_id}; worker thread created at "
+        f"{since(created[0].get('processed_at'), t_ask) if created else 'never'} from the call; "
+        f"answer sent {answered:.0f} s after the call reached the stream ({answer}), echoed at "
+        f"{since(echo.get('processed_at'), t_ask) if echo else 'never'}; further calls answered "
+        f"at once: {extra_asks}"
+    )
+
+    def moment(event: Mapping[str, Any]) -> dt.datetime | None:
+        return parse_time(event.get("processed_at"))
+
+    def waiting(event: Mapping[str, Any]) -> bool:
+        at = moment(event)
+        return bool(at and t_ask and t_answer and t_ask < at < t_answer)
+
+    quiet = ("agent.thinking", "span.model_request_start")
+    worker_events = (
+        ctx.thread_history(session_id, str(created[0]["session_thread_id"])) if created else []
+    )
+    result.add(
+        "worker thread history (seconds from the call): "
+        + (
+            ", ".join(
+                f"{label(e)} {since(e.get('processed_at'), t_ask)}"
+                for e in worker_events
+                if e.get("type") not in quiet
+            )
+            or "empty"
+        )
+    )
+    primary_wait = [
+        e
+        for e in history
+        if waiting(e)
+        and not (e.get("session_thread_id") and str(e.get("type")).startswith(("agent.", "span.")))
+    ]
+    result.add(
+        "session history during the wait (seconds from the call): "
+        + (
+            ", ".join(f"{label(e)} {since(e.get('processed_at'), t_ask)}" for e in primary_wait)
+            or "nothing"
+        )
+    )
+    result.add("polled statuses during the wait (seconds from the call): " + "; ".join(polls))
+    work_types = ("agent.tool_use", "agent.tool_result", "span.model_request_end")
+    work_waiting = [e for e in worker_events if waiting(e) and e.get("type") in work_types]
+    work_later = [
+        e
+        for e in worker_events
+        if e.get("type") in work_types and t_answer and (moment(e) or t_answer) > t_answer
+    ]
+    coordinator_requests = [
+        start
+        for start, _ in primary_requests(history)
+        if start and t_ask and t_answer and t_ask < start < t_answer
+    ]
+    later_idles = [e for e in primary_wait if e.get("type") == "session.status_idle"][1:]
+    sent = next((e for e in worker_events if e.get("type") == "agent.thread_message_sent"), None)
+    report = next((e for e in history if e.get("type") == "agent.thread_message_received"), None)
+    if t_answer is None:
+        q1 = "unknown: the answer never reached the history"
+    elif work_waiting:
+        calls = sum(1 for e in work_waiting if e.get("type") == "agent.tool_use")
+        requests = sum(1 for e in work_waiting if e.get("type") == "span.model_request_end")
+        q1 = (
+            f"the worker KEPT WORKING while the coordinator waited: {calls} bash calls and "
+            f"{requests} model requests between the call and the answer"
+        )
+    elif work_later:
+        q1 = "the worker PAUSED: no work between the call and the answer, work after it"
+    else:
+        q1 = "inconclusive: the worker did no work during or after the wait"
+    q1 += (
+        f"; the coordinator started {len(coordinator_requests)} model requests during the wait; "
+        f"session.status_idle events after the first: {len(later_idles)}; the worker's report, "
+        f"sent at {since(sent.get('processed_at'), t_ask) if sent else 'never'}, reached the "
+        f"primary at {since(report.get('processed_at'), t_ask) if report else 'never'}"
+    )
+
+    q3 = "unknown: no coordinator request on both sides of the wait"
+    cache = cache_after_wait(history, t_ask, t_answer)
+    if cache is not None:
+        result.add(cache[0])
+        q3 = cache[1]
+    if before and after:
+        delta = counts_delta(before, after)
+        result.add(
+            f"primary thread usage, from the requires_action idle to the end: cache writes 5m "
+            f"{delta['write_5m']}, 1h {delta['write_1h']}; cache reads {delta['cache_read']}; "
+            f"input {delta['input']}; whole thread at the end: writes 5m {after['write_5m']}, "
+            f"1h {after['write_1h']}, reads {after['cache_read']}"
+        )
+        ttl = (
+            "5-minute"
+            if after["write_5m"] and not after["write_1h"]
+            else "1-hour"
+            if after["write_1h"] and not after["write_5m"]
+            else "mixed or unknown"
+        )
+        q3 += (
+            f"; the coordinator's cache writes are {ttl} (5m {after['write_5m']}, "
+            f"1h {after['write_1h']})"
+        )
+    else:
+        result.add(f"primary thread usage: before the wait {before}, at the end {after}")
+    resumed = [
+        f"{label(e)} {since(e.get('processed_at'), t_answer)}"
+        for e in history
+        if str(e.get("type")).startswith("session.status")
+        and t_answer
+        and (moment(e) or t_answer) > t_answer
+    ]
+    result.add(f"session status after the answer (seconds from it): {resumed}; {end_statuses}")
+    q3 += f"; after the answer the session went {[r.split(' ')[0] for r in resumed]}"
+    return {"Q1": q1, "Q3": q3}
+
+
+def _p14_interrupt(
+    ctx: ProbeContext, result: ProbeResult, worker: dict[str, Any], coordinator: dict[str, Any]
+) -> dict[str, str]:
+    """Session 2, Q2: `user.interrupt` while the coordinator waits on the custom tool and the
+    worker runs; then whether the pending call still blocks a `user.message`."""
+    session_id = ctx.session(
+        coordinator,
+        ctx.environment("unrestricted"),
+        budget_cents=P14_BUDGET_CENTS,
+        label="p14-interrupt",
+    )
+    recorder = SessionRecorder(ctx, session_id)
+    recorder.start()
+    recorder.opened.wait(30)
+
+    def sequence(start: int, origin: float) -> str:
+        seen = [f"{label(e)} +{e['_received_at'] - origin:.1f}s" for e in recorder.events[start:]]
+        return ", ".join(seen) or "nothing"
+
+    try:
+        ctx.send_message(session_id, p14_message(worker["name"]))
+        found = recorder.wait_for(_is_ask, timeout=TURN_TIMEOUT_SECONDS)
+        if found is None:
+            result.add(
+                f"interrupt session {session_id}: no {P14_TOOL['name']} call; last events "
+                f"{[label(e) for e in recorder.events[-12:]]}"
+            )
+            result.status = "unexpected"
+            return {}
+        index, ask = found
+        recorder.wait_for(lambda e: e.get("type") == "session.status_idle", after=index, timeout=60)
+        time.sleep(P14_INTERRUPT_AFTER_SECONDS)
+        result.add(
+            f"interrupt session {session_id}: {P14_TOOL['name']} call {ask['id']}; "
+            f"{P14_INTERRUPT_AFTER_SECONDS:.0f} s into the wait: {_p14_statuses(ctx, session_id)}"
+        )
+        mark, sent = len(recorder.events), time.monotonic()
+        try:
+            ctx.once.beta.sessions.events.send(session_id, events=[{"type": "user.interrupt"}])
+            interrupt = "accepted"
+        except Exception as exc:
+            interrupt = error_detail(exc)
+        idle = recorder.wait_for(
+            lambda e: e.get("type") == "session.status_idle", after=mark, timeout=60
+        )
+        time.sleep(5)  # thread status events that trail the idle
+        result.add(
+            f"user.interrupt during the wait: {interrupt}; then on the session stream (seconds "
+            f"from the send): {sequence(mark, sent)}"
+        )
+        result.add(f"after the interrupt: {_p14_statuses(ctx, session_id)}")
+        closing = [
+            f"{label(e)} {since(e.get('processed_at'), parse_time(ask.get('processed_at')))}"
+            for e in ctx.history(session_id)
+            if _refers_to(e, str(ask["id"])) and e.get("id") != ask["id"]
+        ]
+        result.add(
+            f"history events that answer {ask['id']} after the interrupt (seconds from the "
+            f"call): {closing or 'none'}"
+        )
+        mark, sent = len(recorder.events), time.monotonic()
+        try:
+            ctx.send_message(session_id, "Reply 'ok' and stop.")
+            message = "accepted"
+            recorder.wait_for(
+                lambda e: e.get("type") == "session.status_idle", after=mark, timeout=120
+            )
+        except Exception as exc:
+            message = error_detail(exc)
+        result.add(f"user.message after the interrupt: {message}; then {sequence(mark, sent)}")
+        mark, sent = len(recorder.events), time.monotonic()
+        late = _p14_answer(ctx, session_id, str(ask["id"]))
+        recorder.wait_for(lambda e: e.get("type") == "session.status_idle", after=mark, timeout=30)
+        result.add(
+            f"late user.custom_tool_result for {ask['id']}: {late}; then {sequence(mark, sent)}; "
+            f"{_p14_statuses(ctx, session_id)}"
+        )
+    finally:
+        recorder.stop()
+    closed = (
+        f"closed the pending call itself ({', '.join(closing)})"
+        if closing
+        else "left the pending call without a result"
+    )
+    q2 = (
+        f"user.interrupt while the session waited on the custom tool was {interrupt}; the next "
+        f"idle was {stop_reason(idle[1]) if idle else 'none within 60 s'}; the platform "
+        f"{closed}; "
+        f"a user.message afterwards was {message}; the late result was {late}"
+    )
+    return {"Q2": q2}
+
+
+def p14_custom_tool_wait(ctx: ProbeContext) -> ProbeResult:
+    """The choice cards' pause on Haiku agents: the coordinator delegates a slow bash task to a
+    worker, then calls a custom tool that is answered after P14_WAIT_SECONDS (session 1) or hit
+    by an interrupt (session 2). The answers to the three questions come first."""
+    result = ProbeResult()
+    worker, coordinator = _p14_agents(ctx)
+    answers = _p14_wait(ctx, result, worker, coordinator)
+    answers |= _p14_interrupt(ctx, result, worker, coordinator)
+    result.findings[0:0] = [f"{q}: {answers[q]}" for q in ("Q1", "Q2", "Q3") if q in answers]
+    return result
+
+
 PROBES: tuple[Probe, ...] = (
     Probe(
         "P1", "Environment shape", "notes §2b fields; unique environment names", 0, p1_environment
@@ -1353,6 +1994,7 @@ PROBES: tuple[Probe, ...] = (
         "§2d budget flow; budget_paused and 'Continua'",
         1,
         p9_budget,
+        budget_cents=P9_BUDGET_CENTS,
     ),
     Probe(
         "P10",
@@ -1375,6 +2017,15 @@ PROBES: tuple[Probe, ...] = (
         "the cost_cents source (session and per-thread list_cost)",
         0,
         p13_usage,
+    ),
+    Probe(
+        "P14",
+        "Custom tool wait: subagents, interrupt, cache",
+        "choice cards (plan-creation design §2): whether subagents work while the coordinator "
+        "waits on a custom tool; user.interrupt during the wait; the prompt cache after 4 minutes",
+        2,
+        p14_custom_tool_wait,
+        budget_cents=P14_BUDGET_CENTS,
     ),
 )
 PROBE_IDS = tuple(p.id for p in PROBES)
@@ -1449,7 +2100,7 @@ def parse_only(text: str | None) -> list[str]:
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="probe_session.py",
-        description="Live probes P1..P13 (docs/managed-agents-notes.md §4) on the development "
+        description="Live probes P1..P14 (docs/managed-agents-notes.md §4) on the development "
         "profile. Spends real money.",
     )
     parser.add_argument("--dry-run", action="store_true", help="print the probe plan; no network")
@@ -1478,9 +2129,9 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
 
 def describe_plan(selected: list[Probe], inputs: ProfileInputs, max_total_cents: int) -> str:
     sessions = sum(p.sessions for p in selected)
-    bound = min(
-        max_total_cents + inputs.session_budget_cents, sessions * inputs.session_budget_cents
-    )
+    capped = sum(p.sessions * (p.budget_cents or inputs.session_budget_cents) for p in selected)
+    bound = min(max_total_cents + inputs.session_budget_cents, capped)
+    own_caps = ", ".join(f"{p.id}: {p.budget_cents}" for p in selected if p.budget_cents)
     lines = [
         f"Probe plan, {PROFILE} profile (no network in a dry run):",
         f"  models: {dict(inputs.models)}; probe agents use {inputs.cheap_model}",
@@ -1490,14 +2141,17 @@ def describe_plan(selected: list[Probe], inputs: ProfileInputs, max_total_cents:
         f"raw plan.json with $defs: {'$defs' in inputs.raw_plan_schema}",
         f"  environments: limited {LIMITED_HOSTS} + allow_mcp_servers, and the profile's own "
         f"{json.dumps(inputs.environment.get('config', {}).get('networking'))}",
+        f"  P14: {P14_TOOL['name']} (custom) left unanswered {P14_WAIT_SECONDS:.0f} s while a "
+        f"worker runs {P14_SLEEPS} x sleep 30, then a second session interrupted "
+        f"{P14_INTERRUPT_AFTER_SECONDS:.0f} s into the wait",
     ]
     for probe in selected:
         lines.append(
             f"  {probe.id:<4} {probe.title}: {probe.sessions} session(s); decides {probe.decides}"
         )
     lines.append(
-        f"  sessions: {sessions}, each capped at {inputs.session_budget_cents} US cents (P9: "
-        f"{P9_BUDGET_CENTS}); "
+        f"  sessions: {sessions}, each capped at {inputs.session_budget_cents} US cents"
+        f"{f' ({own_caps})' if own_caps else ''}; "
         f"no new session past {max_total_cents} cents; worst case about {bound} cents"
     )
     lines.append("  every resource is named probe-<stamp>-... and removed at the end")

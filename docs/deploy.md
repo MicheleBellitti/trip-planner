@@ -602,7 +602,7 @@ later). The run:
 
 ## 8. Day-1 live probe
 
-The probe (notes §4, P1-P13) answers what the docs can't: whether the travel MCP servers
+The probe (notes §4, P1-P14) answers what the docs can't: whether the travel MCP servers
 accept a Managed Agents session (the main project risk), the real MCP tool names, inter-agent
 tools, budget pause and resume, ids and cross-posted events, and how `ant apply` behaves
 (P12). `scripts/probe_session.py` runs it. Run it on the morning of day 1, before building on

@@ -8,7 +8,7 @@ the live probes. Run everything from `backend/` with `uv run` (the backend venv 
 |---|---|---|
 | `render_profiles.py` | Renders `profiles/<profile>/**` from the templates in `agents/` and copies `schema/results/*.json` into `skills/travel-research-rules/schemas/`. `--check` fails on anything stale. | none |
 | `bootstrap.py` | The SDK equivalent of `ant apply --lock-file backend/claude-lock.<profile>.json profiles/<profile>`: uploads skills, creates or updates the environment and the agents, writes ant's lockfile. | `--dry-run`: none |
-| `probe_session.py` | The live probe checklist P1..P13 of `docs/managed-agents-notes.md` §4, on the development profile, with a report in `docs/probes/<date>.md`. **Spends money.** | `--dry-run`: none |
+| `probe_session.py` | The live probe checklist P1..P14 of `docs/managed-agents-notes.md` §4, on the development profile, with a report in `docs/probes/<date>.md`. **Spends money.** | `--dry-run`: none |
 | `session_report.py` | Read-only report on what fills the context of one or more sessions (events of the session and of every thread: requests, context per request, biggest tool results, skill loads, messages), and `--static`: the fixed context of each agent from `profiles/`, `skills/` and `submit_plan.json`. Also the by-hand workflow `session-report.yml`. | `--static`, `--from-raw`: none |
 
 ## Changing a prompt, a model or a number
@@ -89,7 +89,7 @@ uv run python ../scripts/bootstrap.py --profile production --i-know-this-is-prod
 
 Only by hand, on the development key (`ANTHROPIC_API_KEY`, or the federation variables when the
 organization has them), never in CI. Each session is capped at the development
-session budget (60 US cents; P9 uses 3), no new session starts past `--max-total-cents`
+session budget (100 US cents; P9 uses 3, P14 25), no new session starts past `--max-total-cents`
 (default 150), and every resource it creates (`probe-<stamp>-...`) is removed at the end.
 
 ```sh
