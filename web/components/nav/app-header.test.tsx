@@ -30,23 +30,42 @@ afterEach(() => {
 });
 
 describe("AppHeader", () => {
-  it("draws the eval history's station only for the users who manage the planner", () => {
+  it("draws the eval history's and the invitations' stations only for the users who manage the planner", () => {
     isAdmin.mockReturnValue(false);
     const { unmount } = render(<AppHeader current="plans" />);
     const nav = screen.getByRole("navigation", { name: "Sezioni" });
     expect(within(nav).getByRole("link", { name: "Piani" })).toBeTruthy();
     expect(within(nav).queryByRole("link", { name: "Collaudi" })).toBeNull();
+    expect(within(nav).queryByRole("link", { name: "Inviti" })).toBeNull();
     unmount();
 
     isAdmin.mockReturnValue(null); // not known yet: nothing appears and vanishes
     render(<AppHeader current="plans" />);
     expect(screen.queryByRole("link", { name: "Collaudi" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Inviti" })).toBeNull();
+    cleanup();
+
+    isAdmin.mockReturnValue(true);
+    render(<AppHeader current="plans" />); // an admin: Piani, Collaudi, Inviti, in that order
+    const labels = within(screen.getByRole("navigation", { name: "Sezioni" }))
+      .getAllByRole("link")
+      .map((link) => [link.textContent, link.getAttribute("href")]);
+    expect(labels).toEqual([
+      ["Piani", ROUTES.plans],
+      ["Collaudi", ROUTES.evals],
+      ["Inviti", ROUTES.invites],
+    ]);
   });
 
-  it("on the eval pages the station is always there, as the current one, whoever is looking", () => {
+  it("on the admins' own pages their station is always there, as the current one, whoever is looking", () => {
     isAdmin.mockReturnValue(false);
     render(<AppHeader current="evals" />);
     expect(screen.getByRole("link", { name: "Collaudi" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.queryByRole("link", { name: "Inviti" })).toBeNull();
+    cleanup();
+    render(<AppHeader current="invites" />);
+    expect(screen.getByRole("link", { name: "Inviti" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.queryByRole("link", { name: "Collaudi" })).toBeNull();
   });
 
   it("links the lockup to the plans and draws both sections as stations, the current one filled", () => {
@@ -143,22 +162,45 @@ describe("AppHeader", () => {
     expect(after!.className).not.toMatch(/\bright-0\b/);
   });
 
-  it("ends the line at \"Collaudi\" for an admin, and runs it on from \"Piani\" to it", () => {
+  it("ends the line at \"Inviti\" for an admin, and runs it on through \"Collaudi\" to it", () => {
     render(<AppHeader current="plans" />);
     const nav = screen.getByRole("navigation", { name: "Sezioni" });
-    const [plans, evals] = [...nav.querySelectorAll("li")];
-    expect(within(plans!).getByRole("link").textContent).toBe("Piani");
-    expect(within(evals!).getByRole("link").textContent).toBe("Collaudi");
-    const [plansBefore, plansAfter] = [...plans!.querySelectorAll("[data-line]")];
-    const [evalsBefore, evalsAfter] = [...evals!.querySelectorAll("[data-line]")];
+    const items = [...nav.querySelectorAll("li")];
+    expect(items.map((item) => within(item).getByRole("link").textContent)).toEqual(["Piani", "Collaudi", "Inviti"]);
+    const [plans, evals, invites] = items.map((item) => [...item.querySelectorAll("[data-line]")]);
+    const [plansBefore, plansAfter] = plans!;
+    const [evalsBefore, evalsAfter] = evals!;
+    const [invitesBefore, invitesAfter] = invites!;
     expect(plansBefore!.className).toMatch(/\bw-6\b/);
-    // Between the two stations the halves meet: no overhang, edge to edge.
+    // Between two stations the halves meet: no overhang, edge to edge.
     expect(plansAfter!.className).toMatch(/\bright-0\b/);
     expect(plansAfter!.className).not.toMatch(/\bw-6\b/);
+    // "Collaudi" sits in the middle: the line runs through it on both sides.
     expect(evalsBefore!.className).toMatch(/\bleft-0\b/);
     expect(evalsBefore!.className).not.toMatch(/\bw-6\b/);
-    expect(evalsAfter!.className).toMatch(/\bleft-1\/2\b/);
-    expect(evalsAfter!.className).toMatch(/\bw-6\b/);
+    expect(evalsAfter!.className).toMatch(/\bright-0\b/);
+    expect(evalsAfter!.className).not.toMatch(/\bw-6\b/);
+    expect(invitesBefore!.className).toMatch(/\bleft-0\b/);
+    expect(invitesBefore!.className).not.toMatch(/\bw-6\b/);
+    expect(invitesAfter!.className).toMatch(/\bleft-1\/2\b/);
+    expect(invitesAfter!.className).toMatch(/\bw-6\b/);
+  });
+
+  it("ends the line at the one admin station drawn on its own page for a visitor who is no admin", () => {
+    isAdmin.mockReturnValue(false);
+    for (const [current, label] of [
+      ["evals", "Collaudi"],
+      ["invites", "Inviti"],
+    ] as const) {
+      render(<AppHeader current={current} />);
+      const items = [...screen.getByRole("navigation", { name: "Sezioni" }).querySelectorAll("li")];
+      expect(items.map((item) => within(item).getByRole("link").textContent)).toEqual(["Piani", label]);
+      const [before, after] = [...items[1]!.querySelectorAll("[data-line]")];
+      expect(before!.className).toMatch(/\bleft-0\b/);
+      expect(after!.className).toMatch(/\bleft-1\/2\b/);
+      expect(after!.className).toMatch(/\bw-6\b/);
+      cleanup();
+    }
   });
 
   it("gives the edges from the stations drawn, whatever their number", () => {

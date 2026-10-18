@@ -945,7 +945,10 @@ Its only client JavaScript is the theme toggle and `next/link`. Components live 
 - **Closing** (`LandingClose`): the five lines entering the destination (`ConvergingLines`, the link
   preview's drawing, paths in `lib/brand-mark.ts`; below 768 px it shows only the last stretch, so
   the lines keep their weight), then, with the demo, "Guarda una corsa intera, senza account.", "Guarda una
-  corsa", "Accedi" and "Accesso su invito."; until then, "Atlas è su invito." and "Accedi".
+  corsa", "Accedi" and, under "Accesso su invito.", the waitlist form; until then, "Atlas è su invito.",
+  the waitlist form (`components/waitlist/waitlist-form.tsx`: address, two optional lines about the
+  trip, one line on what the address is for, "Mettimi in lista"; its answer replaces it as a
+  StatePanel) and "Hai già un invito? Accedi".
 - **Footer**: the lockup and one honest line ("Prezzi e disponibilità si confermano sempre sul sito
   del fornitore.").
 - **Motion**: the line map is a named exception to The Report, Don't Perform Rule, for the landing

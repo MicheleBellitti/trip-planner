@@ -1,14 +1,17 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { WAITLIST_FAILED, WAITLIST_RECEIVED_TITLE } from "@/components/waitlist/waitlist-form";
+
 import {
   GENERIC_SIGN_IN_ERROR,
   SEND_FAILED_ERROR,
   INVALID_EMAIL_ERROR,
   INVITE_ONLY_ERROR,
-  INVITE_ONLY_HELP,
   LINK_VALIDITY,
+  LISTED_HINT,
   LoginForm,
+  NO_LINK_HINT,
   SIGN_IN_ERRORS,
   TOO_MANY_REQUESTS_ERROR,
   UNCONFIGURED_MESSAGE,
@@ -17,9 +20,18 @@ import {
 
 const magicLink = vi.fn();
 const social = vi.fn();
+const getSession = vi.fn();
+const join = vi.fn();
 
 vi.mock("@/lib/auth-client", () => ({
-  authClient: { signIn: { magicLink: (...args: unknown[]) => magicLink(...args), social: (...args: unknown[]) => social(...args) } },
+  authClient: {
+    signIn: { magicLink: (...args: unknown[]) => magicLink(...args), social: (...args: unknown[]) => social(...args) },
+    getSession: (...args: unknown[]) => getSession(...args),
+  },
+}));
+
+vi.mock("@/app/actions/waitlist", () => ({
+  joinWaitlistAction: (...args: unknown[]) => join(...args),
 }));
 
 const LABEL = "Indirizzo email";
@@ -39,6 +51,9 @@ describe("LoginForm", () => {
   beforeEach(() => {
     magicLink.mockReset();
     social.mockReset();
+    getSession.mockReset();
+    getSession.mockResolvedValue({ data: null, error: null });
+    join.mockReset();
   });
 
   afterEach(cleanup);
@@ -51,7 +66,7 @@ describe("LoginForm", () => {
     expect(screen.getByText("Quello invitato, o con cui sei già entrato.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Inviami il link" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Continua con Google" })).toBeTruthy();
-    expect(screen.queryByText(/su invito/)).toBeNull(); // the invite rule appears only when an address is refused
+    expect(screen.queryByText(/su invito|invito\./)).toBeNull(); // the form never says whether an address is invited
   });
 
   it("says why the user is here and promises the way back when it knows where they were", () => {
@@ -80,7 +95,7 @@ describe("LoginForm", () => {
       errorCallbackURL: "/login?returnTo=%2Fplans%2Fabc%3Ftab%3Dpiano",
     });
     expect(screen.getByText("Someone@Example.com")).toBeTruthy();
-    expect(screen.getByText(/Abbiamo inviato un link a/).textContent).toContain(LINK_VALIDITY);
+    expect(screen.getByText(/ti arriva un link\./).textContent).toBe(`Se Someone@Example.com è abilitato, ti arriva un link. ${LINK_VALIDITY}`);
     expect(screen.getByText(/Guarda nella posta indesiderata/)).toBeTruthy();
     await waitFor(() => expect(document.activeElement?.contains(heading)).toBe(true));
   });
@@ -105,7 +120,7 @@ describe("LoginForm", () => {
     fireEvent.click(screen.getByRole("button", { name: "Inviane un altro" }));
     await waitFor(() => expect(magicLink).toHaveBeenCalledTimes(2));
     expect(magicLink.mock.calls[1]?.[0]).toMatchObject({ email: "a@example.com" });
-    const news = await screen.findByText(/Abbiamo inviato un altro link a/);
+    const news = await screen.findByText(/ti arriva un altro link\./);
     expect(news.getAttribute("aria-live")).toBe("polite");
     await waitFor(() => expect(document.activeElement?.contains(news)).toBe(true));
 
@@ -132,26 +147,104 @@ describe("LoginForm", () => {
     await waitFor(() => expect(document.activeElement?.contains(heading)).toBe(true)); // focus never falls to the document
   });
 
-  it("a refused address is an error on the field, with the invite rule and what to do, and focus goes back to it", async () => {
-    magicLink.mockResolvedValue({ data: null, error: { status: 403, code: "SIGNUP_NOT_ALLOWED", message: "x" } });
+  it("answers every address the same way, and offers everyone the waitlist from the sent state", async () => {
+    // The server answers 200 for an address that may not sign in, and sends it nothing (lib/auth.ts).
+    magicLink.mockResolvedValue(sent);
     renderForm();
-
     typeAndSubmit("nobody@example.com");
 
-    const input = screen.getByLabelText(LABEL);
-    await waitFor(() => expect(input.getAttribute("aria-invalid")).toBe("true"));
-    const error = screen.getByText(INVITE_ONLY_ERROR).closest("p")!;
-    expect(error.textContent).toContain(INVITE_ONLY_HELP);
-    expect(input.getAttribute("aria-describedby")).toContain(error.id);
-    expect(screen.queryByRole("alert")).toBeNull();
-    await waitFor(() => expect(document.activeElement).toBe(input));
-
-    fireEvent.change(input, { target: { value: "nobody2@example.com" } });
-    expect(input.getAttribute("aria-invalid")).toBeNull();
+    await screen.findByRole("heading", { name: "Controlla la posta" });
+    expect(screen.getByText(/ti arriva un link\./).textContent).toContain("Se nobody@example.com è abilitato");
+    expect(screen.getByText(NO_LINK_HINT)).toBeTruthy();
+    const offer = screen.getByRole("button", { name: "Mettimi in lista" });
+    expect(offer.className).not.toMatch(/\bbg-action\b/); // the resend stays the first way on
+    expect(screen.queryByText(INVITE_ONLY_ERROR)).toBeNull();
   });
 
-  it("any other 403 (an origin or callback Better Auth does not trust) is the generic failure, not the invite rule", async () => {
-    for (const code of ["INVALID_ORIGIN", "MISSING_OR_NULL_ORIGIN", "INVALID_CALLBACK_URL", "INVALID_ERROR_CALLBACK_URL", undefined]) {
+  it("'Mettimi in lista' joins the waitlist with the sent address, from the login, and shows the one answer", async () => {
+    magicLink.mockResolvedValue(sent);
+    join.mockResolvedValue({ status: "received", email: "nobody@example.com" });
+    renderForm({ returnTo: "/plans/abc" });
+    typeAndSubmit("Nobody@Example.com");
+    fireEvent.click(await screen.findByRole("button", { name: "Mettimi in lista" }));
+
+    const heading = await screen.findByRole("heading", { name: WAITLIST_RECEIVED_TITLE });
+    const data = join.mock.calls[0]?.[1] as FormData;
+    expect(data.get("email")).toBe("Nobody@Example.com"); // the action normalizes
+    expect(data.get("source")).toBe("login");
+    expect(screen.getByRole("status").textContent).toBe(
+      "Se nobody@example.com è già abilitato puoi accedere subito; altrimenti ti scriviamo lì quando c'è posto.",
+    );
+    expect(screen.getByText(LISTED_HINT)).toBeTruthy(); // the h1 still says "Accedi": this says when
+    expect(screen.queryByRole("link", { name: "Accedi" })).toBeNull(); // this is the login page
+    await waitFor(() => expect(document.activeElement?.contains(heading)).toBe(true));
+
+    fireEvent.click(screen.getByRole("button", { name: "Cambia indirizzo" }));
+    const input = screen.getByLabelText(LABEL) as HTMLInputElement;
+    expect(input.value).toBe("Nobody@Example.com");
+    expect(input.getAttribute("aria-invalid")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(input));
+  });
+
+  it("a failed join is an alert in the sent panel, and frees its buttons", async () => {
+    magicLink.mockResolvedValue(sent);
+    join.mockResolvedValue({ status: "error", error: "failed" });
+    renderForm();
+    typeAndSubmit("nobody@example.com");
+    fireEvent.click(await screen.findByRole("button", { name: "Mettimi in lista" }));
+
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain(WAITLIST_FAILED));
+    expect(screen.getByRole("button", { name: "Mettimi in lista" })).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: "Inviane un altro" })).toHaveProperty("disabled", false);
+  });
+
+  it("a rejected join (a dropped connection, a redeploy's missing action) is the same alert and never leaves the panel busy", async () => {
+    magicLink.mockResolvedValue(sent);
+    join.mockRejectedValueOnce(new Error("Failed to find Server Action \"abc\""));
+    renderForm();
+    typeAndSubmit("nobody@example.com");
+    fireEvent.click(await screen.findByRole("button", { name: "Mettimi in lista" }));
+
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain(WAITLIST_FAILED));
+    const offer = screen.getByRole("button", { name: "Mettimi in lista" });
+    expect(offer).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: "Cambia indirizzo" })).toHaveProperty("disabled", false);
+
+    join.mockResolvedValueOnce({ status: "received", email: "nobody@example.com" });
+    fireEvent.click(offer);
+    await screen.findByRole("heading", { name: WAITLIST_RECEIVED_TITLE });
+  });
+
+  it("a Google sign-in refused for its address comes back as the invite notice (the account is the caller's own)", () => {
+    renderForm({ errorCode: "SIGNUP_NOT_ALLOWED" });
+    expect(screen.getByRole("alert").textContent).toContain(INVITE_ONLY_ERROR);
+  });
+
+  it("the sent tab heals itself: back in view with a session, it goes where the user was headed", async () => {
+    magicLink.mockResolvedValue(sent);
+    const navigate = vi.fn();
+    renderForm({ returnTo: "/plans/abc?tab=piano", navigate });
+    typeAndSubmit("a@example.com");
+    await screen.findByRole("heading", { name: "Controlla la posta" });
+
+    Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    await waitFor(() => expect(getSession).toHaveBeenCalledTimes(1));
+    expect(navigate).not.toHaveBeenCalled(); // no session yet: the link was not used
+
+    getSession.mockResolvedValue({ data: { session: { id: "ses_1" }, user: { email: "a@example.com" } }, error: null });
+    window.dispatchEvent(new Event("focus"));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/plans/abc?tab=piano"));
+
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(getSession).toHaveBeenCalledTimes(2); // hidden: nothing to ask
+  });
+
+  it("a 403 on the link or on Google (an origin or callback Better Auth does not trust) is the generic failure, not the invite rule", async () => {
+    // SIGNUP_NOT_ALLOWED too: the link request never answers it any more (lib/auth.ts), and a stray
+    // one must not say whether the address is invited.
+    for (const code of ["SIGNUP_NOT_ALLOWED", "INVALID_ORIGIN", "MISSING_OR_NULL_ORIGIN", "INVALID_CALLBACK_URL", "INVALID_ERROR_CALLBACK_URL", undefined]) {
       magicLink.mockResolvedValueOnce({ data: null, error: { status: 403, code, message: "x" } });
       renderForm();
       typeAndSubmit("a@example.com");

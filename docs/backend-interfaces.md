@@ -1029,6 +1029,28 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
     show the "Collaudi" station only to admins. The TripTracker path is untouched (contract
     rule 7): its removal waits until production runs `atlas`.
 
+38. The waitlist (`waitlist`, migration `609ccf5bdc99`; `db.WaitlistRecord`). The closed beta's
+    door is a table the web app owns: one row per address (trimmed, lower-cased), `invited_at`
+    NULL while it is a request (`source` says where it came from: the landing's form, the
+    login's sent state, or an admin adding it; a public form may not claim "admin"), set when an
+    admin invites it (`invited_by`), with `invitation_sent_at` stamped when an admin's
+    invitation claims the sending (one conditional UPDATE, so only one admin sends; cleared
+    again if the email does not leave). A stamp can outlive an email that never left (the
+    process died between the claim and the send): the admin page offers "Invia di nuovo", a
+    compare-and-swap on the stamp it shows, so one email leaves however many clicks; a failed
+    re-send restores that stamp. The web app's sign-up policy lets an address create an account
+    when it is in `AUTH_ALLOWED_EMAILS` (the bootstrap list, or `*`) or has an invited row
+    (web/lib/server/waitlist.ts `signInStanding`, called from Better Auth's hooks). Neither the
+    join nor the magic-link request tells the caller whether an address has an account or an
+    invitation (web/lib/auth.ts, web/lib/waitlist-state.ts); the sign-in email leaves after the
+    response (`after()`), so the timing does not tell either. The backend only migrates the
+    table, as for Better Auth's four, so one `alembic upgrade head` still prepares a database
+    for both services; it never reads it (who may plan is decided by the existence of the
+    account, decision 37). The admin page is the web app's, and its "who is an admin" is this
+    backend's `GET /me` called server side with the request's cookie: the role has one source. A
+    retention rule for pending requests is an open item (§8), together with the rate limit on
+    the public join (the quotas PR).
+
 ## 7. Contracts with events.py, the database, config, the web app and the agents
 
 **events.py (`normalize`).**

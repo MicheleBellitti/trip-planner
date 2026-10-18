@@ -60,11 +60,13 @@ backend/                 FastAPI service (uv, Python 3.12). The package is backe
                                yet: the first apply is docs/deploy.md step 7)
 web/                     Next.js 16 (App Router), TypeScript strict, Tailwind 4, Zod 4 (web/README.md)
   app/                     routes: / (landing, public), /demo (demo run, public), /plans (plans), /new (request form), /plans/[id], /evals (eval history),
-                           /evals/[id], /dev/ui (dev only)
+                           /evals/[id], /login, /admin/waitlist (admins: the waitlist and the invitations), /dev/ui (dev only)
   components/ui/           the design system's primitives (DatePair, Timeline, ToolChip, ...)
   lib/                     typed API client, SSE + timeline reducer (lib/plan-events), schemas,
                            auth.ts (the app's own accounts: Better Auth server, Postgres, magic link
-                           and Google), auth-client.ts, server/ (server-only config, the sign-in email)
+                           and Google), auth-client.ts, waitlist-policy.ts, server/ (server-only: the
+                           accounts' config, the shared pg pool, the waitlist queries, the emails
+                           through Resend, the admin check against GET /me); app/actions/ (server actions)
   DESIGN.md, PRODUCT.md    design tokens (the authority) and product decisions
   design/directions/       three static design studies; direction 1 "Linee" was chosen
 agents/                  hand-written agent templates, the single source of the prompts:
@@ -346,8 +348,9 @@ CI must pass before merge.
 - Auth reads a Better Auth session cookie; `AUTH_MODE` picks the provider and the check.
   `atlas` (the web app's own accounts, `web/lib/auth.ts`, cookie prefix `atlas`): the cookie's
   token is looked up in `auth_sessions` in the shared database (`auth.verify_atlas_session`),
-  no HTTP call, no cache, so a sign-out is effective at once; every account may plan (the web
-  app's `AUTH_ALLOWED_EMAILS` decides who signs up, `PLANNER_ALLOWED_EMAILS` is not consulted);
+  no HTTP call, no cache, so a sign-out is effective at once; every account may plan (sign-up is
+  by invitation: the web app's `AUTH_ALLOWED_EMAILS` bootstrap list or an invited row of the
+  `waitlist` table, which admins manage at `/admin/waitlist`; `PLANNER_ALLOWED_EMAILS` is not consulted);
   the user's id is stored in `plans.user_id` and ownership goes by it (`sessions.plan_owner_filter`;
   rows from before the switch, without an id, by email, only when `users.email_verified`).
   `triptracker` (TripTracker's accounts at
@@ -374,8 +377,10 @@ CI must pass before merge.
   Autogenerate it, then review it by hand. Never change production by hand. Railway's
   pre-deploy command runs `alembic upgrade head` before every deploy. `tests/test_db.py` fails
   when `app/db.py` and the migrations drift apart.
-- The tables are `plans`, `events`, `fx_rates` and `eval_runs` (the eval history, written by CI through
-  `POST /evals/runs` with `EVALS_INGEST_TOKEN`, or by `app.cli import-evals`). A plan's status is one of `running`,
+- The tables are `plans`, `events`, `fx_rates`, `eval_runs` (the eval history, written by CI through
+  `POST /evals/runs` with `EVALS_INGEST_TOKEN`, or by `app.cli import-evals`), Better Auth's four
+  (`users`, `auth_sessions`, `auth_accounts`, `auth_verifications`) and `waitlist` (requests and
+  invitations; the web app writes the last five, the backend only migrates them). A plan's status is one of `running`,
   `ready`, `failed`, `budget_paused`, `blocked`, `interrupted`. `events.ma_event_id` is unique,
   so a resumed consumer never stores an event twice (events with an empty API id get a
   deterministic synthetic key, never NULL). `plans` also keeps the session's current budget

@@ -9,18 +9,23 @@ import { iconButtonClasses } from "@/components/ui/icon-button";
 import { Wordmark } from "@/components/ui/wordmark";
 import { ROUTES } from "@/lib/routes";
 
+import { ScrollToCurrent } from "./scroll-to-current";
 import { SectionStations } from "./section-stations";
 
-/** The app's sections. "new" is the request form: it has no nav item, and no "Nuovo piano" there. */
-export type AppSection = "plans" | "evals" | "new";
+/** The app's sections. "new" is the request form: it has no nav item, and no "Nuovo piano" there;
+ * "evals" and "invites" are the admins' (SectionStations). */
+export type AppSection = "plans" | "evals" | "invites" | "new";
 
 /**
  * The header's bar (DESIGN.md, Navigation): the lockup as the link to the plans, the sections drawn
  * as stations on one line (the current one is the "you are here" ring), then `trailing` (AppHeader
  * puts the bare theme toggle there), then "Nuovo piano", always last and always a secondary action
- * (each view keeps its single primary). "Piani" is everyone's; "Collaudi" is drawn only for the
- * users who manage the planner (SectionStations). One line, at most 72 px, no menu drawer at 393 px, 44 px targets under a finger (the 40 px
- * icon controls grow). `compact` is the live screen's slim top row; it has no toggle (the sticky
+ * (each view keeps its single primary). "Piani" is everyone's; "Collaudi" and "Inviti" are drawn
+ * only for the users who manage the planner (SectionStations). One line, at most 72 px, no menu
+ * drawer at 393 px, 44 px targets under a finger (the 40 px icon controls grow). Below about 360 px
+ * the three admin stations no longer fit beside the controls: the strip scrolls sideways (the line
+ * runs past the edge, as it does past the outer stations) instead of pushing the page wider, and
+ * ScrollToCurrent keeps the current one in view. `compact` is the live screen's slim top row; it has no toggle (the sticky
  * control bar carries it), and this file imports none, so the plan page ships no second copy.
  * Every signed-in page draws this bar, so it also carries SessionRefresh, which keeps the session
  * sliding.
@@ -44,11 +49,13 @@ export function AppHeaderBar({
         )}
       >
         <Wordmark href={ROUTES.plans} compact />
-        <div className="flex items-center gap-2">
-          <nav aria-label="Sezioni">
+        <div className="flex min-w-0 items-center gap-2">
+          {/* The vertical padding keeps the links' focus ring inside the scroll container. */}
+          <nav aria-label="Sezioni" className="-my-1 min-w-0 overflow-x-auto py-1 [scrollbar-width:none]">
             <ul className="flex">
               <SectionStations current={current} />
             </ul>
+            <ScrollToCurrent />
           </nav>
           {trailing}
           <NewPlan current={current === "new"} />
