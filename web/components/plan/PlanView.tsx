@@ -25,7 +25,6 @@ import { useIsDesktop } from "@/components/live/hooks";
 import { LinkButton } from "@/components/ui/button";
 import { Disclosure } from "@/components/ui/disclosure";
 import { Notice } from "@/components/ui/notice";
-import { api } from "@/lib/api";
 import { bookingDeadline, tripDueDates, type TripDueDates } from "@/lib/booking-dates";
 import { displayTitle, HOME_TIMEZONE } from "@/lib/format";
 import type { PlanDetail } from "@/lib/schemas/api";
@@ -34,6 +33,8 @@ import { BookingStrip } from "./booking-strip";
 import { BookingRow } from "./bookings";
 import { Itinerary } from "./itinerary";
 import { CoverBand } from "./cover/cover-band";
+import { PlanNowContext } from "./plan-now";
+import type { CoverLoader } from "./cover/cover-store";
 import { ItineraryDays, ItineraryMapPanel, ItineraryMapProvider } from "./map/itinerary-map";
 import {
   alignedChecks,
@@ -52,8 +53,6 @@ import { PlanSummary } from "./plan-summary";
 /** Reads GET /plans/{id}/trip; rejects when it cannot. */
 export type TripLoader = (planId: string, signal: AbortSignal) => Promise<unknown>;
 
-const loadTripFromApi: TripLoader = (planId, signal) => api.getTrip(planId, { signal });
-
 export interface PlanViewProps {
   /** GET /plans/{id} of a `ready` plan. */
   detail: PlanDetail;
@@ -67,27 +66,45 @@ export interface PlanViewProps {
   /** The plan just appeared under a viewer who was watching it run: bring its top into view and
    * move the focus to its summary heading (a plan that is simply opened does neither). */
   arrival?: boolean;
-  /** How to read the Trip when `trip` is not given; defaults to `api.getTrip`. Pass a stable
-   * function (a new one on every render reads the Trip again). */
+  /** How to read the Trip when `trip` is not given (GET /plans/{id}/trip on the live page); none,
+   * the derived "Prenota entro" dates stay unknown. Pass a stable function (a new one on every
+   * render reads the Trip again). PlanView imports no API client: the page brings its loaders. */
   loadTrip?: TripLoader;
+  /** How to read the destination's cover (GET /plans/{id}/cover live, the demo's own copy); none,
+   * no photo. */
+  loadCover?: CoverLoader;
+  /** The plan's hand-off in place of "Apri in TripTracker" (the demo's "Pianifica il tuo
+   * viaggio"): a heading for screen readers, a sentence and an in-app link. */
+  handoff?: PlanHandoff;
+  /** A notice above the plan (the demo's: the prices are an example). */
+  notice?: ReactNode;
+  /** A fixed "now" for the relative dates (the demo's recording date); none, the live clock. */
+  now?: number;
+}
+
+export interface PlanHandoff {
+  title: string;
+  text: string;
+  label: string;
+  href: string;
 }
 
 type Fetched = { planId: string; ok: true; trip: unknown } | { planId: string; ok: false };
 
 /** The Trip's due dates, for `bookingDeadline`: from the `trip` prop, or read once. */
-function useTripDueDates(detail: PlanDetail, provided: unknown, loadTrip: TripLoader): TripDueDates {
+function useTripDueDates(detail: PlanDetail, provided: unknown, loadTrip: TripLoader | undefined): TripDueDates {
   const plan = detail.plan;
   const hasProvided = provided !== null && provided !== undefined;
   const needed = plan !== null && planNeedsTrip(plan);
   // GET /trip answers 409 before `ready`, so a plan in another state is never asked.
-  const shouldFetch = needed && !hasProvided && detail.status === "ready";
+  const shouldFetch = needed && !hasProvided && detail.status === "ready" && loadTrip !== undefined;
   const [fetched, setFetched] = useState<Fetched | null>(null);
 
   useEffect(() => {
     if (!shouldFetch) return;
     const planId = detail.id;
     const controller = new AbortController();
-    loadTrip(planId, controller.signal).then(
+    loadTrip?.(planId, controller.signal).then(
       (trip) => {
         if (!controller.signal.aborted) setFetched({ planId, ok: true, trip });
       },
@@ -125,7 +142,17 @@ function SectionHeading({ id, children, lead }: { id: string; children: ReactNod
 }
 
 /** The finished plan of a `ready` plan. */
-export function PlanView({ detail, trip = null, timeline, arrival = false, loadTrip = loadTripFromApi }: PlanViewProps) {
+export function PlanView({
+  detail,
+  trip = null,
+  timeline,
+  arrival = false,
+  loadTrip,
+  loadCover,
+  handoff: ownHandoff,
+  notice,
+  now,
+}: PlanViewProps) {
   const baseId = useId().replace(/[^\w-]/g, "");
   const tripDates = useTripDueDates(detail, trip, loadTrip);
   const plan = detail.plan;
@@ -180,7 +207,20 @@ export function PlanView({ detail, trip = null, timeline, arrival = false, loadT
   const tripLabel = zoneName ? tripPlaceLabel(plan) : null;
   const importUrl = detail.import_url && safeHttpUrl(detail.import_url) ? detail.import_url : null;
 
-  const handoff = importUrl ? (
+  const handoff = ownHandoff ? (
+    <section
+      aria-labelledby={ids.triptracker}
+      className={desktop ? "mt-6 min-w-0 border-t border-rule pt-4" : "min-w-0"}
+    >
+      <h2 id={ids.triptracker} className="sr-only">
+        {ownHandoff.title}
+      </h2>
+      <p className="max-w-prose text-small text-ink-2">{ownHandoff.text}</p>
+      <LinkButton href={ownHandoff.href} variant="secondary" className="mt-3 w-full sm:w-auto lg:w-full">
+        {ownHandoff.label}
+      </LinkButton>
+    </section>
+  ) : importUrl ? (
     <section
       aria-labelledby={ids.triptracker}
       className={desktop ? "mt-6 min-w-0 border-t border-rule pt-4" : "min-w-0"}
@@ -207,9 +247,11 @@ export function PlanView({ detail, trip = null, timeline, arrival = false, loadT
   ) : null;
 
   return (
+    <PlanNowContext.Provider value={now ?? null}>
     <div className="flex min-w-0 flex-col gap-10 lg:gap-12">
+      {notice ? <div>{notice}</div> : null}
       {/* The destination's photo, with its credit: nothing when the destination has none. */}
-      <CoverBand planId={detail.id} destination={plan.destination} />
+      <CoverBand planId={detail.id} destination={plan.destination} loadCover={loadCover} />
 
       {/* From 1080 px the summary and "Giorno per giorno" share one two-column grid: the text on
           the left, "Da prenotare", the hand-off and the map in one sticky cell on the right
@@ -326,5 +368,6 @@ export function PlanView({ detail, trip = null, timeline, arrival = false, loadT
       {timeline}
 
     </div>
+    </PlanNowContext.Provider>
   );
 }

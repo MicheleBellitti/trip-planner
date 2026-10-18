@@ -15,7 +15,6 @@ export const ROUTES = {
   invites: "/admin/waitlist",
 } as const;
 
-/** The public demo run (step 3) does not exist yet. Until it does, the landing offers "Scopri come
- * funziona" instead of "Guarda una corsa", so no button leads to a 404. Step 3 builds /demo and
- * flips this. */
-export const DEMO_READY = false;
+/** The public demo run exists (step 3): the landing offers "Guarda una corsa" → /demo. Off, the
+ * landing falls back to "Scopri come funziona", so no button can lead to a 404. */
+export const DEMO_READY = true;

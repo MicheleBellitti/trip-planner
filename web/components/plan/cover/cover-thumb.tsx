@@ -16,7 +16,7 @@ import { cx } from "@/components/ui/cx";
 import { Icon } from "@/components/ui/icon";
 
 import { coverSources, destinationInitial } from "./cover-sources";
-import { useCover } from "./cover-store";
+import { useCover, type CoverLoader } from "./cover-store";
 import { useNearView } from "./use-near-view";
 
 /** What the thumbnail asks for at 1x and 2x/3x: the list never draws it wider than 7 rem. */
@@ -30,11 +30,13 @@ interface CoverThumbProps {
   destination: string;
   /** Size and place (the caller sets the width; the aspect is fixed here, 4:3). */
   className?: string;
+  /** Where the photo comes from (GET /plans/{id}/cover on the plans list); none, the tile. */
+  loadCover?: CoverLoader;
 }
 
-export function CoverThumb({ planId, destination, className }: CoverThumbProps) {
+export function CoverThumb({ planId, destination, className, loadCover }: CoverThumbProps) {
   const { ref, near } = useNearView<HTMLSpanElement>();
-  const state = useCover(planId, near);
+  const state = useCover(planId, near, loadCover);
   const [broken, setBroken] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const initial = destinationInitial(destination);

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import LandingPage from "@/app/page";
 import { buttonClasses } from "@/components/ui/button";
-import { BRAND_DESCRIPTION, BRAND_TAGLINE } from "@/lib/brand";
+import { BRAND_DESCRIPTION, BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand";
 import { AGENT_LABELS, AGENTS } from "@/lib/plan-events/labels";
 import { SKIP_LANDING_BOOTSTRAP } from "@/lib/skip-landing";
 import { ROUTES } from "@/lib/routes";
@@ -29,7 +29,8 @@ describe("the landing", () => {
     render(<LandingPage />);
     const header = screen.getByRole("banner");
     expect(within(header).getByRole("link", { name: "Atlas" }).getAttribute("href")).toBe(ROUTES.home);
-    expect(within(header).getByRole("link", { name: "Come funziona" }).getAttribute("href")).toBe("#come-funziona");
+    // A path, not a bare fragment: the public header is the demo's too.
+    expect(within(header).getByRole("link", { name: "Come funziona" }).getAttribute("href")).toBe("/#come-funziona");
     expect(within(header).getByRole("link", { name: "Accedi" }).getAttribute("href")).toBe(ROUTES.plans);
   });
 });
@@ -129,6 +130,13 @@ describe("how it works", () => {
     expect(sample.className).not.toContain(buttonClasses("primary"));
   });
 
+  it("samples the same request the demo replays: children of 9 and 6, 2.800 €", () => {
+    const { container } = render(<HowItWorks />);
+    const request = container.querySelectorAll("figure")[0]!;
+    expect(request.textContent).toContain("9 e 6 anni");
+    expect(request.textContent).toContain("2.800 €");
+  });
+
   it("shows a booking's two dates, the due one in amber words, and a button that is not a link", () => {
     const { container } = render(<HowItWorks />);
     const booking = container.querySelectorAll("figure")[2]!;
@@ -143,7 +151,7 @@ describe("how it works", () => {
 describe("the closing", () => {
   it("until the demo exists, says Atlas is by invitation, offers the waitlist and then sign in", () => {
     const { container } = render(<LandingClose demoReady={false} />);
-    expect(screen.getByRole("heading", { level: 2, name: "Atlas è su invito." })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: `${BRAND_NAME} è su invito.` })).toBeTruthy();
     const form = screen.getByLabelText("Indirizzo email").closest("form")!;
     expect(form.querySelector('input[name="source"]')?.getAttribute("value")).toBe("landing");
     expect(screen.getByRole("button", { name: "Mettimi in lista" })).toBeTruthy();
@@ -151,6 +159,12 @@ describe("the closing", () => {
     expect(signIn.getAttribute("href")).toBe(ROUTES.login); // the login forwards a live session to the plans
     expect(form.compareDocumentPosition(signIn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); // the list first
     expect(container.querySelector(`a[href="${ROUTES.demo}"]`)).toBeNull();
+  });
+
+  it("promises what the demo shows: the cost of the run, not a cost that climbs", () => {
+    render(<LandingClose demoReady />);
+    expect(document.body.textContent).toContain("il costo della corsa");
+    expect(document.body.textContent).not.toContain("il costo che sale");
   });
 
   it("with the demo, offers it first, then sign in, and the waitlist under 'Accesso su invito.'", () => {
@@ -161,9 +175,11 @@ describe("the closing", () => {
     expect(screen.getByRole("button", { name: "Mettimi in lista" })).toBeTruthy();
   });
 
-  it("puts no demo link anywhere on today's landing, and ends with a footer", () => {
-    const { container } = render(<LandingPage />);
-    expect(container.querySelector(`a[href="${ROUTES.demo}"]`)).toBeNull();
+  it("opens the demo from today's landing, in the hero and the closing, and ends with a footer", () => {
+    render(<LandingPage />);
+    const runs = screen.getAllByRole("link", { name: "Guarda una corsa" });
+    expect(runs).toHaveLength(2);
+    for (const link of runs) expect(link.getAttribute("href")).toBe(ROUTES.demo);
     expect(screen.getByRole("contentinfo")).toBeTruthy();
   });
 });

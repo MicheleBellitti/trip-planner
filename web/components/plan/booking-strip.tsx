@@ -7,7 +7,7 @@ import { formatBookingInstant } from "@/components/ui/date-pair";
 import { Icon } from "@/components/ui/icon";
 import type { BookingDeadline } from "@/lib/booking-dates";
 import { HOME_TIMEZONE } from "@/lib/format";
-import { useNow } from "@/lib/use-now";
+import { usePlanNow } from "./plan-now";
 
 import { bookingLine, sortByDeadline, type BookingStripItem } from "./plan-model";
 
@@ -46,7 +46,7 @@ function deadlineWords(deadline: BookingDeadline): { text: string; quiet: boolea
  * booking itself (DatePair) and never leaves it.
  */
 export function BookingStrip({ items, anchor, headingId }: BookingStripProps) {
-  const now = useNow();
+  const now = usePlanNow();
   const sorted = sortByDeadline(items);
   const soon = (item: BookingStripItem) =>
     now !== null && item.deadline.kind === "date" && isDueSoon(item.deadline.at, now);

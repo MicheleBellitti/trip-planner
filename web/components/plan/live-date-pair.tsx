@@ -3,7 +3,7 @@
 import type { ComponentProps } from "react";
 
 import { DatePair } from "@/components/ui/date-pair";
-import { useNow } from "@/lib/use-now";
+import { usePlanNow } from "./plan-now";
 
 /**
  * DatePair with the shared one-second clock: only these small pieces re-render every second,
@@ -12,6 +12,6 @@ import { useNow } from "@/lib/use-now";
  * deadlines included).
  */
 export function LiveDatePair(props: Omit<ComponentProps<typeof DatePair>, "now">) {
-  const now = useNow();
+  const now = usePlanNow();
   return <DatePair {...props} now={now} />;
 }
