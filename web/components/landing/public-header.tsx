@@ -15,7 +15,7 @@ export function PublicHeader() {
         <Wordmark href={ROUTES.home} />
         <nav aria-label="Pagina" className="flex items-center gap-2">
           <a
-            href="#come-funziona"
+            href={`${ROUTES.home}#come-funziona`}
             className="inline-flex min-h-11 items-center rounded-full px-2.5 text-small text-ink-2 no-underline hover:text-ink max-[30rem]:hidden"
           >
             Come funziona

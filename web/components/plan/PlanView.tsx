@@ -76,6 +76,18 @@ export interface PlanViewProps {
   loadTrip?: TripLoader;
   /** How to read the destination's cover; defaults to GET /plans/{id}/cover (cover-store). */
   loadCover?: CoverLoader;
+  /** The plan's hand-off in place of "Apri in TripTracker" (the demo's "Pianifica il tuo
+   * viaggio"): a heading for screen readers, a sentence and an in-app link. */
+  handoff?: PlanHandoff;
+  /** A notice above the plan (the demo's: the prices are an example). */
+  notice?: ReactNode;
+}
+
+export interface PlanHandoff {
+  title: string;
+  text: string;
+  label: string;
+  href: string;
 }
 
 type Fetched = { planId: string; ok: true; trip: unknown } | { planId: string; ok: false };
@@ -138,6 +150,8 @@ export function PlanView({
   arrival = false,
   loadTrip = loadTripFromApi,
   loadCover,
+  handoff: ownHandoff,
+  notice,
 }: PlanViewProps) {
   const baseId = useId().replace(/[^\w-]/g, "");
   const tripDates = useTripDueDates(detail, trip, loadTrip);
@@ -193,7 +207,20 @@ export function PlanView({
   const tripLabel = zoneName ? tripPlaceLabel(plan) : null;
   const importUrl = detail.import_url && safeHttpUrl(detail.import_url) ? detail.import_url : null;
 
-  const handoff = importUrl ? (
+  const handoff = ownHandoff ? (
+    <section
+      aria-labelledby={ids.triptracker}
+      className={desktop ? "mt-6 min-w-0 border-t border-rule pt-4" : "min-w-0"}
+    >
+      <h2 id={ids.triptracker} className="sr-only">
+        {ownHandoff.title}
+      </h2>
+      <p className="max-w-prose text-small text-ink-2">{ownHandoff.text}</p>
+      <LinkButton href={ownHandoff.href} variant="secondary" className="mt-3 w-full sm:w-auto lg:w-full">
+        {ownHandoff.label}
+      </LinkButton>
+    </section>
+  ) : importUrl ? (
     <section
       aria-labelledby={ids.triptracker}
       className={desktop ? "mt-6 min-w-0 border-t border-rule pt-4" : "min-w-0"}
@@ -221,6 +248,7 @@ export function PlanView({
 
   return (
     <div className="flex min-w-0 flex-col gap-10 lg:gap-12">
+      {notice ? <div>{notice}</div> : null}
       {/* The destination's photo, with its credit: nothing when the destination has none. */}
       <CoverBand planId={detail.id} destination={plan.destination} loadCover={loadCover} />
 

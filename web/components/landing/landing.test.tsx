@@ -28,7 +28,8 @@ describe("the landing", () => {
     render(<LandingPage />);
     const header = screen.getByRole("banner");
     expect(within(header).getByRole("link", { name: "Atlas" }).getAttribute("href")).toBe(ROUTES.home);
-    expect(within(header).getByRole("link", { name: "Come funziona" }).getAttribute("href")).toBe("#come-funziona");
+    // A path, not a bare fragment: the public header is the demo's too.
+    expect(within(header).getByRole("link", { name: "Come funziona" }).getAttribute("href")).toBe("/#come-funziona");
     expect(within(header).getByRole("link", { name: "Accedi" }).getAttribute("href")).toBe(ROUTES.plans);
   });
 });

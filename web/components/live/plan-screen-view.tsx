@@ -11,7 +11,7 @@
 import { lazy, Suspense, useMemo, useState, type ReactNode } from "react";
 
 import type { CoverLoader } from "@/components/plan/cover/cover-store";
-import type { TripLoader } from "@/components/plan/PlanView";
+import type { PlanHandoff, TripLoader } from "@/components/plan/PlanView";
 import { daysCount, titleStatesDates, tripLength } from "@/components/plan/trip-dates";
 import { isEndedStatus } from "@/components/states/ended-status";
 import { InlineStatus } from "@/components/ui/notice";
@@ -44,6 +44,8 @@ const PlanEndedPanel = lazy(() => loadPanels().then((module) => ({ default: modu
  * handoff and notice). */
 export interface PlanViewExtras {
   loadCover?: CoverLoader;
+  handoff?: PlanHandoff;
+  notice?: ReactNode;
 }
 
 export interface PlanScreenViewProps {
@@ -59,6 +61,10 @@ export interface PlanScreenViewProps {
   header: ReactNode;
   /** The control beside the state ("Interrompi" live). */
   action?: ReactNode;
+  /** A row of its own in the state group (the demo's bar). */
+  bar?: ReactNode;
+  /** How a finished plan's cost is named (the demo's recorded run). */
+  costLabel?: string;
   /** The stream's own line under the header (live). */
   streamLine?: ReactNode;
   /** The viewer asked to interrupt and the plan has not stopped yet. */
@@ -79,6 +85,8 @@ export function PlanScreenView({
   connection,
   header,
   action,
+  bar,
+  costLabel,
   streamLine,
   interrupting = false,
   onContinue,
@@ -153,6 +161,8 @@ export function PlanScreenView({
         costPending={(status === null || status === "running") && !state.costReported}
         sticky={!ready}
         action={action}
+        bar={bar}
+        costLabel={costLabel}
       />
       {streamLine}
       <main className="mx-auto max-w-page px-4 pt-3 lg:px-7 lg:pt-5">
@@ -180,6 +190,8 @@ export function PlanScreenView({
               trip={trip}
               loadTrip={loadTrip}
               loadCover={planView?.loadCover}
+              handoff={planView?.handoff}
+              notice={planView?.notice}
               arrival={watchedRun}
               timeline={
                 <RunSection title="Il lavoro degli agenti" meta={`${stationCount} eventi`}>

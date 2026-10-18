@@ -56,6 +56,29 @@ function deadlineOf(row: HTMLElement): HTMLElement {
 }
 
 describe("PlanView", () => {
+  it("offers its own hand-off when it is given one, instead of TripTracker's", () => {
+    render(
+      <PlanView
+        detail={happyDetail()}
+        trip={happyTrip()}
+        loadTrip={unused}
+        handoff={{ title: "Il tuo viaggio", text: "Descrivi il tuo viaggio.", label: "Pianifica il tuo viaggio", href: "/new" }}
+      />,
+    );
+    const links = screen.getAllByRole("link", { name: "Pianifica il tuo viaggio" });
+    expect(links.length).toBeGreaterThan(0);
+    for (const link of links) expect(link.getAttribute("href")).toBe("/new");
+    expect(screen.queryByRole("link", { name: /Apri in TripTracker/ })).toBeNull();
+  });
+
+  it("puts a notice above the plan when it is given one", () => {
+    const { container } = render(
+      <PlanView detail={happyDetail()} trip={happyTrip()} loadTrip={unused} notice={<p>Una corsa registrata.</p>} />,
+    );
+    const first = container.firstElementChild?.firstElementChild;
+    expect(first?.textContent).toBe("Una corsa registrata.");
+  });
+
   it("shows the summary, the estimated total and the warnings", () => {
     const detail = happyDetail();
     render(<PlanView detail={detail} trip={happyTrip()} loadTrip={unused} />);
