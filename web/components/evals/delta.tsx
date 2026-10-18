@@ -16,7 +16,7 @@ export function DeltaNote({ delta }: { delta: RunDelta | null }) {
   return (
     <dd className={cx("mt-0.5 text-meta font-medium", DELTA_TONES[delta.trend])}>
       {delta.text}
-      <VisuallyHidden> rispetto alla precedente</VisuallyHidden>
+      <VisuallyHidden> rispetto al precedente</VisuallyHidden>
     </dd>
   );
 }

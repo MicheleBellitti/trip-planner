@@ -9,8 +9,13 @@ const webDir = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    // Mirrors tsconfig.json "paths": "@/*" -> "./*"; `server-only` would throw outside RSC.
-    alias: { "@": webDir, "server-only": path.join(webDir, "test/server-only.ts") },
+    alias: {
+      // Mirrors tsconfig.json "paths": "@/*" -> "./*".
+      "@": webDir,
+      // Next resolves `server-only` itself (it is no package of ours); tests of server modules get
+      // Next's own empty variant, the one it uses on the server.
+      "server-only": path.join(webDir, "node_modules/next/dist/compiled/server-only/empty.js"),
+    },
   },
   test: {
     environment: "jsdom",

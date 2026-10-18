@@ -31,6 +31,28 @@ describe("safeReturnTo", () => {
     }
   });
 
+  it("falls back when the parsed path would start with `//`, however the input spells it", () => {
+    for (const raw of [
+      "/.//evil.com",
+      "/a/..//evil.com",
+      "/%2e//evil.com",
+      "/%2E//evil.com",
+      "/././/evil.com",
+      `${ORIGIN}//evil.com`,
+      `${ORIGIN}/.//evil.com`,
+      `${ORIGIN}/a/..//evil.com`,
+      `${ORIGIN}/%2e//evil.com`,
+    ]) {
+      expect(new URL(raw, ORIGIN).pathname.startsWith("//")).toBe(true); // the case is real
+      expect(safeReturnTo(raw, ORIGIN)).toBe(ROUTES.plans);
+    }
+  });
+
+  it("still keeps an ordinary path that merely contains dot segments", () => {
+    expect(safeReturnTo("/plans/./abc", ORIGIN)).toBe("/plans/abc");
+    expect(safeReturnTo("/a/../plans", ORIGIN)).toBe("/plans");
+  });
+
   it("never loops back to the login page itself", () => {
     expect(safeReturnTo("/login?returnTo=%2Fplans", ORIGIN)).toBe(ROUTES.plans);
   });

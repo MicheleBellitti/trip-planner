@@ -9,8 +9,13 @@ import { stripTrailingSlash } from "@/lib/config";
  *
  * `readAuthConfig()` answers null when `DATABASE_URL` is missing: the accounts are then "not
  * configured" (the login page says so, `/api/auth/*` answers 503), and the rest of the app works,
- * as TripTracker does. With a database, production needs the secret and a way to send the magic
- * link; development falls back to a fixed secret and prints the link to the server console.
+ * as TripTracker does. With a database, production needs the secret, a way to send the magic
+ * link and the cookie's domain; development falls back to a fixed secret, prints the link to the
+ * server console and keeps a host-only cookie (what localhost needs).
+ *
+ * Production requires AUTH_COOKIE_DOMAIN because a host-only cookie never reaches the API host:
+ * every API call would answer 401, the client would send the user to /login, and /login (which
+ * sees the cookie) would send them straight back, forever.
  */
 export interface AuthServerConfig {
   databaseUrl: string;
@@ -18,7 +23,7 @@ export interface AuthServerConfig {
   secret: string;
   /** This app's public origin, the base of every callback URL, without a trailing slash. */
   baseUrl: string;
-  /** `Domain=` of the session cookie, so the API subdomain receives it; unset = host-only. */
+  /** `Domain=` of the session cookie, so the API subdomain receives it; null (development only) = host-only. */
   cookieDomain: string | null;
   allowList: AllowList;
   google: { clientId: string; clientSecret: string } | null;
@@ -65,7 +70,7 @@ export function readAuthConfig(): AuthServerConfig | null {
     databaseUrl,
     secret: required("BETTER_AUTH_SECRET", production, DEVELOPMENT_SECRET),
     baseUrl: stripTrailingSlash(required("BETTER_AUTH_URL", production, "http://localhost:3000")),
-    cookieDomain: read("AUTH_COOKIE_DOMAIN") ?? null,
+    cookieDomain: production ? required("AUTH_COOKIE_DOMAIN", production) : (read("AUTH_COOKIE_DOMAIN") ?? null),
     allowList: parseAllowedEmails(process.env.AUTH_ALLOWED_EMAILS),
     google: clientId && clientSecret ? { clientId, clientSecret } : null,
     email: apiKey && from ? { apiKey, from } : null,

@@ -7,7 +7,7 @@ import { useEffect, useRef } from "react";
  * fit (below about 360 px): brings the current station into view, with no animation and no
  * vertical scroll, so the "you are here" ring is never hidden past the edge. It runs on mount and
  * again whenever a station is added or removed: the admin's stations arrive only once GET /me has
- * answered (lib/me.ts), and "Valutazioni" then appears before "Inviti" and pushes it along.
+ * answered (lib/me.ts), and "Collaudi" then appears before "Inviti" and pushes it along.
  */
 export function ScrollToCurrent() {
   const ref = useRef<HTMLSpanElement>(null);

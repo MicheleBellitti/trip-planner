@@ -255,6 +255,65 @@ describe("LoginForm", () => {
     expect(getSession).toHaveBeenCalledTimes(2); // hidden: nothing to ask
   });
 
+  it("any other 403 (an origin or callback Better Auth does not trust) is the generic failure, not the invite rule", async () => {
+    for (const code of ["INVALID_ORIGIN", "MISSING_OR_NULL_ORIGIN", "INVALID_CALLBACK_URL", "INVALID_ERROR_CALLBACK_URL", undefined]) {
+      magicLink.mockResolvedValueOnce({ data: null, error: { status: 403, code, message: "x" } });
+      renderForm();
+      typeAndSubmit("a@example.com");
+
+      await waitFor(() => expect(screen.getByRole("alert").textContent).toContain(SEND_FAILED_ERROR));
+      expect(screen.queryByText(INVITE_ONLY_ERROR)).toBeNull();
+      expect(screen.getByLabelText(LABEL).getAttribute("aria-invalid")).toBeNull();
+      cleanup();
+    }
+
+    social.mockResolvedValueOnce({ data: null, error: { status: 403, code: "INVALID_CALLBACK_URL", message: "x" } });
+    renderForm();
+    fireEvent.click(screen.getByRole("button", { name: "Continua con Google" }));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain(GENERIC_SIGN_IN_ERROR));
+    expect(screen.queryByText(INVITE_ONLY_ERROR)).toBeNull();
+  });
+
+  it("a network failure on the link is an alert and frees the form", async () => {
+    magicLink.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    renderForm();
+    typeAndSubmit("a@example.com");
+
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain(SEND_FAILED_ERROR));
+    expect(screen.getByRole("button", { name: "Inviami il link" })).toHaveProperty("disabled", false);
+    expect(screen.getByLabelText(LABEL)).toHaveProperty("disabled", false);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(LABEL)));
+
+    // The form works again: the next try goes through.
+    magicLink.mockResolvedValueOnce(sent);
+    fireEvent.submit(screen.getByLabelText(LABEL).closest("form")!);
+    await screen.findByRole("heading", { name: "Controlla la posta" });
+  });
+
+  it("a network failure on the resend is an alert in the sent panel and frees its buttons", async () => {
+    magicLink.mockResolvedValueOnce(sent).mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    renderForm();
+    typeAndSubmit("a@example.com");
+    await screen.findByRole("heading", { name: "Controlla la posta" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Inviane un altro" }));
+
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain(SEND_FAILED_ERROR));
+    expect(screen.getByRole("button", { name: "Inviane un altro" })).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: "Cambia indirizzo" })).toHaveProperty("disabled", false);
+  });
+
+  it("a network failure on Google is an alert and frees the buttons", async () => {
+    social.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    renderForm();
+
+    fireEvent.click(screen.getByRole("button", { name: "Continua con Google" }));
+
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain(GENERIC_SIGN_IN_ERROR));
+    expect(screen.getByRole("button", { name: "Continua con Google" })).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: "Inviami il link" })).toHaveProperty("disabled", false);
+  });
+
   it("an address without a shape never leaves the browser", () => {
     renderForm();
 

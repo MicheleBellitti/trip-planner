@@ -23,7 +23,7 @@ from fastapi import FastAPI
 from starlette.types import Message
 
 from app import main, routes, sessions
-from app.auth import CurrentUser
+from app.auth import AuthErrorCode, CurrentUser, auth_messages
 from app.config import Settings
 from app.consumer import PlanNotFoundError
 from app.db import AuthSessionRecord, PlanStatus
@@ -310,6 +310,22 @@ async def test_create_plan_errors_use_the_envelope(
     else:
         assert body["message"] == PLAN_ERROR_MESSAGES[PlanErrorCode(code)]
         assert body["data"] is None
+
+
+async def test_create_plan_for_a_deleted_account_is_401_not_authenticated(
+    api: Api, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    patch_sessions(monkeypatch, "start_plan", error=sessions.UserGoneError())
+
+    response = await api.client.post("/plans", json=VALID_BODY, headers=POST_HEADERS)
+
+    assert response.status_code == 401
+    assert detail(response) == {
+        "code": "not_authenticated",
+        "message": auth_messages(api.app.state.settings)[AuthErrorCode.NOT_AUTHENTICATED],
+        "data": None,
+    }
+    assert response.headers["www-authenticate"] == "Cookie"
 
 
 async def test_without_a_planner_post_plans_is_503(
@@ -892,6 +908,40 @@ async def test_with_the_apps_own_accounts_the_cookie_is_the_session_table_and_pl
             "message": "Accedi per usare il planner.",
             "data": None,
         }
+
+
+async def test_with_the_apps_own_accounts_an_unverified_email_owns_no_legacy_plan_nor_the_evals(
+    make_app: AppFactory,
+    make_settings: Callable[..., Settings],
+    stub_planner: StubPlanner,
+    plan_rows: PlanRows,
+) -> None:
+    """An account whose `users.email_verified` is false keeps the plans stored with its id, but
+    the address alone gives it neither the legacy plans stored by that email nor the admin role,
+    even when ADMIN_EMAILS names it."""
+    await plan_rows.add_user("usr_me", "me@example.com", email_verified=False)
+    await add_session(plan_rows, user_id="usr_me", token="tok3nMe")
+    mine = await plan_rows.add_plan(user_email="me@example.com", user_id="usr_me")
+    legacy = await plan_rows.add_plan(user_email="me@example.com")  # before the switch: no id
+
+    atlas = make_settings(auth_mode="atlas", admin_emails="me@example.com")
+    async with make_app(settings=atlas) as app:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as http:
+            cookie = {"Cookie": f"{ATLAS_COOKIE}=tok3nMe.SiGnAtUrE"}
+            me = await http.get("/me", headers=cookie)
+            listed = await http.get("/plans", headers=cookie)
+            opened = [
+                (await http.get(f"/plans/{plan.id}", headers=cookie)).status_code
+                for plan in (mine, legacy)
+            ]
+            evals = await http.get("/evals/runs", headers=cookie)
+
+    assert me.json() == {"email": "me@example.com", "is_admin": False}
+    assert {plan["id"] for plan in listed.json()["plans"]} == {str(mine.id)}
+    assert opened == [200, 404]
+    assert evals.status_code == 403
+    assert detail(evals)["code"] == "admin_only"
 
 
 # --- CORS -----------------------------------------------------------------------------------------

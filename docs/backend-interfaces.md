@@ -975,8 +975,23 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
     switch. Alembic owns Better Auth's four tables (`users`, `auth_sessions`, `auth_accounts`,
     `auth_verifications`, snake_case through Better Auth's `fields` mapping): one `alembic
     upgrade head` prepares the database for both services, and `tests/test_db.py` keeps the
-    models and the migrations together. (The first version of this mode asked the web app's
-    `/get-session` over HTTP; decision 37 replaced that with the session table.)
+    models and the migrations together. The web app's Better Auth exempts `/get-session` from
+    its per-IP rate limit, because every check came from the backend's one egress IP; the
+    `VerificationBudget` stayed as a second guard. A get-session user without a non-empty
+    string `id` was a malformed answer in `atlas` mode (`parse_get_session(require_user_id=True)`:
+    the stale user or 503 `auth_unavailable`), never a plan with a NULL `user_id`. (This first
+    version of the mode asked the web app's `/get-session` over HTTP; decision 37 replaced that
+    with the session table.) A user whose `users` row is gone by the time the plan is inserted
+    (a cached user on the get-session path; on the session-table path, an account deleted
+    between the check and the insert) makes the insert violate `fk_plans_user_id_users`:
+    `start_plan` raises `UserGoneError` and POST /plans answers 401 `not_authenticated`; any
+    other integrity error stays a 500. `plans.user_id` keeps ON DELETE CASCADE (a deleted
+    account takes its plans), but nothing deletes a `users` row yet. The future delete-account
+    path must, for each of the user's plans, stop its consumer and delete its Managed Agents
+    session before the row, as `jobs._delete_old_plan` does (session first, then row; a session
+    that cannot be deleted keeps the account for a retry): the cascade removes rows, not
+    sessions. Deleting the plans also removes their `cost_cents` from `monthly_spend_cents()`,
+    so that month's spend drops by what the user spent.
 
 37. The backend auth switch (`AUTH_MODE=atlas` reads the session table; the admin role). With
     the web app's own accounts the sessions live in the database this backend migrates, so
@@ -984,22 +999,31 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
     query on `auth_sessions.token`, `expires_at > now`, joined to `users`) instead of asking the
     web app over HTTP. What goes with it: no `VerificationBudget` and no stale window (they
     answered TripTracker's per-IP rate limit, decision 19, which only the TripTracker path still
-    needs), no 60 s cache (a sign-out is effective on the next request), no dependence on Vercel
-    being up for API auth, and the web app no longer needs to exempt `/get-session` from its
-    rate limit. The signature half of the cookie is not checked: Better Auth's own `getSession`
-    checks it and then looks the token up, and the 32-character random token alone is the
-    secret, so a forged signature with an unknown token finds no row; a database error is 503
-    `auth_unavailable`. Access: in `atlas` mode every account may plan
-    (`Settings.may_use_planner`): the web app's `AUTH_ALLOWED_EMAILS` already decided who could
-    sign up, and a second list on Railway would have to be kept in step by hand.
+    needs), no 60 s cache (a sign-out is effective on the next request), and no dependence on
+    Vercel being up for API auth. The web app keeps exempting `/get-session` from its rate
+    limit until this backend has shipped (contract rule 7: a deployed backend from before the
+    switch still asks it from one IP); a later PR can drop the exemption.
+    The signature half of the cookie is not checked: Better Auth's own `getSession` checks it
+    and then looks the token up, and the 32-character random token alone is the secret, so a
+    forged signature with an unknown token finds no row; a database error is 503
+    `auth_unavailable`. Only the `__Secure-atlas.session_token` name is accepted in production
+    with an https `FRONTEND_ORIGIN` (`Settings.secure_session_cookie_only`, both modes): the
+    plain name carries no `__Secure-` guarantee, so a sibling `*.bellittim.com` host could plant
+    it (cookie tossing); development over http keeps accepting both. Access: in `atlas` mode every account
+    may plan (`Settings.may_use_planner`): the web app's `AUTH_ALLOWED_EMAILS` already decided
+    who could sign up, and a second list on Railway would have to be kept in step by hand.
     Ownership (`sessions.plan_owner_filter`, `owns_plan`, `get_user_plan(..., settings=)`): in
     `atlas` mode a plan is the user's when `plans.user_id` is their id, or when it has no id
-    (a plan from before the switch) and carries their verified email; in the other modes by
-    email alone, as before. The admin role is `ADMIN_EMAILS` (`Settings.admins`, `is_admin`):
-    `auth.require_admin` guards `GET /evals/runs*` with 403 `admin_only`; empty means the
-    allowed users outside `atlas` mode (the one-user setup keeps working with no new variable)
-    and nobody in it. `GET /me` (`routes.MeResponse`: `email`, `is_admin`) lets the web app
-    show the "Valutazioni" station only to admins. The TripTracker path is untouched (contract
+    (a plan from before the switch) and carries their email, provided `users.email_verified`
+    is true (`CurrentUser.email_verified`): anyone may type another person's address into the
+    sign-up form, and until the account proves it owns the address that address hands it
+    nothing; an unverified account still owns the plans stored with its `user_id`. In the other
+    modes by email alone, as before. The admin role is `ADMIN_EMAILS` (`Settings.admins`,
+    `auth.user_is_admin`): `auth.require_admin` guards `GET /evals/runs*` with 403
+    `admin_only`, and in `atlas` mode it also wants a verified email; empty means the allowed
+    users outside `atlas` mode (the one-user setup keeps working with no new variable) and
+    nobody in it. `GET /me` (`routes.MeResponse`: `email`, `is_admin`) lets the web app
+    show the "Collaudi" station only to admins. The TripTracker path is untouched (contract
     rule 7): its removal waits until production runs `atlas`.
 
 38. The waitlist (`waitlist`, migration `609ccf5bdc99`; `db.WaitlistRecord`). The closed beta's

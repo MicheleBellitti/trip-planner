@@ -181,7 +181,7 @@ export default function ComponentGalleryPage() {
                 </Button>
               </Row>
               <Row label="Link">
-                <LinkButton href="/new" icon="plus" variant="primary">
+                <LinkButton href={ROUTES.newPlan} icon="plus" variant="primary">
                   Nuovo piano
                 </LinkButton>
                 <LinkButton href="https://www.expedia.it" external variant="primary">

@@ -59,6 +59,7 @@ from app.auth import (
     session_cookie_names,
     session_token,
     token_cache_key,
+    user_is_admin,
     verify_atlas_session,
 )
 from app.config import Settings
@@ -121,6 +122,15 @@ def test_session_cookie_accepts_the_local_http_name_and_ignores_empty_values() -
     assert session_cookie(make_request([("Cookie", f"{SECURE_COOKIE}=; theme=dark")])) is None
     assert session_cookie(make_request([("Cookie", "theme=dark")])) is None
     assert session_cookie(make_request([])) is None
+
+
+def test_secure_only_accepts_just_the_secure_name() -> None:
+    assert session_cookie_names(secure_only=True) == (SECURE_COOKIE,)
+    assert session_cookie_names("atlas", secure_only=True) == (ATLAS_SECURE_COOKIE,)
+    plain_only = make_request([("Cookie", f"{PLAIN_COOKIE}={SIGNED_TOKEN}")])
+    assert session_cookie(plain_only, secure_only=True) is None
+    both = make_request([("Cookie", f"{PLAIN_COOKIE}=planted.sig; {SECURE_COOKIE}={SIGNED_TOKEN}")])
+    assert session_cookie(both, secure_only=True) == (SECURE_COOKIE, SIGNED_TOKEN)
 
 
 def test_only_better_auth_cookies_are_forwarded_untouched_and_in_order() -> None:
@@ -189,6 +199,21 @@ def test_parse_get_session() -> None:
     for malformed in ({}, {"user": None}, {"user": {"email": ""}}, {"user": {"email": 3}}, []):
         with pytest.raises(ValueError, match="get-session"):
             parse_get_session(malformed)
+    # Without `require_user_id` (TripTracker's provider) a missing id is tolerated.
+    assert parse_get_session({"user": {"email": "a@example.com"}}) == CurrentUser("a@example.com")
+
+
+def test_parse_get_session_requires_the_id_when_plans_store_it() -> None:
+    assert parse_get_session(session_body(), require_user_id=True) == CurrentUser(
+        email="test@example.com", auth_user_id="usr_1"
+    )
+    assert parse_get_session(None, require_user_id=True) is None  # signed out stays signed out
+    for user_id in (None, "", 7, ["usr_1"]):
+        body = {"user": {"email": "a@example.com", "id": user_id}}
+        with pytest.raises(ValueError, match="get-session user has no id"):
+            parse_get_session(body, require_user_id=True)
+    with pytest.raises(ValueError, match="get-session user has no id"):
+        parse_get_session({"user": {"email": "a@example.com"}}, require_user_id=True)
 
 
 def test_auth_errors_use_the_api_envelope() -> None:
@@ -1031,11 +1056,12 @@ async def add_atlas_session(
     email: str = "Test@Example.com",
     expires_in: dt.timedelta = TOMORROW,
     with_user: bool = True,
+    email_verified: bool = True,
 ) -> None:
     """A `users` row and an `auth_sessions` row, as the web app's Better Auth writes them."""
     async with db_session_factory() as db:
         if with_user:
-            db.add(UserRecord(id=user_id, email=email))
+            db.add(UserRecord(id=user_id, email=email, email_verified=email_verified))
             await db.commit()
         db.add(
             AuthSessionRecord(
@@ -1065,7 +1091,7 @@ async def test_verify_atlas_session_reads_the_session_and_its_user(
 
     user = await verify_atlas_session(db_session_factory, SIGNED_TOKEN)
 
-    assert user == CurrentUser("test@example.com", "usr_1")  # the email lower-cased
+    assert user == CurrentUser("test@example.com", "usr_1", email_verified=True)  # lower-cased
     assert await verify_atlas_session(db_session_factory, "unknown.sig") is None
     assert await verify_atlas_session(db_session_factory, ".sig") is None
     # Expiry is checked against `now`: one second after `expires_at` the session is gone.
@@ -1197,6 +1223,56 @@ async def test_an_implausible_atlas_cookie_never_reaches_the_database(
     assert response.status_code == 401  # 503 would mean the lookup was attempted
 
 
+def test_only_production_over_https_refuses_the_plain_cookie_name(
+    make_settings: Callable[..., Settings],
+) -> None:
+    production = {"anthropic_api_key": "sk-test", "agent_profile": "production"}
+    assert make_settings(
+        environment="production", auth_mode="atlas", **production
+    ).secure_session_cookie_only
+    assert make_settings(
+        environment="production", auth_mode="triptracker", **production
+    ).secure_session_cookie_only
+    assert not make_settings(auth_mode="atlas").secure_session_cookie_only  # development
+    assert not make_settings(
+        auth_mode="atlas", frontend_origin="http://localhost:3000"
+    ).secure_session_cookie_only
+
+
+async def test_in_production_an_atlas_cookie_under_the_plain_name_is_refused(
+    make_settings: Callable[..., Settings], db_session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """Cookie tossing: a sibling `*.bellittim.com` host can set `atlas.session_token` (no
+    `__Secure-` guarantees), so in production only the `__Secure-` name stands for a session."""
+    await add_atlas_session(db_session_factory)
+    settings = make_settings(
+        environment="production",
+        auth_mode="atlas",
+        anthropic_api_key="sk-test",
+        agent_profile="production",
+    )
+    app = atlas_app(settings, db_session_factory)
+
+    async with asgi_client(app) as client:
+        plain = await client.get("/me", headers={"Cookie": f"{ATLAS_PLAIN_COOKIE}={SIGNED_TOKEN}"})
+        secure = await client.get(
+            "/me", headers={"Cookie": f"{ATLAS_SECURE_COOKIE}={SIGNED_TOKEN}"}
+        )
+        # A planted plain cookie beside the real one changes nothing: the secure one is read.
+        both = await client.get(
+            "/me",
+            headers={
+                "Cookie": f"{ATLAS_PLAIN_COOKIE}=planted.sig; {ATLAS_SECURE_COOKIE}={SIGNED_TOKEN}"
+            },
+        )
+
+    assert plain.status_code == 401
+    assert plain.json()["detail"]["code"] == "not_authenticated"
+    assert secure.status_code == 200
+    assert both.status_code == 200
+    assert both.json() == {"email": "test@example.com", "id": "usr_1"}
+
+
 # --- the admin role -------------------------------------------------------------------------------
 
 
@@ -1227,6 +1303,29 @@ async def test_the_admin_role_guards_a_route_after_the_session_check(
     assert allowed.json() == {"email": "test@example.com"}
 
 
+async def test_an_admins_address_without_a_verified_email_is_no_admin(
+    make_settings: Callable[..., Settings], db_session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """Anyone may type an admin's address into the sign-up form: until the account proves it
+    owns the address (users.email_verified), ADMIN_EMAILS does not make it an admin."""
+    await add_atlas_session(db_session_factory, email_verified=False)
+    settings = make_settings(auth_mode="atlas", admin_emails="test@example.com")
+    app = atlas_app(settings, db_session_factory)
+
+    async with asgi_client(app) as client:
+        refused = await client.get(
+            "/admin-only", headers={"Cookie": f"{ATLAS_PLAIN_COOKIE}={SIGNED_TOKEN}"}
+        )
+
+    assert refused.status_code == 403
+    assert refused.json()["detail"]["code"] == "admin_only"
+    unverified = CurrentUser("test@example.com", "usr_1", email_verified=False)
+    assert user_is_admin(unverified, settings) is False
+    assert user_is_admin(CurrentUser("test@example.com", "usr_1", True), settings) is True
+    # Outside atlas mode the allowlisted email is trusted, as before.
+    assert user_is_admin(CurrentUser("test@example.com"), make_settings()) is True
+
+
 async def test_in_local_mode_the_allowed_user_is_the_admin_by_default(
     make_settings: Callable[..., Settings],
 ) -> None:
@@ -1240,3 +1339,18 @@ async def test_in_local_mode_the_allowed_user_is_the_admin_by_default(
         refused = await client.get("/admin-only")
     assert refused.status_code == 403
     assert refused.json()["detail"]["code"] == "admin_only"
+
+
+async def test_triptracker_mode_still_accepts_a_user_without_an_id(
+    triptracker_settings: Settings, http: httpx.AsyncClient, mock_tt: respx.MockRouter
+) -> None:
+    assert triptracker_settings.plans_carry_user_id is False
+    route = mock_tt.get(GET_SESSION_URL).respond(200, json={"user": {"email": "test@example.com"}})
+    app = auth_app(triptracker_settings, SessionVerifier(triptracker_settings, http))
+
+    async with asgi_client(app) as client:
+        response = await client.get("/me", headers={"Cookie": f"{SECURE_COOKIE}={SIGNED_TOKEN}"})
+
+    assert response.status_code == 200
+    assert response.json() == {"email": "test@example.com", "id": None}
+    assert route.call_count == 1

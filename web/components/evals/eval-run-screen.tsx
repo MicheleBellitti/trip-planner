@@ -4,7 +4,7 @@
  * "/evals/[id]": one eval run (GET /evals/runs/{id}). The header with the run's facts and its
  * verdict, the comparison with the baseline, the requests as closed rows (the deep dive behind
  * each, the ones that stopped the gate first) and the agent versions closed at the end. A link to
- * `#richiesta-<id>` opens that request; "Più recente" and "Più vecchia" step to the neighbouring
+ * `#richiesta-<id>` opens that request; "Più recente" and "Più vecchio" step to the neighbouring
  * runs. Fetched in the browser (the cookie), like the plans.
  */
 
@@ -28,6 +28,8 @@ import { EvalRunSkeleton } from "./eval-run-skeleton";
 import { RequestRow } from "./request-row";
 import { RunHeader } from "./run-header";
 import { StepLink } from "./run-pager";
+import { evalRunPath } from "@/lib/page-paths";
+import { ROUTES } from "@/lib/routes";
 
 type ScreenState =
   | { kind: "loading" }
@@ -64,18 +66,18 @@ export function EvalRunScreen({ runId }: { runId: string }) {
         <main className="mx-auto max-w-page px-4 pt-2 lg:px-7">
           <StatePanel
             icon="warning"
-            title="Questa valutazione non c'è"
-            headingId="valutazione-mancante"
+            title="Questo collaudo non c'è"
+            headingId="collaudo-mancante"
             actions={
-              <LinkButton href="/evals" variant="primary" icon="arrow-left">
-                Torna alle valutazioni
+              <LinkButton href={ROUTES.evals} variant="primary" icon="arrow-left">
+                Torna ai collaudi
               </LinkButton>
             }
           >
             <StateFact label="Cosa è successo">{state.message}</StateFact>
             <StateFact label="Cosa puoi fare">
-              Torna all&apos;elenco: le valutazioni arrivano dalla CI dopo ogni run, e quella che cerchi potrebbe non
-              essere ancora stata caricata.
+              Torna all&apos;elenco: i collaudi arrivano dalla CI dopo ogni run, e quello che cerchi potrebbe non
+              essere ancora stato caricato.
             </StateFact>
           </StatePanel>
         </main>
@@ -102,7 +104,7 @@ export function EvalRunScreen({ runId }: { runId: string }) {
           <BackLink />
           <Notice
             tone="error"
-            title="La valutazione non si è caricata"
+            title="Il collaudo non si è caricato"
             className="mt-4 max-w-[48rem]"
             action={
               <Button
@@ -131,11 +133,11 @@ export function EvalRunScreen({ runId }: { runId: string }) {
 function BackLink() {
   return (
     <Link
-      href="/evals"
+      href={ROUTES.evals}
       className="-my-1.5 inline-flex min-h-11 items-center gap-1.5 rounded-xs text-meta text-ink-2 no-underline hover:text-ink hover:underline"
     >
       <Icon name="arrow-left" size={15} />
-      Valutazioni
+      Collaudi
     </Link>
   );
 }
@@ -170,12 +172,12 @@ function RunPage({ run }: { run: EvalRunDetail }) {
         <div className="flex max-w-[64rem] flex-wrap items-center justify-between gap-x-4">
           <BackLink />
           {/* The neighbours, in the list's direction: newer to the left, older to the right. */}
-          <nav aria-label="Valutazioni vicine" className="flex items-center gap-4">
-            <StepLink href={run.next_run ? `/evals/${run.next_run.id}` : null} direction="newer">
+          <nav aria-label="Collaudi vicini" className="flex items-center gap-4">
+            <StepLink href={run.next_run ? evalRunPath(run.next_run.id) : null} direction="newer">
               Più recente
             </StepLink>
-            <StepLink href={run.previous_run ? `/evals/${run.previous_run.id}` : null} direction="older">
-              Più vecchia
+            <StepLink href={run.previous_run ? evalRunPath(run.previous_run.id) : null} direction="older">
+              Più vecchio
             </StepLink>
           </nav>
         </div>

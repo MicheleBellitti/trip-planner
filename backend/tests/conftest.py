@@ -438,10 +438,11 @@ class PlanRows:
 
     session_factory: async_sessionmaker[AsyncSession]
 
-    async def add_user(self, user_id: str, email: str) -> None:
-        """Insert a `users` row (the web app's own accounts), for plans that carry `user_id`."""
+    async def add_user(self, user_id: str, email: str, *, email_verified: bool = True) -> None:
+        """Insert a `users` row (the web app's own accounts), for plans that carry `user_id`;
+        verified unless told otherwise, as a magic-link sign-in leaves it."""
         async with self.session_factory() as db:
-            db.add(UserRecord(id=user_id, email=email))
+            db.add(UserRecord(id=user_id, email=email, email_verified=email_verified))
             await db.commit()
 
     async def add_plan(

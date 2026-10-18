@@ -79,7 +79,7 @@ export function PlanEndedPanel({ status, blocker = null, failureReason, costCent
       headingId="state-ended"
       actions={
         <>
-          <LinkButton href="/new" variant="primary" icon="plus">
+          <LinkButton href={ROUTES.newPlan} variant="primary" icon="plus">
             Crea un nuovo piano
           </LinkButton>
           <LinkButton href={ROUTES.plans} variant="quiet" icon="arrow-left">

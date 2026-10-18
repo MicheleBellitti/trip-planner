@@ -94,6 +94,21 @@ describe("design invariants", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("spells no page path by hand: every link and navigation goes through lib/routes.ts", () => {
+    const HAND_PATH = /(?:href=\{?|href:\s*|push\()\s*["'`]\/(?:new|evals|plans|demo)\b/;
+    const offenders = [...sources(path.join(webDir, "components")), ...sources(path.join(webDir, "app"))]
+      .filter((file) => HAND_PATH.test(readFileSync(file, "utf8")))
+      .map((file) => path.relative(webDir, file));
+    expect(offenders).toEqual([]);
+  });
+
+  it("calls the eval history \"Collaudi\" on screen, never \"Valutazioni\"", () => {
+    const offenders = [...sources(path.join(webDir, "components")), ...sources(path.join(webDir, "app"))]
+      .filter((file) => /valutazion/i.test(readFileSync(file, "utf8")))
+      .map((file) => path.relative(webDir, file));
+    expect(offenders).toEqual([]);
+  });
+
   it("recognises AI chrome in raw CSS and in Tailwind's own utilities, but not the sticky bar's glass", () => {
     for (const glow of [
       "filter: drop-shadow(0 0 4px red)",

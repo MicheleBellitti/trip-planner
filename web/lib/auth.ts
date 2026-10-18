@@ -22,7 +22,8 @@ import { isInvited } from "./server/waitlist";
  *   TripTracker's `better-auth` cookie on the shared `bellittim.com` domain), with `Domain=` set
  *   to AUTH_COOKIE_DOMAIN so the API subdomain receives it. The backend verifies it against the
  *   `auth_sessions` table of the shared database (backend/app/auth.py `verify_atlas_session`):
- *   no call back to this app, so a sign-out is effective on its next request.
+ *   no call back to this app, so a sign-out is effective on its next request. `/get-session`
+ *   stays exempt from the rate limit until no deployed backend asks it any more (`rateLimit`).
  * - Sign-up is by invitation: an address may create an account when it is in AUTH_ALLOWED_EMAILS
  *   (lib/auth-policy.ts: the bootstrap list and the `*` of a public launch) or when an admin
  *   invited it on the waitlist (lib/server/waitlist.ts `isInvited`, the day-to-day list). The
@@ -65,6 +66,9 @@ function build(config: AuthServerConfig) {
         userAgent: "user_agent",
         userId: "user_id",
       },
+      // Sliding: a get-session that may refresh, at most once a day, extends the session to 30
+      // days again. Only the browser's call from components/auth/session-refresh.tsx can (the
+      // backend sends disableRefresh=true, /login's RSC check cannot write cookies).
       expiresIn: 30 * DAY_SECONDS,
       updateAge: DAY_SECONDS,
     },
@@ -91,6 +95,13 @@ function build(config: AuthServerConfig) {
       cookiePrefix: COOKIE_PREFIX,
       useSecureCookies: config.baseUrl.startsWith("https://"),
       crossSubDomainCookies: config.cookieDomain ? { enabled: true, domain: config.cookieDomain } : { enabled: false },
+    },
+    rateLimit: {
+      // A backend from before the switch (contract rule 7: the web may ship first) checks every
+      // request here from its one IP, and Better Auth's per-IP limit would turn those checks into
+      // 429s. Drop this in a later PR, once the deployed backend no longer calls get-session.
+      // Every other path keeps the defaults.
+      customRules: { "/get-session": false },
     },
     socialProviders: config.google
       ? { google: { clientId: config.google.clientId, clientSecret: config.google.clientSecret } }

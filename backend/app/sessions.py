@@ -41,6 +41,7 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy.exc import IntegrityError
 
 from app import clock
 from app import consumer as consumer_api
@@ -148,6 +149,28 @@ class MonthlyLimitReachedError(Exception):
         super().__init__(f"monthly spend {spent_cents} >= limit {limit_cents} (US cents)")
         self.spent_cents = spent_cents
         self.limit_cents = limit_cents
+
+
+class UserGoneError(Exception):
+    """POST /plans refused: the signed-in user's `users` row no longer exists (the account was
+    deleted while a verified session was still cached, `auth.SessionCache`), so the
+    `plans.user_id` foreign key refused the insert. Routes answer 401 `not_authenticated`."""
+
+
+PLANS_USER_FK = "fk_plans_user_id_users"
+"""The `plans.user_id` -> `users.id` foreign key (db.NAMING_CONVENTION, migration 600fbb922f91)."""
+
+_FOREIGN_KEY_VIOLATION = "23503"
+
+
+def is_plans_user_fk_violation(exc: IntegrityError) -> bool:
+    """True only when `exc` is Postgres refusing `plans.user_id` because the user is gone; any
+    other integrity error (another key, a check, a duplicate) is not this one."""
+    orig = exc.orig
+    if getattr(orig, "sqlstate", None) != _FOREIGN_KEY_VIOLATION:
+        return False
+    # SQLAlchemy's asyncpg adapter raises its own error from asyncpg's, which names the constraint.
+    return getattr(getattr(orig, "__cause__", None), "constraint_name", None) == PLANS_USER_FK
 
 
 class PlanStateError(Exception):
@@ -543,7 +566,13 @@ async def _create_and_start(
                 agent_versions=agent_versions,
             )
         )
-        await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError as exc:
+            if not is_plans_user_fk_violation(exc):
+                raise
+            bound.warning("plan_refused_user_gone")
+            raise UserGoneError from None
     sink = EventSink(plan_id, session_factory=services.session_factory, hub=services.hub)
     await sink.emit(
         backend_event(EventKind.STATUS, TITLE_PLAN_CREATED, ts=now),
@@ -1061,19 +1090,21 @@ def plan_owner_filter(user: CurrentUser, *, settings: Settings) -> ColumnElement
     """SQL predicate: the plans that belong to `user`.
 
     When the signed-in id is one of this backend's `users.id` (`Settings.plans_carry_user_id`,
-    AUTH_MODE=atlas): the rows whose `user_id` is that id, plus the rows from before the switch
-    that have no `user_id` and carry the user's email (the provider verified the address, so
-    those plans are theirs too). Otherwise (TripTracker's and the local mode's plans) the rows
-    with the user's email, compared trimmed and lower-cased. `owns_plan` is the same rule for a
-    row already loaded.
+    AUTH_MODE=atlas): the rows whose `user_id` is that id, plus, when the account's email is
+    verified (`CurrentUser.email_verified`: it proved it owns the address), the rows from before
+    the switch that have no `user_id` and carry that email. An unverified account sees only the
+    plans stored with its id: anyone may type someone else's address into a sign-up form, and
+    the address alone must not hand them that person's old plans. Otherwise (TripTracker's and
+    the local mode's plans) the rows with the user's email, compared trimmed and lower-cased.
+    `owns_plan` is the same rule for a row already loaded.
     """
     email = user.email.strip().lower()
     by_email = func.lower(PlanRecord.user_email) == email
     if settings.plans_carry_user_id and user.auth_user_id:
-        return or_(
-            PlanRecord.user_id == user.auth_user_id,
-            and_(PlanRecord.user_id.is_(None), by_email),
-        )
+        by_id = PlanRecord.user_id == user.auth_user_id
+        if not user.email_verified:
+            return by_id
+        return or_(by_id, and_(PlanRecord.user_id.is_(None), by_email))
     return by_email
 
 
@@ -1081,7 +1112,8 @@ def owns_plan(plan: PlanRecord, user: CurrentUser, *, settings: Settings) -> boo
     """`plan_owner_filter`'s rule for a loaded row."""
     same_email = plan.user_email.strip().lower() == user.email.strip().lower()
     if settings.plans_carry_user_id and user.auth_user_id:
-        return plan.user_id == user.auth_user_id or (plan.user_id is None and same_email)
+        legacy = user.email_verified and plan.user_id is None and same_email
+        return plan.user_id == user.auth_user_id or legacy
     return same_email
 
 
