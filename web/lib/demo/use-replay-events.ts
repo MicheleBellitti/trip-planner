@@ -10,14 +10,17 @@
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 
+import { SETTLE_MS } from "@/components/live/hooks";
 import { initialPlanLiveState, planEventsReducer, type PlanLiveState } from "@/lib/plan-events/reducer";
 import type { UIEvent } from "@/lib/schemas/generated/ui-event";
 
 import { replaySchedule } from "./schedule";
 
 /** The first event waits for the live screen's baseline (components/live/hooks.ts, SETTLE_MS),
- * so the replayed events draw in and are announced as live ones. */
-export const REPLAY_SETTLE_MS = 600;
+ * so the replayed events draw in and are announced as live ones. Strictly later, not equal: two
+ * timers due in the same millisecond can both run before React renders, and the baseline would
+ * then count the first events as history (no draw-in, no announcement). */
+export const REPLAY_SETTLE_MS = SETTLE_MS + 150;
 
 /** The clock updates a few times a second (the elapsed time shows seconds). */
 const TICK_MS = 250;

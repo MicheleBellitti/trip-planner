@@ -6,6 +6,7 @@ import { DEMO_REQUEST } from "@/lib/demo/request";
 import { REPLAY_TARGET_MS } from "@/lib/demo/schedule";
 import { REPLAY_SETTLE_MS } from "@/lib/demo/use-replay-events";
 import backend from "@/lib/plan-events/__fixtures__/backend/happy-path.json";
+import { SETTLE_MS } from "@/components/live/hooks";
 import { PLAN_STATE_ID } from "@/components/live/live-header";
 import { ROUTES } from "@/lib/routes";
 
@@ -64,6 +65,17 @@ describe("DemoPlanScreen", () => {
     expect(finishedPlan().length).toBeGreaterThan(0);
     expect(network.fetch).not.toHaveBeenCalled();
     expect(network.EventSource).not.toHaveBeenCalled();
+  });
+
+  it("draws in the very first replayed station: it lands after the live baseline settles", async () => {
+    render(<DemoPlanScreen />);
+    // The baseline's moment, then the replay's first tick, each in its own step (React renders
+    // between them, as a browser does between timers that are not due together). Were both due in
+    // the same millisecond, the baseline would count the first events as history: the first
+    // stations would not draw in (and a lane change among them would go unspoken).
+    await advance(SETTLE_MS + 1);
+    await advance(REPLAY_SETTLE_MS - SETTLE_MS + 50);
+    expect(document.querySelectorAll("[class*='animate-arrive']").length).toBeGreaterThan(0);
   });
 
   it("jumps to the finished plan on 'Salta al piano'", async () => {
