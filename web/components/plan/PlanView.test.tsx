@@ -446,4 +446,79 @@ describe("PlanView reading the Trip", () => {
       }
     });
   });
+
+  describe("dead links", () => {
+    const OCEANARIO = "https://www.oceanario.pt/";
+    const PENA = "https://www.parquesdesintra.pt/";
+    const deadHome = (url: string, fallback: string | null) => ({
+      [url]: { status: "dead", fallback, fallback_allowed: false },
+    });
+
+    it("shows 'Sito di a.example' for a dead stop page with a fallback", () => {
+      const detail = happyDetail();
+      detail.link_health = deadHome(OCEANARIO, "https://www.oceanario.pt/home/");
+      render(<PlanView detail={detail} trip={happyTrip()} loadTrip={unused} />);
+      const link = screen.getAllByRole("link").find((a) => a.textContent?.startsWith("Sito di oceanario.pt"));
+      expect(link?.getAttribute("href")).toBe("https://www.oceanario.pt/home/");
+      expect(link?.getAttribute("target")).toBe("_blank");
+      expect(link?.getAttribute("rel")).toBe("noopener noreferrer");
+    });
+
+    it("shows 'Pagina non trovata' and no link for a dead stop page without one", () => {
+      const detail = happyDetail();
+      detail.link_health = deadHome(PENA, null);
+      render(<PlanView detail={detail} trip={happyTrip()} loadTrip={unused} />);
+      const missing = screen.getAllByText("Pagina non trovata");
+      expect(missing.length).toBeGreaterThan(0);
+      missing.forEach((node) => expect(node.closest("a")).toBeNull());
+      expect(document.querySelector(`a[href="${PENA}"]`)).toBeNull();
+    });
+
+    it("one verdict drives the stop link and the price source of the same URL", () => {
+      const detail = happyDetail();
+      detail.link_health = deadHome(OCEANARIO, "https://www.oceanario.pt/");
+      render(<PlanView detail={detail} trip={happyTrip()} loadTrip={unused} />);
+      const sites = screen.getAllByRole("link").filter((a) => /^sito di oceanario\.pt/i.test(a.textContent ?? ""));
+      expect(sites.map((a) => a.textContent?.slice(0, 20))).toEqual(["Sito di oceanario.pt", "sito di oceanario.pt"]);
+    });
+
+    it("a dead price source without a fallback reads 'Fonte host (pagina non trovata)' as text", () => {
+      const detail = happyDetail();
+      detail.link_health = deadHome("https://www.aerobus.pt/", null);
+      render(<PlanView detail={detail} trip={happyTrip()} loadTrip={unused} />);
+      expect(screen.getByText("aerobus.pt (pagina non trovata)")).toBeTruthy();
+      expect(document.querySelector('a[href="https://www.aerobus.pt/"]')).toBeNull();
+    });
+
+    it("a dead booking link without a fallback shows no button and the search hint", () => {
+      const detail = happyDetail();
+      const link = detail.plan!.bookings[0]!.link!;
+      detail.link_health = deadHome(link, null);
+      render(<PlanView detail={detail} trip={happyTrip()} loadTrip={unused} />);
+      expect(screen.getAllByRole("link", { name: /^Prenota su / })).toHaveLength(1);
+      const rows = bookingRows();
+      const row = rows.find((r) => r.textContent?.includes("Pagina non trovata")) as HTMLElement;
+      expect(within(row).getByText("Pagina non trovata")).toBeTruthy();
+      expect(within(row).getByText("Cerca l'offerta sul sito del fornitore.")).toBeTruthy();
+      expect(row.querySelector("a[target]")).toBeNull();
+    });
+
+    it("renders an older plan without link_health exactly as before", () => {
+      const snapshot = () => ({
+        text: document.body.textContent,
+        links: [...document.querySelectorAll("a")].map((a) => [a.getAttribute("href")?.replace(/^#.*/, "#"), a.textContent]),
+      });
+      const { unmount } = render(<PlanView detail={happyDetail()} trip={happyTrip()} loadTrip={unused} />);
+      const before = snapshot();
+      unmount();
+      const detail = happyDetail();
+      detail.link_health = {
+        [OCEANARIO]: { status: "unknown", fallback: null, fallback_allowed: false },
+        [PENA]: { status: "ok", fallback: null, fallback_allowed: false },
+      };
+      render(<PlanView detail={detail} trip={happyTrip()} loadTrip={unused} />);
+      expect(snapshot()).toEqual(before);
+      expect(screen.queryByText("Pagina non trovata")).toBeNull();
+    });
+  });
 });

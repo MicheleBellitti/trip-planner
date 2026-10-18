@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { LinkCheck } from "@/lib/schemas/api";
+import type { LinkCheck, LinkHealthMap } from "@/lib/schemas/api";
 import type { PlanBooking } from "@/lib/schemas/generated/plan";
 
 import {
@@ -22,6 +22,7 @@ import {
   needsTripDueDate,
   parsePlanDate,
   planNeedsTrip,
+  planUrl,
   planTotal,
   safeHttpUrl,
   stopPlace,
@@ -289,5 +290,58 @@ describe("the plan's first screen", () => {
   it("names the trip's clock only when the trip is away from home", () => {
     expect(tripZoneName({ timezone: "Europe/Lisbon", destination: "Lisbona, Portogallo" }, "Europe/Rome")).toBe("ora di Lisbona");
     expect(tripZoneName({ timezone: "Europe/Rome", destination: "Roma" }, "Europe/Rome")).toBeNull();
+  });
+});
+
+describe("planUrl and dead links", () => {
+  const DEAD = "https://www.a.example/old-page";
+  const HEALTH: LinkHealthMap = {
+    [DEAD]: { status: "dead", fallback: "https://www.a.example/", fallback_allowed: false },
+    "https://b.example/gone": { status: "dead", fallback: null, fallback_allowed: false },
+    "https://c.example/x": { status: "unknown", fallback: null, fallback_allowed: false },
+    "https://d.example/x": { status: "ok", fallback: null, fallback_allowed: false },
+  };
+
+  it("planUrl: a dead page with a fallback is the homepage", () =>
+    expect(planUrl(DEAD, HEALTH)).toEqual({ kind: "homepage", href: "https://www.a.example/", host: "a.example" }));
+  it("planUrl: a dead page without a fallback is missing", () =>
+    expect(planUrl("https://b.example/gone", HEALTH)).toEqual({ kind: "missing", host: "b.example" }));
+  it("planUrl: no verdict, or ok or unknown, is the link as today", () => {
+    for (const url of ["https://c.example/x", "https://d.example/x", "https://e.example/x"]) {
+      expect(planUrl(url, HEALTH)).toMatchObject({ kind: "link", href: url });
+    }
+    expect(planUrl("https://www.e.example/x", {})).toEqual({ kind: "link", href: "https://www.e.example/x", host: "e.example" });
+  });
+  it("planUrl: an empty or non-http URL is none", () => {
+    expect(planUrl(null, HEALTH)).toEqual({ kind: "none" });
+    expect(planUrl("", HEALTH)).toEqual({ kind: "none" });
+    expect(planUrl("javascript:alert(1)", HEALTH)).toEqual({ kind: "none" });
+  });
+  it("planUrl: an unsafe fallback is never linked", () => {
+    const health: LinkHealthMap = { [DEAD]: { status: "dead", fallback: "javascript:alert(1)", fallback_allowed: false } };
+    expect(planUrl(DEAD, health)).toEqual({ kind: "missing", host: "a.example" });
+  });
+
+  const FLIGHTS = "https://www.google.com/travel/flights?q=x";
+  it("bookingAction: a dead Google Flights link is missing, never a button", () => {
+    const check: LinkCheck = { allowed: true, provider: "google_flights", label: "Google Voli", host: "www.google.com" };
+    const health: LinkHealthMap = { [FLIGHTS]: { status: "dead", fallback: "https://www.google.com/", fallback_allowed: false } };
+    expect(bookingAction(FLIGHTS, check, health)).toEqual({ kind: "missing" });
+  });
+  it("bookingAction: a dead Booking.com link with an allowed fallback is a button to it", () => {
+    const link = "https://www.booking.com/hotel/pt/gone.html";
+    const check: LinkCheck = { allowed: true, provider: "booking", label: "Booking.com", host: "www.booking.com" };
+    const health: LinkHealthMap = { [link]: { status: "dead", fallback: "https://www.booking.com/", fallback_allowed: true } };
+    expect(bookingAction(link, check, health)).toEqual({ kind: "button", href: "https://www.booking.com/", site: "Booking.com" });
+  });
+  it("bookingAction: an allowed fallback is not trusted without an allowed check", () => {
+    const link = "https://www.booking.com/hotel/pt/gone.html";
+    const health: LinkHealthMap = { [link]: { status: "dead", fallback: "https://www.booking.com/", fallback_allowed: true } };
+    expect(bookingAction(link, REFUSED, health)).toEqual({ kind: "missing" });
+  });
+  it("bookingAction: without health, or with a live verdict, is unchanged", () => {
+    expect(bookingAction("https://www.expedia.it/x", EXPEDIA)).toEqual({ kind: "button", href: "https://www.expedia.it/x", site: "Expedia" });
+    const health: LinkHealthMap = { "https://www.expedia.it/x": { status: "ok", fallback: null, fallback_allowed: false } };
+    expect(bookingAction("https://www.expedia.it/x", EXPEDIA, health)).toMatchObject({ kind: "button" });
   });
 });

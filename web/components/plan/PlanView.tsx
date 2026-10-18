@@ -301,6 +301,7 @@ export function PlanView({
                       timeZone={plan.timezone}
                       bookings={plan.bookings}
                       bookingAnchor={bookingAnchor}
+                      health={detail.link_health}
                     />
                   </ItineraryDays>
                 </>
@@ -327,6 +328,7 @@ export function PlanView({
                 id={bookingAnchor(index)}
                 booking={booking}
                 check={check ?? null}
+                health={detail.link_health}
                 deadline={deadline}
                 timeZone={plan.timezone}
                 startsAtHome={startsAtHome}
@@ -364,6 +366,7 @@ export function PlanView({
                       alternative
                       booking={item.booking}
                       check={item.check}
+                      health={detail.link_health}
                       deadline={alternativeDeadline(item.booking)}
                       timeZone={plan.timezone}
                       startsAtHome={bookingStartsAtHome(plan, item.booking)}

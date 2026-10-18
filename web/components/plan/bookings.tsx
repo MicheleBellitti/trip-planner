@@ -6,7 +6,7 @@ import { Icon } from "@/components/ui/icon";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import type { BookingDeadline } from "@/lib/booking-dates";
 import { formatDateTime, HOME_TIMEZONE } from "@/lib/format";
-import type { LinkCheck } from "@/lib/schemas/api";
+import type { LinkCheck, LinkHealthMap } from "@/lib/schemas/api";
 import type { PlanBooking, Price } from "@/lib/schemas/generated/plan";
 
 import { LiveDatePair } from "./live-date-pair";
@@ -17,6 +17,7 @@ import {
   CATEGORY_LABELS,
   formatPrice,
   hostLabel,
+  planUrl,
   safeHttpUrl,
   type BookingAction,
 } from "./plan-model";
@@ -50,16 +51,21 @@ function sourceName(source: URL, check: LinkCheck | null): string {
 
 /** Price, its status as a word and its provenance: "812,00 € [verificato] Fonte expedia.it,
  * letto il 12 ott 2026, 12:01". */
-function PriceLine({ price, check }: { price: Price | null; check: LinkCheck | null }) {
+function PriceLine({ price, check, health }: { price: Price | null; check: LinkCheck | null; health: LinkHealthMap }) {
   if (!price) return <p className="mt-1 text-small text-ink-2">Prezzo non indicato</p>;
   const source = safeHttpUrl(price.source_url);
+  const where = planUrl(price.source_url, health);
   return (
     <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-small text-ink-2">
       <span className="font-semibold text-ink">{formatPrice(price)}</span>
       <Chip>{price.status === "verified" ? "verificato" : "stimato"}</Chip>
       <span className="min-w-0">
         Fonte{" "}
-        {source ? (
+        {where.kind === "homepage" ? (
+          <QuietExternalLink href={where.href}>{`sito di ${where.host}`}</QuietExternalLink>
+        ) : where.kind === "missing" ? (
+          <span className="[overflow-wrap:anywhere]">{where.host ?? price.source_url} (pagina non trovata)</span>
+        ) : source ? (
           <QuietExternalLink href={price.source_url}>{sourceName(source, check)}</QuietExternalLink>
         ) : (
           <span className="[overflow-wrap:anywhere]">{price.source_url}</span>
@@ -100,6 +106,14 @@ function ActionSide({
       </LinkButton>
     );
   }
+  if (action.kind === "missing") {
+    return (
+      <div className="min-w-0 text-meta text-ink-2">
+        <p className="font-semibold">Pagina non trovata</p>
+        <p>Cerca l&apos;offerta sul sito del fornitore.</p>
+      </div>
+    );
+  }
   if (action.kind === "text") {
     return (
       <div className="min-w-0 text-meta text-ink-2" data-link-text="">
@@ -134,10 +148,14 @@ function ActionSide({
   );
 }
 
+const NO_HEALTH: LinkHealthMap = {};
+
 interface BookingRowProps {
   booking: PlanBooking;
   /** The backend's verdict on `booking.link` (PlanDetail.booking_links / .alternative_links). */
   check: LinkCheck | null;
+  /** The link check's verdicts by URL (PlanDetail.link_health); only `dead` changes the row. */
+  health?: LinkHealthMap;
   /** The "Prenota entro" side, decided by the caller (lib/booking-dates `bookingDeadline` for
    * the plan's bookings, `alternativeDeadline` for alternatives). */
   deadline: BookingDeadline;
@@ -158,9 +176,9 @@ interface BookingRowProps {
  * labelled) | "Prenota su <sito>". On the phone the three stack; from 1080 px they sit side by
  * side (1.3fr 1.4fr 240px).
  */
-export function BookingRow({ booking, check, deadline, timeZone, startsAtHome = false, tripLabel = null, alternative = false, id }: BookingRowProps) {
+export function BookingRow({ booking, check, health = NO_HEALTH, deadline, timeZone, startsAtHome = false, tripLabel = null, alternative = false, id }: BookingRowProps) {
   const line = bookingLine(booking, check);
-  const action = bookingAction(booking.link, check);
+  const action = bookingAction(booking.link, check, health);
   return (
     <li
       id={id}
@@ -176,7 +194,7 @@ export function BookingRow({ booking, check, deadline, timeZone, startsAtHome = 
         <div className="min-w-0">
           <p className="text-meta text-ink-2">{CATEGORY_LABELS[bookingCategory(booking, check)]}</p>
           <h3 className="text-body font-semibold [overflow-wrap:anywhere]">{booking.title}</h3>
-          <PriceLine price={booking.price} check={check} />
+          <PriceLine price={booking.price} check={check} health={health} />
           {booking.notes ? (
             <p className="mt-1.5 text-meta whitespace-pre-line text-ink-2 [overflow-wrap:anywhere]">{booking.notes}</p>
           ) : null}

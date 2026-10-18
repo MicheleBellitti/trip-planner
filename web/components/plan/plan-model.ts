@@ -9,7 +9,7 @@
  */
 
 import type { BookingDeadline } from "@/lib/booking-dates";
-import type { LinkCheck } from "@/lib/schemas/api";
+import type { LinkCheck, LinkHealthMap } from "@/lib/schemas/api";
 import type { Plan, PlanBooking, PlanStop, Price } from "@/lib/schemas/generated/plan";
 import type { AgentName } from "@/lib/schemas/generated/ui-event";
 
@@ -54,6 +54,30 @@ export function alignedChecks(checks: readonly (LinkCheck | null)[], length: num
   return [...checks];
 }
 
+/** What a plan URL (a stop's page, a price's source) becomes on screen once the link check's
+ * verdict is known. Only a `dead` verdict changes anything: no entry, `ok` and `unknown` read as
+ * the link, exactly as before the check existed. */
+export type PlanUrl =
+  /** The URL as the plan has it. */
+  | { kind: "link"; href: string; host: string }
+  /** A dead page: its site's homepage ("Sito di host"). */
+  | { kind: "homepage"; href: string; host: string }
+  /** A dead page with no usable homepage: plain text, never an anchor. */
+  | { kind: "missing"; host: string | null }
+  /** Empty, or not an http(s) URL a page may link to. */
+  | { kind: "none" };
+
+export function planUrl(url: string | null | undefined, health: LinkHealthMap): PlanUrl {
+  const parsed = safeHttpUrl(url);
+  if (!url || !parsed) return { kind: "none" };
+  const host = hostLabel(parsed);
+  const entry = health[url];
+  if (entry?.status !== "dead") return { kind: "link", href: url, host };
+  const fallback = safeHttpUrl(entry.fallback);
+  if (fallback && entry.fallback) return { kind: "homepage", href: entry.fallback, host: hostLabel(fallback) };
+  return { kind: "missing", host };
+}
+
 /** What a booking's link becomes on screen. */
 export type BookingAction =
   /** "Prenota su <site>": the backend's allowlist accepted the link (CLAUDE.md, contract rule 4).
@@ -61,6 +85,9 @@ export type BookingAction =
   | { kind: "button"; href: string; site: string }
   /** A link outside the allowlist (or unchecked, or not https): shown as plain text. */
   | { kind: "text"; text: string }
+  /** The link check found the page dead and there is no allowed homepage to send the reader to:
+   * no button, no link; the reader looks the offer up on the supplier's site. */
+  | { kind: "missing" }
   /** No link at all. */
   | { kind: "none" };
 
@@ -68,11 +95,28 @@ export type BookingAction =
  * The link gate: a booking link is a button only when the backend's verdict for it says
  * `allowed` and the link is an absolute https URL; in every other case it is plain text, never
  * an anchor. The site's name is the verdict's label ("Expedia"), else its host.
+ *
+ * `health` (PlanDetail.link_health) can only take a link away: a `dead` link is a button to its
+ * site's homepage when the backend allowed that homepage (`fallback_allowed`, and the link's own
+ * check is allowed), else `missing`. Without it, or with any other verdict, nothing changes.
  */
-export function bookingAction(link: string | null | undefined, check: LinkCheck | null | undefined): BookingAction {
+export function bookingAction(
+  link: string | null | undefined,
+  check: LinkCheck | null | undefined,
+  health?: LinkHealthMap,
+): BookingAction {
   const text = link?.trim();
   if (!text) return { kind: "none" };
   const url = safeHttpUrl(link);
+  const entry = link ? health?.[link] : undefined;
+  if (entry?.status === "dead") {
+    const fallback = safeHttpUrl(entry.fallback);
+    if (entry.fallback_allowed && check?.allowed === true && fallback?.protocol === "https:" && entry.fallback) {
+      const site = check.label?.trim() || check.host?.trim() || hostLabel(fallback);
+      return { kind: "button", href: entry.fallback, site };
+    }
+    return { kind: "missing" };
+  }
   if (check?.allowed === true && url?.protocol === "https:") {
     const site = check.label?.trim() || check.host?.trim() || hostLabel(url);
     return { kind: "button", href: link as string, site };

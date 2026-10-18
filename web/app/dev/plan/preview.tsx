@@ -102,6 +102,17 @@ function edgeCase(now: number): { detail: PlanDetail; trip: unknown } {
   ];
   const firstStop = plan.days[0]?.stops[0];
   if (firstStop) firstStop.url = "javascript:alert(1)";
+  // The link check's three dead cases (PlanDetail.link_health): a stop page with a homepage
+  // fallback ("Sito di ..."), a price source without one ("pagina non trovata") and a Google
+  // Flights booking link, which never falls back to a button ("Pagina non trovata").
+  const stopPage = plan.days.flatMap((day) => day.stops).find((stop) => stop.url);
+  const flightsLink = "https://www.google.com/travel/flights?q=Flights%20from%20MXP%20to%20LIS";
+  flight.link = flightsLink;
+  detail.link_health = {
+    ...(stopPage?.url ? { [stopPage.url]: { status: "dead", fallback: new URL(stopPage.url).origin + "/", fallback_allowed: false } } : {}),
+    ...(oceanario.price ? { [oceanario.price.source_url]: { status: "dead", fallback: null, fallback_allowed: false } } : {}),
+    [flightsLink]: { status: "dead", fallback: "https://www.google.com/", fallback_allowed: false },
+  };
   plan.alternatives = [
     ...(plan.alternatives ?? []),
     {
