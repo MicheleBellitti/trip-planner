@@ -473,6 +473,9 @@ def test_proxy_headers_are_trusted_in_production_unless_said_otherwise(
     make_settings: MakeSettings,
 ) -> None:
     assert make_settings().trusts_proxy_headers is False  # development
+    assert (
+        make_settings(trust_proxy_headers="").trust_proxy_headers is None
+    )  # the example's blank line
     assert make_settings(trust_proxy_headers=True).trusts_proxy_headers is True
     production = make_settings(
         environment="production",

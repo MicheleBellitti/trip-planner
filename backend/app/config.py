@@ -345,6 +345,14 @@ class Settings(BaseSettings):
             return value.strip() or None
         return value
 
+    @field_validator("trust_proxy_headers", mode="before")
+    @classmethod
+    def _blank_proxy_flag_is_unset(cls, value: object) -> object:
+        """`TRUST_PROXY_HEADERS=` (the example file's line) means "the environment's default"."""
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
     @field_validator("trip_schema_url", mode="before")
     @classmethod
     def _strip_schema_url(cls, value: object) -> object:
