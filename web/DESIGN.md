@@ -544,9 +544,11 @@ layout, not a stretched phone.
   "710 € sotto il budget di 2.400 €", in neutral ink whether under or over, with one quiet line,
   "3 prezzi stimati"; the base; the dates only when the title does not state them, else the length
   goes in the header's subtitle and the budget leaves it); **"Da prenotare"**, the bookings sorted
-  by deadline, one 44 px row each (roundel, underlined title, "entro ven 26 feb"), each a link to
-  its row below, with "N in scadenza" in ink when some are due within 72 hours (amber stays
-  inside `DatePair`); the warnings; then days as a vertical sequence of stops (never a grid of
+  by deadline, one row each, at least 44 px (roundel, underlined title, and under it both dates,
+  "Prenota entro ven 26 feb" and "Quando mer 14 apr", in `DatePair`'s compact variant on the
+  row's own clocks), each a link to its row below, with "N in scadenza" in ink when some are due
+  within 72 hours (their "Prenota entro" turns amber inside that `DatePair`, and "In scadenza ·
+  tra 2 giorni" says it in words); the warnings; then days as a vertical sequence of stops (never a grid of
   cards), **drawn as the trip's line map** (`itinerary.tsx`): each day is its own 5 px line (the
   lanes' width) in the hue the map gives that day, dashed from the sixth day as on the map; its
   head is a day badge, a disc in that hue with the day's number in `on-line` (28 px on the phone,
@@ -583,7 +585,9 @@ layout, not a stretched phone.
   clock at home in bold ("mer 14 apr, 09:40") and the trip's clock is the ink-2 second line, naming
   its zone ("08:40 a Lisbona", `startsAtHome` and `tripLabel`). A booking at the destination shows
   the trip's clock alone: no second clock, no zone words. He reads the plan from home: a flight is
-  not read on the wrong clock.
+  not read on the wrong clock. The compact variant (the "Da prenotare" strip, the alternatives) says
+  the days alone, each on the clock the fields lead with, and never the second clock: a time in
+  brackets after a bare date ("mer 14 apr (08:40 a Lisbona)") reads as the booking's time.
 - **When the plan arrives** under someone watching the run, the page scrolls to the plan's top
   (never down) and the focus goes to its summary heading (`tabIndex -1`); a plan that is merely
   opened does neither. The one live region stays for lane states only.
