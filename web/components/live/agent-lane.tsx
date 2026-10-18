@@ -196,7 +196,7 @@ export function LaneBody({ view, startedAt, now, freshAfterSeq, running, stale, 
           {running && (live || view.state === "working" || view.state === "waiting") ? <TimelineNext /> : null}
         </Timeline>
       )}
-      {endRef ? <div ref={endRef} aria-hidden="true" /> : null}
+      {endRef ? <div ref={endRef} data-lane-end="" aria-hidden="true" /> : null}
     </>
   );
 }

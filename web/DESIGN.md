@@ -965,13 +965,26 @@ replay in `web/lib/demo/`.
   the events re-stamped on the replay's clock, which is also the elapsed time and the lanes' clock.
   It starts by itself after the live baseline settles, pauses while the page is hidden and never
   leaps more than a second; 2× rescales what is left.
+- **The camera** (`AgentLanes follow="show"`): while the visitor only watches, the work stays on
+  screen. On the phone the open card follows the agent at work, even on screen, and comes into
+  view when the work moves to it; on wider layouts the coordinator's newest station stays in view.
+  `block: "nearest"` moves the page only when something is out of view, smoothly unless reduced
+  motion is asked; the first scroll, key or toggle hands the page back. Live, `follow="reader"`
+  never moves anything under a reader.
 - **Demo bar** (`DemoBar`), a row of its own in the live header's state group, in place of
-  "Interrompi": "Corsa dimostrativa: dati di esempio, gratis per te", "Ricomincia" (remounts the
-  run), "2×" (pressed) and "Salta al piano" (while it plays).
+  "Interrompi". While it plays: "Corsa dimostrativa: dati di esempio, gratis per te", "Ricomincia"
+  (remounts the run and moves the focus to the plan's state), "2×" (named "Velocità doppia",
+  pressed) and "Salta al piano". When it ends, where the arrival lands: "Fine della corsa
+  dimostrativa. Atlas è su invito.", "Ricomincia" and the ask, "Pianifica il tuo viaggio" → `/new`
+  for a browser that has signed in before (the returning-visitor mark), "Accedi" → `/plans`
+  otherwise, since the form would only send a visitor to the login after it was filled in.
 - **The story agrees.** The detail carries the request the run was given (`lib/demo/request.ts`:
-  children of 9 and 6, 2.800 €), the cost is named "Costo della corsa registrata", a notice says the
-  prices are an example, and "Pianifica il tuo viaggio" → `/new` replaces "Apri in TripTracker".
-  The booking links stay the real, allowlisted ones.
+  children of 9 and 6, 2.800 €; the landing's samples say the same), and the finished line gives
+  the recorded run's own figures, "Corsa registrata: durata 1:17 · costo 0,41 $", not the replay's
+  45 s. The plan's relative dates read on the recording's day (PlanView `now`, `PlanNowContext`),
+  so the showcase never turns amber or past. A notice says the prices are an example, the
+  hand-off below the plan matches the bar's ask in place of "Apri in TripTracker", and the
+  booking links stay the real, allowlisted ones.
 
 ## Map
 

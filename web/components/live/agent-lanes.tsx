@@ -54,6 +54,13 @@ export function mayFollowLane({
 
 const SUBAGENTS = AGENTS.filter((agent) => agent !== "coordinator");
 
+/** The camera glides, unless the visitor asked for reduced motion. */
+function cameraMotion(): ScrollBehavior {
+  return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ? "auto"
+    : "smooth";
+}
+
 /** Under the live bar (LiveHeader measures it into `--live-bar-h`), above the lanes' own marks:
  * the one z-index besides the bar (10 < 20). The heads stay on screen while the lines scroll. */
 const HEADS_STRIP =
@@ -118,6 +125,24 @@ export function AgentLanes({
     follow,
   });
   if (followedIsStale && mayFollow) setFollowed(focus);
+
+  // The demo's camera (`show`): while the visitor only watches, the work stays on screen. On the
+  // phone the open card's newest station stays in view as the work moves and grows; on wider
+  // layouts the coordinator's newest station does. "nearest" moves the page only when the thing is out of view; a scroll, a key or
+  // a toggle (`touched`) hands the page back to the visitor.
+  const followedStations = views[followed].stations.length;
+  useEffect(() => {
+    if (follow !== "show" || touched || layout !== "stack") return;
+    // The open card's end, where its newest station is (the card itself before it opens).
+    const card = document.getElementById(laneCardId(followed));
+    const end = card?.querySelector<HTMLElement>("[data-lane-end]") ?? card;
+    end?.scrollIntoView?.({ block: "nearest", behavior: cameraMotion() });
+  }, [follow, touched, layout, followed, followedStations]);
+  const coordinatorStations = views.coordinator.stations.length;
+  useEffect(() => {
+    if (follow !== "show" || touched || layout === "stack") return;
+    coordinatorEnd.current?.scrollIntoView?.({ block: "nearest", behavior: cameraMotion() });
+  }, [follow, touched, layout, coordinatorStations]);
 
   useEffect(() => {
     const mark = () => setTouched(true);

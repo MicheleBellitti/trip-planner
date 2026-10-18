@@ -92,10 +92,11 @@ describe("DemoPlanScreen", () => {
 
   it("toggles 2× as a pressed button", async () => {
     render(<DemoPlanScreen />);
-    const fast = screen.getByRole("button", { name: "2×" });
+    const fast = screen.getByRole("button", { name: "Velocità doppia" });
+    expect(fast.textContent).toBe("2×");
     expect(fast.getAttribute("aria-pressed")).toBe("false");
     fireEvent.click(fast);
-    expect(screen.getByRole("button", { name: "2×" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Velocità doppia" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("tells the request the run was given: the header, the coordinator and the budget agree", async () => {
@@ -120,23 +121,32 @@ describe("DemoPlanScreen", () => {
     expect(DEMO_REQUEST.dates.exact_end).toBe(recorded.dates.exact_end);
   });
 
-  it("ends on 'Pianifica il tuo viaggio' and the recorded run's cost, with no TripTracker link", async () => {
+  it("ends with no TripTracker link and the example-prices notice", async () => {
     render(<DemoPlanScreen />);
     await advance(WHOLE_RUN);
-    const plan = screen.getAllByRole("link", { name: "Pianifica il tuo viaggio" });
-    expect(plan.length).toBeGreaterThan(0);
-    for (const link of plan) expect(link.getAttribute("href")).toBe(ROUTES.newPlan);
     expect(screen.queryByRole("link", { name: /TripTracker/ })).toBeNull();
     expect(document.body.textContent).toContain("prezzi e disponibilità sono un esempio");
   });
-  it("ends with its own ask in the bar, where the arrival lands, honest about the invitation", async () => {
+  it("ends with its own ask in the bar: 'Accedi' for a visitor, honest about the invitation", async () => {
     render(<DemoPlanScreen />);
     await advance(WHOLE_RUN);
     const bar = screen.getByRole("group", { name: "Stato del piano" });
-    const ask = within(bar).getByRole("link", { name: "Pianifica il tuo viaggio" });
-    expect(ask.getAttribute("href")).toBe(ROUTES.newPlan);
+    expect(within(bar).getByRole("link", { name: "Accedi" }).getAttribute("href")).toBe(ROUTES.plans);
+    expect(within(bar).queryByRole("link", { name: "Pianifica il tuo viaggio" })).toBeNull();
     expect(bar.textContent).toContain("Atlas è su invito");
-    expect(document.body.textContent).toContain("Se hai un invito");
+    expect(document.body.textContent).toContain("Atlas è su invito: con un invito");
+  });
+
+  it("offers 'Pianifica il tuo viaggio' to a browser that has signed in before", async () => {
+    localStorage.setItem("atlas-signed-in", "1");
+    try {
+      render(<DemoPlanScreen />);
+      await advance(WHOLE_RUN);
+      const bar = screen.getByRole("group", { name: "Stato del piano" });
+      expect(within(bar).getByRole("link", { name: "Pianifica il tuo viaggio" }).getAttribute("href")).toBe(ROUTES.newPlan);
+    } finally {
+      localStorage.removeItem("atlas-signed-in");
+    }
   });
 
   it("gives the recorded run's real duration when it ends, not the replay's", async () => {

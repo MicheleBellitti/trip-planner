@@ -5,8 +5,9 @@ import { ROUTES } from "@/lib/routes";
 
 /**
  * The demo's bar (spec, "Demo"), in place of "Interrompi": what this run is, then "Ricomincia",
- * "2×" and "Salta al piano" while it plays; once it ends, "Ricomincia" and the demo's own ask,
- * "Pianifica il tuo viaggio", where the arrival lands, honest that access is by invitation. Its
+ * "2×" and "Salta al piano" while it plays; once it ends, "Ricomincia" and the demo's own ask
+ * where the arrival lands: "Pianifica il tuo viaggio" for a browser that has signed in before,
+ * "Accedi" for anyone else, honest that access is by invitation. Its
  * own row in the live header's state group, so it fits a phone beside nothing else.
  */
 export function DemoBar({
@@ -15,7 +16,9 @@ export function DemoBar({
   onRestart,
   onSkip,
   done,
+  signedIn,
 }: {
+  signedIn: boolean;
   speed: number;
   onSpeed: (speed: number) => void;
   onRestart: () => void;
@@ -32,15 +35,24 @@ export function DemoBar({
           Ricomincia
         </Button>
         {done ? (
-          <LinkButton href={ROUTES.newPlan} variant="primary" size="sm" className="pointer-coarse:min-h-11">
-            Pianifica il tuo viaggio
-          </LinkButton>
+          // A browser that has signed in before plans a trip; anyone else signs in (by invitation):
+          // the form would only send them to the login after they filled it in.
+          signedIn ? (
+            <LinkButton href={ROUTES.newPlan} variant="primary" size="sm" className="pointer-coarse:min-h-11">
+              Pianifica il tuo viaggio
+            </LinkButton>
+          ) : (
+            <LinkButton href={ROUTES.plans} variant="primary" size="sm" icon="sign-in" className="pointer-coarse:min-h-11">
+              Accedi
+            </LinkButton>
+          )
         ) : (
           <>
             <Button
               size="sm"
               variant="secondary"
               aria-pressed={speed === 2}
+              aria-label="Velocità doppia"
               onClick={() => onSpeed(speed === 2 ? 1 : 2)}
               className="pointer-coarse:min-h-11 pointer-coarse:min-w-11 aria-pressed:bg-notice-wash aria-pressed:inset-ring-[1.5px] aria-pressed:inset-ring-ink"
             >

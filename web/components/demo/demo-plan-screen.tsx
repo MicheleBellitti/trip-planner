@@ -26,6 +26,7 @@ import type { Cover, PlanDetail } from "@/lib/schemas/api";
 import type { UIEvent } from "@/lib/schemas/generated/ui-event";
 
 import { DemoBar } from "./demo-bar";
+import { useSignedIn } from "./use-signed-in";
 
 const EVENTS = backend.events as unknown as UIEvent[];
 const EPOCH = EVENTS[0]!.ts;
@@ -39,11 +40,18 @@ const DETAIL = { ...detailJson, request: DEMO_REQUEST, import_url: null } as unk
 const COVER = coverJson as Cover;
 const loadCover: CoverLoader = async () => COVER;
 
-const HANDOFF = {
+/** The finished plan's hand-off, in TripTracker's place: plan a trip, or sign in (by invitation). */
+const PLAN_HANDOFF = {
   title: "Il tuo viaggio",
-  text: "Se hai un invito, descrivi il tuo viaggio: cinque agenti lo pianificano così, con le date entro cui prenotare.",
+  text: "Descrivi il tuo viaggio: cinque agenti lo pianificano così, con le date entro cui prenotare.",
   label: "Pianifica il tuo viaggio",
   href: ROUTES.newPlan,
+};
+const SIGN_IN_HANDOFF = {
+  title: "Il tuo viaggio",
+  text: "Atlas è su invito: con un invito, accedi con il tuo account TripTracker e pianifica il prossimo viaggio.",
+  label: "Accedi",
+  href: ROUTES.plans,
 };
 
 const NOTICE = (
@@ -72,6 +80,7 @@ function DemoRun({
   onRestart: () => void;
 }) {
   const { state, now, done, skip } = useReplayEvents(EVENTS, { speed, epoch: EPOCH });
+  const signedIn = useSignedIn();
 
   // The finished plan's chunk, warmed while the run plays so the arrival is instant.
   useEffect(() => {
@@ -87,13 +96,13 @@ function DemoRun({
       stale={false}
       connection="open"
       header={<PublicHeader themeToggle={false} />}
-      bar={<DemoBar speed={speed} onSpeed={onSpeed} onRestart={onRestart} onSkip={skip} done={done} />}
+      bar={<DemoBar speed={speed} onSpeed={onSpeed} onRestart={onRestart} onSkip={skip} done={done} signedIn={signedIn} />}
       followLanes="show"
       durationLabel="Corsa registrata: durata"
       finishedElapsed={RECORDED_DURATION}
       costLabel="costo"
       trip={tripJson}
-      planView={{ loadCover, handoff: HANDOFF, notice: NOTICE, now: RECORDED_NOW }}
+      planView={{ loadCover, handoff: signedIn ? PLAN_HANDOFF : SIGN_IN_HANDOFF, notice: NOTICE, now: RECORDED_NOW }}
     />
   );
 }
