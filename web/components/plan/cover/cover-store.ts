@@ -17,7 +17,6 @@
 
 import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 
-import { lazyApi } from "@/lib/lazy-api";
 import type { Cover } from "@/lib/schemas/api";
 
 import { uniqueCovers } from "./cover-sources";
@@ -68,13 +67,9 @@ function pump(): void {
   }
 }
 
-/** GET /plans/{id}/cover, importing the API client only when it is called: a page that brings
- * its own loader (the demo) never evaluates the client. */
-const defaultLoader: CoverLoader = async (planId) => (await lazyApi()).getCover(planId);
-
 /** Starts reading a plan's cover unless it is known (or on its way). Safe to call on every
  * render of an effect: it does nothing twice. */
-export function requestCover(planId: string, load: CoverLoader = defaultLoader): void {
+export function requestCover(planId: string, load: CoverLoader): void {
   const known = states.get(planId);
   if (known && !(known.kind === "none" && known.retry)) return;
   states.set(planId, LOADING);
@@ -113,7 +108,9 @@ export function useCover(planId: string, enabled = true, load?: CoverLoader): Co
     loader.current = load;
   });
   useEffect(() => {
-    if (enabled) requestCover(planId, loader.current);
+    // No loader, no request: the page that shows the cover says where it comes from (the live
+    // pages read GET /plans/{id}/cover, the demo its own copy), so this store needs no client.
+    if (enabled && loader.current) requestCover(planId, loader.current);
   }, [planId, enabled]);
   return state;
 }

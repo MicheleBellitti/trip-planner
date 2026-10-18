@@ -12,6 +12,7 @@
 
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 
+import type { CoverLoader } from "@/components/plan/cover/cover-store";
 import type { TripLoader } from "@/components/plan/PlanView";
 import { SessionExpiredPanel } from "@/components/states/session-expired";
 import { AppHeaderBar } from "@/components/nav/app-header-bar";
@@ -139,6 +140,7 @@ export function PlanScreen({ planId, client = liveApi }: { planId: string; clien
   const now = useNow();
   const online = useOnline();
   const loadTrip = useCallback<TripLoader>((id, signal) => client.getTrip(id, { signal }), [client]);
+  const loadCover = useCallback<CoverLoader>((id) => client.getCover(id), [client]);
 
   const title = displayTitle(detail?.title ?? "Piano");
   useEffect(() => {
@@ -252,6 +254,7 @@ export function PlanScreen({ planId, client = liveApi }: { planId: string; clien
       }
       onContinue={resume}
       loadTrip={loadTrip}
+      planView={{ loadCover }}
     />
   );
 }

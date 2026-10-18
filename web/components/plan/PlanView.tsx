@@ -32,8 +32,6 @@ import type { PlanDetail } from "@/lib/schemas/api";
 import { BookingStrip } from "./booking-strip";
 import { BookingRow } from "./bookings";
 import { Itinerary } from "./itinerary";
-import { lazyApi } from "@/lib/lazy-api";
-
 import { CoverBand } from "./cover/cover-band";
 import type { CoverLoader } from "./cover/cover-store";
 import { ItineraryDays, ItineraryMapPanel, ItineraryMapProvider } from "./map/itinerary-map";
@@ -54,10 +52,6 @@ import { PlanSummary } from "./plan-summary";
 /** Reads GET /plans/{id}/trip; rejects when it cannot. */
 export type TripLoader = (planId: string, signal: AbortSignal) => Promise<unknown>;
 
-/** The default reader, importing the API client only when it is called: a page that gives the
- * Trip or its own loader (the demo) never evaluates the client. */
-const loadTripFromApi: TripLoader = async (planId, signal) => (await lazyApi()).getTrip(planId, { signal });
-
 export interface PlanViewProps {
   /** GET /plans/{id} of a `ready` plan. */
   detail: PlanDetail;
@@ -71,10 +65,12 @@ export interface PlanViewProps {
   /** The plan just appeared under a viewer who was watching it run: bring its top into view and
    * move the focus to its summary heading (a plan that is simply opened does neither). */
   arrival?: boolean;
-  /** How to read the Trip when `trip` is not given; defaults to `api.getTrip`. Pass a stable
-   * function (a new one on every render reads the Trip again). */
+  /** How to read the Trip when `trip` is not given (GET /plans/{id}/trip on the live page); none,
+   * the derived "Prenota entro" dates stay unknown. Pass a stable function (a new one on every
+   * render reads the Trip again). PlanView imports no API client: the page brings its loaders. */
   loadTrip?: TripLoader;
-  /** How to read the destination's cover; defaults to GET /plans/{id}/cover (cover-store). */
+  /** How to read the destination's cover (GET /plans/{id}/cover live, the demo's own copy); none,
+   * no photo. */
   loadCover?: CoverLoader;
   /** The plan's hand-off in place of "Apri in TripTracker" (the demo's "Pianifica il tuo
    * viaggio"): a heading for screen readers, a sentence and an in-app link. */
@@ -93,19 +89,19 @@ export interface PlanHandoff {
 type Fetched = { planId: string; ok: true; trip: unknown } | { planId: string; ok: false };
 
 /** The Trip's due dates, for `bookingDeadline`: from the `trip` prop, or read once. */
-function useTripDueDates(detail: PlanDetail, provided: unknown, loadTrip: TripLoader): TripDueDates {
+function useTripDueDates(detail: PlanDetail, provided: unknown, loadTrip: TripLoader | undefined): TripDueDates {
   const plan = detail.plan;
   const hasProvided = provided !== null && provided !== undefined;
   const needed = plan !== null && planNeedsTrip(plan);
   // GET /trip answers 409 before `ready`, so a plan in another state is never asked.
-  const shouldFetch = needed && !hasProvided && detail.status === "ready";
+  const shouldFetch = needed && !hasProvided && detail.status === "ready" && loadTrip !== undefined;
   const [fetched, setFetched] = useState<Fetched | null>(null);
 
   useEffect(() => {
     if (!shouldFetch) return;
     const planId = detail.id;
     const controller = new AbortController();
-    loadTrip(planId, controller.signal).then(
+    loadTrip?.(planId, controller.signal).then(
       (trip) => {
         if (!controller.signal.aborted) setFetched({ planId, ok: true, trip });
       },
@@ -148,7 +144,7 @@ export function PlanView({
   trip = null,
   timeline,
   arrival = false,
-  loadTrip = loadTripFromApi,
+  loadTrip,
   loadCover,
   handoff: ownHandoff,
   notice,

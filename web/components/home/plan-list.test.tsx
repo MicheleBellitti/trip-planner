@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -340,8 +340,7 @@ describe("PlanList", () => {
     it("shows a tile with the destination's initial when there is no photo, and no credit note", async () => {
       mocks.listPlans.mockResolvedValue(PLANS);
       await renderList();
-      // The covers' default loader imports the API client on first use: a beat later than the list.
-      await waitFor(() => expect(mocks.getCover).toHaveBeenCalledWith(PLANS[0]?.id));
+      expect(mocks.getCover).toHaveBeenCalledWith(PLANS[0]?.id);
       const tiles = document.querySelectorAll("[data-cover='tile']");
       expect(tiles).toHaveLength(2);
       expect(tiles[0]?.textContent).toBe("L");
@@ -353,11 +352,8 @@ describe("PlanList", () => {
       mocks.getCover.mockResolvedValue(COVER);
       mocks.listPlans.mockResolvedValue([PLANS[0], { ...PLANS[0]!, id: "55555555-3b4d-4e5f-8a9b-0c1d2e3f4a5b" }]);
       await renderList();
-      const image = await waitFor(() => {
-        const found = document.querySelector("[data-cover='photo'].aspect-\\[4\\/3\\] img");
-        if (!found) throw new Error("no thumbnail yet");
-        return found;
-      });
+      const thumb = document.querySelector("[data-cover='photo'].aspect-\\[4\\/3\\]");
+      const image = thumb?.querySelector("img");
       expect(image?.getAttribute("alt")).toBe("");
       expect(image?.getAttribute("loading")).toBe("lazy");
       expect(image?.getAttribute("referrerpolicy")).toBe("no-referrer");
@@ -388,7 +384,7 @@ describe("PlanList", () => {
         [1, 2, 3].map((n) => ({ ...PLANS[0]!, id: `${n}1111111-3b4d-4e5f-8a9b-0c1d2e3f4a5b` })),
       );
       await renderList();
-      const disclosure = (await screen.findByText("Crediti delle foto (3)")).closest("details") as HTMLDetailsElement;
+      const disclosure = screen.getByText("Crediti delle foto (3)").closest("details") as HTMLDetailsElement;
       expect(disclosure.open).toBe(false);
       expect(disclosure.querySelectorAll("li")).toHaveLength(3);
       expect(disclosure.textContent).toContain("Autore B (CC BY-SA 2.0), Wikimedia Commons");
@@ -411,7 +407,7 @@ describe("PlanList", () => {
           vi.advanceTimersByTime(POLL_MS * 2);
         });
         expect(mocks.listPlans.mock.calls.length).toBeGreaterThan(1);
-        await waitFor(() => expect(mocks.getCover).toHaveBeenCalledTimes(2));
+        expect(mocks.getCover).toHaveBeenCalledTimes(2);
       } finally {
         vi.useRealTimers();
       }
