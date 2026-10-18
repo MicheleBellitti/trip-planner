@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import LandingPage from "@/app/page";
 import { buttonClasses } from "@/components/ui/button";
-import { BRAND_DESCRIPTION, BRAND_TAGLINE } from "@/lib/brand";
+import { BRAND_DESCRIPTION, BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand";
 import { AGENT_LABELS, AGENTS } from "@/lib/plan-events/labels";
 import { SKIP_LANDING_BOOTSTRAP } from "@/lib/skip-landing";
 import { ROUTES } from "@/lib/routes";
@@ -150,7 +150,7 @@ describe("how it works", () => {
 describe("the closing", () => {
   it("until the demo exists, says Atlas is by invitation and offers to sign in", () => {
     const { container } = render(<LandingClose demoReady={false} />);
-    expect(screen.getByRole("heading", { level: 2, name: "Atlas è su invito." })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: `${BRAND_NAME} è su invito.` })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Accedi" }).getAttribute("href")).toBe(ROUTES.plans);
     expect(container.querySelector(`a[href="${ROUTES.demo}"]`)).toBeNull();
   });

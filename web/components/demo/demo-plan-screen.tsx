@@ -16,6 +16,7 @@ import detailJson from "@/components/plan/__fixtures__/happy-path.detail.json";
 import tripJson from "@/components/plan/__fixtures__/happy-path.trip.json";
 import type { CoverLoader } from "@/components/plan/cover/cover-store";
 import { Notice } from "@/components/ui/notice";
+import { BRAND_NAME } from "@/lib/brand";
 import coverJson from "@/lib/demo/cover.json";
 import { DEMO_REQUEST } from "@/lib/demo/request";
 import { formatElapsed } from "@/lib/format";
@@ -49,7 +50,7 @@ const PLAN_HANDOFF = {
 };
 const SIGN_IN_HANDOFF = {
   title: "Il tuo viaggio",
-  text: "Atlas è su invito: con un invito, accedi con il tuo account TripTracker e pianifica il prossimo viaggio.",
+  text: `${BRAND_NAME} è su invito: con un invito, accedi con il tuo account TripTracker e pianifica il prossimo viaggio.`,
   label: "Accedi",
   href: ROUTES.plans,
 };

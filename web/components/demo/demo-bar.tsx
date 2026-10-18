@@ -1,6 +1,7 @@
 "use client";
 
 import { Button, LinkButton } from "@/components/ui/button";
+import { BRAND_NAME } from "@/lib/brand";
 import { ROUTES } from "@/lib/routes";
 
 /**
@@ -28,7 +29,7 @@ export function DemoBar({
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-rule pt-2.5 lg:border-0 lg:pt-0">
       <p className="text-meta text-ink-2">
-        {done ? "Fine della corsa dimostrativa. Atlas è su invito." : "Corsa dimostrativa: dati di esempio, gratis per te"}
+        {done ? `Fine della corsa dimostrativa. ${BRAND_NAME} è su invito.` : "Corsa dimostrativa: dati di esempio, gratis per te"}
       </p>
       <div className="flex items-center gap-2">
         <Button size="sm" variant="quiet" icon="arrows-clockwise" onClick={onRestart} className="pointer-coarse:min-h-11">

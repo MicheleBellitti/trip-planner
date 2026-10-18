@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { BRAND_NAME } from "@/lib/brand";
 import { DEMO_REQUEST } from "@/lib/demo/request";
 import { REPLAY_TARGET_MS } from "@/lib/demo/schedule";
 import { REPLAY_SETTLE_MS } from "@/lib/demo/use-replay-events";
@@ -157,8 +158,8 @@ describe("DemoPlanScreen", () => {
     const bar = screen.getByRole("group", { name: "Stato del piano" });
     expect(within(bar).getByRole("link", { name: "Accedi" }).getAttribute("href")).toBe(ROUTES.plans);
     expect(within(bar).queryByRole("link", { name: "Pianifica il tuo viaggio" })).toBeNull();
-    expect(bar.textContent).toContain("Atlas è su invito");
-    expect(document.body.textContent).toContain("Atlas è su invito: con un invito");
+    expect(bar.textContent).toContain(`${BRAND_NAME} è su invito`);
+    expect(document.body.textContent).toContain(`${BRAND_NAME} è su invito: con un invito`);
   });
 
   it("offers 'Pianifica il tuo viaggio' to a browser that has signed in before", async () => {
