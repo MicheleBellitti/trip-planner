@@ -1730,3 +1730,24 @@ async def test_a_failed_continue_gives_its_reservation_back(
     # 1200 + 60 + a start's 60 = 1320: the released 200 no longer stands in the way.
     await start_plan(REQUEST, USER, services=ceiling_planner.services)
     assert len(ceiling_planner.fake.created) == 1
+
+
+async def test_an_outage_does_not_eat_the_users_plans(quota_planner: Planner) -> None:
+    """Michele, 2026-10-18: starts that failed before any session existed (502s) are not plans
+    of the month; the next start after the outage is still admitted."""
+    factory = quota_planner.session_factory
+    await insert_plan(factory, status=PlanStatus.READY, cost_cents=10, created_at=OCTOBER)
+    await insert_plan(factory, status=PlanStatus.FAILED, cost_cents=5, created_at=OCTOBER)
+    for _ in range(4):  # more than the 3-plan quota
+        quota_planner.fake.fail_next("create_session", "api_unavailable")
+        with pytest.raises(ManagedAgentsError):
+            await start_plan(REQUEST, USER, services=quota_planner.services)
+
+    plan_id = await start_plan(REQUEST, USER, services=quota_planner.services)
+
+    assert (await load_plan(factory, plan_id)).status == PlanStatus.RUNNING.value
+    # Now 3 plans (the ready one, the one that failed with a session, this one): the next is one
+    # too many.
+    with pytest.raises(QuotaReachedError) as caught:
+        await start_plan(REQUEST, USER, services=quota_planner.services)
+    assert (caught.value.kind, caught.value.quota.plans_used) == ("plans", 3)

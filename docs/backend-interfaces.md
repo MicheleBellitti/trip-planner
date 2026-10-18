@@ -1049,7 +1049,11 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
     a check that only knows cost already recorded. So the month's usage counts the recorded
     cost plus the **reservation**: the unspent budget of the plans still `running`
     (`budget_cents - cost_cents`, never negative; the profile's session budget stands in while
-    the session does not exist yet). The per-user quota (`USER_MONTHLY_PLANS`,
+    the session does not exist yet), whichever month created them, so on the 1st the plans
+    still running from the month before reserve too (their cost stays with the month that
+    created them: `created_at` accounting). A start that failed before any session existed
+    (`failed` with no `session_id`, `quota.never_started`) is not one of the month's plans:
+    an outage must not eat the quota (Michele, 2026-10-18); its cost, like every plan's, counts. The per-user quota (`USER_MONTHLY_PLANS`,
     `USER_MONTHLY_CENTS`, calendar month in Europe/Rome like the ceiling) is checked for the
     signed-in user's plans (`plan_owner_filter`) with the new plan's own budget counted, admins
     (`auth.user_is_admin`: with AUTH_MODE=atlas, only a verified address) exempt; the global

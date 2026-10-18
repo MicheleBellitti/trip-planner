@@ -5,11 +5,13 @@ Money is US cents of Managed Agents list cost, like everywhere in the backend (n
 
 - A **month** is the calendar month in Europe/Rome (`month_bounds`, shared with the global
   ceiling `MONTHLY_LIMIT_CENTS`).
-- **Usage** counts the plans created in the month and the cents they used: the cost already
-  recorded (`plans.cost_cents`) plus the **reservation** of the plans still `running`, the
-  budget they may still spend (`budget_cents - cost_cents`, never negative; a running plan whose
-  session does not exist yet reserves the profile's session budget). Without the reservation N
-  requests sent together would all pass a check that only knows cost already recorded.
+- **Usage** counts the plans created in the month (not those whose start failed before a
+  session existed, `never_started`) and the cents they used: the cost already recorded
+  (`plans.cost_cents`) plus the **reservation** of the plans still `running`, whichever month
+  created them, the budget they may still spend (`budget_cents - cost_cents`, never negative; a
+  running plan whose session does not exist yet reserves the profile's session budget). Without
+  the reservation N requests sent together would all pass a check that only knows cost already
+  recorded.
 - The **per-user quota** (`USER_MONTHLY_PLANS`, `USER_MONTHLY_CENTS`) is checked before every
   plan start and every "Continua" for the plans of the signed-in user
   (`sessions.plan_owner_filter`); admins (`auth.user_is_admin`) are exempt from it, never from the
@@ -32,7 +34,7 @@ import datetime as dt
 from dataclasses import dataclass
 from typing import Literal
 
-from sqlalchemy import case, func, select, text
+from sqlalchemy import and_, case, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ColumnElement
 
@@ -138,6 +140,15 @@ async def lock_checks(db: AsyncSession) -> None:
     await db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": QUOTA_LOCK_KEY})
 
 
+def never_started() -> ColumnElement[bool]:
+    """SQL predicate: a plan whose start failed before any session existed (`failed` with no
+    `session_id`: `create_session` refused, `sessions._mark_start_failed` without a session, or
+    a crash before the session was created). Nothing could be spent on it, so it does not count
+    against `USER_MONTHLY_PLANS` (Michele, 2026-10-18: an outage must not eat the month). A plan
+    whose session existed counts even when it failed, and every plan's cost always counts."""
+    return and_(PlanRecord.status == PlanStatus.FAILED.value, PlanRecord.session_id.is_(None))
+
+
 async def month_usage(
     db: AsyncSession,
     *,
@@ -145,19 +156,29 @@ async def month_usage(
     owner: ColumnElement[bool] | None,
     default_budget_cents: int,
 ) -> Usage:
-    """`Usage` of the plans created in `now`'s month: `owner`'s (a `plan_owner_filter`
-    predicate) or everyone's (None). `default_budget_cents` stands in for a running plan whose
-    `budget_cents` is still NULL."""
+    """`Usage` in `now`'s month of `owner`'s plans (a `plan_owner_filter` predicate) or
+    everyone's (None): the plans created in the month except those that never started
+    (`never_started`), their recorded cost, and the reservation of **every** plan still
+    `running`, whatever month created it. `default_budget_cents` stands in for a running plan
+    whose `budget_cents` is still NULL.
+
+    Months follow `created_at`: a plan's whole cost belongs to the month it was created in. So a
+    plan created on 31 October and still running on 1 November reserves its unspent budget in
+    November's checks too (else November would start with nothing reserved), but what it then
+    spends, a "Continua" included, is recorded on October; once it ends it leaves November's
+    figures. A `budget_paused` plan reserves nothing: its "Continua" reserves through the row it
+    turns `running` (`sessions._reserve_continue`)."""
     start, end = month_bounds(now)
+    in_month = and_(PlanRecord.created_at >= start, PlanRecord.created_at < end)
+    running = PlanRecord.status == PlanStatus.RUNNING.value
     unspent = func.greatest(
         func.coalesce(PlanRecord.budget_cents, default_budget_cents) - PlanRecord.cost_cents, 0
     )
-    reserved = func.sum(case((PlanRecord.status == PlanStatus.RUNNING.value, unspent), else_=0))
     statement = select(
-        func.count(),
-        func.coalesce(func.sum(PlanRecord.cost_cents), 0),
-        func.coalesce(reserved, 0),
-    ).where(PlanRecord.created_at >= start, PlanRecord.created_at < end)
+        func.count().filter(in_month, ~never_started()),
+        func.coalesce(func.sum(PlanRecord.cost_cents).filter(in_month), 0),
+        func.coalesce(func.sum(case((running, unspent), else_=0)), 0),
+    ).where(or_(in_month, running))
     if owner is not None:
         statement = statement.where(owner)
     row = (await db.execute(statement)).one()

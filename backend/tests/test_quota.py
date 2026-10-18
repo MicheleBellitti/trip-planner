@@ -84,6 +84,49 @@ async def test_month_usage_of_one_owner(
     assert mine == Usage(plans=1, cost_cents=70, reserved_cents=0)
 
 
+async def test_a_start_that_never_had_a_session_is_not_a_plan_but_its_cost_counts(
+    db_session: AsyncSession, plan_rows: PlanRows
+) -> None:
+    # create_session refused: failed, no session, nothing spent. Not counted.
+    await plan_rows.add_plan(
+        status=PlanStatus.FAILED, cost_cents=0, created_at=OCTOBER, session_id=None
+    )
+    # A session existed (a start that timed out, a run that failed): a plan, with its cost.
+    await plan_rows.add_plan(status=PlanStatus.FAILED, cost_cents=7, created_at=OCTOBER)
+    # Whatever the row says, a recorded cost is never dropped.
+    await plan_rows.add_plan(
+        status=PlanStatus.FAILED, cost_cents=3, created_at=OCTOBER, session_id=None
+    )
+
+    usage = await month_usage(db_session, now=NOW, owner=None, default_budget_cents=60)
+
+    assert usage == Usage(plans=1, cost_cents=10, reserved_cents=0)
+
+
+async def test_last_months_plans_still_running_reserve_in_the_new_month(
+    db_session: AsyncSession, plan_rows: PlanRows
+) -> None:
+    last_night = dt.datetime(2026, 10, 31, 23, 50, tzinfo=ROME)
+    # Created in October, still running on 1 November with 50 of its 60 unspent.
+    await plan_rows.add_plan(
+        status=PlanStatus.RUNNING, cost_cents=10, budget_cents=60, created_at=last_night
+    )
+    # Created in October and finished: November knows nothing of it.
+    await plan_rows.add_plan(status=PlanStatus.READY, cost_cents=90, created_at=last_night)
+    # Paused in October: it reserves nothing until a "Continua" turns it running.
+    await plan_rows.add_plan(
+        status=PlanStatus.BUDGET_PAUSED, cost_cents=60, budget_cents=60, created_at=last_night
+    )
+    november = dt.datetime(2026, 11, 1, 0, 5, tzinfo=ROME)
+
+    usage = await month_usage(db_session, now=november, owner=None, default_budget_cents=60)
+
+    # Its cost stays October's (created_at accounting); only the reservation crosses over.
+    assert usage == Usage(plans=0, cost_cents=0, reserved_cents=50)
+    october = await month_usage(db_session, now=last_night, owner=None, default_budget_cents=60)
+    assert october == Usage(plans=3, cost_cents=160, reserved_cents=50)
+
+
 async def test_month_usage_of_an_empty_month_is_zero(db_session: AsyncSession) -> None:
     assert await month_usage(db_session, now=NOW, owner=None, default_budget_cents=60) == Usage(
         plans=0, cost_cents=0, reserved_cents=0
