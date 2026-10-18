@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { cx } from "@/components/ui/cx";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
@@ -12,7 +12,7 @@ import { AgentRoundel } from "@/components/ui/agent";
 import { Icon } from "@/components/ui/icon";
 import { AGENT_LABELS } from "@/lib/plan-events/labels";
 
-import { AgentLane, JumpToLatest, LaneColumn, LaneHead, laneCardId } from "./agent-lane";
+import { AgentLane, JumpToLatest, LaneColumn, LaneHead, laneBodyId, laneCardId } from "./agent-lane";
 import { useLaneLayout } from "./hooks";
 import { laneToOpen, type LaneView } from "./stations";
 
@@ -24,9 +24,42 @@ interface AgentLanesProps {
   stale: boolean;
   /** The section's heading, for screen readers (the eye reads the lanes from their place). */
   heading?: string;
+  /** How the phone's open card follows the work: `reader` (live) never swaps a card on screen;
+   * `show` (the demo) follows the work until the viewer takes over. */
+  follow?: LaneFollow;
+}
+
+export type LaneFollow = "reader" | "show";
+
+/** Whether the phone's open card may move to where the work is now (see AgentLanes). */
+export function mayFollowLane({
+  caughtUp,
+  layout,
+  chosen,
+  touched,
+  followedOnScreen,
+  follow,
+}: {
+  caughtUp: boolean;
+  layout: string;
+  chosen: ReadonlySet<AgentName> | null;
+  touched: boolean;
+  followedOnScreen: boolean;
+  follow: LaneFollow;
+}): boolean {
+  if (!caughtUp) return true;
+  if (layout !== "stack" || chosen !== null || touched) return false;
+  return follow === "show" || !followedOnScreen;
 }
 
 const SUBAGENTS = AGENTS.filter((agent) => agent !== "coordinator");
+
+/** The camera glides, unless the visitor asked for reduced motion. */
+function cameraMotion(): ScrollBehavior {
+  return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ? "auto"
+    : "smooth";
+}
 
 /** Under the live bar (LiveHeader measures it into `--live-bar-h`), above the lanes' own marks:
  * the one z-index besides the bar (10 < 20). The heads stay on screen while the lines scroll. */
@@ -46,7 +79,15 @@ const HEADS_STRIP =
  * - from 1280 px: five columns, the coordinator's trunk 1.3 times wider, one row of heads that
  *   sticks under the top bar.
  */
-export function AgentLanes({ state, views, now, freshAfterSeq, stale, heading = "Corsie degli agenti" }: AgentLanesProps) {
+export function AgentLanes({
+  state,
+  views,
+  now,
+  freshAfterSeq,
+  stale,
+  heading = "Corsie degli agenti",
+  follow = "reader",
+}: AgentLanesProps) {
   const layout = useLaneLayout();
   const coordinatorEnd = useRef<HTMLDivElement>(null);
   const headsStrip = useRef<HTMLDivElement>(null);
@@ -73,8 +114,54 @@ export function AgentLanes({ state, views, now, freshAfterSeq, stale, heading = 
   // yet: follow the work freely (the coordinator gives way as soon as a subagent is at work). Live,
   // swap the open lane only when nobody is looking at it: a card that touches the screen is never
   // closed, and once the viewer has scrolled or chosen, the row below is the only pointer.
-  const mayFollow = !caughtUp || (layout === "stack" && chosen === null && !touched && !onScreen.has(followed));
+  // In the demo (`show`) the open card keeps following the work on screen: a visitor who only
+  // watches sees each agent at work, until they scroll or choose.
+  const mayFollow = mayFollowLane({
+    caughtUp,
+    layout,
+    chosen,
+    touched,
+    followedOnScreen: onScreen.has(followed),
+    follow,
+  });
   if (followedIsStale && mayFollow) setFollowed(focus);
+
+  // The demo's camera (`show`): while the visitor only watches, the work stays on screen. On the
+  // phone the open card's newest station stays in view as the work moves and grows; on wider
+  // layouts the coordinator's newest station does. "nearest" moves the page only when the thing is out of view; a scroll, a key or
+  // a toggle (`touched`) hands the page back to the visitor.
+  // What the camera keeps in view: the open card's end, where its newest station is (the card
+  // itself before it opens), or the coordinator's newest station on wider layouts.
+  const cameraTarget = useCallback((): HTMLElement | null => {
+    if (layout !== "stack") return coordinatorEnd.current;
+    // The end marker lives in the card's collapsible body, which is in the DOM even closed: aim at
+    // it only once the body shows (open and grown past 0 px), else at the card, still opening.
+    const body = document.getElementById(laneBodyId(followed));
+    const shown = body !== null && !body.hasAttribute("inert") && body.getBoundingClientRect().height > 0;
+    const end = shown ? body.querySelector<HTMLElement>("[data-lane-end]") : null;
+    return end ?? document.getElementById(laneCardId(followed));
+  }, [layout, followed]);
+  // Until when a scroll is the camera's own (a smooth move takes a few hundred ms).
+  const cameraUntil = useRef(0);
+  const followedStations = views[followed].stations.length;
+  const coordinatorStations = views.coordinator.stations.length;
+  useEffect(() => {
+    if (follow !== "show" || touched) return;
+    cameraUntil.current = Date.now() + 1_000;
+    cameraTarget()?.scrollIntoView?.({ block: "nearest", behavior: cameraMotion() });
+  }, [follow, touched, cameraTarget, followedStations, coordinatorStations]);
+  // Any other scroll that takes the work out of view is the visitor's (the scrollbar, a screen
+  // reader, a magnifier, an anchor: none of them sends a wheel or a key), and hands the page back.
+  useEffect(() => {
+    if (follow !== "show" || touched) return;
+    const onScroll = () => {
+      if (Date.now() < cameraUntil.current) return;
+      const box = cameraTarget()?.getBoundingClientRect();
+      if (box && (box.bottom < 0 || box.top > window.innerHeight)) setTouched(true);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [follow, touched, cameraTarget]);
 
   useEffect(() => {
     const mark = () => setTouched(true);
