@@ -24,6 +24,7 @@ import { Notice } from "@/components/ui/notice";
 import { Skeleton } from "@/components/ui/skeleton";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { api, API_ERROR_MESSAGES, ApiError, UnauthorizedError } from "@/lib/api";
+import { isAdminOnly } from "@/lib/me";
 import { formatCreated, formatDateTime, formatUsd } from "@/lib/format";
 import type { EvalRunSummary } from "@/lib/schemas/api";
 
@@ -45,6 +46,7 @@ import {
   type RunDelta,
   type RunMetric,
 } from "./eval-model";
+import { AdminOnlyPanel } from "./admin-only";
 import { DeltaNote } from "./delta";
 import { Sha } from "./external-link";
 import { RunVerdictPill } from "./marks";
@@ -54,6 +56,7 @@ import { evalRunPath } from "@/lib/page-paths";
 type DashboardState =
   | { kind: "loading" }
   | { kind: "ready"; runs: EvalRunSummary[]; openedAt: number }
+  | { kind: "admin_only"; message: string }
   | { kind: "error"; message: string };
 
 /** A trend needs this many runs before it is drawn. */
@@ -69,14 +72,18 @@ export function EvalDashboard({ className }: { className?: string }) {
       .listEvalRuns({ limit: TREND_RUNS, signal: controller.signal })
       .then(({ runs }) => setState({ kind: "ready", runs, openedAt: Date.now() }))
       .catch((error: unknown) => {
-        // 401: the browser is on its way to TripTracker's login; keep the placeholder.
+        // 401: the browser is on its way to the login; keep the placeholder.
         if (controller.signal.aborted || error instanceof UnauthorizedError) return;
-        setState({ kind: "error", message: error instanceof ApiError ? error.message : API_ERROR_MESSAGES.unknown });
+        const message = error instanceof ApiError ? error.message : API_ERROR_MESSAGES.unknown;
+        setState(isAdminOnly(error) ? { kind: "admin_only", message } : { kind: "error", message });
       });
     return () => controller.abort();
   }, [attempt]);
 
   if (state.kind === "loading") return <DashboardSkeleton className={className} />;
+
+  // The list below answers the same 403 and draws nothing: this panel speaks for the page.
+  if (state.kind === "admin_only") return <AdminOnlyPanel message={state.message} className={className} />;
 
   if (state.kind === "error") {
     return (

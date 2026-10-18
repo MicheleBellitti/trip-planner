@@ -3,7 +3,7 @@
 /**
  * usePlanEvents(planId): the live timeline of a plan, from GET /plans/{id}/events (SSE).
  *
- * - Opens `new EventSource(url, { withCredentials: true })`: the TripTracker cookie travels to
+ * - Opens `new EventSource(url, { withCredentials: true })`: the session cookie travels to
  *   the backend's origin.
  * - Validates every message with Zod (./stream.ts); an invalid one is dropped and counted.
  * - Resumes from the last received id: on its own reconnections the browser sends

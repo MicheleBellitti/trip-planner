@@ -1,15 +1,18 @@
-"""Auth (app/auth.py): TripTracker session check, its 60 s cache, the allowlist, the Origin check.
+"""Auth (app/auth.py): TripTracker session check, its 60 s cache, the allowlist, the Origin check,
+the app's own sessions read from the database (AUTH_MODE=atlas) and the admin role.
 
 Spec row "Unit, backend - auth.py": no cookie 401, email not allowed 403, wrong Origin 403,
 cache expired after 60 seconds. TripTracker's get-session is mocked with respx; the cache clock
 is moved with time-machine (which drives `time.time`, injected as the cache's clock) or a fake.
 Also decision 19's flood defences: the verification budget, stale-if-error, the separate
-signed-out cache, the cookie pre-filter and single-flight.
+signed-out cache, the cookie pre-filter and single-flight. The atlas section inserts
+`users` and `auth_sessions` rows and asserts that no HTTP call leaves.
 """
 
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import hashlib
 import json
 import time
@@ -21,6 +24,9 @@ import pytest
 import respx
 import time_machine
 from fastapi import FastAPI, HTTPException, Request
+from sqlalchemy import delete
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.auth import (
     ATLAS_AUTH_ERROR_MESSAGES,
@@ -36,6 +42,7 @@ from app.auth import (
     AuthErrorCode,
     CurrentUser,
     CurrentUserDep,
+    RequireAdmin,
     RequireOrigin,
     SessionCache,
     SessionVerifier,
@@ -50,9 +57,13 @@ from app.auth import (
     plausible_session_token,
     session_cookie,
     session_cookie_names,
+    session_token,
     token_cache_key,
+    user_is_admin,
+    verify_atlas_session,
 )
 from app.config import Settings
+from app.db import AuthSessionRecord, UserRecord
 
 TRIPTRACKER = "https://viaggi.bellittim.com"
 FRONTEND = "https://atlas.bellittim.com"
@@ -111,6 +122,15 @@ def test_session_cookie_accepts_the_local_http_name_and_ignores_empty_values() -
     assert session_cookie(make_request([("Cookie", f"{SECURE_COOKIE}=; theme=dark")])) is None
     assert session_cookie(make_request([("Cookie", "theme=dark")])) is None
     assert session_cookie(make_request([])) is None
+
+
+def test_secure_only_accepts_just_the_secure_name() -> None:
+    assert session_cookie_names(secure_only=True) == (SECURE_COOKIE,)
+    assert session_cookie_names("atlas", secure_only=True) == (ATLAS_SECURE_COOKIE,)
+    plain_only = make_request([("Cookie", f"{PLAIN_COOKIE}={SIGNED_TOKEN}")])
+    assert session_cookie(plain_only, secure_only=True) is None
+    both = make_request([("Cookie", f"{PLAIN_COOKIE}=planted.sig; {SECURE_COOKIE}={SIGNED_TOKEN}")])
+    assert session_cookie(both, secure_only=True) == (SECURE_COOKIE, SIGNED_TOKEN)
 
 
 def test_only_better_auth_cookies_are_forwarded_untouched_and_in_order() -> None:
@@ -501,6 +521,10 @@ def auth_app(settings: Settings, verifier: SessionVerifier | None) -> FastAPI:
 
     @app.post("/change", dependencies=[RequireOrigin])
     async def change(user: CurrentUserDep) -> dict[str, str]:
+        return {"email": user.email}
+
+    @app.get("/admin-only", dependencies=[RequireAdmin])
+    async def admin_only(user: CurrentUserDep) -> dict[str, str]:
         return {"email": user.email}
 
     return app
@@ -950,7 +974,7 @@ async def test_an_implausible_cookie_is_401_without_asking_triptracker(
 
 # --- AUTH_MODE=atlas: the web app's own accounts ------------------------------------------------
 
-ATLAS_GET_SESSION_URL = f"{FRONTEND}{GET_SESSION_PATH}?disableRefresh=true"
+
 ATLAS_SECURE_COOKIE = "__Secure-atlas.session_token"
 ATLAS_PLAIN_COOKIE = "atlas.session_token"
 
@@ -1014,28 +1038,94 @@ def test_pure_helpers_take_the_prefix() -> None:
     )
 
 
-async def test_atlas_mode_asks_the_web_app_and_forwards_only_its_cookies(
-    atlas_settings: Settings, http: httpx.AsyncClient, mock_tt: respx.MockRouter
+def test_session_token_is_the_part_before_the_first_dot() -> None:
+    assert session_token("tok3n-abc.SiGnAtUrE%2Bx%3D") == "tok3n-abc"
+    assert session_token("a.b.c") == "a"
+    assert session_token("nodot") == "nodot"
+    assert session_token(".sig") == ""
+
+
+TOMORROW = dt.timedelta(days=1)
+
+
+async def add_atlas_session(
+    db_session_factory: async_sessionmaker[AsyncSession],
+    *,
+    token: str = "tok3n-abc",
+    user_id: str = "usr_1",
+    email: str = "Test@Example.com",
+    expires_in: dt.timedelta = TOMORROW,
+    with_user: bool = True,
+    email_verified: bool = True,
 ) -> None:
-    route = mock_tt.get(ATLAS_GET_SESSION_URL).respond(200, json=session_body())
-    app = auth_app(atlas_settings, SessionVerifier(atlas_settings, http))
-    cookie = f"{SECURE_COOKIE}={SIGNED_TOKEN}; {ATLAS_SECURE_COOKIE}={SIGNED_TOKEN}; theme=dark"
+    """A `users` row and an `auth_sessions` row, as the web app's Better Auth writes them."""
+    async with db_session_factory() as db:
+        if with_user:
+            db.add(UserRecord(id=user_id, email=email, email_verified=email_verified))
+            await db.commit()
+        db.add(
+            AuthSessionRecord(
+                id=f"ses_{token}",
+                user_id=user_id,
+                token=token,
+                expires_at=dt.datetime.now(dt.UTC) + expires_in,
+            )
+        )
+        await db.commit()
+
+
+def atlas_app(
+    settings: Settings, db_session_factory: async_sessionmaker[AsyncSession] | None
+) -> FastAPI:
+    """`auth_app` for AUTH_MODE=atlas: the session table instead of a verifier."""
+    app = auth_app(settings, verifier=None)
+    if db_session_factory is not None:
+        app.state.session_factory = db_session_factory
+    return app
+
+
+async def test_verify_atlas_session_reads_the_session_and_its_user(
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await add_atlas_session(db_session_factory)
+
+    user = await verify_atlas_session(db_session_factory, SIGNED_TOKEN)
+
+    assert user == CurrentUser("test@example.com", "usr_1", email_verified=True)  # lower-cased
+    assert await verify_atlas_session(db_session_factory, "unknown.sig") is None
+    assert await verify_atlas_session(db_session_factory, ".sig") is None
+    # Expiry is checked against `now`: one second after `expires_at` the session is gone.
+    stored_until = dt.datetime.now(dt.UTC) + TOMORROW
+    assert (
+        await verify_atlas_session(
+            db_session_factory, SIGNED_TOKEN, now=stored_until + dt.timedelta(seconds=1)
+        )
+        is None
+    )
+
+
+async def test_atlas_mode_reads_the_cookie_from_the_database_and_asks_nobody(
+    atlas_settings: Settings,
+    db_session_factory: async_sessionmaker[AsyncSession],
+    mock_tt: respx.MockRouter,
+) -> None:
+    await add_atlas_session(db_session_factory)
+    app = atlas_app(atlas_settings, db_session_factory)
+    cookie = f"{SECURE_COOKIE}=other.sig; {ATLAS_SECURE_COOKIE}={SIGNED_TOKEN}; theme=dark"
 
     async with asgi_client(app) as client:
         response = await client.get("/me", headers={"Cookie": cookie})
 
     assert response.status_code == 200
     assert response.json() == {"email": "test@example.com", "id": "usr_1"}
-    assert route.call_count == 1
-    assert route.calls.last.request.headers["cookie"] == f"{ATLAS_SECURE_COOKIE}={SIGNED_TOKEN}"
-    assert str(route.calls.last.request.url) == ATLAS_GET_SESSION_URL
+    assert mock_tt.calls.call_count == 0  # no get-session, no provider at all
 
 
 async def test_atlas_mode_ignores_triptrackers_cookie(
-    atlas_settings: Settings, http: httpx.AsyncClient, mock_tt: respx.MockRouter
+    atlas_settings: Settings, db_session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
-    route = mock_tt.get(ATLAS_GET_SESSION_URL).respond(200, json=session_body())
-    app = auth_app(atlas_settings, SessionVerifier(atlas_settings, http))
+    await add_atlas_session(db_session_factory)
+    app = atlas_app(atlas_settings, db_session_factory)
 
     async with asgi_client(app) as client:
         response = await client.get("/me", headers={"Cookie": f"{SECURE_COOKIE}={SIGNED_TOKEN}"})
@@ -1046,50 +1136,209 @@ async def test_atlas_mode_ignores_triptrackers_cookie(
         "message": ATLAS_AUTH_ERROR_MESSAGES[AuthErrorCode.NOT_AUTHENTICATED],
         "data": None,
     }
-    assert route.call_count == 0
 
 
-async def test_atlas_mode_failures_do_not_name_triptracker(
-    atlas_settings: Settings, http: httpx.AsyncClient, mock_tt: respx.MockRouter
+async def test_atlas_mode_expired_unknown_and_signed_out_sessions_are_401(
+    atlas_settings: Settings, db_session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
-    mock_tt.get(ATLAS_GET_SESSION_URL).respond(503)
-    app = auth_app(atlas_settings, SessionVerifier(atlas_settings, http))
-
-    async with asgi_client(app) as client:
-        response = await client.get(
-            "/me", headers={"Cookie": f"{ATLAS_PLAIN_COOKIE}={SIGNED_TOKEN}"}
-        )
-
-    assert response.status_code == 503
-    assert (
-        response.json()["detail"]["message"]
-        == "Non riesco a verificare l'accesso. Riprova tra poco."
+    await add_atlas_session(db_session_factory, token="fresh")
+    await add_atlas_session(
+        db_session_factory,
+        token="old",
+        user_id="usr_2",
+        email="two@example.com",
+        expires_in=-TOMORROW,
     )
+    app = atlas_app(atlas_settings, db_session_factory)
+
+    async with asgi_client(app) as client:
+        fresh = await client.get("/me", headers={"Cookie": f"{ATLAS_PLAIN_COOKIE}=fresh.sig"})
+        expired = await client.get("/me", headers={"Cookie": f"{ATLAS_PLAIN_COOKIE}=old.sig"})
+        unknown = await client.get("/me", headers={"Cookie": f"{ATLAS_PLAIN_COOKIE}=nobody.sig"})
+        # Sign-out deletes the row: no cache, so the very next request is refused.
+        async with db_session_factory() as db:
+            await db.execute(delete(AuthSessionRecord).where(AuthSessionRecord.token == "fresh"))
+            await db.commit()
+        signed_out = await client.get("/me", headers={"Cookie": f"{ATLAS_PLAIN_COOKIE}=fresh.sig"})
+
+    assert fresh.status_code == 200
+    for response in (expired, unknown, signed_out):
+        assert response.status_code == 401
+        assert response.json()["detail"]["code"] == "not_authenticated"
 
 
-async def test_atlas_mode_treats_a_user_without_an_id_as_a_malformed_answer(
-    atlas_settings: Settings, http: httpx.AsyncClient, mock_tt: respx.MockRouter
+async def test_atlas_mode_does_not_consult_the_allowlist(
+    make_settings: Callable[..., Settings], db_session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
-    # New plans store the id in plans.user_id: a user without one is never let through as NULL.
-    body = session_body()
-    del body["user"]["id"]
-    route = mock_tt.get(ATLAS_GET_SESSION_URL).respond(200, json=body)
-    verifier = SessionVerifier(atlas_settings, http)
-    app = auth_app(atlas_settings, verifier)
+    """The web app decided who could sign up; PLANNER_ALLOWED_EMAILS is not a second gate."""
+    settings = make_settings(auth_mode="atlas", planner_allowed_emails="someone-else@example.com")
+    await add_atlas_session(db_session_factory)
+    app = atlas_app(settings, db_session_factory)
 
     async with asgi_client(app) as client:
         response = await client.get(
             "/me", headers={"Cookie": f"{ATLAS_PLAIN_COOKIE}={SIGNED_TOKEN}"}
         )
 
-    assert response.status_code == 503
-    assert response.json()["detail"] == {
-        "code": "auth_unavailable",
-        "message": ATLAS_AUTH_ERROR_MESSAGES[AuthErrorCode.AUTH_UNAVAILABLE],
+    assert response.status_code == 200
+
+
+async def test_atlas_mode_failures_are_503_and_do_not_name_triptracker(
+    atlas_settings: Settings,
+) -> None:
+    # The lifespan did not run: no session factory.
+    without_factory = atlas_app(atlas_settings, None)
+    # The database cannot be reached (a closed local port, NullPool: a fresh failure every time).
+    unreachable = async_sessionmaker(
+        create_async_engine("postgresql+asyncpg://127.0.0.1:9/nowhere", poolclass=NullPool)
+    )
+    down = atlas_app(atlas_settings, unreachable)
+    cookie = {"Cookie": f"{ATLAS_PLAIN_COOKIE}={SIGNED_TOKEN}"}
+
+    async with asgi_client(without_factory) as client:
+        missing = await client.get("/me", headers=cookie)
+    async with asgi_client(down) as client:
+        failed = await client.get("/me", headers=cookie)
+
+    for response in (missing, failed):
+        assert response.status_code == 503
+        assert response.json()["detail"] == {
+            "code": "auth_unavailable",
+            "message": "Non riesco a verificare l'accesso. Riprova tra poco.",
+            "data": None,
+        }
+
+
+async def test_an_implausible_atlas_cookie_never_reaches_the_database(
+    atlas_settings: Settings,
+) -> None:
+    unreachable = async_sessionmaker(
+        create_async_engine("postgresql+asyncpg://127.0.0.1:9/nowhere", poolclass=NullPool)
+    )
+    app = atlas_app(atlas_settings, unreachable)
+
+    async with asgi_client(app) as client:
+        response = await client.get("/me", headers={"Cookie": f"{ATLAS_PLAIN_COOKIE}=no-dot-here"})
+
+    assert response.status_code == 401  # 503 would mean the lookup was attempted
+
+
+def test_only_production_over_https_refuses_the_plain_cookie_name(
+    make_settings: Callable[..., Settings],
+) -> None:
+    production = {"anthropic_api_key": "sk-test", "agent_profile": "production"}
+    assert make_settings(
+        environment="production", auth_mode="atlas", **production
+    ).secure_session_cookie_only
+    assert make_settings(
+        environment="production", auth_mode="triptracker", **production
+    ).secure_session_cookie_only
+    assert not make_settings(auth_mode="atlas").secure_session_cookie_only  # development
+    assert not make_settings(
+        auth_mode="atlas", frontend_origin="http://localhost:3000"
+    ).secure_session_cookie_only
+
+
+async def test_in_production_an_atlas_cookie_under_the_plain_name_is_refused(
+    make_settings: Callable[..., Settings], db_session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """Cookie tossing: a sibling `*.bellittim.com` host can set `atlas.session_token` (no
+    `__Secure-` guarantees), so in production only the `__Secure-` name stands for a session."""
+    await add_atlas_session(db_session_factory)
+    settings = make_settings(
+        environment="production",
+        auth_mode="atlas",
+        anthropic_api_key="sk-test",
+        agent_profile="production",
+    )
+    app = atlas_app(settings, db_session_factory)
+
+    async with asgi_client(app) as client:
+        plain = await client.get("/me", headers={"Cookie": f"{ATLAS_PLAIN_COOKIE}={SIGNED_TOKEN}"})
+        secure = await client.get(
+            "/me", headers={"Cookie": f"{ATLAS_SECURE_COOKIE}={SIGNED_TOKEN}"}
+        )
+        # A planted plain cookie beside the real one changes nothing: the secure one is read.
+        both = await client.get(
+            "/me",
+            headers={
+                "Cookie": f"{ATLAS_PLAIN_COOKIE}=planted.sig; {ATLAS_SECURE_COOKIE}={SIGNED_TOKEN}"
+            },
+        )
+
+    assert plain.status_code == 401
+    assert plain.json()["detail"]["code"] == "not_authenticated"
+    assert secure.status_code == 200
+    assert both.status_code == 200
+    assert both.json() == {"email": "test@example.com", "id": "usr_1"}
+
+
+# --- the admin role -------------------------------------------------------------------------------
+
+
+async def test_the_admin_role_guards_a_route_after_the_session_check(
+    make_settings: Callable[..., Settings], db_session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    await add_atlas_session(db_session_factory)
+    cookie = {"Cookie": f"{ATLAS_PLAIN_COOKIE}={SIGNED_TOKEN}"}
+
+    nobody_is_admin = atlas_app(make_settings(auth_mode="atlas"), db_session_factory)
+    async with asgi_client(nobody_is_admin) as client:
+        refused = await client.get("/admin-only", headers=cookie)
+        signed_out = await client.get("/admin-only")
+    assert refused.status_code == 403
+    assert refused.json()["detail"] == {
+        "code": "admin_only",
+        "message": "Questa sezione è riservata a chi gestisce il planner.",
         "data": None,
     }
-    assert route.call_count == 1
-    assert len(verifier.cache) == 0  # a malformed answer is never cached
+    assert signed_out.status_code == 401  # the session check comes first
+
+    admin = atlas_app(
+        make_settings(auth_mode="atlas", admin_emails="TEST@example.com"), db_session_factory
+    )
+    async with asgi_client(admin) as client:
+        allowed = await client.get("/admin-only", headers=cookie)
+    assert allowed.status_code == 200
+    assert allowed.json() == {"email": "test@example.com"}
+
+
+async def test_an_admins_address_without_a_verified_email_is_no_admin(
+    make_settings: Callable[..., Settings], db_session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """Anyone may type an admin's address into the sign-up form: until the account proves it
+    owns the address (users.email_verified), ADMIN_EMAILS does not make it an admin."""
+    await add_atlas_session(db_session_factory, email_verified=False)
+    settings = make_settings(auth_mode="atlas", admin_emails="test@example.com")
+    app = atlas_app(settings, db_session_factory)
+
+    async with asgi_client(app) as client:
+        refused = await client.get(
+            "/admin-only", headers={"Cookie": f"{ATLAS_PLAIN_COOKIE}={SIGNED_TOKEN}"}
+        )
+
+    assert refused.status_code == 403
+    assert refused.json()["detail"]["code"] == "admin_only"
+    unverified = CurrentUser("test@example.com", "usr_1", email_verified=False)
+    assert user_is_admin(unverified, settings) is False
+    assert user_is_admin(CurrentUser("test@example.com", "usr_1", True), settings) is True
+    # Outside atlas mode the allowlisted email is trusted, as before.
+    assert user_is_admin(CurrentUser("test@example.com"), make_settings()) is True
+
+
+async def test_in_local_mode_the_allowed_user_is_the_admin_by_default(
+    make_settings: Callable[..., Settings],
+) -> None:
+    app = auth_app(make_settings(), verifier=None)  # AUTH_MODE=local, no ADMIN_EMAILS
+    async with asgi_client(app) as client:
+        allowed = await client.get("/admin-only")
+    assert allowed.status_code == 200
+
+    app = auth_app(make_settings(admin_emails="boss@example.com"), verifier=None)
+    async with asgi_client(app) as client:
+        refused = await client.get("/admin-only")
+    assert refused.status_code == 403
+    assert refused.json()["detail"]["code"] == "admin_only"
 
 
 async def test_triptracker_mode_still_accepts_a_user_without_an_id(

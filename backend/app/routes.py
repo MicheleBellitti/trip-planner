@@ -8,6 +8,7 @@ Spec: "Backend FastAPI" -> "Endpoint" table, "SSE verso il browser", "Autenticaz
 |------------------------------|--------------------------|----------------------------------------|
 | POST /plans                  | user + Origin            | validate PlanRequest, start the plan   |
 | POST /plans?demo_scenario=   | user + Origin            | DEMO_MODE only: replay a scenario      |
+| GET /me                      | user                     | who is signed in, and the admin flag   |
 | GET /plans                   | user                     | the user's last 20 plans               |
 | GET /plans/{id}              | user                     | status, plan, link checks, import URL  |
 | GET /plans/{id}/events       | user                     | SSE: replay after Last-Event-ID, live  |
@@ -16,8 +17,12 @@ Spec: "Backend FastAPI" -> "Endpoint" table, "SSE verso il browser", "Autenticaz
 | POST /plans/{id}/interrupt   | user + Origin            | send user.interrupt                    |
 | POST /plans/{id}/continue    | user + Origin            | raise the budget by $2 and resume      |
 | POST /evals/runs             | Bearer EVALS_INGEST_TOKEN| CI uploads an eval run (no Origin/CORS)|
-| GET /evals/runs              | user                     | the eval history, newest first         |
-| GET /evals/runs/{id}         | user                     | one run with its results and comparison|
+| GET /evals/runs              | admin                    | the eval history, newest first         |
+| GET /evals/runs/{id}         | admin                    | one run with its results and comparison|
+
+"user" is `auth.current_user` (the plans it lists and opens are the user's own,
+`sessions.plan_owner_filter`); "admin" adds `auth.require_admin` (ADMIN_EMAILS; 403
+`admin_only` for anyone else).
 
 Errors: `HTTPException(detail=ErrorBody)` -> `{"detail": {"code", "message", "data"}}` with an
 Italian `message`; auth errors use the same envelope (`auth.AuthErrorCode`). Request-body
@@ -66,9 +71,11 @@ from app.auth import (
     AuthErrorCode,
     CurrentUser,
     CurrentUserDep,
+    RequireAdmin,
     RequireOrigin,
     auth_error,
     auth_messages,
+    user_is_admin,
 )
 from app.config import AgentProfile, Settings
 from app.covers import Cover, CoverErrorCode, CoverResolver
@@ -221,6 +228,15 @@ def format_usd(cents: int) -> str:
 
 class CreatePlanResponse(BaseModel):
     id: uuid.UUID
+
+
+class MeResponse(BaseModel):
+    """Answer of GET /me: who the cookie belongs to, for the web app's header."""
+
+    email: str = Field(description="The signed-in address, trimmed and lower-cased.")
+    is_admin: bool = Field(
+        description="May read the eval history (one of ADMIN_EMAILS, `Settings.admins`)."
+    )
 
 
 class PlanSummary(BaseModel):
@@ -638,12 +654,25 @@ _ERRORS: dict[int | str, dict[str, Any]] = {
 }
 
 
-async def _user_plan(db: AsyncSession, plan_id: uuid.UUID, user: CurrentUser) -> PlanRecord:
+async def _user_plan(
+    db: AsyncSession, plan_id: uuid.UUID, user: CurrentUser, settings: Settings
+) -> PlanRecord:
     """`sessions.get_user_plan`, with a missing or foreign plan as 404 `plan_not_found`."""
     try:
-        return await sessions.get_user_plan(db, plan_id, user)
+        return await sessions.get_user_plan(db, plan_id, user, settings=settings)
     except consumer.PlanNotFoundError:
         raise plan_error(PlanErrorCode.PLAN_NOT_FOUND) from None
+
+
+me_router = APIRouter(tags=["me"])
+
+
+@me_router.get("/me", responses=_ERRORS)
+async def me(user: CurrentUserDep, settings: SettingsDep) -> MeResponse:
+    """Who is signed in and whether they may read the eval history (`auth.user_is_admin`): the
+    web app shows the "Collaudi" section only to admins. No personal data beyond the email
+    the cookie already stands for."""
+    return MeResponse(email=user.email, is_admin=user_is_admin(user, settings))
 
 
 @router.post(
@@ -729,9 +758,12 @@ def check_demo_scenario(value: str | None, *, settings: Settings, planner: Plann
 
 
 @router.get("", responses=_ERRORS)
-async def list_plans(user: CurrentUserDep, db: DbSession) -> PlanListResponse:
-    """The user's `PLAN_LIST_LIMIT` most recent plans, newest first: title, status, cost,
-    date. Reads only the listed columns (never the stored plan or Trip documents)."""
+async def list_plans(
+    user: CurrentUserDep, db: DbSession, settings: SettingsDep
+) -> PlanListResponse:
+    """The user's `PLAN_LIST_LIMIT` most recent plans (`sessions.plan_owner_filter`), newest
+    first: title, status, cost, date. Reads only the listed columns (never the stored plan or
+    Trip documents)."""
     rows = await db.execute(
         select(
             PlanRecord.id,
@@ -741,7 +773,7 @@ async def list_plans(user: CurrentUserDep, db: DbSession) -> PlanListResponse:
             PlanRecord.request,
             func.jsonb_extract_path_text(PlanRecord.plan, "title"),
         )
-        .where(func.lower(PlanRecord.user_email) == user.email.lower())
+        .where(sessions.plan_owner_filter(user, settings=settings))
         .order_by(PlanRecord.created_at.desc(), PlanRecord.id.desc())
         .limit(PLAN_LIST_LIMIT)
     )
@@ -764,7 +796,7 @@ async def get_plan(
 ) -> PlanDetail:
     """`plan_detail()` of the user's plan (`budget_cents` from `plans.budget_cents`); 404
     `plan_not_found` otherwise."""
-    record = await _user_plan(db, plan_id, user)
+    record = await _user_plan(db, plan_id, user, settings)
     return plan_detail(record, settings=settings)
 
 
@@ -775,6 +807,7 @@ async def plan_events(
     user: CurrentUserDep,
     db: DbSession,
     planner: PlannerDep,
+    settings: SettingsDep,
     last_event_id: Annotated[str | None, Header()] = None,
     after: Annotated[int | None, Query(ge=0, le=MAX_SEQ)] = None,
 ) -> EventSourceResponse:
@@ -783,7 +816,7 @@ async def plan_events(
     ping_message_factory=ping_comment, send_timeout=SEND_TIMEOUT_SECONDS,
     headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})`. The request's DB
     session is released before streaming (the stream opens its own short sessions)."""
-    await _user_plan(db, plan_id, user)
+    await _user_plan(db, plan_id, user, settings)
     await db.close()
     return EventSourceResponse(
         event_stream(
@@ -804,12 +837,14 @@ async def plan_events(
     response_class=JSONResponse,
     responses={**_ERRORS, 409: {"model": ErrorResponse}},
 )
-async def get_trip(plan_id: uuid.UUID, user: CurrentUserDep, db: DbSession) -> JSONResponse:
+async def get_trip(
+    plan_id: uuid.UUID, user: CurrentUserDep, db: DbSession, settings: SettingsDep
+) -> JSONResponse:
     """The stored TripTracker Trip (`plans.trip`), byte-for-byte the same on every call (its
     ids never change, so /import deduplicates by id). 409 `plan_not_ready` unless `ready`;
     404 for another user's plan. `Cache-Control: no-store`. The only route that also allows
     `TRIPTRACKER_ORIGIN` in CORS."""
-    record = await _user_plan(db, plan_id, user)
+    record = await _user_plan(db, plan_id, user, settings)
     if record.status != PlanStatus.READY or record.trip is None:
         raise plan_error(PlanErrorCode.PLAN_NOT_READY, data={"status": record.status})
     return JSONResponse(record.trip, headers={"Cache-Control": "no-store"})
@@ -822,13 +857,14 @@ async def get_cover(
     user: CurrentUserDep,
     db: DbSession,
     covers: CoverResolverDep,
+    settings: SettingsDep,
 ) -> Cover:
     """A free-licensed Wikimedia photo of the plan's destination, with author, license and
     source (`covers.Cover`); `cover_destination` picks the name. 404 `cover_unavailable` when
     there is no destination, no usable free photo or Wikimedia can't be reached (the page then
     simply has no photo); 404 `plan_not_found` for another user's plan. The destination name
     is the only thing sent to Wikimedia; the answer is cached per destination (covers.py)."""
-    record = await _user_plan(db, plan_id, user)
+    record = await _user_plan(db, plan_id, user, settings)
     destination = cover_destination(record)
     await db.close()  # no connection held while Wikimedia answers
     if destination is None:
@@ -1008,7 +1044,7 @@ async def ingest_eval_run(
     return evals_store.EvalRunCreated(id=stored.id)
 
 
-@evals_router.get("/runs", responses=_ERRORS)
+@evals_router.get("/runs", dependencies=[RequireAdmin], responses=_ERRORS)
 async def list_eval_runs(
     user: CurrentUserDep,
     db: DbSession,
@@ -1019,18 +1055,18 @@ async def list_eval_runs(
 ) -> evals_store.EvalRunListResponse:
     """The eval history, newest first: the counts and the verdict of each run, never its
     documents; `offset` skips the newest runs and `total` counts them all, for the list's pages.
-    Any allowed user sees every run (they belong to the project, not to a user)."""
+    Admins only (`RequireAdmin`): the runs belong to the project, not to a user."""
     return evals_store.EvalRunListResponse(
         runs=await evals_store.list_eval_runs(db, limit=limit, offset=offset),
         total=await evals_store.count_eval_runs(db),
     )
 
 
-@evals_router.get("/runs/{run_id}", responses=_ERRORS)
+@evals_router.get("/runs/{run_id}", dependencies=[RequireAdmin], responses=_ERRORS)
 async def get_eval_run(
     run_id: uuid.UUID, user: CurrentUserDep, db: DbSession
 ) -> evals_store.EvalRunDetail:
-    """One run with its stored results and comparison; 404 `eval_run_not_found`."""
+    """One run with its stored results and comparison; 404 `eval_run_not_found`. Admins only."""
     run = await evals_store.get_eval_run(db, run_id)
     if run is None:
         raise plan_error(PlanErrorCode.EVAL_RUN_NOT_FOUND)
@@ -1173,6 +1209,7 @@ def install_routes(app: FastAPI, settings: Settings) -> None:
     Last-Event-ID; plus a path-scoped rule that also accepts `TRIPTRACKER_ORIGIN` for GET
     /plans/{id}/trip and its preflight). Never a wildcard. The last middleware added is the
     outermost: CORS wraps the body cap, which wraps routing."""
+    app.include_router(me_router)
     app.include_router(router)
     app.include_router(evals_router)
     app.add_middleware(

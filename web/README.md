@@ -110,6 +110,7 @@ components/request/        the request form: model, validation, summary, trip ou
 lib/api.ts                 typed backend client: errors, 401 -> the login (this app's or TripTracker's), 429, 503
 lib/auth.ts                the app's own accounts: Better Auth server (Postgres, magic link, Google, allowlist)
 lib/auth-client.ts         its browser client; lib/auth-policy.ts the sign-up allowlist; lib/return-to.ts
+lib/me.ts                  GET /me: whether the signed-in user manages the planner (the header's "Collaudi")
 lib/server/                server-only: the accounts' configuration, the sign-in email through Resend
 components/auth/           the login form and the signed-out header; app/login the page
 lib/request-form.ts        form metadata from schema/request.json + validation (Italian)

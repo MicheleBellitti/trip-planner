@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: "Collaudi" };
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 /** "/evals": the eval history. The dashboard (the newest run, the trends), then every run, ten a
- * page (`?pagina=N`). Both are fetched in the browser, which carries the TripTracker cookie, like
+ * page (`?pagina=N`). Both are fetched in the browser, which carries the session cookie, like
  * the plans; only the page number is read on the server. */
 export default function EvalsPage({ searchParams }: { searchParams: SearchParams }) {
   return (

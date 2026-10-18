@@ -1,11 +1,19 @@
 import { buttonClasses } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { InlineStatus } from "@/components/ui/notice";
+import { getAuthMode } from "@/lib/config";
 
 import { StatePanel } from "./state-panel";
 
-/** The sign-in link: TripTracker's login, which brings the user back to this page. Same tab:
- * it is a step of this page, not another site to keep open. */
+/** What expired, in the words of the mode: this app's own session, or the TripTracker login. */
+export function sessionExpiredSentence(): string {
+  return getAuthMode() === "atlas"
+    ? "La sessione è scaduta. Accedi di nuovo: tornerai qui, al tuo piano."
+    : "L'accesso a TripTracker è scaduto. Accedi di nuovo: tornerai qui, al tuo piano.";
+}
+
+/** The sign-in link: the login (this app's or TripTracker's, lib/api.ts `loginUrl`), which brings
+ * the user back to this page. Same tab: it is a step of this page, not another site to keep open. */
 function SignInLink({ href, variant }: { href: string; variant: "primary" | "inline" }) {
   if (variant === "inline") {
     return (
@@ -33,9 +41,7 @@ export function SessionExpiredPanel({ loginUrl }: { loginUrl: string }) {
     >
       <div className="min-w-0 lg:col-span-3">
         <dt className="sr-only">Cosa è successo</dt>
-        <dd className="m-0 max-w-prose text-small text-ink">
-          L&apos;accesso a TripTracker è scaduto. Accedi di nuovo: tornerai qui, al tuo piano.
-        </dd>
+        <dd className="m-0 max-w-prose text-small text-ink">{sessionExpiredSentence()}</dd>
       </div>
     </StatePanel>
   );

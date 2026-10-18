@@ -437,14 +437,15 @@ clear error.
    | `AGENT_PROFILE` | `production` | yes | yes | required in production; selects `backend/claude-lock.production.json` |
    | `SESSION_BUDGET_CENTS` | `400` | yes | | US cents per session; empty = the profile's default (400) |
    | `MONTHLY_LIMIT_CENTS` | `5000` | yes | | POST /plans refuses new plans at or above it |
-   | `PLANNER_ALLOWED_EMAILS` | your TripTracker login email | yes | | empty means nobody; never commit it. With `AUTH_MODE=atlas`, change it together with the web app's `AUTH_ALLOWED_EMAILS` (step 5) |
+   | `PLANNER_ALLOWED_EMAILS` | your TripTracker login email | yes | | empty means nobody; never commit it. TripTracker mode only: with `AUTH_MODE=atlas` the web app's `AUTH_ALLOWED_EMAILS` decides who signs up and this list is not consulted |
+   | `ADMIN_EMAILS` | your email | yes | | who reads the eval history (`/evals`); empty = `PLANNER_ALLOWED_EMAILS` in TripTracker mode, nobody with `AUTH_MODE=atlas` |
    | `FRONTEND_ORIGIN` | `https://atlas.bellittim.com` | yes | | the only CORS origin and the required `Origin` on POST |
    | `TRIPTRACKER_ORIGIN` | `https://viaggi.bellittim.com` | yes | | session check, `trip.json`, CORS of `GET /plans/{id}/trip` |
    | `TRIP_SCHEMA_URL` | **`file:///app/pinned/trip.schema.json`** until TripTracker serves `/schema/trip.json`, then unset | yes | | the pinned copy `backend/pinned/trip.schema.json` ships in the image (`tests/` doesn't) and equals the test fixture (a backend test checks it); production never falls back on its own: without this setting POST /plans answers 503 until TripTracker serves the schema |
    | `EVALS_INGEST_TOKEN` | a random token ("Eval history" below) | yes | | sealed; optional. Empty (the default) disables `POST /evals/runs` (404); the same value goes in both GitHub environments |
    | `LOG_LEVEL` | `INFO` | yes | yes | |
    | `WIKIMEDIA_CONTACT_URL` | an https page or `mailto:` where Wikimedia can reach you | yes | | optional; empty = `FRONTEND_ORIGIN` (Wikimedia's User-Agent policy for the cover photos) |
-   | `AUTH_MODE` | leave unset (`triptracker`), or `atlas` once the web app runs its own accounts (step 5) | yes | | `atlas` verifies the `__Secure-atlas.session_token` cookie at `FRONTEND_ORIGIN` and stores the user's id on plans |
+   | `AUTH_MODE` | leave unset (`triptracker`), or `atlas` once the web app runs its own accounts (step 5) | yes | | `atlas` looks the `__Secure-atlas.session_token` cookie up in the `auth_sessions` table of the shared database (no call to the web app) and stores the user's id on plans |
    | `LOCKFILE_PATH`, `GIT_SHA` | leave unset | | | `backend/claude-lock.<AGENT_PROFILE>.json`; Railway sets `RAILWAY_GIT_COMMIT_SHA` |
    | `PORT`, `FORWARDED_ALLOW_IPS` | leave unset | | | Railway injects `PORT`; the image sets `FORWARDED_ALLOW_IPS=*` |
 
@@ -508,16 +509,21 @@ also issue and renew their own certificates without interference.
    the app refuses to start in production without it, because a host-only cookie never reaches
    `atlas.api`, every API call answers 401 and `/login` and the page bounce the user back and
    forth; with it `atlas.api` receives the `__Secure-atlas.session_token` cookie, whose `atlas`
-   prefix keeps it apart from TripTracker's), `AUTH_ALLOWED_EMAILS` (who may sign up; **change
-   it together with the backend's `PLANNER_ALLOWED_EMAILS`**: an address only in the web's list
-   signs in and then gets 403 `email_not_allowed` from the API, one only in the backend's can
-   never sign up), `RESEND_API_KEY` and
+   prefix keeps it apart from TripTracker's; accepted risk: a cookie scoped to the whole
+   domain can be planted by any other https host under `bellittim.com`, so keep every such host
+   yours and free of XSS until the API moves behind a host-only cookie, issue #17),
+   `AUTH_ALLOWED_EMAILS` (who may sign up; with
+   `AUTH_MODE=atlas` it is the only list: every account may plan, the backend's
+   `PLANNER_ALLOWED_EMAILS` is not consulted), `RESEND_API_KEY` and
    `AUTH_EMAIL_FROM` (a sender on a domain verified at Resend), and optionally
    `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (OAuth client with redirect URI
    `https://atlas.bellittim.com/api/auth/callback/google`). The tables already exist: the
    backend's `alembic upgrade head` (migration `600fbb922f91`) creates them. On Railway set
-   `AUTH_MODE=atlas` on the `backend` service at the same time; the backend then verifies the
-   cookie at `FRONTEND_ORIGIN/api/auth/get-session` instead of TripTracker's.
+   `AUTH_MODE=atlas` on the `backend` service at the same time, and `ADMIN_EMAILS` to your
+   address (in this mode nobody reads `/evals` otherwise); the backend then verifies the cookie
+   against the `auth_sessions` table of the shared database instead of asking TripTracker, every
+   account may plan, and `PLANNER_ALLOWED_EMAILS` is no longer consulted. Plans from before the
+   switch (no `user_id`) stay yours by email.
 3. Domains: add `atlas.bellittim.com`; Vercel shows the CNAME target for Cloudflare.
 4. Git: production branch `main`, a preview for every PR (spec). Settings > Git > Ignored
    Build Step, custom command `git diff --quiet HEAD^ HEAD -- . ../schema` skips builds when

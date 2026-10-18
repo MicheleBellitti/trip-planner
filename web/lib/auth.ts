@@ -19,9 +19,10 @@ import { MAGIC_LINK_MINUTES, sendMagicLink } from "./server/send-magic-link";
  *   snake_case through the `fields` mapping below; this file never creates or alters them.
  * - Cookie: `__Secure-atlas.session_token` (prefix `atlas`, so it never collides with
  *   TripTracker's `better-auth` cookie on the shared `bellittim.com` domain), with `Domain=` set
- *   to AUTH_COOKIE_DOMAIN so the API subdomain receives it. The backend verifies it by asking
- *   this app's `GET /api/auth/get-session?disableRefresh=true` (backend/app/auth.py); that path
- *   is exempt from the rate limit because every such call comes from the backend's one IP.
+ *   to AUTH_COOKIE_DOMAIN so the API subdomain receives it. The backend verifies it against the
+ *   `auth_sessions` table of the shared database (backend/app/auth.py `verify_atlas_session`):
+ *   no call back to this app, so a sign-out is effective on its next request. `/get-session`
+ *   stays exempt from the rate limit until no deployed backend asks it any more (`rateLimit`).
  * - Sign-up is gated by AUTH_ALLOWED_EMAILS (lib/auth-policy.ts): the magic-link request is
  *   refused before any email leaves, and `user.create` is refused for every provider (Google's
  *   address is only known at its callback). Existing accounts always sign in.
@@ -91,8 +92,10 @@ function build(config: AuthServerConfig) {
       crossSubDomainCookies: config.cookieDomain ? { enabled: true, domain: config.cookieDomain } : { enabled: false },
     },
     rateLimit: {
-      // The backend's session checks all come from one IP; Better Auth's per-IP limit would
-      // turn them into 429s under load. Every other path keeps the defaults.
+      // A backend from before the switch (contract rule 7: the web may ship first) checks every
+      // request here from its one IP, and Better Auth's per-IP limit would turn those checks into
+      // 429s. Drop this in a later PR, once the deployed backend no longer calls get-session.
+      // Every other path keeps the defaults.
       customRules: { "/get-session": false },
     },
     socialProviders: config.google

@@ -7,7 +7,7 @@
  *
  * Data: GET /plans/{id} (status, cost, budget, the plan) and the SSE stream through
  * usePlanEvents, re-reading the plan whenever an event may change its status. Everything is
- * fetched in the browser, which carries the TripTracker cookie to the backend.
+ * fetched in the browser, which carries the session cookie to the backend.
  */
 
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";

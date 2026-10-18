@@ -39,8 +39,8 @@ backend/                 FastAPI service (uv, Python 3.12). The package is backe
   app/hub.py               in-memory per-plan pub/sub for SSE
   app/routes.py            every endpoint except /health; SSE; CORS; request body cap
   app/evals_store.py       the eval history: store a run (POST /evals/runs, bearer token), list, read
-  app/auth.py              current_user() via Better Auth get-session (TripTracker's, or the web app's
-                           own accounts with AUTH_MODE=atlas); the Origin check
+  app/auth.py              current_user(): the web app's own sessions read from the database
+                           (AUTH_MODE=atlas) or TripTracker's get-session; require_admin(); the Origin check
   app/mapping.py           plan_to_trip(): Plan -> TripTracker Trip (pure function)
   app/links.py             check_link(): the booking-link domain allowlist (pure)
   app/fx.py                FxConverter: Banca d'Italia daily rate, InforEuro fallback, fx_rates cache
@@ -343,13 +343,21 @@ CI must pass before merge.
   one plan binds them with `structlog.contextvars`, so the tasks it creates inherit them.
 - An unset `ENVIRONMENT` means production. `AUTH_MODE=local`, `DEMO_MODE` and `DEMO_PACE` are
   only allowed with `ENVIRONMENT=development`, and Settings refuses to start otherwise.
-- Auth checks a Better Auth session cookie with the provider's
-  `/api/auth/get-session?disableRefresh=true` (a check never refreshes the session), cached
-  for 60 s. `AUTH_MODE` picks the provider: `triptracker` (TripTracker's accounts at
-  `TRIPTRACKER_ORIGIN`, cookie prefix `better-auth`) or `atlas` (the web app's own accounts,
-  `web/lib/auth.ts`, at `FRONTEND_ORIGIN`, cookie prefix `atlas`, the user's id stored in
-  `plans.user_id`). The web app mirrors it with `NEXT_PUBLIC_AUTH_MODE` (where a 401 sends the
-  browser). An empty `PLANNER_ALLOWED_EMAILS` lets nobody in. State-changing requests must send
+- Auth reads a Better Auth session cookie; `AUTH_MODE` picks the provider and the check.
+  `atlas` (the web app's own accounts, `web/lib/auth.ts`, cookie prefix `atlas`): the cookie's
+  token is looked up in `auth_sessions` in the shared database (`auth.verify_atlas_session`),
+  no HTTP call, no cache, so a sign-out is effective at once; every account may plan (the web
+  app's `AUTH_ALLOWED_EMAILS` decides who signs up, `PLANNER_ALLOWED_EMAILS` is not consulted);
+  the user's id is stored in `plans.user_id` and ownership goes by it (`sessions.plan_owner_filter`;
+  rows from before the switch, without an id, by email, only when `users.email_verified`).
+  `triptracker` (TripTracker's accounts at
+  `TRIPTRACKER_ORIGIN`, cookie prefix `better-auth`): the cookie is forwarded to
+  `/api/auth/get-session?disableRefresh=true` (a check never refreshes the session), cached for
+  60 s, and the email must be in `PLANNER_ALLOWED_EMAILS` (empty lets nobody in). `ADMIN_EMAILS`
+  is the admin role: who reads `/evals/runs*` (403 `admin_only` otherwise; empty means the allowed
+  users outside `atlas` mode, nobody in it; in `atlas` mode the email must also be verified). `GET /me` tells the web app the email and the admin
+  flag; the header shows "Collaudi" only to admins. The web app mirrors the mode with
+  `NEXT_PUBLIC_AUTH_MODE` (where a 401 sends the browser). State-changing requests must send
   `Origin: FRONTEND_ORIGIN`. CORS allows `FRONTEND_ORIGIN` only, plus `TRIPTRACKER_ORIGIN`
   read-only on `GET /plans/{id}/trip`.
 - Every error answer is `{"detail": {"code", "message" (Italian), "data"}}`, framework errors
