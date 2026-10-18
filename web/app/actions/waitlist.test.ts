@@ -73,6 +73,25 @@ describe("joinWaitlistAction", () => {
     expect(await joinWaitlistAction(JOIN_IDLE, data)).toEqual({ status: "received", email: "nobody@example.com" });
   });
 
+  it("keys the window on the client, never on the address, and a request without an IP shares one bucket", async () => {
+    hit.mockReturnValue({ allowed: false, retryAfterSeconds: 300 });
+    // Two addresses from one connection: the same key, the same answer, whatever the list holds.
+    for (const email of ["listed@example.com", "stranger@example.com"]) {
+      expect(await joinWaitlistAction(JOIN_IDLE, form({ email, source: "landing" }))).toEqual({ status: "error", error: "too_many_requests" });
+    }
+    expect(hit.mock.calls).toEqual([["203.0.113.9"], ["203.0.113.9"]]);
+
+    const ip = requestHeaders["x-real-ip"];
+    delete requestHeaders["x-real-ip"];
+    try {
+      await joinWaitlistAction(JOIN_IDLE, form({ email: "a@b.co", source: "landing" }));
+    } finally {
+      if (ip) requestHeaders["x-real-ip"] = ip;
+    }
+    expect(hit).toHaveBeenLastCalledWith("unknown");
+    expect(joinWaitlist).not.toHaveBeenCalled();
+  });
+
   it("validates before touching anything, and says when the accounts are not configured", async () => {
     expect(await joinWaitlistAction(JOIN_IDLE, form({ email: "nope", source: "landing" }))).toEqual({ status: "error", error: "invalid_email" });
     expect(await joinWaitlistAction(JOIN_IDLE, form({ email: "a@b.co", source: "elsewhere" }))).toEqual({ status: "error", error: "invalid_source" });
