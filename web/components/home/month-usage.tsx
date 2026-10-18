@@ -42,10 +42,12 @@ export function MonthUsage({ className, size = "small", withNote = true }: Month
   // An admin the tab remembers: nothing, and nothing reserved.
   if (me === null && remembered === true) return null;
   if (me === null) {
-    // One empty line of this size until the answer lands: the page below stays where it is.
+    // One empty line of this size until the answer lands: the page below stays where it is. A
+    // no-break space, written as an escape so no editor turns it into a plain space, which would
+    // collapse to a line box of no height.
     return (
       <p aria-hidden="true" className={cx(text, className)} data-testid="month-usage-pending">
-        {" "}
+        {"\u00a0"}
       </p>
     );
   }

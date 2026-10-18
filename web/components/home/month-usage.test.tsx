@@ -36,6 +36,7 @@ describe("MonthUsage", () => {
     expect(pending.getAttribute("aria-hidden")).toBe("true");
     expect(pending.className).toContain("mt-2");
     expect(pending.className).toContain("text-small");
+    expect(pending.textContent).toBe("\u00a0"); // a plain space would collapse to no height
     expect(screen.queryByTestId("month-usage")).toBeNull();
     unmount();
 
