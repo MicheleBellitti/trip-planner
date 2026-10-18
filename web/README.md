@@ -164,6 +164,13 @@ some pages need lives apart: the path builders in `lib/page-paths.ts`, the mark'
 `lib/mark-geometry.ts` (not `lib/brand-mark.ts`), the tagline's line break in
 `lib/tagline-lines.ts`.
 
+Re-measured on 2026-10-18 for the demo (step 3): `/demo` is 199.1 KB gzip (ungated). The live pages
+grow by about 2 KB with no new code of theirs: `/plans/[id]` 195.3 (was 192.8), `/plans` 179.0, `/new`
+178.9, `/evals` 178.5. Cause: on `main` one 22.1 KB chunk held zod and the API client together;
+`/demo` shares zod but must not load the client, so Turbopack splits that chunk in two (19.0 + 7.5 KB),
+and two files compress worse than one. Keeping them together would mean loading the API client on
+`/demo`, which the spec forbids. The 190 gate on `/plans/[id]` is still Michele's decision.
+
 ## Accessibility
 
 Built to WCAG 2.2 AA; checked by hand in the browser on every screen at 393 and 1440 px, light and
