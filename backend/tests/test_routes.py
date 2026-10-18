@@ -435,6 +435,18 @@ async def test_create_plan_is_rate_limited_per_proxied_client_ip(
     assert detail(again)["code"] == "too_many_requests"
 
 
+async def test_create_plan_never_lifts_the_user_quota(
+    api: Api, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Only the eval runner (a CLI) passes user_quota_applies=False: the route never does.
+    calls = patch_sessions(monkeypatch, "start_plan", result=uuid.uuid4())
+
+    response = await api.client.post("/plans", json=VALID_BODY, headers=POST_HEADERS)
+
+    assert response.status_code == 201
+    assert "user_quota_applies" not in calls.options[0]
+
+
 async def test_create_plan_for_a_deleted_account_is_401_not_authenticated(
     api: Api, monkeypatch: pytest.MonkeyPatch
 ) -> None:

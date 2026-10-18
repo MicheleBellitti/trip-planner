@@ -1751,3 +1751,22 @@ async def test_an_outage_does_not_eat_the_users_plans(quota_planner: Planner) ->
     with pytest.raises(QuotaReachedError) as caught:
         await start_plan(REQUEST, USER, services=quota_planner.services)
     assert (caught.value.kind, caught.value.quota.plans_used) == ("plans", 3)
+
+
+async def test_the_eval_runner_is_exempt_from_the_user_quota_not_from_the_ceiling(
+    quota_planner: Planner,
+) -> None:
+    factory = quota_planner.session_factory
+    for _ in range(3):  # USER's 3 plans of the month
+        await insert_plan(factory, status=PlanStatus.READY, cost_cents=10, created_at=OCTOBER)
+    with pytest.raises(QuotaReachedError):
+        await start_plan(REQUEST, USER, services=quota_planner.services)
+
+    await start_plan(REQUEST, USER, services=quota_planner.services, user_quota_applies=False)
+    assert len(quota_planner.fake.created) == 1
+
+    await insert_plan(  # the ceiling (5000) still holds
+        factory, status=PlanStatus.READY, cost_cents=4900, created_at=OCTOBER, user_email="x@a.it"
+    )
+    with pytest.raises(MonthlyLimitReachedError):
+        await start_plan(REQUEST, USER, services=quota_planner.services, user_quota_applies=False)

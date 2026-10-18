@@ -1056,7 +1056,9 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
     an outage must not eat the quota (Michele, 2026-10-18); its cost, like every plan's, counts. The per-user quota (`USER_MONTHLY_PLANS`,
     `USER_MONTHLY_CENTS`, calendar month in Europe/Rome like the ceiling) is checked for the
     signed-in user's plans (`plan_owner_filter`) with the new plan's own budget counted, admins
-    (`auth.user_is_admin`: with AUTH_MODE=atlas, only a verified address) exempt; the global
+    (`auth.user_is_admin`: with AUTH_MODE=atlas, only a verified address) and the eval runner
+    (`start_plan(user_quota_applies=False)`, passed by evals/run.py alone, never by a route)
+    exempt; the global
     ceiling gets the same reservation and the same "would this budget fit" rule, so the last
     dollar under it stays unused rather than overshot; `MAX_RUNNING_PLANS` caps the plans `running` for everyone (503 `planner_busy`,
     `Retry-After` 60, nothing spent); `MAX_CONTINUES_PER_PLAN` caps `plans.continues`, which

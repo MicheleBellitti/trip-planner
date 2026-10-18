@@ -454,6 +454,7 @@ async def start_plan(
     *,
     services: PlannerServices,
     demo_scenario: str | None = None,
+    user_quota_applies: bool = True,
 ) -> uuid.UUID:
     """POST /plans: create a plan and start its session. Returns the new plan id.
 
@@ -462,10 +463,11 @@ async def start_plan(
        `TripSchemaUnavailableError`).
     2. The economics (app/quota.py), in one transaction holding the quota lock
        (`quota.lock_checks`), with the insert of step 3, so two requests never both pass:
-       the user's monthly quota unless they are an admin (`QuotaReachedError`: plans, or
-       cents counting this plan's budget), the global ceiling with the running plans' unspent
-       budgets reserved and this plan's budget included (`MonthlyLimitReachedError`), the cap
-       on running plans (`PlannerBusyError`). Nothing is spent on a refusal.
+       the user's monthly quota unless they are an admin or `user_quota_applies` is False
+       (`QuotaReachedError`: plans, or cents counting this plan's budget), the global ceiling
+       with the running plans' unspent budgets reserved and this plan's budget included
+       (`MonthlyLimitReachedError`), the cap on running plans (`PlannerBusyError`). Nothing is
+       spent on a refusal.
     3. Insert the `plans` row: `user_email`, `user_id` (the web app's own `users.id`, only
        with `Settings.plans_carry_user_id`), `agent_profile`, status `running` (`running_since`
        defaults to `now()`), `request` (`request.model_dump(mode="json")`), `agent_versions`
@@ -490,6 +492,11 @@ async def start_plan(
        cost in `plans.cost_cents` (`_stop_abandoned_session`), so it neither runs a whole plan
        unwatched nor escapes the monthly limit.
 
+    `user_quota_applies=False` is for the eval runner alone (evals/run.py, a CLI with database
+    access): its fixed user runs six plans per run, several runs a month, against a database
+    that persists between runs. No route passes it, so nobody reaches it from the web; the
+    global ceiling and the running cap still apply.
+
     DEMO_MODE: `demo_scenario` (default `DEFAULT_DEMO_SCENARIO`) goes into the session metadata
     under `DEMO_SCENARIO_METADATA`, where the demo client reads which scenario to play;
     outside demo mode a `demo_scenario` is a ValueError (the route answers 404 first).
@@ -511,7 +518,9 @@ async def start_plan(
     )
     async with services.session_factory() as db:
         await quota.lock_checks(db)
-        await _admit_start(db, user, settings=settings, now=now)
+        await _admit_start(
+            db, user, settings=settings, now=now, user_quota_applies=user_quota_applies
+        )
         db.add(
             PlanRecord(
                 id=plan_id,
@@ -554,14 +563,19 @@ async def start_plan(
 
 
 async def _admit_start(
-    db: AsyncSession, user: CurrentUser, *, settings: Settings, now: dt.datetime
+    db: AsyncSession,
+    user: CurrentUser,
+    *,
+    settings: Settings,
+    now: dt.datetime,
+    user_quota_applies: bool = True,
 ) -> None:
     """Step 2 of `start_plan`, on a connection that holds the quota lock: the user's quota
     (plans, then cents with this plan's budget counted; admins exempt), the global ceiling with
     the running plans' unspent budgets reserved and this plan's budget counted, the running
     cap. Each refusal is logged with its figures, never with the user."""
     budget = settings.session_budget_cents
-    if not user_is_admin(user, settings):
+    if user_quota_applies and not user_is_admin(user, settings):
         mine = await quota.month_usage(
             db,
             now=now,
