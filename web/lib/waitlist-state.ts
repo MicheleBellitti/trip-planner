@@ -24,9 +24,11 @@ export type InviteError = "invalid_email" | "note_too_long" | "signed_out" | "fo
 /**
  * What happened to the invitation's email: it left; it had already left (or another admin is
  * sending it right now); the address already has an account, so nothing is sent; or it did not
- * leave (the claim is given back, "Invia l'email" tries again).
+ * leave (the claim is given back, "Invia l'email" tries again). The `resend_*` three answer
+ * "Invia di nuovo": sent again; not sent, because the stamp had moved (another click or admin, or
+ * an account meanwhile); not sent, the previous stamp restored.
  */
-export type InviteDelivery = "sent" | "already_sent" | "has_account" | "failed";
+export type InviteDelivery = "sent" | "already_sent" | "has_account" | "failed" | "resent" | "resend_skipped" | "resend_failed";
 
 export type InviteState =
   | { status: "idle" }

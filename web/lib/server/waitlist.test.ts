@@ -5,6 +5,7 @@ import {
   invite,
   joinWaitlist,
   listWaitlist,
+  reclaimInvitation,
   releaseInvitation,
   removeRequest,
   signInStanding,
@@ -56,22 +57,23 @@ describe("the waitlist queries", () => {
 
   it("listWaitlist maps the rows, pending first, with the account flag", async () => {
     const db = fakeDb([
-      { email: "a@b.co", note: "", source: "landing", created_at: NOW, invited_at: null, invited_by: null, invitation_sent_at: null, registered: false },
-      { email: "c@d.co", note: "ciao", source: "admin", created_at: NOW, invited_at: NOW, invited_by: "me@x.it", invitation_sent_at: NOW, registered: true },
+      { email: "a@b.co", note: "", source: "landing", created_at: NOW, invited_at: null, invited_by: null, invitation_sent_at: null, invitation_sent_claim: null, registered: false },
+      { email: "c@d.co", note: "ciao", source: "admin", created_at: NOW, invited_at: NOW, invited_by: "me@x.it", invitation_sent_at: NOW, invitation_sent_claim: "2026-10-17 18:00:00.000123+00", registered: true },
     ]);
     const { rows, truncated } = await listWaitlist(db);
     expect(truncated).toBe(false);
     expect(rows).toEqual([
-      { email: "a@b.co", note: "", source: "landing", createdAt: NOW.toISOString(), invitedAt: null, invitedBy: null, invitationSentAt: null, registered: false },
-      { email: "c@d.co", note: "ciao", source: "admin", createdAt: NOW.toISOString(), invitedAt: NOW.toISOString(), invitedBy: "me@x.it", invitationSentAt: NOW.toISOString(), registered: true },
+      { email: "a@b.co", note: "", source: "landing", createdAt: NOW.toISOString(), invitedAt: null, invitedBy: null, invitationSentAt: null, invitationSentClaim: null, registered: false },
+      { email: "c@d.co", note: "ciao", source: "admin", createdAt: NOW.toISOString(), invitedAt: NOW.toISOString(), invitedBy: "me@x.it", invitationSentAt: NOW.toISOString(), invitationSentClaim: "2026-10-17 18:00:00.000123+00", registered: true },
     ]);
     expect(db.calls[0]?.text).toContain("ORDER BY (w.invited_at IS NULL) DESC, w.created_at DESC");
     expect(db.calls[0]?.text).toContain("LEFT JOIN users u ON lower(u.email) = w.email");
+    expect(db.calls[0]?.text).toContain("w.invitation_sent_at::text AS invitation_sent_claim"); // the exact stamp
   });
 
   it("listWaitlist reads at most the limit, one more to know the list is cut", async () => {
     expect(WAITLIST_LIST_LIMIT).toBe(500);
-    const raw = (email: string) => ({ email, note: "", source: "landing", created_at: NOW, invited_at: null, invited_by: null, invitation_sent_at: null, registered: false });
+    const raw = (email: string) => ({ email, note: "", source: "landing", created_at: NOW, invited_at: null, invited_by: null, invitation_sent_at: null, invitation_sent_claim: null, registered: false });
     const db = fakeDb([raw("a@b.co"), raw("c@d.co"), raw("e@f.co")]);
     const { rows, truncated } = await listWaitlist(db, 2);
     expect(rows.map((item) => item.email)).toEqual(["a@b.co", "c@d.co"]);
@@ -83,7 +85,7 @@ describe("the waitlist queries", () => {
   });
 
   it("invite upserts the row, keeping a first invitation, and reports it", async () => {
-    const db = fakeDb([{ email: "a@b.co", note: "", source: "admin", created_at: NOW, invited_at: NOW, invited_by: "me@x.it", invitation_sent_at: null, registered: false }]);
+    const db = fakeDb([{ email: "a@b.co", note: "", source: "admin", created_at: NOW, invited_at: NOW, invited_by: "me@x.it", invitation_sent_at: null, invitation_sent_claim: null, registered: false }]);
     const row = await invite(db, { email: "a@b.co", by: "me@x.it" });
     expect(row).toMatchObject({ email: "a@b.co", invitedAt: NOW.toISOString(), invitedBy: "me@x.it", invitationSentAt: null });
     expect(db.calls[0]?.text).toContain("VALUES ($1, $2, 'admin', now(), $3)");
@@ -108,12 +110,24 @@ describe("the waitlist queries", () => {
     expect(await claimInvitation(fakeDb([]), "a@b.co")).toBeNull();
   });
 
-  it("releaseInvitation gives back only its own claim", async () => {
-    const db = fakeDb([]);
+  it("releaseInvitation gives back only its own claim, to NULL or to the stamp before it", async () => {
+    const db = fakeDb([], []);
     await releaseInvitation(db, "a@b.co", "2026-10-18 10:00:00.123456+00");
     expect(db.calls[0]).toEqual({
-      text: "UPDATE waitlist SET invitation_sent_at = NULL, updated_at = now() WHERE email = $1 AND invitation_sent_at = $2::timestamptz",
-      values: ["a@b.co", "2026-10-18 10:00:00.123456+00"],
+      text: "UPDATE waitlist SET invitation_sent_at = $3::timestamptz, updated_at = now() WHERE email = $1 AND invitation_sent_at = $2::timestamptz",
+      values: ["a@b.co", "2026-10-18 10:00:00.123456+00", null],
     });
+    await releaseInvitation(db, "a@b.co", "2026-10-18 10:00:00.123456+00", "2026-10-17 09:00:00.5+00");
+    expect(db.calls[1]?.values).toEqual(["a@b.co", "2026-10-18 10:00:00.123456+00", "2026-10-17 09:00:00.5+00"]);
+  });
+
+  it("reclaimInvitation swaps the stamp the page saw for a new one, never an account's", async () => {
+    const db = fakeDb([{ claim: "2026-10-18 10:00:00.123456+00" }]);
+    expect(await reclaimInvitation(db, "a@b.co", "2026-10-17 09:00:00.5+00")).toBe("2026-10-18 10:00:00.123456+00");
+    expect(db.calls[0]?.text).toBe(
+      "UPDATE waitlist SET invitation_sent_at = now(), updated_at = now() WHERE email = $1 AND invitation_sent_at = $2::timestamptz AND NOT EXISTS (SELECT 1 FROM users u WHERE lower(u.email) = waitlist.email) RETURNING invitation_sent_at::text AS claim",
+    );
+    expect(db.calls[0]?.values).toEqual(["a@b.co", "2026-10-17 09:00:00.5+00"]);
+    expect(await reclaimInvitation(fakeDb([]), "a@b.co", "2026-10-17 09:00:00.5+00")).toBeNull();
   });
 });

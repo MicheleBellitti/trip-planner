@@ -23,6 +23,9 @@ export interface WaitlistRow {
   invitedAt: string | null;
   invitedBy: string | null;
   invitationSentAt: string | null;
+  /** `invitation_sent_at` exactly as Postgres writes it (microseconds included): what "Invia di
+   * nuovo" compares against (`reclaimInvitation`), which a JS Date would round. */
+  invitationSentClaim: string | null;
   /** The address already has an account (a `users` row). */
   registered: boolean;
 }
@@ -35,6 +38,7 @@ interface RawRow extends QueryResultRow {
   invited_at: Date | null;
   invited_by: string | null;
   invitation_sent_at: Date | null;
+  invitation_sent_claim: string | null;
   registered: boolean;
 }
 
@@ -51,6 +55,7 @@ function row(raw: RawRow): WaitlistRow {
     invitedAt: iso(raw.invited_at),
     invitedBy: raw.invited_by,
     invitationSentAt: iso(raw.invitation_sent_at),
+    invitationSentClaim: raw.invitation_sent_claim,
     registered: raw.registered,
   };
 }
@@ -104,7 +109,7 @@ export async function listWaitlist(
 ): Promise<{ rows: WaitlistRow[]; truncated: boolean }> {
   const { rows } = await db.query<RawRow>(
     `SELECT w.email, w.note, w.source, w.created_at, w.invited_at, w.invited_by, w.invitation_sent_at,
-            (u.id IS NOT NULL) AS registered
+            w.invitation_sent_at::text AS invitation_sent_claim, (u.id IS NOT NULL) AS registered
        FROM waitlist w
        LEFT JOIN users u ON lower(u.email) = w.email
       ORDER BY (w.invited_at IS NULL) DESC, w.created_at DESC
@@ -131,6 +136,7 @@ export async function invite(
            note = CASE WHEN waitlist.note = '' THEN EXCLUDED.note ELSE waitlist.note END,
            updated_at = now()
      RETURNING email, note, source, created_at, invited_at, invited_by, invitation_sent_at,
+               invitation_sent_at::text AS invitation_sent_claim,
                EXISTS (SELECT 1 FROM users u WHERE lower(u.email) = waitlist.email) AS registered`,
     [email, note, by],
   );
@@ -155,13 +161,32 @@ export async function claimInvitation(db: Queryable, email: string): Promise<str
   return rows[0]?.claim ?? null;
 }
 
-/** Gives back a claim whose email did not leave, so the admin can send it again ("Invia l'email").
- * Only that claim: a later one (another admin's retry) is left alone. */
-export async function releaseInvitation(db: Queryable, email: string, claim: string): Promise<void> {
+/**
+ * Claims a second sending of an invitation already marked sent ("Invia di nuovo": the email may
+ * never have left if the process died between the claim and the send). A compare-and-swap on the
+ * stamp the admin saw, `previous`: of two clicks or two admins only one moves it, and only that
+ * one sends. An address that has an account meanwhile is not claimed. Returns the new claim, or
+ * null when the stamp had already moved.
+ */
+export async function reclaimInvitation(db: Queryable, email: string, previous: string): Promise<string | null> {
+  const { rows } = await db.query<{ claim: string }>(
+    `UPDATE waitlist SET invitation_sent_at = now(), updated_at = now()
+      WHERE email = $1 AND invitation_sent_at = $2::timestamptz
+        AND NOT EXISTS (SELECT 1 FROM users u WHERE lower(u.email) = waitlist.email)
+      RETURNING invitation_sent_at::text AS claim`,
+    [email, previous],
+  );
+  return rows[0]?.claim ?? null;
+}
+
+/** Gives back a claim whose email did not leave, so the admin can try again: the stamp goes back
+ * to `previous` (NULL for a first sending, the earlier stamp for "Invia di nuovo"), exactly. Only
+ * that claim: a later one (another admin's retry) is left alone. */
+export async function releaseInvitation(db: Queryable, email: string, claim: string, previous: string | null = null): Promise<void> {
   await db.query(
-    `UPDATE waitlist SET invitation_sent_at = NULL, updated_at = now()
+    `UPDATE waitlist SET invitation_sent_at = $3::timestamptz, updated_at = now()
       WHERE email = $1 AND invitation_sent_at = $2::timestamptz`,
-    [email, claim],
+    [email, claim, previous],
   );
 }
 

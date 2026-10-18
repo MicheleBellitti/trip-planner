@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 
-import { inviteAction, removeRequestAction } from "@/app/actions/waitlist";
+import { inviteAction, removeRequestAction, resendInvitationAction } from "@/app/actions/waitlist";
 import { Button } from "@/components/ui/button";
 import { cx } from "@/components/ui/cx";
 import { Field, TextArea, TextInput } from "@/components/ui/field";
@@ -57,13 +57,19 @@ export function inviteOutcome(state: InviteState): Outcome | null {
       return { tone: "info", text: `${state.email} ha già un account: nessuna email.` };
     case "failed":
       return { tone: "warning", text: `${state.email} è stato invitato, ma l'email non è partita: riprova con «Invia l'email».` };
+    case "resent":
+      return { tone: "info", text: `Invito inviato di nuovo a ${state.email}.` };
+    case "resend_skipped":
+      return { tone: "info", text: `Nessuna nuova email a ${state.email}: l'invito era già stato rimandato, o l'indirizzo ha un account.` };
+    case "resend_failed":
+      return { tone: "warning", text: `L'email per ${state.email} non è partita di nuovo: riprova con «Invia di nuovo».` };
   }
 }
 
 /** What a row action says when the action itself never answered (a dropped connection, a
  * redeploy's "Failed to find Server Action"): the action's own failure, not the error page. */
-export function unansweredOutcome(kind: "invite" | "remove"): Outcome {
-  return { tone: "error", text: kind === "invite" ? INVITE_ERRORS.failed : REMOVE_ERRORS.failed };
+export function unansweredOutcome(kind: RowAction): Outcome {
+  return { tone: "error", text: kind === "remove" ? REMOVE_ERRORS.failed : INVITE_ERRORS.failed };
 }
 
 /** What removing a request did. */
@@ -73,11 +79,12 @@ export function removeOutcome(state: RemoveState): Outcome | null {
   return { tone: "info", text: `${state.email} è stato tolto dalla lista.` };
 }
 
-type RowAction = "invite" | "remove";
+type RowAction = "invite" | "remove" | "resend";
 
 /**
  * The invitations page's body: invite an address, the pending requests with "Invita" and "Togli",
- * the invitations with their state. Every action is a server action checked on the server
+ * the invitations with their state ("Invia l'email" when it never left, a quiet "Invia di nuovo"
+ * when it is marked sent). Every action is a server action checked on the server
  * (app/actions/waitlist.ts); the page re-reads the rows after each one. One status region for the
  * whole view, there from the first render, says what the last action did, the add form's included
  * (its field errors stay on the fields and clear it). It sticks to the top of the viewport, so the
@@ -105,7 +112,7 @@ export function WaitlistAdmin({ rows, truncatedAt = null }: { rows: WaitlistRow[
     else items.current.delete(email);
   }
 
-  function run(kind: RowAction, email: string) {
+  function run(kind: RowAction, email: string, sent?: string) {
     // The row leaves the list on success: focus will go to its neighbour, the one after it or else
     // the one before. An invited row's "Invia l'email" has no neighbour here: the region takes it.
     const index = pending.findIndex((row) => row.email === email);
@@ -115,10 +122,11 @@ export function WaitlistAdmin({ rows, truncatedAt = null }: { rows: WaitlistRow[
     startTransition(async () => {
       const data = new FormData();
       data.set("email", email);
+      if (sent) data.set("sent", sent);
       try {
-        setOutcome(
-          kind === "invite" ? inviteOutcome(await inviteAction(INVITE_IDLE, data)) : removeOutcome(await removeRequestAction(REMOVE_IDLE, data)),
-        );
+        if (kind === "invite") setOutcome(inviteOutcome(await inviteAction(INVITE_IDLE, data)));
+        else if (kind === "resend") setOutcome(inviteOutcome(await resendInvitationAction(INVITE_IDLE, data)));
+        else setOutcome(removeOutcome(await removeRequestAction(REMOVE_IDLE, data)));
       } catch {
         // A rejection inside a transition would reach the error boundary: it is a failed action.
         setOutcome(unansweredOutcome(kind));
@@ -304,7 +312,7 @@ function Row({
   inFlight: boolean;
   confirming?: boolean;
   onConfirm?: (open: boolean) => void;
-  onRun: (kind: RowAction, email: string) => void;
+  onRun: (kind: RowAction, email: string, sent?: string) => void;
   itemRef?: (element: HTMLLIElement | null) => void;
 }) {
   const item = useRef<HTMLLIElement | null>(null);
@@ -327,6 +335,9 @@ function Row({
     if (row.registered) facts.push("ha un account");
   }
   const needsEmail = invitedAt !== null && row.invitationSentAt === null && !row.registered;
+  // Marked sent, but the email may never have left (the process died between the claim and the
+  // send): the admin may send it once more, quietly, on the stamp this page shows.
+  const mayResend = invitedAt !== null && row.invitationSentClaim !== null && !row.registered;
   const mine = (kind: RowAction) => inFlight && busy?.email === row.email && busy.kind === kind;
   const button = "min-h-11 sm:min-h-8";
   return (
@@ -400,6 +411,20 @@ function Row({
             className={button}
           >
             {mine("invite") ? "Invio…" : "Invia l'email"}
+          </Button>
+        </div>
+      ) : mayResend ? (
+        <div className="sm:pt-0.5">
+          <Button
+            variant="quiet"
+            size="sm"
+            busy={mine("resend")}
+            disabled={inFlight}
+            aria-label={`Invia di nuovo l'invito a ${row.email}`}
+            onClick={() => onRun("resend", row.email, row.invitationSentClaim ?? undefined)}
+            className={button}
+          >
+            {mine("resend") ? "Invio…" : "Invia di nuovo"}
           </Button>
         </div>
       ) : null}

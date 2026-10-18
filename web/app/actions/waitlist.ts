@@ -8,7 +8,15 @@ import { currentCaller } from "@/lib/server/admin";
 import { readAuthConfig, type AuthServerConfig } from "@/lib/server/auth-config";
 import { getPool } from "@/lib/server/db";
 import { sendInvitation } from "@/lib/server/send-invitation";
-import { claimInvitation, invite, joinWaitlist, releaseInvitation, removeRequest, type Queryable } from "@/lib/server/waitlist";
+import {
+  claimInvitation,
+  invite,
+  joinWaitlist,
+  reclaimInvitation,
+  releaseInvitation,
+  removeRequest,
+  type Queryable,
+} from "@/lib/server/waitlist";
 import { parseJoinInput } from "@/lib/waitlist-policy";
 import type { InviteDelivery, InviteState, JoinState, RemoveState } from "@/lib/waitlist-state";
 
@@ -95,6 +103,44 @@ async function deliver(db: Queryable, config: AuthServerConfig, email: string): 
     console.error("[waitlist] invitation email failed", error instanceof Error ? error.message : typeof error);
     await releaseInvitation(db, email, claim);
     return "failed";
+  }
+}
+
+/**
+ * "Invia di nuovo": sends an invitation already marked sent once more, for when the first email
+ * may never have left (the process died between the claim and the send, so nothing gave the
+ * claim back). `sent` is the stamp the page showed (`WaitlistRow.invitationSentClaim`): the
+ * re-claim is a compare-and-swap on it (`reclaimInvitation`), so a double click or two admins
+ * send one email; a send that fails puts that stamp back exactly.
+ */
+export async function resendInvitationAction(_previous: InviteState, formData: FormData): Promise<InviteState> {
+  const parsed = parseJoinInput({ email: formData.get("email"), note: "", source: "admin" }, ADMIN_SOURCE);
+  const sent = formData.get("sent");
+  if (!parsed.ok || typeof sent !== "string" || sent === "") return { status: "error", error: "failed" };
+  const config = readAuthConfig();
+  if (!config) return { status: "error", error: "unavailable" };
+  const gate = await admin();
+  if (!gate.ok) return { status: "error", error: gate.error };
+  const db = getPool(config.databaseUrl);
+  const { email } = parsed.value;
+  try {
+    const claim = await reclaimInvitation(db, email, sent);
+    let delivery: InviteDelivery = "resend_skipped";
+    if (claim !== null) {
+      try {
+        await sendInvitation(config, { email });
+        delivery = "resent";
+      } catch (error) {
+        console.error("[waitlist] invitation email failed", error instanceof Error ? error.message : typeof error);
+        await releaseInvitation(db, email, claim, sent);
+        delivery = "resend_failed";
+      }
+    }
+    revalidatePath(ROUTES.invites);
+    return { status: "invited", email, delivery };
+  } catch (error) {
+    console.error("[waitlist] resend failed", error instanceof Error ? error.name : typeof error);
+    return { status: "error", error: "failed" };
   }
 }
 
