@@ -1,0 +1,96 @@
+import type { Metadata } from "next";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { Suspense } from "react";
+
+import { AuthHeader } from "@/components/auth/auth-header";
+import { LoginForm } from "@/components/auth/login-form";
+import { Skeleton } from "@/components/ui/skeleton";
+import { VisuallyHidden } from "@/components/ui/visually-hidden";
+import { auth, authConfig } from "@/lib/auth";
+import { safeReturnTo } from "@/lib/return-to";
+
+export const metadata: Metadata = { title: "Accedi", robots: { index: false } };
+
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+/** "/login": the app's own sign-in (lib/auth.ts). A signed-in visitor is sent straight back to
+ * `returnTo` (lib/api.ts put the interrupted page there), everyone else gets the form. */
+export default function LoginPage({ searchParams }: { searchParams: SearchParams }) {
+  return (
+    <>
+      <AuthHeader />
+      <main className="mx-auto max-w-page px-4 pt-8 pb-16 lg:px-7 lg:pt-14">
+        <div className="mx-auto max-w-[26rem]">
+          <h1 className="font-cond text-display font-semibold lg:text-display-lg">Accedi</h1>
+          <div className="mt-3">
+            <Suspense fallback={<FormPlaceholder />}>
+              <Gate searchParams={searchParams} />
+            </Suspense>
+          </div>
+        </div>
+      </main>
+    </>
+  );
+}
+
+function first(value: string | string[] | undefined): string | null {
+  const chosen = Array.isArray(value) ? value[0] : value;
+  return chosen?.trim() ? chosen : null;
+}
+
+/** Reads the query and the cookie at request time (hence inside the Suspense boundary). */
+async function Gate({ searchParams }: { searchParams: SearchParams }) {
+  const params = await searchParams;
+  const returnTo = first(params.returnTo);
+  const errorCode = first(params.error);
+  let signedIn = false;
+  if (auth) {
+    try {
+      signedIn = (await auth.api.getSession({ headers: await headers() })) !== null;
+    } catch (error) {
+      // The database is unreachable: the form still renders, and the submit says what failed.
+      console.error("[auth] get-session failed on /login", error instanceof Error ? error.message : error);
+    }
+  }
+  if (signedIn && authConfig) redirect(safeReturnTo(returnTo, authConfig.baseUrl));
+  return (
+    <LoginForm
+      returnTo={returnTo}
+      errorCode={errorCode}
+      configured={auth !== null}
+      googleEnabled={authConfig?.google != null}
+    />
+  );
+}
+
+/** The lede, the field and the button in their final shape and rhythm while the request-time part
+ * arrives: each text line takes its real line box (text-small 20 px, text-meta 19 px), so the field
+ * and the button do not jump when the form replaces the placeholder. */
+function FormPlaceholder() {
+  return (
+    <div aria-busy="true" className="grid gap-5">
+      <VisuallyHidden>Carico il modulo…</VisuallyHidden>
+      <div className="grid">
+        <div className="flex h-5 items-center">
+          <Skeleton className="w-full text-small" />
+        </div>
+        <div className="flex h-5 items-center">
+          <Skeleton className="w-3/4 text-small" />
+        </div>
+      </div>
+      <div className="grid gap-4">
+        <div className="grid gap-1.5">
+          <div className="flex h-[19px] items-center">
+            <Skeleton className="w-28 text-meta" />
+          </div>
+          <div className="-mt-1 flex h-[19px] items-center">
+            <Skeleton className="w-60 text-meta" />
+          </div>
+          <Skeleton shape="block" className="h-11 w-full" />
+        </div>
+        <Skeleton shape="round" className="h-11 w-full sm:h-10 sm:w-[9.25rem]" />
+      </div>
+    </div>
+  );
+}

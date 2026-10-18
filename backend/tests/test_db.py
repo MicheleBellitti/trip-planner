@@ -12,7 +12,19 @@ from sqlalchemy import Connection, delete, func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
-from app.db import Base, DbSession, EventRecord, FxRateRecord, PlanRecord, PlanStatus
+from app.db import (
+    AuthAccountRecord,
+    AuthSessionRecord,
+    AuthVerificationRecord,
+    Base,
+    DbSession,
+    EventRecord,
+    FxRateRecord,
+    PlanRecord,
+    PlanStatus,
+    UserRecord,
+    WaitlistRecord,
+)
 from tests.conftest import run_alembic
 
 REQUEST: dict[str, Any] = {
@@ -341,3 +353,133 @@ async def test_get_db_discards_uncommitted_work(
 
     assert response.status_code == 200
     assert await db_session.scalar(select(func.count()).select_from(PlanRecord)) == 0
+
+
+# --- the web app's own accounts (Better Auth tables, AUTH_MODE=atlas) ----------------------------
+
+
+def make_user(**overrides: Any) -> UserRecord:
+    values: dict[str, Any] = {"id": "usr_test", "email": "test@example.com"}
+    values.update(overrides)
+    return UserRecord(**values)
+
+
+def tomorrow() -> dt.datetime:
+    return dt.datetime.now(dt.UTC) + dt.timedelta(days=1)
+
+
+async def test_user_round_trip_with_defaults(db_session: AsyncSession) -> None:
+    db_session.add(make_user())
+    await db_session.commit()
+    db_session.expunge_all()
+
+    stored = await db_session.get_one(UserRecord, "usr_test")
+
+    assert stored.email == "test@example.com"
+    assert stored.name == ""  # a magic-link sign-up has no display name
+    assert stored.email_verified is False
+    assert stored.image is None
+    assert stored.created_at.tzinfo is not None
+    assert stored.updated_at.tzinfo is not None
+
+
+async def test_user_emails_are_unique(db_session: AsyncSession) -> None:
+    db_session.add(make_user())
+    await db_session.commit()
+    db_session.add(make_user(id="usr_other"))
+
+    with pytest.raises(IntegrityError):
+        await db_session.commit()
+
+
+async def test_a_plan_may_carry_its_owners_id_but_only_a_real_one(db_session: AsyncSession) -> None:
+    db_session.add(make_user())
+    await db_session.commit()
+    db_session.add(make_plan())  # TripTracker's or the local mode's plan: no user id
+    db_session.add(make_plan(user_id="usr_test"))
+    await db_session.commit()
+    assert await db_session.scalar(select(func.count()).select_from(PlanRecord)) == 2
+
+    db_session.add(make_plan(user_id="usr_missing"))
+    with pytest.raises(IntegrityError):
+        await db_session.commit()
+
+
+async def test_deleting_a_user_deletes_their_plans_sessions_and_accounts(
+    db_session: AsyncSession,
+) -> None:
+    # No ORM relationships tie these models (the web app owns the rows), so the user is
+    # committed first: the unit of work would not otherwise order the inserts by foreign key.
+    db_session.add(make_user())
+    await db_session.commit()
+    db_session.add(make_plan(user_id="usr_test"))
+    db_session.add(make_plan())  # another mode's plan, untouched by the deletion
+    db_session.add(
+        AuthSessionRecord(id="ses_1", user_id="usr_test", token="tok_1", expires_at=tomorrow())
+    )
+    db_session.add(
+        AuthAccountRecord(id="acc_1", user_id="usr_test", account_id="g-1", provider_id="google")
+    )
+    await db_session.commit()
+
+    await db_session.execute(delete(UserRecord).where(UserRecord.id == "usr_test"))
+    await db_session.commit()
+
+    assert await db_session.scalar(select(func.count()).select_from(UserRecord)) == 0
+    assert await db_session.scalar(select(func.count()).select_from(AuthSessionRecord)) == 0
+    assert await db_session.scalar(select(func.count()).select_from(AuthAccountRecord)) == 0
+    [remaining] = (await db_session.scalars(select(PlanRecord))).all()
+    assert remaining.user_id is None
+
+
+async def test_session_tokens_are_unique_and_verifications_round_trip(
+    db_session: AsyncSession,
+) -> None:
+    db_session.add(make_user())
+    await db_session.commit()
+    db_session.add(
+        AuthSessionRecord(id="ses_1", user_id="usr_test", token="tok_1", expires_at=tomorrow())
+    )
+    db_session.add(
+        AuthVerificationRecord(
+            id="ver_1", identifier="test@example.com", value="magic", expires_at=tomorrow()
+        )
+    )
+    await db_session.commit()
+    db_session.expunge_all()
+
+    verification = await db_session.get_one(AuthVerificationRecord, "ver_1")
+    assert verification.identifier == "test@example.com"
+    assert verification.expires_at.tzinfo is not None
+
+    db_session.add(
+        AuthSessionRecord(id="ses_2", user_id="usr_test", token="tok_1", expires_at=tomorrow())
+    )
+    with pytest.raises(IntegrityError):
+        await db_session.commit()
+
+
+async def test_waitlist_round_trip_with_defaults(db_session: AsyncSession) -> None:
+    """A request from the landing: no note, not invited, timestamps with an offset (the web app
+    writes the rows; the backend only migrates the table)."""
+    db_session.add(WaitlistRecord(email="friend@example.com", source="landing"))
+    await db_session.commit()
+    db_session.expunge_all()
+
+    stored = await db_session.get_one(WaitlistRecord, "friend@example.com")
+
+    assert stored.note == ""
+    assert stored.source == "landing"
+    assert stored.invited_at is None
+    assert stored.invited_by is None
+    assert stored.invitation_sent_at is None
+    assert stored.created_at.tzinfo is not None
+    assert stored.updated_at.tzinfo is not None
+
+    stored.invited_at = dt.datetime.now(dt.UTC)
+    stored.invited_by = "michele@example.com"
+    await db_session.commit()
+    db_session.expunge_all()
+    db_session.add(WaitlistRecord(email="friend@example.com", source="admin"))
+    with pytest.raises(IntegrityError):  # one row per address
+        await db_session.commit()

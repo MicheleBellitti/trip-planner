@@ -1128,7 +1128,7 @@ def test_message_text_is_capped() -> None:
             "In attesa di una risposta",
             "waiting",
         ),
-        ({"type": "budget_reached"}, None, "Fermo: budget della sessione esaurito", "waiting"),
+        ({"type": "budget_reached"}, None, "Fermo: budget della sessione raggiunto", "waiting"),
         (
             {"type": "retries_exhausted"},
             None,

@@ -1,4 +1,4 @@
-import { useId, type ComponentPropsWithoutRef, type ReactNode } from "react";
+import { useId, type ComponentProps, type ComponentPropsWithoutRef, type ReactNode } from "react";
 
 import { cx } from "./cx";
 import { Icon } from "./icon";
@@ -72,12 +72,20 @@ const CONTROL =
   "not-disabled:hover:border-ink focus-visible:border-ink aria-invalid:border-error " +
   "disabled:cursor-not-allowed disabled:opacity-55";
 
-export function TextInput({ className, type = "text", ...props }: ComponentPropsWithoutRef<"input">) {
+/** `ref` is an ordinary prop (React 19): a form that moves focus onto the field after an error passes it. */
+export function TextInput({ className, type = "text", ...props }: ComponentProps<"input">) {
   return <input type={type} className={cx(CONTROL, "min-h-11 w-full px-3", className)} {...props} />;
 }
 
-export function TextArea({ className, rows = 3, ...props }: ComponentPropsWithoutRef<"textarea">) {
-  return <textarea rows={rows} className={cx(CONTROL, "min-h-24 w-full resize-y px-3 py-2.5", className)} {...props} />;
+/** Two rows get a two-line box (64 px); three or more the usual 96 px. `ref` is an ordinary prop. */
+export function TextArea({ className, rows = 3, ...props }: ComponentProps<"textarea">) {
+  return (
+    <textarea
+      rows={rows}
+      className={cx(CONTROL, rows <= 2 ? "min-h-16" : "min-h-24", "w-full resize-y px-3 py-2.5", className)}
+      {...props}
+    />
+  );
 }
 
 /** A native select (the phone's own picker), with the caret drawn from the icon sprite. */

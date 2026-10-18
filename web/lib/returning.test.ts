@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { markSignedIn, markSignedOut, SIGNED_IN_KEY } from "./returning";
+import { ADMIN_KEY, markSignedIn, markSignedOut, SIGNED_IN_KEY } from "./returning";
 import { SKIP_LANDING_BOOTSTRAP, SKIP_LANDING_DECISION } from "./skip-landing";
 
 type Decide = (storage: Pick<Storage, "getItem">, referrer: string, origin: string, hash?: string) => string | null;
@@ -71,5 +71,17 @@ describe("the mark", () => {
     });
     expect(markSignedIn).not.toThrow();
     expect(markSignedOut).not.toThrow();
+  });
+});
+
+describe("signing out", () => {
+  afterEach(() => sessionStorage.clear());
+
+  it("forgets the tab's admin flag with the mark, so the next account never inherits it", () => {
+    markSignedIn();
+    sessionStorage.setItem(ADMIN_KEY, "1");
+    markSignedOut();
+    expect(localStorage.getItem(SIGNED_IN_KEY)).toBeNull();
+    expect(sessionStorage.getItem(ADMIN_KEY)).toBeNull();
   });
 });

@@ -760,8 +760,8 @@ async def test_the_monthly_limit_refuses_a_new_plan_before_spending(
     assert response.json()["detail"] == {
         "code": "monthly_limit_reached",
         "message": (
-            "Questo mese sono già stati spesi 50,00 $ su 50,00 $: il prossimo piano si potrà "
-            "creare il mese prossimo."
+            "Questo mese il planner ha già impegnato 50,00 $ su 50,00 $: il prossimo piano si "
+            "potrà creare il mese prossimo."
         ),
         "data": {"spent_cents": 5000, "limit_cents": 5000},
     }

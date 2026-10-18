@@ -62,9 +62,22 @@ time and are public: never put a secret in them. Details and the reason for each
 | Variable | Used for |
 |---|---|
 | `NEXT_PUBLIC_API_URL` | The planner backend: every fetch and the SSE stream. Its `FRONTEND_ORIGIN` must be this app's origin. |
-| `NEXT_PUBLIC_TRIPTRACKER_URL` | "Apri in TripTracker" (`/import?plan=<id>`) and the login redirect on a 401. |
+| `NEXT_PUBLIC_TRIPTRACKER_URL` | "Apri in TripTracker" (`/import?plan=<id>`) and, in `triptracker` mode, the login redirect on a 401. |
+| `NEXT_PUBLIC_AUTH_MODE` | `atlas` (a 401 goes to this app's `/login`) or `triptracker` (TripTracker's `/accedi`); the backend's `AUTH_MODE`. Empty: `atlas` under `next dev`, `triptracker` otherwise. |
 | `NEXT_PUBLIC_DEMO_SCENARIOS` | Development only: comma list of scenarios for the form's demo select. Never shown in production. |
 | `NEXT_DIST_DIR` | Not an app setting: where `next build` writes (default `.next`). Set it (`.next-build`) to build without touching the output of a running `next dev`. |
+
+The app's own accounts (`lib/auth.ts`, Better Auth: magic link by email and Google, no passwords)
+read server-only variables, documented in the "Accounts" section of `.env.example`: `DATABASE_URL`
+(the backend's Postgres, whose Alembic migrations create the `users`, `auth_sessions`,
+`auth_accounts` and `auth_verifications` tables), `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`,
+`AUTH_COOKIE_DOMAIN`, `AUTH_ALLOWED_EMAILS` (who may sign up), `RESEND_API_KEY` and
+`AUTH_EMAIL_FROM` (the sign-in email; unset in development, the link is printed to the server
+console), `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. Without `DATABASE_URL` the login page
+says the accounts are not configured and everything else works. `NEXT_PUBLIC_TURNSTILE_SITE_KEY`
+and `TURNSTILE_SECRET_KEY` put Cloudflare Turnstile on the public forms (the landing's waitlist
+join, the login's magic-link request: `lib/turnstile.ts`, `components/ui/turnstile.tsx`,
+`lib/server/turnstile.ts`); without them no widget is drawn and nothing is checked.
 
 ## Commands
 
@@ -97,7 +110,17 @@ components/states/         the states that need words: budget paused, ended (fai
                            session expired, load failed, the skeleton; `panels.tsx` is their lazy chunk
 components/home/           the plan list ("Plan rail"), empty invitation, site header
 components/request/        the request form: model, validation, summary, trip outline, failure copy
-lib/api.ts                 typed backend client: errors, 401 -> TripTracker login, 429, 503
+lib/api.ts                 typed backend client: errors, 401 -> the login (this app's or TripTracker's), 429, 503
+lib/auth.ts                the app's own accounts: Better Auth server (Postgres, magic link, Google, invitations)
+lib/auth-client.ts         its browser client; lib/auth-policy.ts the sign-up allowlist; lib/return-to.ts
+lib/me.ts                  GET /me: whether the signed-in user manages the planner (the header's "Collaudi", "Inviti")
+lib/waitlist-policy.ts     the waitlist's rules (pure); lib/invitation-email.ts the invitation
+lib/server/                server-only: the accounts' configuration, the shared pg pool, the waitlist queries,
+                           the emails through Resend (sign-in link, invitation), the admin check (GET /me)
+app/actions/waitlist.ts    server actions: join the waitlist (public), invite (admins)
+components/auth/           the login form and the signed-out header; app/login the page
+components/waitlist/       the waitlist form and its one answer (the landing's closing, the login's sent state)
+components/admin/          the invitations page's body; app/admin/waitlist the page (admins only)
 lib/request-form.ts        form metadata from schema/request.json + validation (Italian)
 lib/plan-events/           usePlanEvents (SSE), the timeline reducer, labels, detail keys, virtualization
 lib/schemas/generated/     Zod schemas + types generated from ../schema (never edit by hand)

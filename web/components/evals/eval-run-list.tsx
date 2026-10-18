@@ -8,7 +8,7 @@
  * how many plans were accepted, what it cost, the judge's mean and the CI run it came from; the
  * whole row opens the run (a stretched link), the GitHub link sits above it.
  *
- * Fetched in the browser, which carries the TripTracker cookie. The clock is read only in the
+ * Fetched in the browser, which carries the session cookie. The clock is read only in the
  * fetch callback, never in render: with Cache Components the route is prerendered.
  */
 
@@ -22,6 +22,7 @@ import { Notice } from "@/components/ui/notice";
 import { Skeleton } from "@/components/ui/skeleton";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { api, API_ERROR_MESSAGES, ApiError, UnauthorizedError } from "@/lib/api";
+import { isAdminOnly } from "@/lib/me";
 import { formatCreated, formatDateTime } from "@/lib/format";
 import type { EvalRunSummary } from "@/lib/schemas/api";
 
@@ -47,6 +48,7 @@ type ListState =
   | { kind: "loading" }
   /** `page` is the page these rows belong to: while another one loads they stay, dimmed. */
   | { kind: "ready"; page: number; runs: EvalRunSummary[]; total: number | null; openedAt: number }
+  | { kind: "admin_only" }
   | { kind: "error"; message: string };
 
 /** The rail's column: 36 px, so its centre (18 px) is where the rail and every node sit. */
@@ -67,14 +69,18 @@ export function EvalRunList({ page, className }: { page: number; className?: str
       .listEvalRuns({ limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE, signal: controller.signal })
       .then(({ runs, total }) => setState({ kind: "ready", page, runs, total, openedAt: Date.now() }))
       .catch((error: unknown) => {
-        // 401: the browser is on its way to TripTracker's login; keep the placeholder rows.
+        // 401: the browser is on its way to the login; keep the placeholder rows.
         if (controller.signal.aborted || error instanceof UnauthorizedError) return;
+        // 403 admin_only: the dashboard above shows the panel; two would say it twice.
+        if (isAdminOnly(error)) return setState({ kind: "admin_only" });
         setState({ kind: "error", message: error instanceof ApiError ? error.message : API_ERROR_MESSAGES.unknown });
       });
     return () => controller.abort();
   }, [page, attempt]);
 
   if (state.kind === "loading") return <EvalRunListPlaceholder className={className} />;
+
+  if (state.kind === "admin_only") return null;
 
   if (state.kind === "error") {
     return (

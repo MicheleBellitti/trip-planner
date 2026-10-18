@@ -76,7 +76,10 @@ EXPOSE 8000
 
 # One uvicorn process, never --workers: the live SSE channel and the plan consumers are in
 # memory, so the service runs as exactly one process on one replica. Railway injects PORT.
-# --proxy-headers: https scheme and client address from Railway's proxy.
+# --proxy-headers: https scheme from Railway's proxy. With FORWARDED_ALLOW_IPS="*" uvicorn also
+#   sets request.client to the LEFTMOST X-Forwarded-For value, which the client chose: nothing
+#   may trust it. The rate limits key on the last value instead (TRUST_PROXY_HEADERS, on by
+#   default in production; app/ratelimit.py), so it must not be turned off on Railway.
 # --no-access-log: access lines carry client IPs (personal data); the app logs structlog JSON.
 # --timeout-graceful-shutdown: open SSE streams would otherwise hold a redeploy until SIGKILL;
 #   after 20 s they are closed and the lifespan shutdown stops the consumers cleanly (Railway

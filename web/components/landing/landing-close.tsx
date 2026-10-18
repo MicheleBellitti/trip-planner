@@ -1,4 +1,5 @@
 import { LinkButton } from "@/components/ui/button";
+import { WaitlistForm } from "@/components/waitlist/waitlist-form";
 import { BRAND_NAME } from "@/lib/brand";
 import { DEMO_READY, ROUTES } from "@/lib/routes";
 
@@ -6,8 +7,9 @@ import { ConvergingLines } from "./converging-lines";
 
 /**
  * The landing's closing (DESIGN.md, Landing): the five lines entering the destination, then the
- * invitation. With the demo: watch a whole run, then sign in, "Accesso su invito.". Until it
- * exists: Atlas is by invitation, sign in. "Accedi" lives here and in the header, never in the hero.
+ * invitation. Atlas is by invitation: the waitlist form is the way in for a stranger, "Accedi" for
+ * the invited (here and in the header, never in the hero). With the demo, "Guarda una corsa" comes
+ * first and the list follows under "Accesso su invito."; until it exists, the list is the closing.
  */
 export function LandingClose({ demoReady = DEMO_READY }: { demoReady?: boolean }) {
   return (
@@ -30,7 +32,13 @@ export function LandingClose({ demoReady = DEMO_READY }: { demoReady?: boolean }
               Accedi
             </LinkButton>
           </div>
-          <p className="mt-3.5 text-meta text-ink-2">Accesso su invito.</p>
+          <h3 id="landing-waitlist-title" className="mt-10 font-cond text-heading font-semibold">
+            Accesso su invito.
+          </h3>
+          <p className="mt-1.5 max-w-[34em] text-small text-ink-2">
+            Lascia il tuo indirizzo: ti scriviamo quando c&apos;è posto.
+          </p>
+          <WaitlistForm source="landing" className="mt-4 max-w-[26rem]" />
         </>
       ) : (
         <>
@@ -38,14 +46,10 @@ export function LandingClose({ demoReady = DEMO_READY }: { demoReady?: boolean }
             {BRAND_NAME} è su invito.
           </h2>
           <p className="mt-2.5 max-w-[34em] text-lede text-ink-2">
-            Se hai un invito, accedi con il tuo account TripTracker e pianifica il prossimo viaggio. Presto qui
-            potrai guardare una corsa intera, senza account.
+            Lascia il tuo indirizzo: ti scriviamo quando c&apos;è posto. Se hai già un invito, accedi e pianifica il
+            prossimo viaggio.
           </p>
-          <div className="mt-5.5">
-            <LinkButton href={ROUTES.plans} variant="primary" icon="sign-in" className="pointer-coarse:min-h-11">
-              Accedi
-            </LinkButton>
-          </div>
+          <WaitlistForm source="landing" signInHint className="mt-6 max-w-[26rem]" />
         </>
       )}
     </section>

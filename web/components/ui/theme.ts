@@ -3,6 +3,10 @@
  * inline script in ./theme-script.tsx applies it before the first paint. */
 export const THEME_STORAGE_KEY = "atlas-theme";
 
+/** Dispatched on `window` by ThemeToggle after it pins a theme: what redraws with the theme
+ * (the toggle itself, a Turnstile widget) listens for it. */
+export const THEME_EVENT = "atlas-theme-change";
+
 export type ThemeName = "light" | "dark";
 
 /** The theme when nothing is pinned. */

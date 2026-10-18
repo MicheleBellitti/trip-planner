@@ -255,8 +255,8 @@ describe("buildLaneViews, budget reached", () => {
   it("stops the working lane and says why, without a live plate", () => {
     expect(views.lodging.state).toBe("stopped");
     expect(views.lodging.live).toBeNull();
-    expect(views.lodging.summary).toBe("Fermo: budget della sessione esaurito.");
-    expect(titles(views.lodging.stations)).toContain("Fermo: budget della sessione esaurito");
+    expect(views.lodging.summary).toBe("Fermo: budget della sessione raggiunto.");
+    expect(titles(views.lodging.stations)).toContain("Fermo: budget della sessione raggiunto");
   });
 
   it("shows the resumption on the coordinator's line", () => {

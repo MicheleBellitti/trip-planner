@@ -3,7 +3,7 @@
  *
  * Hand-written from the Pydantic models in backend/app/routes.py (PlanSummary,
  * PlanListResponse, LinkCheck, PlanDetail, CreatePlanResponse, StatusResponse,
- * ContinueResponse, ErrorBody), backend/app/db.py (PlanStatus), backend/app/config.py
+ * ContinueResponse, MeResponse, ErrorBody), backend/app/db.py (PlanStatus), backend/app/config.py
  * (AgentProfile) and backend/app/auth.py (AuthErrorCode). Keep them in step with those models;
  * the generated contract schemas (request, UI event, plan) live in ./generated.
  *
@@ -94,6 +94,11 @@ export const PlanDetailSchema = z.object({
   /** Italian, for failed/blocked plans. */
   failure_reason: z._default(z.nullable(z.string()), null),
   submit_attempts: z.int().check(z.gte(0)),
+  /** How many times "Continua" raised the budget, and how many times it may (MAX_CONTINUES_PER_PLAN):
+   * at the cap the plan page offers no "Continua" and says why. Zero from a backend that predates
+   * them, which never refuses a "Continua" for this reason. */
+  continues: z._default(z.int().check(z.gte(0)), 0),
+  continues_limit: z._default(z.int().check(z.gte(0)), 0),
   /** The PlanRequest as submitted (stored JSON; read it with the request schema if needed). */
   request: z.record(z.string(), z.unknown()),
   /** The accepted Plan (schema/plan.json), once submitted. */
@@ -425,6 +430,11 @@ export const PLAN_ERROR_CODES = [
   "plan_not_ready",
   "invalid_plan_state",
   "monthly_limit_reached",
+  "quota_plans_reached",
+  "quota_cents_reached",
+  "too_many_requests",
+  "planner_busy",
+  "continue_limit_reached",
   "planner_unavailable",
   "agents_unavailable",
   "request_too_large",
@@ -442,8 +452,39 @@ export const AUTH_ERROR_CODES = [
   "not_authenticated",
   "email_not_allowed",
   "bad_origin",
+  "admin_only",
   "auth_unavailable",
 ] as const;
+
+/** 403 of the eval history for a signed-in user who is not one of the backend's ADMIN_EMAILS. */
+export const ADMIN_ONLY_CODE = "admin_only";
+
+/** GET /me (routes.MeResponse): who the cookie belongs to, and whether they may read the evals. */
+/** One user's month against the per-user quota (routes.QuotaView): what GET /me shows before the
+ * limit and what a 429 `quota_*_reached` carries as `data`. Cents are US cents of Managed Agents
+ * list cost: the recorded cost plus the unspent budget of the plans still running. */
+export const QuotaSchema = z.object({
+  plans_used: z.int().check(z.gte(0)),
+  plans_limit: z.int().check(z.gte(0)),
+  cents_used: z.int().check(z.gte(0)),
+  cents_limit: z.int().check(z.gte(0)),
+  /** The first instant of the next month (Europe/Rome). */
+  resets_at: InstantSchema,
+  /** What a new plan reserves (the session budget): a start is refused when `cents_used +
+   * next_plan_cents > cents_limit`. Absent from a backend that predates it. */
+  next_plan_cents: z.optional(z.int().check(z.gte(0))),
+  /** What a "Continua" adds (200): refused when `cents_used + continue_cents > cents_limit`. */
+  continue_cents: z.optional(z.int().check(z.gte(0))),
+});
+export type Quota = z.output<typeof QuotaSchema>;
+
+export const MeSchema = z.object({
+  email: z.string(),
+  is_admin: z.boolean(),
+  /** Null for the users exempt from the quota (admins), and from a backend that predates it. */
+  quota: z._default(z.nullable(QuotaSchema), null),
+});
+export type Me = z.output<typeof MeSchema>;
 
 export type PlanErrorCode = (typeof PLAN_ERROR_CODES)[number];
 export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[number];

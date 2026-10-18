@@ -22,11 +22,11 @@ import respx
 from fastapi import FastAPI
 from starlette.types import Message
 
-from app import main, routes, sessions
-from app.auth import CurrentUser
+from app import main, quota, routes, sessions
+from app.auth import AuthErrorCode, CurrentUser, auth_messages
 from app.config import Settings
 from app.consumer import PlanNotFoundError
-from app.db import PlanStatus
+from app.db import AuthSessionRecord, PlanStatus
 from app.events import AgentName, EventKind, UIEvent
 from app.links import check_link
 from app.ma_client import ApiRejectedError, ApiUnavailableError
@@ -152,6 +152,11 @@ def test_plan_errors_carry_status_code_and_italian_message() -> None:
         PlanErrorCode.PLAN_NOT_READY: 409,
         PlanErrorCode.INVALID_PLAN_STATE: 409,
         PlanErrorCode.MONTHLY_LIMIT_REACHED: 429,
+        PlanErrorCode.QUOTA_PLANS_REACHED: 429,
+        PlanErrorCode.QUOTA_CENTS_REACHED: 429,
+        PlanErrorCode.TOO_MANY_REQUESTS: 429,
+        PlanErrorCode.PLANNER_BUSY: 503,
+        PlanErrorCode.CONTINUE_LIMIT_REACHED: 409,
         PlanErrorCode.PLANNER_UNAVAILABLE: 503,
         PlanErrorCode.AGENTS_UNAVAILABLE: 502,
         PlanErrorCode.REQUEST_TOO_LARGE: 413,
@@ -174,8 +179,8 @@ def test_plan_errors_carry_status_code_and_italian_message() -> None:
     assert limit.detail == {
         "code": "monthly_limit_reached",
         "message": (
-            "Questo mese sono già stati spesi 50,10 $ su 50,00 $: il prossimo piano si potrà "
-            "creare il mese prossimo."
+            "Questo mese il planner ha già impegnato 50,10 $ su 50,00 $: il prossimo piano si "
+            "potrà creare il mese prossimo."
         ),
         "data": {"spent_cents": 5010, "limit_cents": 5000},
     }
@@ -310,6 +315,186 @@ async def test_create_plan_errors_use_the_envelope(
     else:
         assert body["message"] == PLAN_ERROR_MESSAGES[PlanErrorCode(code)]
         assert body["data"] is None
+
+
+QUOTA = quota.UserQuota(
+    plans_used=10,
+    plans_limit=10,
+    cents_used=1234,
+    cents_limit=1500,
+    resets_at=dt.datetime(2026, 11, 1, tzinfo=dt.timezone(dt.timedelta(hours=1))),
+    next_plan_cents=400,
+    continue_cents=200,
+)
+
+
+@pytest.mark.parametrize(
+    ("error", "status", "code", "message_part", "retry_after"),
+    [
+        (
+            quota.QuotaReachedError("plans", QUOTA),
+            429,
+            "quota_plans_reached",
+            "hai già creato tutti i piani previsti (10 su 10)",
+            None,
+        ),
+        (
+            quota.QuotaReachedError("cents", QUOTA),
+            429,
+            "quota_cents_reached",
+            "hanno già impegnato 12,34 $ su 15,00 $",
+            None,
+        ),
+        (quota.PlannerBusyError(8, 8), 503, "planner_busy", "al completo", "60"),
+    ],
+)
+async def test_create_plan_quota_and_busy_refusals(
+    api: Api,
+    monkeypatch: pytest.MonkeyPatch,
+    error: BaseException,
+    status: int,
+    code: str,
+    message_part: str,
+    retry_after: str | None,
+) -> None:
+    patch_sessions(monkeypatch, "start_plan", error=error)
+
+    response = await api.client.post("/plans", json=VALID_BODY, headers=POST_HEADERS)
+
+    assert response.status_code == status
+    body = detail(response)
+    assert body["code"] == code
+    assert message_part in body["message"]
+    assert response.headers.get("Retry-After") == retry_after
+    if code.startswith("quota_"):
+        assert body["data"] == {
+            "plans_used": 10,
+            "plans_limit": 10,
+            "cents_used": 1234,
+            "cents_limit": 1500,
+            "resets_at": "2026-11-01T00:00:00+01:00",
+            "next_plan_cents": 400,
+            "continue_cents": 200,
+        }
+    else:
+        assert body["data"] == {"retry_after_seconds": 60, "running": 8, "limit": 8}
+
+
+async def test_create_plan_is_rate_limited_per_user(
+    make_app: AppFactory,
+    make_settings: Callable[..., Settings],
+    stub_planner: StubPlanner,
+    db_session_factory: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    patch_sessions(monkeypatch, "start_plan", result=uuid.uuid4())
+    settings = make_settings(plan_create_limit_per_user=2, plan_create_window_seconds=600)
+    async with make_app(settings=settings) as app:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            statuses = [
+                (await client.post("/plans", json=VALID_BODY, headers=POST_HEADERS)).status_code
+                for _ in range(3)
+            ]
+            third = await client.post("/plans", json=VALID_BODY, headers=POST_HEADERS)
+
+    assert statuses == [201, 201, 429]
+    body = detail(third)
+    assert body["code"] == "too_many_requests"
+    assert body["data"] == {"retry_after_seconds": 600}
+    assert "riprova tra 600 s." in body["message"]
+    assert third.headers["Retry-After"] == "600"
+
+
+async def test_only_a_request_that_could_start_a_plan_counts_in_the_windows(
+    make_app: AppFactory,
+    make_settings: Callable[..., Settings],
+    stub_planner: StubPlanner,
+    db_session_factory: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = make_settings(plan_create_limit_per_user=1, plan_create_limit_per_ip=1)
+    async with make_app(settings=settings) as app:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+
+            async def post(body: Any, query: str = "") -> int:
+                response = await client.post(f"/plans{query}", json=body, headers=POST_HEADERS)
+                return response.status_code
+
+            invalid = [await post({"origin": ""}) for _ in range(3)]
+            demo = [await post(VALID_BODY, "?demo_scenario=happy_path") for _ in range(3)]
+            # The stub planner is not ready: a 503 gives its slot back.
+            unavailable = [await post(VALID_BODY) for _ in range(3)]
+            patch_sessions(monkeypatch, "start_plan", result=uuid.uuid4())
+            started = await post(VALID_BODY)
+            again = await post(VALID_BODY)
+
+    assert invalid == [422, 422, 422]
+    assert demo == [404, 404, 404]
+    assert unavailable == [503, 503, 503]
+    assert (started, again) == (201, 429)
+
+
+async def test_create_plan_is_rate_limited_per_proxied_client_ip(
+    make_app: AppFactory,
+    make_settings: Callable[..., Settings],
+    stub_planner: StubPlanner,
+    db_session_factory: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    patch_sessions(monkeypatch, "start_plan", result=uuid.uuid4())
+    settings = make_settings(plan_create_limit_per_ip=1, trust_proxy_headers=True)
+    async with make_app(settings=settings) as app:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            first = await client.post(
+                "/plans",
+                json=VALID_BODY,
+                headers={**POST_HEADERS, "X-Forwarded-For": "203.0.113.9"},
+            )
+            other = await client.post(
+                "/plans",
+                json=VALID_BODY,
+                headers={**POST_HEADERS, "X-Forwarded-For": "198.51.100.2"},
+            )
+            # The client's own first value changes nothing: the proxy's last value is the key.
+            again = await client.post(
+                "/plans",
+                json=VALID_BODY,
+                headers={**POST_HEADERS, "X-Forwarded-For": "9.9.9.9, 203.0.113.9"},
+            )
+
+    assert (first.status_code, other.status_code, again.status_code) == (201, 201, 429)
+    assert detail(again)["code"] == "too_many_requests"
+
+
+async def test_create_plan_never_lifts_the_user_quota(
+    api: Api, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Only the eval runner (a CLI) passes user_quota_applies=False: the route never does.
+    calls = patch_sessions(monkeypatch, "start_plan", result=uuid.uuid4())
+
+    response = await api.client.post("/plans", json=VALID_BODY, headers=POST_HEADERS)
+
+    assert response.status_code == 201
+    assert "user_quota_applies" not in calls.options[0]
+
+
+async def test_create_plan_for_a_deleted_account_is_401_not_authenticated(
+    api: Api, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    patch_sessions(monkeypatch, "start_plan", error=sessions.UserGoneError())
+
+    response = await api.client.post("/plans", json=VALID_BODY, headers=POST_HEADERS)
+
+    assert response.status_code == 401
+    assert detail(response) == {
+        "code": "not_authenticated",
+        "message": auth_messages(api.app.state.settings)[AuthErrorCode.NOT_AUTHENTICATED],
+        "data": None,
+    }
+    assert response.headers["www-authenticate"] == "Cookie"
 
 
 async def test_without_a_planner_post_plans_is_503(
@@ -568,6 +753,33 @@ async def test_interrupt_and_continue_errors(
         assert body["data"] == {"status": "ready"}
 
 
+async def test_continue_at_its_cap_is_409(
+    api: Api, plan_rows: PlanRows, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    record = await plan_rows.add_plan(status=PlanStatus.BUDGET_PAUSED)
+    patch_sessions(monkeypatch, "continue_plan", error=quota.ContinueLimitReachedError(2, 2))
+
+    response = await api.client.post(f"/plans/{record.id}/continue", headers=POST_HEADERS)
+
+    assert response.status_code == 409
+    body = detail(response)
+    assert body["code"] == "continue_limit_reached"
+    assert body["data"] == {"continues": 2, "limit": 2}
+    assert "(2 su 2)" in body["message"]
+
+
+async def test_continue_over_the_users_quota_is_429(
+    api: Api, plan_rows: PlanRows, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    record = await plan_rows.add_plan(status=PlanStatus.BUDGET_PAUSED)
+    patch_sessions(monkeypatch, "continue_plan", error=quota.QuotaReachedError("cents", QUOTA))
+
+    response = await api.client.post(f"/plans/{record.id}/continue", headers=POST_HEADERS)
+
+    assert response.status_code == 429
+    assert detail(response)["code"] == "quota_cents_reached"
+
+
 async def test_continue_over_the_monthly_limit_is_429(
     api: Api, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -579,6 +791,20 @@ async def test_continue_over_the_monthly_limit_is_429(
 
     assert response.status_code == 429
     assert detail(response)["data"] == {"spent_cents": 4900, "limit_cents": 5000}
+
+
+async def test_continue_when_the_planner_is_full_is_503_planner_busy(
+    api: Api, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    patch_sessions(monkeypatch, "continue_plan", error=quota.PlannerBusyError(8, 8))
+
+    response = await api.client.post(f"/plans/{uuid.uuid4()}/continue", headers=POST_HEADERS)
+
+    assert response.status_code == 503
+    body = detail(response)
+    assert body["code"] == "planner_busy"
+    assert body["data"] == {"retry_after_seconds": 60, "running": 8, "limit": 8}
+    assert response.headers["Retry-After"] == "60"
 
 
 @pytest.mark.parametrize("action", ["interrupt", "continue"])
@@ -807,6 +1033,175 @@ async def test_a_signed_in_allowed_user_sees_their_plans(
     assert len(response.json()["plans"]) == 1
 
 
+# --- GET /me and ownership with the app's own accounts (AUTH_MODE=atlas) --------------------------
+
+
+async def test_me_says_who_is_signed_in_and_whether_they_manage_the_evals(api: Api) -> None:
+    # AUTH_MODE=local without ADMIN_EMAILS: the allowed user is the admin (the one-user setup).
+    response = await api.client.get("/me")
+
+    assert response.status_code == 200
+    assert response.json() == {"email": USER, "is_admin": True, "quota": None}  # exempt
+
+
+async def test_me_carries_the_month_against_the_quota_for_a_plain_user(
+    make_app: AppFactory,
+    make_settings: Callable[..., Settings],
+    stub_planner: StubPlanner,
+    plan_rows: PlanRows,
+) -> None:
+    settings = make_settings(
+        admin_emails=["boss@example.com"], user_monthly_plans=10, user_monthly_cents=1500
+    )
+    await plan_rows.add_plan(
+        status=PlanStatus.READY, cost_cents=80, created_at=dt.datetime.now(dt.UTC)
+    )
+    await plan_rows.add_plan(  # running: 60 budgeted, 10 spent, 50 reserved
+        status=PlanStatus.RUNNING,
+        cost_cents=10,
+        budget_cents=60,
+        created_at=dt.datetime.now(dt.UTC),
+    )
+    async with make_app(settings=settings) as app:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.get("/me")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert (body["email"], body["is_admin"]) == (USER, False)
+    assert {
+        key: body["quota"][key]
+        for key in ("plans_used", "plans_limit", "cents_used", "cents_limit")
+    } == {
+        "plans_used": 2,
+        "plans_limit": 10,
+        "cents_used": 80 + 10 + 50,
+        "cents_limit": 1500,
+    }
+    assert body["quota"]["resets_at"].startswith("20")
+    # What the next start and a "Continua" need, so the web app applies the backend's own rule.
+    assert (body["quota"]["next_plan_cents"], body["quota"]["continue_cents"]) == (
+        settings.session_budget_cents,
+        200,
+    )
+
+
+async def test_me_needs_a_session(tt_api: httpx.AsyncClient) -> None:
+    response = await tt_api.get("/me")
+
+    assert response.status_code == 401
+    assert detail(response)["code"] == "not_authenticated"
+
+
+ATLAS_COOKIE = "__Secure-atlas.session_token"
+
+
+async def add_session(plan_rows: PlanRows, *, user_id: str, token: str, hours: float = 24) -> None:
+    async with plan_rows.session_factory() as db:
+        db.add(
+            AuthSessionRecord(
+                id=f"ses_{token}",
+                user_id=user_id,
+                token=token,
+                expires_at=dt.datetime.now(dt.UTC) + dt.timedelta(hours=hours),
+            )
+        )
+        await db.commit()
+
+
+async def test_with_the_apps_own_accounts_the_cookie_is_the_session_table_and_plans_go_by_id(
+    make_app: AppFactory,
+    make_settings: Callable[..., Settings],
+    stub_planner: StubPlanner,
+    plan_rows: PlanRows,
+) -> None:
+    """AUTH_MODE=atlas end to end: the `atlas` cookie's token is looked up in `auth_sessions`
+    (no HTTP call to anyone), PLANNER_ALLOWED_EMAILS plays no part, the list and the detail go by
+    `plans.user_id` (plus the user's legacy rows without one), and `/me` says this user is no
+    admin until ADMIN_EMAILS names them."""
+    await plan_rows.add_user("usr_me", "Me@Example.com")
+    await plan_rows.add_user("usr_other", "other@example.com")
+    await add_session(plan_rows, user_id="usr_me", token="tok3nMe")
+    await add_session(plan_rows, user_id="usr_other", token="tok3nOther", hours=-1)  # expired
+    mine = await plan_rows.add_plan(user_email="me@example.com", user_id="usr_me")
+    legacy = await plan_rows.add_plan(user_email="ME@example.com")  # before the switch: no id
+    others = await plan_rows.add_plan(user_email="me@example.com", user_id="usr_other")
+    strangers = await plan_rows.add_plan(user_email="other@example.com")
+
+    atlas = make_settings(auth_mode="atlas", planner_allowed_emails="nobody@example.com")
+    async with make_app(settings=atlas) as app:
+        transport = httpx.ASGITransport(app=app)
+        async with (
+            httpx.AsyncClient(transport=transport, base_url="http://testserver") as http,
+            respx.mock(assert_all_mocked=True),  # any HTTP call out of the app fails the test
+        ):
+            cookie = {"Cookie": f"{ATLAS_COOKIE}=tok3nMe.SiGnAtUrE%3D; theme=dark"}
+            me = await http.get("/me", headers=cookie)
+            listed = await http.get("/plans", headers=cookie)
+            opened = [
+                (await http.get(f"/plans/{plan.id}", headers=cookie)).status_code
+                for plan in (mine, legacy, others, strangers)
+            ]
+            expired = await http.get("/plans", headers={"Cookie": f"{ATLAS_COOKIE}=tok3nOther.x"})
+            unknown = await http.get("/plans", headers={"Cookie": f"{ATLAS_COOKIE}=nobody.x"})
+            triptrackers = await http.get(
+                "/plans", headers={"Cookie": "__Secure-better-auth.session_token=tok3nMe.x"}
+            )
+
+    assert me.status_code == 200
+    identity = me.json()
+    assert (identity["email"], identity["is_admin"]) == ("me@example.com", False)
+    assert identity["quota"]["plans_limit"] == 10  # a plain user sees their month
+    assert listed.status_code == 200
+    assert {plan["id"] for plan in listed.json()["plans"]} == {str(mine.id), str(legacy.id)}
+    assert opened == [200, 200, 404, 404]
+    for response in (expired, unknown, triptrackers):
+        assert response.status_code == 401
+        assert detail(response) == {
+            "code": "not_authenticated",
+            "message": "Accedi per usare il planner.",
+            "data": None,
+        }
+
+
+async def test_with_the_apps_own_accounts_an_unverified_email_owns_no_legacy_plan_nor_the_evals(
+    make_app: AppFactory,
+    make_settings: Callable[..., Settings],
+    stub_planner: StubPlanner,
+    plan_rows: PlanRows,
+) -> None:
+    """An account whose `users.email_verified` is false keeps the plans stored with its id, but
+    the address alone gives it neither the legacy plans stored by that email nor the admin role,
+    even when ADMIN_EMAILS names it."""
+    await plan_rows.add_user("usr_me", "me@example.com", email_verified=False)
+    await add_session(plan_rows, user_id="usr_me", token="tok3nMe")
+    mine = await plan_rows.add_plan(user_email="me@example.com", user_id="usr_me")
+    legacy = await plan_rows.add_plan(user_email="me@example.com")  # before the switch: no id
+
+    atlas = make_settings(auth_mode="atlas", admin_emails="me@example.com")
+    async with make_app(settings=atlas) as app:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as http:
+            cookie = {"Cookie": f"{ATLAS_COOKIE}=tok3nMe.SiGnAtUrE"}
+            me = await http.get("/me", headers=cookie)
+            listed = await http.get("/plans", headers=cookie)
+            opened = [
+                (await http.get(f"/plans/{plan.id}", headers=cookie)).status_code
+                for plan in (mine, legacy)
+            ]
+            evals = await http.get("/evals/runs", headers=cookie)
+
+    identity = me.json()
+    assert (identity["email"], identity["is_admin"]) == ("me@example.com", False)
+    # Not an admin, so not exempt from the quota, which counts only the plan stored with its id.
+    assert identity["quota"]["plans_used"] == 1
+    assert {plan["id"] for plan in listed.json()["plans"]} == {str(mine.id)}
+    assert opened == [200, 404]
+    assert evals.status_code == 403
+    assert detail(evals)["code"] == "admin_only"
+
+
 # --- CORS -----------------------------------------------------------------------------------------
 
 
@@ -928,6 +1323,7 @@ async def test_development_documents_every_route(api: Api) -> None:
 
     assert set(paths) == {
         "/health",
+        "/me",
         "/plans",
         "/plans/{plan_id}",
         "/plans/{plan_id}/events",
