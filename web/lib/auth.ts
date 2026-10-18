@@ -21,7 +21,8 @@ import { MAGIC_LINK_MINUTES, sendMagicLink } from "./server/send-magic-link";
  *   TripTracker's `better-auth` cookie on the shared `bellittim.com` domain), with `Domain=` set
  *   to AUTH_COOKIE_DOMAIN so the API subdomain receives it. The backend verifies it against the
  *   `auth_sessions` table of the shared database (backend/app/auth.py `verify_atlas_session`):
- *   no call back to this app, so a sign-out is effective on its next request.
+ *   no call back to this app, so a sign-out is effective on its next request. `/get-session`
+ *   stays exempt from the rate limit until no deployed backend asks it any more (`rateLimit`).
  * - Sign-up is gated by AUTH_ALLOWED_EMAILS (lib/auth-policy.ts): the magic-link request is
  *   refused before any email leaves, and `user.create` is refused for every provider (Google's
  *   address is only known at its callback). Existing accounts always sign in.
@@ -89,6 +90,13 @@ function build(config: AuthServerConfig) {
       cookiePrefix: COOKIE_PREFIX,
       useSecureCookies: config.baseUrl.startsWith("https://"),
       crossSubDomainCookies: config.cookieDomain ? { enabled: true, domain: config.cookieDomain } : { enabled: false },
+    },
+    rateLimit: {
+      // A backend from before the switch (contract rule 7: the web may ship first) checks every
+      // request here from its one IP, and Better Auth's per-IP limit would turn those checks into
+      // 429s. Drop this in a later PR, once the deployed backend no longer calls get-session.
+      // Every other path keeps the defaults.
+      customRules: { "/get-session": false },
     },
     socialProviders: config.google
       ? { google: { clientId: config.google.clientId, clientSecret: config.google.clientSecret } }

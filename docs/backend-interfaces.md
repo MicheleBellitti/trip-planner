@@ -1000,8 +1000,9 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
     web app over HTTP. What goes with it: no `VerificationBudget` and no stale window (they
     answered TripTracker's per-IP rate limit, decision 19, which only the TripTracker path still
     needs), no 60 s cache (a sign-out is effective on the next request), and no dependence on
-    Vercel being up for API auth, and the web app no longer needs to exempt `/get-session` from
-    its rate limit.
+    Vercel being up for API auth. The web app keeps exempting `/get-session` from its rate
+    limit until this backend has shipped (contract rule 7: a deployed backend from before the
+    switch still asks it from one IP); a later PR can drop the exemption.
     The signature half of the cookie is not checked: Better Auth's own `getSession` checks it
     and then looks the token up, and the 32-character random token alone is the secret, so a
     forged signature with an unknown token finds no row; a database error is 503
