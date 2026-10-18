@@ -1105,15 +1105,33 @@ def test_dead_price_source_note_says_page_not_found() -> None:
     assert "prezzi" not in booking["notes"]
 
 
-def test_dead_price_source_with_a_homepage_shows_the_homepage() -> None:
-    source = "https://a.example/prezzi"
+def test_dead_price_source_with_a_homepage_names_the_site() -> None:
+    """The homepage stands in for the dead page: the note says it is the site, not the price's
+    page."""
+    source = "https://www.a.example/prezzi"
     plan = make_plan(bookings=priced_booking(source))
+    health = dead(source, fallback="https://www.a.example/")
 
-    booking = trip_of(run_with(plan, health=dead(source, fallback="https://a.example/")))[
-        "bookings"
-    ][0]
+    booking = trip_of(run_with(plan, health=health))["bookings"][0]
 
-    assert "Fonte del prezzo: https://a.example/" in booking["notes"]
+    assert "Fonte del prezzo: sito di a.example (https://www.a.example/)" in booking["notes"]
+    assert "Fonte del prezzo: https://" not in booking["notes"]
+    assert "prezzi" not in booking["notes"]
+
+
+def test_a_dead_link_that_fails_the_allowlist_is_dropped_even_with_an_allowed_homepage() -> None:
+    """As the web app: the homepage replaces a dead booking link only when the link itself also
+    passes the allowlist (fail closed). A backslash fails it on an allowlisted host."""
+    link = "https://www.booking.com/hotel\\it/x.html"
+    assert not check_link(link).allowed
+    assert check_link("https://www.booking.com/").allowed
+    plan = make_plan(bookings=[{"title": "Hotel", "kind": "lodging", "link": link}])
+    health = dead(link, fallback="https://www.booking.com/", allowed=True)
+
+    booking = trip_of(run_with(plan, health=health))["bookings"][0]
+
+    assert "url" not in booking
+    assert "notes" not in booking
 
 
 def test_without_health_the_trip_is_unchanged() -> None:

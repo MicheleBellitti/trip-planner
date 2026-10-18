@@ -63,6 +63,16 @@ def test_the_missing_source_line_with_the_longest_host_still_fits() -> None:
     assert len("\n".join(lines)) <= mapping.MAX_NOTES
 
 
+def test_the_homepage_source_line_with_the_longest_host_still_fits() -> None:
+    """A dead price source replaced by its homepage names the site, uncut, and the homepage,
+    cut like any URL. A host is never longer than the URL it comes from."""
+    host = "h" * (plan.MAX_URL - len("https://"))
+    lines = worst_case_provenance_after_cuts()
+    lines[1] = mapping.NOTE_PRICE_SOURCE_HOMEPAGE.format(host=host, url=_cut_url())
+
+    assert len("\n".join(lines)) <= mapping.MAX_NOTES
+
+
 def test_provenance_lines_fit_the_notes_once_urls_are_cut() -> None:
     lines = worst_case_provenance_after_cuts()
 
@@ -147,3 +157,23 @@ def test_a_dead_price_source_at_every_cap_still_fits() -> None:
     assert notes is not None
     assert len(notes) <= mapping.MAX_NOTES
     assert "pagina non trovata (prices.example)" in notes
+
+
+def test_a_dead_price_source_with_a_homepage_at_every_cap_still_fits() -> None:
+    booking = _booking_at_every_cap()
+    price = booking.price
+    assert price is not None
+    entry = LinkHealth("dead", "http_404", 404, fallback="https://www.prices.example/")
+    health = LinkHealthMap({str(price.source_url): entry})
+
+    notes = mapping.booking_notes(
+        booking,
+        quote=None,
+        link=check_link(booking.link or ""),
+        book_now=True,
+        health=health,
+    )
+
+    assert notes is not None
+    assert len(notes) <= mapping.MAX_NOTES
+    assert "Fonte del prezzo: sito di prices.example (https://www.prices.example/)" in notes

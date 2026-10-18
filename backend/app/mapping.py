@@ -29,8 +29,9 @@ Rules, field by field (Plan -> Trip):
   1000, 2000... in plan order; `stopId` = the Stop id of `stop_ref` (Plan validation already
   guarantees it exists); `url` = `link` only when `links.check_link(link).allowed`, otherwise
   the link goes to `notes` as text (spec "Sicurezza e privacy"). A link the check found dead is
-  replaced by its homepage when that is on the booking allowlist, else dropped entirely (no
-  `url`, no note): the allowlist test and the note apply to the replaced value only.
+  replaced by its homepage only when both the link and its homepage are on the booking
+  allowlist (`fallback_allowed`), as the web app does; else it is dropped entirely (no `url`,
+  no note, fail closed). The allowlist test and the note then apply to the replaced value.
 - `scheduledFor` = `scheduled_for`; `dueAt` = `book_by`. Both are rendered in the trip time zone
   with `format_instant()`. `dueAt` and `scheduledFor` are never derived from each other
   except by the documented fallback (`fallback_due_at`). A `book_by` in the past never gets
@@ -42,14 +43,15 @@ Rules, field by field (Plan -> Trip):
   `Price.amount_cents <= plan.MAX_AMOUNT_CENTS` (10**11) and no currency is worth 10 euro, so a
   converted amount stays below 10**12, far under TripTracker's cap (2**53 - 1).
 - Booking notes = the plan's `notes` followed by one provenance line each (Italian copy below):
-  price status, price source URL (or `NOTE_PRICE_SOURCE_MISSING` with its host when the link check
-  found the page dead and there is no homepage to show), `book_by_reason`, the conversion details
+  price status, price source URL (when the link check found the page dead:
+  `NOTE_PRICE_SOURCE_HOMEPAGE`, the site's host and its homepage, or `NOTE_PRICE_SOURCE_MISSING`
+  with the host when there is no homepage to show), `book_by_reason`, the conversion details
   (original amount and currency, rate, source and its date) or the missing conversion, an
   unchecked link, the "book now" hint. Hard budget of `MAX_NOTES` (4000) code points, always met
   (schema-notes A10): (1) everything in full if it fits; (2) else the plan's free-text notes are
   shortened (with "…", dropped entirely if no room is left); (3) if the provenance lines alone are
   still too long (two URLs of up to 2000 characters each), the URL inside `NOTE_UNCHECKED_LINK`,
-  then the one inside `NOTE_PRICE_SOURCE`, is cut to its first `NOTE_URL_KEEP` characters plus
+  then the one inside the price source line, is cut to its first `NOTE_URL_KEEP` characters plus
   "…", and the room a cut frees goes back to the plan's notes as in (2). The notes are plain text
   in TripTracker, so a cut URL is only a hint; the full one stays in the planner's stored plan.
   Every other line is bounded by the contract (`book_by_reason` <= `plan.MAX_REASON`), so (3)
@@ -109,6 +111,7 @@ is not exported in trip.json, so a change there goes unnoticed here (schema-note
 NOTE_PRICE_VERIFIED = "Prezzo verificato"
 NOTE_PRICE_ESTIMATED = "Prezzo stimato"
 NOTE_PRICE_SOURCE = "Fonte del prezzo: {url}"
+NOTE_PRICE_SOURCE_HOMEPAGE = "Fonte del prezzo: sito di {host} ({url})"
 NOTE_PRICE_SOURCE_MISSING = "Fonte del prezzo: pagina non trovata ({host})"
 NOTE_BOOK_BY_REASON = "Perché entro questa data: {reason}"
 NOTE_FX_CONVERTED = (
@@ -376,17 +379,19 @@ def booking_notes(
 ) -> str | None:
     """The booking's TripTracker `notes`: the plan's notes, then the provenance lines (module
     docstring), joined with newlines, always at most `MAX_NOTES` code points: the plan's notes
-    are shortened first, then the URLs inside `NOTE_UNCHECKED_LINK` and `NOTE_PRICE_SOURCE` are
-    cut to `NOTE_URL_KEEP` characters plus `NOTE_ELLIPSIS`. `quote` is the conversion used (None
+    are shortened first, then the URLs inside `NOTE_UNCHECKED_LINK` and the price source line
+    are cut to `NOTE_URL_KEEP` characters plus `NOTE_ELLIPSIS`. `quote` is the conversion used (None
     for EUR or when missing; a non-EUR price with `quote=None` gets `NOTE_FX_MISSING`); `link`
-    is the verdict on the link as resolved against `health` (None when there is no link or the
-    check dropped it). `health` (None: no verdicts) replaces a dead price source by its homepage
-    or, with none, by `NOTE_PRICE_SOURCE_MISSING`. None when there is nothing to write."""
+    is the verdict on the link as resolved against `health` (`_export_booking_link`; None when
+    there is no link or the check dropped it). `health` (None: no verdicts) replaces a dead
+    price source by `NOTE_PRICE_SOURCE_HOMEPAGE` (its site and homepage) or, with no homepage,
+    by `NOTE_PRICE_SOURCE_MISSING`. None when there is nothing to write."""
     health = health if health is not None else LinkHealthMap.empty()
     original = str(booking.price.source_url) if booking.price is not None else None
     source = health.resolve(original)
-    missing_host = _host_label(original) if original is not None and source is None else None
-    resolved_link = health.resolve(booking.link, booking=True)
+    # The host of a dead price source: of the homepage standing in for it, or of the lost page.
+    site = _host_label(source or original) if original is not None and source != original else None
+    resolved_link = _export_booking_link(booking.link, health)
     unchecked = resolved_link if link is not None and not link.allowed and resolved_link else None
     free = booking.notes or ""
     attempts = (
@@ -400,7 +405,7 @@ def booking_notes(
             booking,
             quote=quote,
             source=source_text,
-            missing_host=missing_host,
+            site=site,
             unchecked=link_text,
             book_now=book_now,
         )
@@ -537,7 +542,7 @@ def _map_booking(
         mapped["scheduledFor"] = format_instant(booking.scheduled_for, tz)
 
     _put(mapped, "phone", booking.phone)
-    link = health.resolve(booking.link, booking=True)
+    link = _export_booking_link(booking.link, health)
     verdict = check_link(link) if link else None
     if link is not None and verdict is not None and verdict.allowed:
         mapped["url"] = link
@@ -595,20 +600,22 @@ def _provenance_lines(
     *,
     quote: FxQuote | None,
     source: str | None,
-    missing_host: str | None,
+    site: str | None,
     unchecked: str | None,
     book_now: bool,
 ) -> list[str]:
     """The provenance lines in their fixed order, with `source` and `unchecked` (the price
-    source URL and the link that failed the allowlist) as given, possibly already cut. A price
-    without `source` (its page is dead, no homepage) gets the "page not found" line with
-    `missing_host`."""
+    source URL and the link that failed the allowlist) as given, possibly already cut. `site`
+    is set when the price's page is dead: with `source` (its homepage) the line names the site,
+    without (no homepage) it says the page was not found."""
     lines: list[str] = []
     price = booking.price
     if price is not None:
         lines.append(NOTE_PRICE_VERIFIED if price.status == "verified" else NOTE_PRICE_ESTIMATED)
         if source is None:
-            lines.append(NOTE_PRICE_SOURCE_MISSING.format(host=missing_host or ""))
+            lines.append(NOTE_PRICE_SOURCE_MISSING.format(host=site or ""))
+        elif site is not None:
+            lines.append(NOTE_PRICE_SOURCE_HOMEPAGE.format(host=site, url=source))
         else:
             lines.append(NOTE_PRICE_SOURCE.format(url=source))
     if booking.book_by_reason:
@@ -632,6 +639,19 @@ def _provenance_lines(
     if book_now:
         lines.append(NOTE_BOOK_NOW)
     return lines
+
+
+def _export_booking_link(link: str | None, health: LinkHealthMap) -> str | None:
+    """The booking link the Trip works with: the link itself, or, when the link check found it
+    dead, its homepage only when the link itself and the homepage (`fallback_allowed`) both
+    pass the booking allowlist, as the web app's `bookingAction`; else None (fail closed: no
+    `url`, no unchecked-link note)."""
+    if not link:
+        return link
+    entry = health.get(link)
+    if entry is not None and entry.status == "dead" and not check_link(link).allowed:
+        return None
+    return health.resolve(link, booking=True)
 
 
 def _host_label(url: str) -> str:
