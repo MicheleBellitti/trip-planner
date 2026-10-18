@@ -461,6 +461,7 @@ class PlanRows:
         created_at: dt.datetime | None = None,
         failure_reason: str | None = None,
         session_id: str | None = "sesn_test",
+        link_health: dict[str, Any] | None = None,
     ) -> PlanRecord:
         record = PlanRecord(
             user_email=user_email,
@@ -474,6 +475,7 @@ class PlanRows:
             cost_cents=cost_cents,
             budget_cents=budget_cents,
             failure_reason=failure_reason,
+            link_health=link_health,
         )
         if created_at is not None:
             record.created_at = created_at

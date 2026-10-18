@@ -610,6 +610,46 @@ async def test_get_plan_returns_status_plan_link_checks_and_import_link(
     ]
 
 
+async def test_plan_detail_exposes_link_health(api: Api, plan_rows: PlanRows) -> None:
+    record = await plan_rows.add_plan(
+        status=PlanStatus.READY,
+        plan=ACCEPTED_PLAN,
+        trip=STORED_TRIP,
+        link_health={
+            "https://a.example/gone": {
+                "status": "dead",
+                "reason": "http_404",
+                "http_status": 404,
+                "fallback": "https://a.example/",
+                "fallback_allowed": False,
+                "checked_at": "2026-10-18T10:00:00+00:00",
+            }
+        },
+    )
+
+    response = await api.client.get(f"/plans/{record.id}")
+
+    assert response.status_code == 200
+    assert response.json()["link_health"] == {
+        "https://a.example/gone": {
+            "status": "dead",
+            "fallback": "https://a.example/",
+            "fallback_allowed": False,
+        }
+    }
+
+
+async def test_plan_detail_link_health_is_empty_for_older_plans(
+    api: Api, plan_rows: PlanRows
+) -> None:
+    record = await plan_rows.add_plan(status=PlanStatus.READY, plan=ACCEPTED_PLAN, trip=STORED_TRIP)
+
+    response = await api.client.get(f"/plans/{record.id}")
+
+    assert response.status_code == 200
+    assert response.json()["link_health"] == {}
+
+
 async def test_get_plan_before_acceptance_has_no_plan_and_no_import_link(
     api: Api, plan_rows: PlanRows
 ) -> None:
