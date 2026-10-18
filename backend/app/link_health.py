@@ -22,8 +22,9 @@ never rejects a plan. Logs carry the host and the reason, never a full URL or pa
 
 Limits: GET only, at most 5 redirects, 5 s per request (httpcore's timeouts; an asyncio guard
 0.5 s later also bounds the resolution and the whole body read), 8 URLs at a time, 10 s for the
-whole plan, exact (a URL not checked by then is `unknown`, reason `deadline`), at most 65,536
-body bytes read.
+whole plan, exact (a URL not checked by then is `unknown`, reason `deadline`; a URL already
+found dead keeps that verdict, with its unchecked homepage as fallback), at most 65,536 body
+bytes read, and a title of at most 1024 bytes.
 """
 
 from __future__ import annotations
@@ -66,7 +67,11 @@ NOT_FOUND_PHRASES: Final[tuple[str, ...]] = (
 )
 """Casefolded phrases that make an HTML title a soft 404."""
 
-_TITLE = re.compile(rb"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
+_TITLE_OPEN: Final[re.Pattern[bytes]] = re.compile(rb"<title\b[^>]{0,256}>", re.IGNORECASE)
+"""A `<title>` tag (not `<titles>`), its attributes bounded."""
+_TITLE_CLOSE: Final[re.Pattern[bytes]] = re.compile(rb"</title\b", re.IGNORECASE)
+_MAX_TITLE: Final[int] = 1024
+"""Bytes of title read after the opening tag; a title not closed within them is not read."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -277,12 +282,29 @@ def looks_not_found(content_type: str | None, body: bytes) -> bool:
     """A soft 404: an HTML page whose first `<title>` says the page was not found."""
     if not _is_html(content_type):
         return False
-    match = _TITLE.search(body)
-    if match is None:
+    raw = _first_title(body)
+    if raw is None:
         return False
-    title = " ".join(html.unescape(match.group(1).decode("utf-8", errors="ignore")).split())
+    title = " ".join(html.unescape(raw.decode("utf-8", errors="ignore")).split())
     folded = title.casefold()
     return any(phrase in folded for phrase in NOT_FOUND_PHRASES)
+
+
+def _first_title(body: bytes) -> bytes | None:
+    """The text of the first `<title>` element; None when there is none or it does not close
+    within `_MAX_TITLE` bytes. Linear in the body: one search for the opening tag, then one
+    bounded search for its end (a single pattern spanning both restarts at every `<title` and
+    goes quadratic on a body of unclosed openings; it runs on the event loop, where no timeout
+    can preempt it)."""
+    opening = _TITLE_OPEN.search(body)
+    if opening is None:
+        return None
+    start = opening.end()
+    # The window ends one byte past a closing tag at the limit, so `\b` sees the next byte.
+    closing = _TITLE_CLOSE.search(body, start, start + _MAX_TITLE + len(b"</title") + 1)
+    if closing is None or closing.start() - start > _MAX_TITLE:
+        return None
+    return body[start : closing.start()]
 
 
 def _is_html(content_type: str | None) -> bool:
@@ -304,6 +326,10 @@ _GUARD_MARGIN: Final[float] = 0.5
 """Seconds the per-request asyncio guard waits beyond httpcore's own timeouts, so httpcore's
 (which close their socket) fire first; the guard only catches what httpcore does not bound,
 such as a body that trickles in under the read timeout."""
+
+
+_CUT_OFF: Final[LinkHealth] = LinkHealth(status="unknown", reason="deadline")
+"""A URL whose check the deadline cut off before any verdict."""
 
 
 class HostNotFoundError(Exception):
@@ -375,16 +401,19 @@ class HttpLinkChecker:
 
     async def check_plan(self, plan: Plan) -> LinkHealthMap:
         """Every distinct URL of the plan, `concurrency` at a time, within `total_deadline`:
-        a URL still being checked then is cancelled and `unknown` (`deadline`). Never raises
-        because of a URL: a failed check is `unknown` (`error`)."""
+        a URL still being checked then is cancelled and `unknown` (`deadline`), unless it was
+        already found dead and only its homepage check was cut off (it stays dead, with the
+        homepage as fallback). Never raises because of a URL: a failed check is `unknown`
+        (`error`)."""
         started = time.monotonic()
         urls = collect_plan_urls(plan)
         semaphore = asyncio.Semaphore(self._concurrency)
+        settled: dict[str, LinkHealth] = {}
 
         async def check(url: str) -> LinkHealth:
             try:
                 async with semaphore:
-                    return await self.check_url(url)
+                    return await self._check(url, settled)
             except Exception as exc:  # a link never fails the plan
                 log.warning("link_check_failed", host=_host_of(url), error=type(exc).__name__)
                 return LinkHealth(status="unknown", reason="error", checked_at=self._now())
@@ -395,7 +424,7 @@ class HttpLinkChecker:
                 tasks.extend(group.create_task(check(url)) for url in urls)
         entries = {
             url: (
-                LinkHealth(status="unknown", reason="deadline", checked_at=self._now())
+                replace(settled.get(url, _CUT_OFF), checked_at=self._now())
                 if task.cancelled()
                 else task.result()
             )
@@ -420,22 +449,28 @@ class HttpLinkChecker:
         """The verdict on `url`, within `total_deadline`. A dead URL gets its homepage as
         `fallback` when the homepage is not dead too, with `fallback_allowed` from the
         booking-link allowlist; not when the URL's own host does not exist (`nxdomain`; a
-        missing host further down a redirect chain is `redirect_nxdomain`)."""
+        missing host further down a redirect chain is `redirect_nxdomain`). A homepage check
+        cut off by the deadline leaves the homepage unchecked (`unknown`, which counts as
+        alive): the URL stays dead with the homepage as fallback."""
+        return await self._check(url, {})
+
+    async def _check(self, url: str, settled: dict[str, LinkHealth]) -> LinkHealth:
+        """`check_url`'s work. A dead verdict goes into `settled`, with its homepage as the
+        fallback, before the homepage is checked: a deadline that cuts the homepage check off,
+        this one or the caller's (`check_plan`), keeps it."""
         try:
             async with asyncio.timeout(self._total_deadline):
                 health = await self._follow(url)
                 home = homepage_of(url)
-                if (
-                    health.status == "dead"
-                    and health.reason != "nxdomain"
-                    and home is not None
-                    and (await self._follow(home)).status != "dead"
-                ):
+                if health.status == "dead" and health.reason != "nxdomain" and home is not None:
                     health = replace(
                         health, fallback=home, fallback_allowed=check_link(home).allowed
                     )
+                    settled[url] = health
+                    if (await self._follow(home)).status == "dead":
+                        health = replace(health, fallback=None, fallback_allowed=False)
         except TimeoutError:
-            health = LinkHealth(status="unknown", reason="deadline")
+            health = settled.get(url, _CUT_OFF)
         return replace(health, checked_at=self._now())
 
     async def aclose(self) -> None:
@@ -582,11 +617,12 @@ class PinnedNetworkBackend(httpcore.AsyncNetworkBackend):
     """An httpcore network backend that connects only to public addresses.
 
     httpcore hands `connect_tcp` the URL's host name: this resolves it through `resolver` and
-    opens the socket to a public address of the answer (the first that accepts, in order), else
-    raises httpcore.ConnectError. A DNS answer that changed since the checker vetted the host
-    (rebinding) cannot point the connection at a private address. TLS keeps the URL's host name
-    for SNI and certificate verification: httpcore passes the origin's host to `start_tls`, not
-    the address connected to.
+    opens the socket to a public address of the answer (the first that accepts, in order: a
+    refused or timed-out address passes to the next), else raises the last address's error
+    (httpcore.ConnectError or ConnectTimeout). A DNS answer that changed since the checker
+    vetted the host (rebinding) cannot point the connection at a private address. TLS keeps the
+    URL's host name for SNI and certificate verification: httpcore passes the origin's host to
+    `start_tls`, not the address connected to.
     """
 
     def __init__(
@@ -619,14 +655,15 @@ class PinnedNetworkBackend(httpcore.AsyncNetworkBackend):
         public = [address for address in addresses if is_public_address(address)]
         if not public:
             raise httpcore.ConnectError(f"no public address for {host}")
-        for address in public[:-1]:
-            with contextlib.suppress(httpcore.ConnectError):
+        errors: list[httpcore.ConnectError | httpcore.ConnectTimeout] = []
+        for address in public:
+            try:
                 return await self._inner.connect_tcp(
                     str(address), port, timeout, local_address, socket_options
                 )
-        return await self._inner.connect_tcp(
-            str(public[-1]), port, timeout, local_address, socket_options
-        )
+            except (httpcore.ConnectError, httpcore.ConnectTimeout) as exc:
+                errors.append(exc)
+        raise errors[-1]
 
     async def sleep(self, seconds: float) -> None:
         await self._inner.sleep(seconds)

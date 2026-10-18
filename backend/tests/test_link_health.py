@@ -172,6 +172,24 @@ def test_looks_not_found_handles_whitespace_entities_and_no_title() -> None:
     assert looks_not_found("text/html", b"\xff\xfe<title>ok</title>") is False
 
 
+def test_looks_not_found_reads_only_a_real_title_tag() -> None:
+    """`<titles>` and `<titlebar>` are other tags: the title is the `<title>` after them."""
+    titles = b"<titles>Page not found</titles><title>Museo</title>"
+    titlebar = b"<titlebar>Page not found</title><title>Museo</title>"
+    assert looks_not_found("text/html", titles) is False
+    assert looks_not_found("text/html", titlebar) is False
+    assert looks_not_found("text/html", b"<title lang='it'>Pagina non trovata</title >") is True
+
+
+def test_looks_not_found_is_fast_on_a_pathological_body() -> None:
+    """64 KB of `<title>` openings with no closing tag: the search is bounded, never quadratic
+    (it runs on the event loop, where no timeout can preempt it)."""
+    body = (b"<title>" * 10_000)[:65_536]
+    started = time.perf_counter()
+    assert looks_not_found("text/html", body) is False
+    assert time.perf_counter() - started < 0.1
+
+
 def dead_map() -> LinkHealthMap:
     return LinkHealthMap.from_json(
         {
@@ -626,7 +644,7 @@ async def test_check_plan_enforces_its_own_deadline(router: respx.MockRouter) ->
     plan's."""
 
     class HangingChecker(HttpLinkChecker):
-        async def check_url(self, url: str) -> LinkHealth:
+        async def _check(self, url: str, settled: dict[str, LinkHealth]) -> LinkHealth:
             await asyncio.sleep(3)
             raise AssertionError("the plan deadline should have cancelled this check")
 
@@ -642,6 +660,72 @@ async def test_check_plan_enforces_its_own_deadline(router: respx.MockRouter) ->
     assert time.perf_counter() - started < 0.5
     assert health.counts() == {"ok": 0, "dead": 0, "unknown": 2}
     assert verdict(entry_of(health, PAGE)) == ("unknown", "deadline")
+
+
+BOOKING_PAGE = "https://www.booking.com/hotel/it/x.html"
+BOOKING_HOME = "https://www.booking.com/"
+
+
+async def hang(request: httpx.Request) -> httpx.Response:
+    await asyncio.sleep(3)
+    return httpx.Response(200)
+
+
+async def test_a_dead_page_whose_homepage_check_is_cut_off_stays_dead(
+    router: respx.MockRouter,
+) -> None:
+    """The page answers 404 at once, its homepage never answers: the URL's own deadline cuts
+    the homepage check off, and the URL stays dead with the unchecked homepage as fallback (an
+    unchecked homepage is `unknown`, which counts as alive)."""
+    router.get(BOOKING_PAGE).respond(404)
+    router.get(BOOKING_HOME).mock(side_effect=hang)
+    started = time.perf_counter()
+    health = await make_checker(router, total_deadline=0.2).check_url(BOOKING_PAGE)
+    assert time.perf_counter() - started < 0.5
+    assert health == LinkHealth(
+        status="dead",
+        reason="http_404",
+        http_status=404,
+        fallback=BOOKING_HOME,
+        fallback_allowed=True,
+        checked_at=NOW,
+    )
+
+
+async def test_the_plan_deadline_keeps_a_dead_verdict_and_fills_every_pending_url(
+    router: respx.MockRouter,
+) -> None:
+    """One check at a time: the first URL takes 0.1 s, so the booking page's own deadline
+    (0.35 s) is later than the plan's (0.25 s), which cuts its homepage check off. The third URL
+    never starts and is `unknown` (`deadline`)."""
+    first = "https://b.example/y"
+    waiting = "https://c.example/z"
+
+    async def slow_ok(request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(0.1)
+        return httpx.Response(200)
+
+    router.get(first).mock(side_effect=slow_ok)
+    router.get(BOOKING_PAGE).respond(404)
+    router.get(BOOKING_HOME).mock(side_effect=hang)
+    router.get(waiting).respond(200)
+    checker = make_checker(router, total_deadline=0.25, concurrency=1)
+    started = time.perf_counter()
+    health = await checker.check_plan(plan_with_urls(first, BOOKING_PAGE, waiting))
+    assert time.perf_counter() - started < 0.5
+    assert list(health) == [first, BOOKING_PAGE, waiting]
+    assert verdict(entry_of(health, first)) == ("ok", "ok")
+    assert entry_of(health, BOOKING_PAGE) == LinkHealth(
+        status="dead",
+        reason="http_404",
+        http_status=404,
+        fallback=BOOKING_HOME,
+        fallback_allowed=True,
+        checked_at=NOW,
+    )
+    assert entry_of(health, waiting) == LinkHealth(
+        status="unknown", reason="deadline", checked_at=NOW
+    )
 
 
 async def test_check_plan_checks_each_distinct_url_once(router: respx.MockRouter) -> None:
@@ -772,11 +856,13 @@ async def test_aclose_closes_the_transport(router: respx.MockRouter) -> None:
 
 
 class RecordingBackend(httpcore.AsyncNetworkBackend):
-    """Records connect_tcp calls; refuses the addresses in `refused`."""
+    """Records connect_tcp calls; refuses the addresses in `refused` and times out on those in
+    `timed_out`."""
 
-    def __init__(self, refused: tuple[str, ...] = ()) -> None:
+    def __init__(self, refused: tuple[str, ...] = (), timed_out: tuple[str, ...] = ()) -> None:
         self.calls: list[tuple[str, int]] = []
         self.refused = refused
+        self.timed_out = timed_out
 
     async def connect_tcp(
         self,
@@ -789,6 +875,8 @@ class RecordingBackend(httpcore.AsyncNetworkBackend):
         self.calls.append((host, port))
         if host in self.refused:
             raise httpcore.ConnectError(f"refused by {host}")
+        if host in self.timed_out:
+            raise httpcore.ConnectTimeout(f"no answer from {host}")
         return httpcore.AsyncMockStream([])
 
     async def sleep(self, seconds: float) -> None:
@@ -826,6 +914,34 @@ async def test_pinned_backend_skips_private_answers_and_falls_over() -> None:
     backend = PinnedNetworkBackend(resolver, inner=inner)
     await backend.connect_tcp("a.example", 80)
     assert inner.calls == [("2606:4700::1111", 80), (PUBLIC_ADDRESS, 80)]
+
+
+async def test_pinned_backend_falls_over_after_a_connect_timeout() -> None:
+    inner = RecordingBackend(timed_out=("2606:4700::1111",))
+    resolver = FakeResolver({"a.example": ["2606:4700::1111", PUBLIC_ADDRESS]})
+    backend = PinnedNetworkBackend(resolver, inner=inner)
+    stream = await backend.connect_tcp("a.example", 443, timeout=5.0)
+    assert isinstance(stream, httpcore.AsyncMockStream)
+    assert inner.calls == [("2606:4700::1111", 443), (PUBLIC_ADDRESS, 443)]
+
+
+@pytest.mark.parametrize(
+    ("refused", "timed_out", "last_error"),
+    [
+        (("2606:4700::1111",), (PUBLIC_ADDRESS,), httpcore.ConnectTimeout),
+        ((PUBLIC_ADDRESS,), ("2606:4700::1111",), httpcore.ConnectError),
+    ],
+)
+async def test_pinned_backend_raises_the_last_error_when_every_address_fails(
+    refused: tuple[str, ...], timed_out: tuple[str, ...], last_error: type[Exception]
+) -> None:
+    inner = RecordingBackend(refused=refused, timed_out=timed_out)
+    resolver = FakeResolver({"a.example": ["2606:4700::1111", PUBLIC_ADDRESS]})
+    backend = PinnedNetworkBackend(resolver, inner=inner)
+    with pytest.raises(last_error) as raised:
+        await backend.connect_tcp("a.example", 443)
+    assert raised.type is last_error
+    assert inner.calls == [("2606:4700::1111", 443), (PUBLIC_ADDRESS, 443)]
 
 
 async def test_the_built_checker_connects_through_the_pinned_backend(
