@@ -49,8 +49,10 @@ import datetime as dt
 import hashlib
 import hmac
 import re
+import time
 import uuid
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Callable, Mapping
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Annotated, Any, cast
 
@@ -66,7 +68,7 @@ from starlette.datastructures import Headers
 from starlette.middleware.cors import CORSMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from app import consumer, evals_store, sessions
+from app import clock, consumer, evals_store, quota, ratelimit, sessions
 from app.auth import CurrentUser, CurrentUserDep, RequireAdmin, RequireOrigin
 from app.config import AgentProfile, Settings
 from app.covers import Cover, CoverErrorCode, CoverResolver
@@ -124,6 +126,11 @@ class PlanErrorCode(StrEnum):
     PLAN_NOT_READY = "plan_not_ready"  # 409: GET /trip before `ready`
     INVALID_PLAN_STATE = "invalid_plan_state"  # 409: interrupt/continue in the wrong status
     MONTHLY_LIMIT_REACHED = "monthly_limit_reached"  # 429: data {spent_cents, limit_cents}
+    QUOTA_PLANS_REACHED = "quota_plans_reached"  # 429: data = quota.UserQuota.as_data()
+    QUOTA_CENTS_REACHED = "quota_cents_reached"  # 429: data = quota.UserQuota.as_data()
+    TOO_MANY_REQUESTS = "too_many_requests"  # 429: data {retry_after_seconds}; Retry-After
+    PLANNER_BUSY = "planner_busy"  # 503: data {running, limit, retry_after_seconds}; Retry-After
+    CONTINUE_LIMIT_REACHED = "continue_limit_reached"  # 409: data {continues, limit}
     PLANNER_UNAVAILABLE = "planner_unavailable"  # 503: no key, lockfile or trip.json
     AGENTS_UNAVAILABLE = "agents_unavailable"  # 502: the Managed Agents API failed
     REQUEST_TOO_LARGE = "request_too_large"  # 413: body over MAX_REQUEST_BODY_BYTES
@@ -139,6 +146,11 @@ PLAN_ERROR_STATUS: dict[PlanErrorCode, int] = {
     PlanErrorCode.PLAN_NOT_READY: 409,
     PlanErrorCode.INVALID_PLAN_STATE: 409,
     PlanErrorCode.MONTHLY_LIMIT_REACHED: 429,
+    PlanErrorCode.QUOTA_PLANS_REACHED: 429,
+    PlanErrorCode.QUOTA_CENTS_REACHED: 429,
+    PlanErrorCode.TOO_MANY_REQUESTS: 429,
+    PlanErrorCode.PLANNER_BUSY: 503,
+    PlanErrorCode.CONTINUE_LIMIT_REACHED: 409,
     PlanErrorCode.PLANNER_UNAVAILABLE: 503,
     PlanErrorCode.AGENTS_UNAVAILABLE: 502,
     PlanErrorCode.REQUEST_TOO_LARGE: 413,
@@ -154,8 +166,27 @@ PLAN_ERROR_MESSAGES: dict[PlanErrorCode, str] = {
     PlanErrorCode.PLAN_NOT_READY: "Il piano è ancora in preparazione.",
     PlanErrorCode.INVALID_PLAN_STATE: "Il piano non è in uno stato che lo permette.",
     PlanErrorCode.MONTHLY_LIMIT_REACHED: (
-        "Questo mese sono già stati spesi {spent} su {limit}: il prossimo piano si potrà "
+        "Questo mese il planner ha già impegnato {spent} su {limit}: il prossimo piano si potrà "
         "creare il mese prossimo."
+    ),
+    PlanErrorCode.QUOTA_PLANS_REACHED: (
+        "Questo mese hai già creato {plans_used} piani su {plans_limit}: il prossimo si potrà "
+        "creare il mese prossimo."
+    ),
+    PlanErrorCode.QUOTA_CENTS_REACHED: (
+        "Questo mese i tuoi piani hanno già impegnato {cents_used} su {cents_limit}: il "
+        "prossimo si potrà creare il mese prossimo."
+    ),
+    PlanErrorCode.TOO_MANY_REQUESTS: (
+        "Troppe richieste in poco tempo: riprova tra {retry_after_seconds} secondi."
+    ),
+    PlanErrorCode.PLANNER_BUSY: (
+        "Il planner è al completo in questo momento: riprova tra qualche minuto. Nessun costo "
+        "è stato addebitato."
+    ),
+    PlanErrorCode.CONTINUE_LIMIT_REACHED: (
+        "Questo piano ha già usato le sue {limit} proroghe: il budget non si può aumentare "
+        "ancora. Puoi interromperlo, o creare un nuovo piano."
     ),
     PlanErrorCode.PLANNER_UNAVAILABLE: (
         "Il planner non è pronto in questo momento: nessun costo è stato addebitato. Riprova "
@@ -188,23 +219,40 @@ class ErrorResponse(BaseModel):
     detail: ErrorBody
 
 
-def plan_error(code: PlanErrorCode, *, data: dict[str, Any] | None = None) -> HTTPException:
+def plan_error(
+    code: PlanErrorCode,
+    *,
+    data: dict[str, Any] | None = None,
+    retry_after_seconds: int | None = None,
+) -> HTTPException:
     """The `HTTPException` for `code` (status from the PlanErrorCode comments), with
-    `PLAN_ERROR_MESSAGES[code]` formatted from `data`: every integer `<name>_cents` value fills
-    the `{<name>}` placeholder as `format_usd(value)`."""
+    `PLAN_ERROR_MESSAGES[code]` formatted from `data`: every integer whose key ends with `_cents`
+    or starts with `cents_` fills `{<key>}` as `format_usd(value)` (a `<name>_cents` key fills
+    `{<name>}` too), every other integer fills `{<key>}` as is. `retry_after_seconds` becomes
+    the `Retry-After` header and, when absent from `data`, its `retry_after_seconds` key."""
+    if retry_after_seconds is not None:
+        data = {"retry_after_seconds": retry_after_seconds, **(data or {})}
     message = PLAN_ERROR_MESSAGES[code]
     if data and "{" in message:
-        figures = {
-            key.removesuffix("_cents"): format_usd(value)
-            for key, value in data.items()
-            if key.endswith("_cents") and isinstance(value, int) and not isinstance(value, bool)
-        }
+        figures: dict[str, str] = {}
+        for key, value in data.items():
+            if not isinstance(value, int) or isinstance(value, bool):
+                continue
+            if key.endswith("_cents"):
+                figures[key] = figures[key.removesuffix("_cents")] = format_usd(value)
+            elif key.startswith("cents_"):
+                figures[key] = format_usd(value)
+            else:
+                figures[key] = str(value)
         try:
             message = message.format(**figures)
         except (KeyError, IndexError, ValueError):
             log.error("plan_error_format_failed", code=code.value)
     body = ErrorBody(code=code.value, message=message, data=data)
-    return HTTPException(status_code=PLAN_ERROR_STATUS[code], detail=body.model_dump(mode="json"))
+    headers = {"Retry-After": str(retry_after_seconds)} if retry_after_seconds is not None else None
+    return HTTPException(
+        status_code=PLAN_ERROR_STATUS[code], detail=body.model_dump(mode="json"), headers=headers
+    )
 
 
 def format_usd(cents: int) -> str:
@@ -221,12 +269,45 @@ class CreatePlanResponse(BaseModel):
     id: uuid.UUID
 
 
+class QuotaView(BaseModel):
+    """One user's month against their quota (quota.UserQuota): what the web app shows before
+    the limit is hit, and what a 429 `quota_*_reached` carries as `data`."""
+
+    plans_used: int = Field(description="Plans created this month (Europe/Rome), any status.")
+    plans_limit: int = Field(description="USER_MONTHLY_PLANS.")
+    cents_used: int = Field(
+        description=(
+            "US cents: the month's recorded cost plus the unspent budget of the plans still "
+            "running."
+        )
+    )
+    cents_limit: int = Field(description="USER_MONTHLY_CENTS.")
+    resets_at: AwareDatetime = Field(description="The first instant of the next month.")
+
+    @classmethod
+    def from_quota(cls, allowance: quota.UserQuota) -> QuotaView:
+        return cls(
+            plans_used=allowance.plans_used,
+            plans_limit=allowance.plans_limit,
+            cents_used=allowance.cents_used,
+            cents_limit=allowance.cents_limit,
+            resets_at=allowance.resets_at,
+        )
+
+
 class MeResponse(BaseModel):
     """Answer of GET /me: who the cookie belongs to, for the web app's header."""
 
     email: str = Field(description="The signed-in address, trimmed and lower-cased.")
     is_admin: bool = Field(
         description="May read the eval history (one of ADMIN_EMAILS, `Settings.admins`)."
+    )
+    quota: QuotaView | None = Field(
+        default=None,
+        description=(
+            "The user's month against the per-user quota; null for the users exempt from it "
+            "(admins)."
+        ),
     )
 
 
@@ -281,6 +362,16 @@ class PlanDetail(BaseModel):
     )
     failure_reason: str | None = Field(default=None, description="Italian, for failed/blocked.")
     submit_attempts: int
+    continues: int = Field(
+        default=0, description="How many times 'Continua' raised the budget (plans.continues)."
+    )
+    continues_limit: int = Field(
+        default=0,
+        description=(
+            "MAX_CONTINUES_PER_PLAN: at `continues` equal to it the web app offers no "
+            "'Continua' and says why."
+        ),
+    )
     request: dict[str, Any] = Field(description="The PlanRequest as submitted.")
     plan: dict[str, Any] | None = Field(
         default=None, description="The accepted Plan (schema/plan.json), once submitted."
@@ -487,12 +578,26 @@ def plan_detail(record: PlanRecord, *, settings: Settings) -> PlanDetail:
         budget_cents=record.budget_cents,
         failure_reason=record.failure_reason,
         submit_attempts=record.submit_attempts,
+        continues=record.continues,
+        continues_limit=settings.max_continues_per_plan,
         request=dict(record.request),
         plan=dict(record.plan) if record.plan is not None else None,
         booking_links=_link_checks(record.plan, "bookings"),
         alternative_links=_link_checks(record.plan, "alternatives"),
         import_url=import_url(record, settings=settings),
     )
+
+
+async def _counted(
+    stream: AsyncIterator[ServerSentEvent], *, release: Callable[[], None]
+) -> AsyncIterator[ServerSentEvent]:
+    """`stream`, with `release()` called once it ends, however it ends (the client went away,
+    the plan finished, an error)."""
+    try:
+        async for item in stream:
+            yield item
+    finally:
+        release()
 
 
 def sse_message(event: UIEvent) -> ServerSentEvent:
@@ -637,6 +742,63 @@ async def event_stream(
 
 router = APIRouter(prefix="/plans", tags=["plans"])
 
+
+@dataclass
+class RateLimits:
+    """The process's limiters (app/ratelimit.py), one set per app, built from its settings."""
+
+    create_per_user: ratelimit.SlidingWindow
+    create_per_ip: ratelimit.SlidingWindow
+    streams: ratelimit.StreamCounter
+
+    @classmethod
+    def from_settings(cls, settings: Settings) -> RateLimits:
+        window = float(settings.plan_create_window_seconds)
+        return cls(
+            create_per_user=ratelimit.SlidingWindow(
+                settings.plan_create_limit_per_user, window, time.monotonic
+            ),
+            create_per_ip=ratelimit.SlidingWindow(
+                settings.plan_create_limit_per_ip, window, time.monotonic
+            ),
+            streams=ratelimit.StreamCounter(settings.max_streams_per_user),
+        )
+
+
+def get_rate_limits(request: Request) -> RateLimits:
+    """`request.app.state.rate_limits`, built on first use from the app's settings."""
+    limits: RateLimits | None = getattr(request.app.state, "rate_limits", None)
+    if limits is None:
+        limits = RateLimits.from_settings(request.app.state.settings)
+        request.app.state.rate_limits = limits
+    return limits
+
+
+RateLimitsDep = Annotated[RateLimits, Depends(get_rate_limits)]
+
+
+async def check_create_rate(
+    request: Request, user: CurrentUserDep, settings: SettingsDep, limits: RateLimitsDep
+) -> None:
+    """POST /plans: the user's and the client IP's sliding windows (`ratelimit`), after the
+    user is known and before any quota query; over either: 429 `too_many_requests` with
+    `Retry-After`. The IP window is hit first, so a refused request still counts against the
+    address (a burst from one address is what it guards)."""
+    by_ip = limits.create_per_ip.hit(
+        ratelimit.client_ip(request, trust_proxy=settings.trusts_proxy_headers)
+    )
+    by_user = limits.create_per_user.hit(user.email) if by_ip.allowed else by_ip
+    refused = by_ip if not by_ip.allowed else by_user
+    if not refused.allowed:
+        log.info("plan_create_rate_limited", by="ip" if not by_ip.allowed else "user")
+        raise plan_error(
+            PlanErrorCode.TOO_MANY_REQUESTS, retry_after_seconds=refused.retry_after_seconds
+        )
+
+
+RequireCreateRate = Depends(check_create_rate)
+
+
 _ERRORS: dict[int | str, dict[str, Any]] = {
     401: {"model": ErrorResponse},
     403: {"model": ErrorResponse},
@@ -659,17 +821,29 @@ me_router = APIRouter(tags=["me"])
 
 
 @me_router.get("/me", responses=_ERRORS)
-async def me(user: CurrentUserDep, settings: SettingsDep) -> MeResponse:
-    """Who is signed in and whether they may read the eval history (`Settings.is_admin`): the
-    web app shows the "Valutazioni" section only to admins. No personal data beyond the email
-    the cookie already stands for."""
-    return MeResponse(email=user.email, is_admin=settings.is_admin(user.email))
+async def me(user: CurrentUserDep, settings: SettingsDep, db: DbSession) -> MeResponse:
+    """Who is signed in, whether they may read the eval history (`Settings.is_admin`: the web
+    app shows the "Valutazioni" section only to admins) and, unless they are exempt, their
+    month against the quota (`quota.month_usage` of their plans, read without the lock). No
+    personal data beyond the email the cookie already stands for."""
+    is_admin = settings.is_admin(user.email)
+    allowance: QuotaView | None = None
+    if not is_admin:
+        now = clock.now()
+        usage = await quota.month_usage(
+            db,
+            now=now,
+            owner=sessions.plan_owner_filter(user, settings=settings),
+            default_budget_cents=settings.session_budget_cents,
+        )
+        allowance = QuotaView.from_quota(quota.user_quota(usage, settings=settings, now=now))
+    return MeResponse(email=user.email, is_admin=is_admin, quota=allowance)
 
 
 @router.post(
     "",
     status_code=201,
-    dependencies=[RequireOrigin],
+    dependencies=[RequireOrigin, RequireCreateRate],
     responses={
         **_ERRORS,
         413: {"model": ErrorResponse},
@@ -695,20 +869,30 @@ async def create_plan(
     ] = None,
 ) -> CreatePlanResponse:
     """Validate the request (422 on errors), then `sessions.start_plan`. Maps
-    `MonthlyLimitReachedError` -> 429 `monthly_limit_reached` (data: spent_cents,
-    limit_cents), `PlannerUnavailableError`/`TripSchemaUnavailableError` -> 503
-    `planner_unavailable`, `ManagedAgentsError` or a start `TimeoutError` -> 502
-    `agents_unavailable`. `demo_scenario`: `check_demo_scenario`."""
+    `QuotaReachedError` -> 429 `quota_plans_reached` or `quota_cents_reached` (data: the
+    user's quota), `MonthlyLimitReachedError` -> 429 `monthly_limit_reached` (data:
+    spent_cents, limit_cents), `PlannerBusyError` -> 503 `planner_busy` (Retry-After),
+    `PlannerUnavailableError`/`TripSchemaUnavailableError` -> 503 `planner_unavailable`,
+    `ManagedAgentsError` or a start `TimeoutError` -> 502 `agents_unavailable`.
+    `demo_scenario`: `check_demo_scenario`."""
     check_demo_scenario(demo_scenario, settings=settings, planner=planner)
     try:
         plan_id = await sessions.start_plan(
             body, user, services=planner, demo_scenario=demo_scenario
         )
+    except quota.QuotaReachedError as exc:
+        raise quota_error(exc) from None
     except sessions.MonthlyLimitReachedError as exc:
         log.info("plan_refused_monthly_limit", spent_cents=exc.spent_cents)
         raise plan_error(
             PlanErrorCode.MONTHLY_LIMIT_REACHED,
             data={"spent_cents": exc.spent_cents, "limit_cents": exc.limit_cents},
+        ) from None
+    except quota.PlannerBusyError as exc:
+        raise plan_error(
+            PlanErrorCode.PLANNER_BUSY,
+            data={"running": exc.running, "limit": exc.limit},
+            retry_after_seconds=quota.PLANNER_BUSY_RETRY_SECONDS,
         ) from None
     except sessions.PlannerUnavailableError as exc:
         log.error("plan_refused_planner_unavailable", reasons=exc.reasons)
@@ -720,6 +904,16 @@ async def create_plan(
         log.error("plan_start_failed", error=type(exc).__name__)
         raise plan_error(PlanErrorCode.AGENTS_UNAVAILABLE) from None
     return CreatePlanResponse(id=plan_id)
+
+
+def quota_error(exc: quota.QuotaReachedError) -> HTTPException:
+    """429 `quota_plans_reached` or `quota_cents_reached`, `data` the user's quota."""
+    code = (
+        PlanErrorCode.QUOTA_PLANS_REACHED
+        if exc.kind == "plans"
+        else PlanErrorCode.QUOTA_CENTS_REACHED
+    )
+    return plan_error(code, data=dict(exc.quota.as_data()))
 
 
 def check_demo_scenario(value: str | None, *, settings: Settings, planner: PlannerServices) -> None:
@@ -796,22 +990,34 @@ async def plan_events(
     db: DbSession,
     planner: PlannerDep,
     settings: SettingsDep,
+    limits: RateLimitsDep,
     last_event_id: Annotated[str | None, Header()] = None,
     after: Annotated[int | None, Query(ge=0, le=MAX_SEQ)] = None,
 ) -> EventSourceResponse:
-    """SSE of the plan's UI events (module docstring). Checks ownership first (404), then
-    returns `EventSourceResponse(event_stream(...), ping=PING_SECONDS,
+    """SSE of the plan's UI events (module docstring). Checks ownership first (404), then the
+    user's open streams (`MAX_STREAMS_PER_USER`, 429 `too_many_requests` with `Retry-After`;
+    the count is released when the stream ends), then returns
+    `EventSourceResponse(event_stream(...), ping=PING_SECONDS,
     ping_message_factory=ping_comment, send_timeout=SEND_TIMEOUT_SECONDS,
     headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})`. The request's DB
     session is released before streaming (the stream opens its own short sessions)."""
     await _user_plan(db, plan_id, user, settings)
     await db.close()
+    held = limits.streams.acquire(user.email)
+    if not held.allowed:
+        log.info("plan_events_rate_limited", plan_id=str(plan_id))
+        raise plan_error(
+            PlanErrorCode.TOO_MANY_REQUESTS, retry_after_seconds=held.retry_after_seconds
+        )
     return EventSourceResponse(
-        event_stream(
-            plan_id,
-            parse_last_event_id(last_event_id, after),
-            planner=planner,
-            request=request,
+        _counted(
+            event_stream(
+                plan_id,
+                parse_last_event_id(last_event_id, after),
+                planner=planner,
+                request=request,
+            ),
+            release=lambda: limits.streams.release(user.email),
         ),
         ping=PING_SECONDS,
         ping_message_factory=ping_comment,
@@ -907,8 +1113,9 @@ async def continue_plan(
     plan_id: uuid.UUID, user: CurrentUserDep, planner: PlannerDep
 ) -> ContinueResponse:
     """The "Continua con 2 $ in piu'" button: `sessions.continue_plan` (only from
-    `budget_paused`, else 409); monthly limit -> 429; API failure -> 502 and the plan stays
-    `budget_paused`."""
+    `budget_paused`, else 409); the plan's cap on "Continua" -> 409 `continue_limit_reached`;
+    the user's quota -> 429 `quota_cents_reached`; the monthly limit -> 429; API failure -> 502
+    and the plan stays `budget_paused`."""
     try:
         budget_cents = await sessions.continue_plan(plan_id, user, services=planner)
     except consumer.PlanNotFoundError:
@@ -917,6 +1124,13 @@ async def continue_plan(
         raise plan_error(
             PlanErrorCode.INVALID_PLAN_STATE, data={"status": exc.status.value}
         ) from None
+    except quota.ContinueLimitReachedError as exc:
+        raise plan_error(
+            PlanErrorCode.CONTINUE_LIMIT_REACHED,
+            data={"continues": exc.continues, "limit": exc.limit},
+        ) from None
+    except quota.QuotaReachedError as exc:
+        raise quota_error(exc) from None
     except sessions.MonthlyLimitReachedError as exc:
         raise plan_error(
             PlanErrorCode.MONTHLY_LIMIT_REACHED,

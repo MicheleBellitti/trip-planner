@@ -6,10 +6,15 @@
 
 import type { JoinInputError, JoinOutcome } from "./waitlist-policy";
 
+/** Why a join was refused besides the input: the challenge was not passed (Turnstile), too many
+ * joins from this address in a short time (the server's window), no accounts configured, or a
+ * failure. */
+export type JoinRefusal = "challenge_failed" | "too_many_requests" | "unavailable" | "failed";
+
 export type JoinState =
   | { status: "idle" }
   | { status: JoinOutcome; email: string }
-  | { status: "error"; error: JoinInputError | "unavailable" | "failed" };
+  | { status: "error"; error: JoinInputError | JoinRefusal };
 
 export const JOIN_IDLE: JoinState = { status: "idle" };
 

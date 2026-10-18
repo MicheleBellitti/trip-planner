@@ -172,6 +172,13 @@ Taken by Michele on 2026-10-12. They replace the first pass's open questions.
   on `/login` says "non ha ancora un invito" and offers the list in place rather than hiding
   whether an address is invited; the invitation email names the address in its body and never
   in a URL.
+- **2026-10-18: fair use, said before it bites.** Every account has a month (plans and spend),
+  shown as one quiet line on the plans page and under the request form, never as a meter or a
+  warning colour; a refusal names the limit, the figures and the day the month turns, and the
+  request stays in the form. "Continua" has a cap per plan and disappears at it with the reason;
+  when the planner is full the form says so and that nothing was charged. The public forms
+  (waitlist, sign-in link) carry a Turnstile challenge once the keys are set, drawn in the
+  page's theme; signed-in work has no challenge in the way.
 
 ## Brand Commitments
 

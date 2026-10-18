@@ -467,3 +467,35 @@ def test_triptracker_auth_keeps_its_provider(make_settings: MakeSettings) -> Non
     assert settings.auth_origin == settings.triptracker_origin
     assert settings.auth_cookie_prefix == "better-auth"
     assert settings.plans_carry_user_id is False
+
+
+def test_proxy_headers_are_trusted_in_production_unless_said_otherwise(
+    make_settings: MakeSettings,
+) -> None:
+    assert make_settings().trusts_proxy_headers is False  # development
+    assert make_settings(trust_proxy_headers=True).trusts_proxy_headers is True
+    production = make_settings(
+        environment="production",
+        auth_mode="triptracker",
+        anthropic_api_key="sk-test",
+        agent_profile="production",
+    )
+    assert production.trusts_proxy_headers is True
+    assert (
+        make_settings(
+            environment="production",
+            auth_mode="triptracker",
+            anthropic_api_key="sk-test",
+            agent_profile="production",
+            trust_proxy_headers=False,
+        ).trusts_proxy_headers
+        is False
+    )
+
+
+def test_quota_defaults() -> None:
+    settings = Settings(_env_file=None)  # pyright: ignore[reportCallIssue]
+    assert (settings.user_monthly_plans, settings.user_monthly_cents) == (10, 1500)
+    assert (settings.max_continues_per_plan, settings.max_running_plans) == (2, 8)
+    assert (settings.plan_create_limit_per_user, settings.plan_create_limit_per_ip) == (5, 20)
+    assert (settings.plan_create_window_seconds, settings.max_streams_per_user) == (600, 4)

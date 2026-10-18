@@ -41,6 +41,7 @@ import {
   MonthlyLimitDataSchema,
   PlanDetailSchema,
   PlanListResponseSchema,
+  QuotaSchema,
   StatusResponseSchema,
   ValidationErrorResponseSchema,
   type ContinueResponse,
@@ -52,6 +53,7 @@ import {
   type Me,
   type PlanDetail,
   type PlanSummary,
+  type Quota,
   type StatusResponse,
   type ValidationIssue,
 } from "./schemas/api";
@@ -71,6 +73,15 @@ export type ApiErrorKind =
   | "validation"
   /** 429 monthly_limit_reached: `MonthlyLimitError` has the spend and the limit. */
   | "monthly_limit"
+  /** 429 quota_plans_reached or quota_cents_reached: the user's own month is used up;
+   * `QuotaReachedError` has the figures and when it resets. */
+  | "quota_reached"
+  /** 429 too_many_requests: a burst from this user or address; `retryAfterSeconds` says when. */
+  | "rate_limited"
+  /** 503 planner_busy: every slot is running a plan; nothing was spent, retry in a minute. */
+  | "planner_busy"
+  /** 409 continue_limit_reached: this plan had all the "Continua" it may have. */
+  | "continue_limit"
   /** 502 agents_unavailable: the Managed Agents API failed; the plan did not start. */
   | "agents_unavailable"
   /** 503 planner_unavailable: no API key, lockfile or trip.json; nothing was spent. */
@@ -94,6 +105,10 @@ export const API_ERROR_MESSAGES: Record<ApiErrorKind, string> = {
   conflict: "Il piano non è in uno stato che lo permette.",
   validation: "Controlla i campi evidenziati.",
   monthly_limit: "Questo mese è stato raggiunto il limite di spesa: il prossimo piano si potrà creare il mese prossimo.",
+  quota_reached: "Questo mese hai usato tutti i piani a tua disposizione: il prossimo si potrà creare il mese prossimo.",
+  rate_limited: "Troppe richieste in poco tempo: aspetta un momento e riprova.",
+  planner_busy: "Il planner è al completo in questo momento: riprova tra qualche minuto. Nessun costo è stato addebitato.",
+  continue_limit: "Questo piano ha già usato tutte le sue proroghe: il budget non si può aumentare ancora.",
   agents_unavailable: "Gli agenti non rispondono: il piano non è partito. Riprova tra qualche minuto.",
   planner_unavailable:
     "Il planner non è pronto in questo momento: nessun costo è stato addebitato. Riprova più tardi.",
@@ -173,6 +188,32 @@ export class MonthlyLimitError extends ApiError {
     this.name = "MonthlyLimitError";
     this.spentCents = figures.success ? figures.data.spent_cents : null;
     this.limitCents = figures.success ? figures.data.limit_cents : null;
+  }
+}
+
+/** 429 quota_plans_reached or quota_cents_reached: the user's own month is used up. `quota` is the
+ * backend's figures when it sent them (US cents, and when the month turns). */
+export class QuotaReachedError extends ApiError {
+  readonly quota: Quota | null;
+  readonly limit: "plans" | "cents";
+
+  constructor(init: Omit<ApiErrorInit, "kind">) {
+    const figures = QuotaSchema.safeParse(init.data ?? null);
+    super({ ...init, kind: "quota_reached", message: init.message || API_ERROR_MESSAGES.quota_reached });
+    this.name = "QuotaReachedError";
+    this.quota = figures.success ? figures.data : null;
+    this.limit = init.code === "quota_cents_reached" ? "cents" : "plans";
+  }
+}
+
+/** 429 too_many_requests: `retryAfterSeconds` from the body (or the Retry-After header). */
+export class RateLimitedError extends ApiError {
+  readonly retryAfterSeconds: number | null;
+
+  constructor(init: Omit<ApiErrorInit, "kind">, retryAfterSeconds: number | null) {
+    super({ ...init, kind: "rate_limited", message: init.message || API_ERROR_MESSAGES.rate_limited });
+    this.name = "RateLimitedError";
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 
@@ -286,11 +327,20 @@ async function readJson(response: Response): Promise<unknown> {
   }
 }
 
+/** A 429's wait: the body's `retry_after_seconds`, else the Retry-After header's seconds. */
+function retryAfterSeconds(data: Record<string, unknown> | null | undefined, header: string | null): number | null {
+  const fromBody = data?.retry_after_seconds;
+  if (typeof fromBody === "number" && Number.isFinite(fromBody)) return Math.max(0, Math.round(fromBody));
+  if (header && /^\d+$/.test(header.trim())) return Number(header.trim());
+  return null;
+}
+
 function kindForStatus(status: number, code: string | null): ApiErrorKind {
   if (status === 403) return "forbidden";
   if (status === 404) return "not_found";
-  if (status === 409) return "conflict";
+  if (status === 409) return code === "continue_limit_reached" ? "continue_limit" : "conflict";
   if (status === 502) return "agents_unavailable";
+  if (status === 503 && code === "planner_busy") return "planner_busy";
   if (status === 503) return code === "auth_unavailable" ? "auth_unavailable" : "planner_unavailable";
   if (status >= 500) return "server";
   return "unknown";
@@ -309,7 +359,7 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
   const planPath = (planId: string) => `/plans/${encodeURIComponent(planId)}`;
   const login = () => loginUrl(loginTarget(), currentUrl());
 
-  function errorFromResponse(status: number, payload: unknown): ApiError {
+  function errorFromResponse(status: number, payload: unknown, retryAfterHeader: string | null = null): ApiError {
     if (status === 422) {
       const validation = ValidationErrorResponseSchema.safeParse(payload);
       return new RequestValidationError(status, validation.success ? validation.data.detail : []);
@@ -325,6 +375,12 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
     }
     if (status === 429 && init.code === "monthly_limit_reached") {
       return new MonthlyLimitError(init);
+    }
+    if (status === 429 && (init.code === "quota_plans_reached" || init.code === "quota_cents_reached")) {
+      return new QuotaReachedError(init);
+    }
+    if (status === 429) {
+      return new RateLimitedError(init, retryAfterSeconds(init.data, retryAfterHeader));
     }
     return new ApiError({ ...init, kind: kindForStatus(status, init.code) });
   }
@@ -352,7 +408,7 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
     }
     const payload = await readJson(response);
     if (!response.ok) {
-      throw errorFromResponse(response.status, payload);
+      throw errorFromResponse(response.status, payload, response.headers.get("retry-after"));
     }
     // Any 2xx from an authenticated endpoint proves a session: "/" may skip the landing next time.
     if (path !== "/health") markSignedIn();

@@ -22,6 +22,7 @@ import { Field, NumberStepper, SegmentedControl, Select, TextArea, TextInput } f
 import { Icon } from "@/components/ui/icon";
 import { useIsDesktop } from "@/components/live/hooks";
 import { Notice } from "@/components/ui/notice";
+import { MonthUsage } from "@/components/home/month-usage";
 import { api, RequestValidationError, UnauthorizedError } from "@/lib/api";
 import {
   childAgePath,
@@ -593,6 +594,8 @@ export function RequestForm({ today, initialValues, restoreLast = false, demoSce
             <Icon name="wallet" size={15} />
             {COST_ESTIMATE}
           </p>
+          {/* Where the month stands against the quota (nothing for the users exempt from it). */}
+          <MonthUsage className="text-meta sm:col-span-full lg:text-center" />
         </div>
       </div>
     </form>

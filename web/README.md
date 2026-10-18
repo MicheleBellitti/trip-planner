@@ -74,7 +74,10 @@ read server-only variables, documented in the "Accounts" section of `.env.exampl
 `AUTH_COOKIE_DOMAIN`, `AUTH_ALLOWED_EMAILS` (who may sign up), `RESEND_API_KEY` and
 `AUTH_EMAIL_FROM` (the sign-in email; unset in development, the link is printed to the server
 console), `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. Without `DATABASE_URL` the login page
-says the accounts are not configured and everything else works.
+says the accounts are not configured and everything else works. `NEXT_PUBLIC_TURNSTILE_SITE_KEY`
+and `TURNSTILE_SECRET_KEY` put Cloudflare Turnstile on the public forms (the landing's waitlist
+join, the login's magic-link request: `lib/turnstile.ts`, `components/ui/turnstile.tsx`,
+`lib/server/turnstile.ts`); without them no widget is drawn and nothing is checked.
 
 ## Commands
 

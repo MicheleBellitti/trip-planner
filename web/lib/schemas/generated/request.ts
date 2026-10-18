@@ -29,8 +29,8 @@ export type TravelerInput = z.input<typeof TravelerSchema>;
 
 /** A trip request: where from, where to (or "suggest one"), when, who, and the budget. */
 export const PlanRequestSchema = z.strictObject({
-  /** Total budget in whole euro for the whole party: travel, lodging, activities. */
-  budget_eur: z.int().check(z.gt(0)),
+  /** Total budget in whole euro for the whole party: travel, lodging, activities; at most 50000. */
+  budget_eur: z.int().check(z.gt(0), z.lte(50000)),
   /** Fixed dates, or a month and a number of nights. */
   dates: DateWindowSchema,
   /** Where to go: a city, region or country. Empty when suggest_destination is true. */
@@ -172,8 +172,9 @@ export const planRequestJsonSchema = {
   "description": "A trip request: where from, where to (or \"suggest one\"), when, who, and the budget.",
   "properties": {
     "budget_eur": {
-      "description": "Total budget in whole euro for the whole party: travel, lodging, activities.",
+      "description": "Total budget in whole euro for the whole party: travel, lodging, activities; at most 50000.",
       "exclusiveMinimum": 0,
+      "maximum": 50000,
       "type": "integer"
     },
     "dates": {

@@ -1,18 +1,20 @@
 "use client";
 
 /**
- * Whether the signed-in user manages the planner (GET /me `is_admin`: the backend's ADMIN_EMAILS),
- * for the header's "Valutazioni" station, which only admins see. One request per page load,
- * shared by every header on the page; the answer is kept in sessionStorage so the next page of
- * the same tab draws the station without waiting (a per-viewer convenience: a missing or blocked
- * storage only costs the wait). A 401 is "not an admin" and never redirects from here: the page's
- * own calls do that.
+ * Who the signed-in user is to the backend (GET /me): whether they manage the planner
+ * (`is_admin`, the backend's ADMIN_EMAILS: the header's "Valutazioni" and "Inviti" stations, which
+ * only admins see) and their month against the per-user quota (`quota`: the usage line on the
+ * plans page and under the request form, null for the users exempt from it). One request per page
+ * load, shared by every reader on the page; the admin flag is kept in sessionStorage so the next
+ * page of the same tab draws the stations without waiting (a per-viewer convenience: a missing or
+ * blocked storage only costs the wait). The quota is never stored: it changes with every plan. A
+ * 401 is "not an admin, no quota" and never redirects from here: the page's own calls do that.
  */
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { ApiError, createApiClient } from "./api";
-import { ADMIN_ONLY_CODE } from "./schemas/api";
+import { ADMIN_ONLY_CODE, type Me, type Quota } from "./schemas/api";
 
 export const ADMIN_KEY = "atlas-admin";
 
@@ -21,7 +23,15 @@ export function isAdminOnly(error: unknown): boolean {
   return error instanceof ApiError && error.status === 403 && error.code === ADMIN_ONLY_CODE;
 }
 
-let pending: Promise<boolean> | null = null;
+/** What the page knows once GET /me answered; a failure reads as a plain user with no quota. */
+export interface Identity {
+  isAdmin: boolean;
+  quota: Quota | null;
+}
+
+const NOBODY: Identity = { isAdmin: false, quota: null };
+
+let pending: Promise<Identity> | null = null;
 
 function remembered(): boolean | null {
   try {
@@ -40,19 +50,24 @@ function remember(isAdmin: boolean): void {
   }
 }
 
-/** The answer of GET /me, asked once per page load; any failure means "not an admin". */
-export function fetchIsAdmin(): Promise<boolean> {
+/** The answer of GET /me, asked once per page load; any failure means a plain user. */
+export function fetchMe(): Promise<Identity> {
   pending ??= createApiClient({ onUnauthorized: () => undefined })
     .me()
     .then(
-      (me) => me.is_admin,
-      () => false,
+      (me: Me): Identity => ({ isAdmin: me.is_admin, quota: me.quota }),
+      () => NOBODY,
     )
-    .then((isAdmin) => {
-      remember(isAdmin);
-      return isAdmin;
+    .then((identity) => {
+      remember(identity.isAdmin);
+      return identity;
     });
   return pending;
+}
+
+/** The admin flag alone, from the same shared request. */
+export function fetchIsAdmin(): Promise<boolean> {
+  return fetchMe().then((identity) => identity.isAdmin);
 }
 
 /** Tests: forget the shared request. */
@@ -64,20 +79,27 @@ function subscribeToNothing(): () => void {
   return () => undefined;
 }
 
-/** null until known, then the answer: what this tab remembered from an earlier page (read as an
- * external store, so the server render and the hydration see null and the client's first paint
- * after it sees the stored value), replaced by this page's own answer once it arrives. */
-export function useIsAdmin(): boolean | null {
-  const stored = useSyncExternalStore(subscribeToNothing, remembered, () => null);
-  const [fetched, setFetched] = useState<boolean | null>(null);
+/** null until the answer arrives, then it. Pages that need the quota read this; the header reads
+ * `useIsAdmin`, which also knows what the tab remembered. */
+export function useMe(): Identity | null {
+  const [identity, setIdentity] = useState<Identity | null>(null);
   useEffect(() => {
     let live = true;
-    void fetchIsAdmin().then((value) => {
-      if (live) setFetched(value);
+    void fetchMe().then((value) => {
+      if (live) setIdentity(value);
     });
     return () => {
       live = false;
     };
   }, []);
-  return fetched ?? stored;
+  return identity;
+}
+
+/** null until known, then the answer: what this tab remembered from an earlier page (read as an
+ * external store, so the server render and the hydration see null and the client's first paint
+ * after it sees the stored value), replaced by this page's own answer once it arrives. */
+export function useIsAdmin(): boolean | null {
+  const stored = useSyncExternalStore(subscribeToNothing, remembered, () => null);
+  const fetched = useMe();
+  return fetched === null ? stored : fetched.isAdmin;
 }

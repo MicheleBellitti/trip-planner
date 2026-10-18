@@ -8,7 +8,10 @@ import { magicLink } from "better-auth/plugins";
 import { isSignupAllowed, normalizeEmail } from "./auth-policy";
 import { readAuthConfig, type AuthServerConfig } from "./server/auth-config";
 import { getPool } from "./server/db";
+import { clientIp } from "./server/request-ip";
 import { MAGIC_LINK_MINUTES, sendMagicLink } from "./server/send-magic-link";
+import { verifyTurnstile } from "./server/turnstile";
+import { CHALLENGE_FAILED_MESSAGE, TURNSTILE_HEADER } from "./turnstile";
 import { isInvited } from "./server/waitlist";
 
 /**
@@ -33,6 +36,9 @@ import { isInvited } from "./server/waitlist";
  * and the login page says so.
  */
 export const SIGNUP_REFUSED_MESSAGE = "Questo indirizzo non ha ancora un invito.";
+
+/** The `code` of the magic-link request refused by the challenge (the login form reads it). */
+export const CHALLENGE_FAILED_CODE = "CHALLENGE_FAILED";
 
 export const COOKIE_PREFIX = "atlas";
 
@@ -106,9 +112,19 @@ function build(config: AuthServerConfig) {
     ],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
-        // Refuse a magic-link request for an address that may not sign up before any email is
-        // sent; an address that already has an account is always let through.
+        // A magic-link request first passes the challenge (lib/turnstile.ts; nothing is checked
+        // without the keys), so a robot learns nothing about the list; then an address that may
+        // not sign up is refused before any email is sent. An address that already has an
+        // account is always let through.
         if (ctx.path !== "/sign-in/magic-link") return;
+        const requestHeaders = ctx.headers ?? null;
+        const verdict = await verifyTurnstile(
+          requestHeaders?.get(TURNSTILE_HEADER) ?? null,
+          requestHeaders ? clientIp(requestHeaders) : null,
+        );
+        if (verdict === "failed") {
+          throw new APIError("BAD_REQUEST", { code: CHALLENGE_FAILED_CODE, message: CHALLENGE_FAILED_MESSAGE });
+        }
         const email = (ctx.body as { email?: unknown } | undefined)?.email;
         if (typeof email !== "string") return;
         const existing = await ctx.context.internalAdapter.findUserByEmail(email);

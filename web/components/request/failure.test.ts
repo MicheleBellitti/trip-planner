@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { ApiError, MonthlyLimitError } from "@/lib/api";
+import { ApiError, MonthlyLimitError, QuotaReachedError, RateLimitedError } from "@/lib/api";
 
-import { describeSubmitFailure } from "./failure";
+import { describeSubmitFailure, formatResetDay, waitWords } from "./failure";
 
 describe("describeSubmitFailure", () => {
   it("says the monthly limit with the backend's figures and no 'send it again'", () => {
@@ -44,5 +44,45 @@ describe("describeSubmitFailure", () => {
     const unknown = describeSubmitFailure(new TypeError("boom"));
     expect(unknown.title).toBe("Il piano non è partito");
     expect(unknown.body).not.toContain("boom");
+  });
+});
+
+describe("the economics' refusals", () => {
+  const quota = { plans_used: 10, plans_limit: 10, cents_used: 1234, cents_limit: 1500, resets_at: "2026-11-01T00:00:00+01:00" };
+
+  it("says which limit the quota hit, with the figures and the day the month turns", () => {
+    const plans = describeSubmitFailure(new QuotaReachedError({ status: 429, code: "quota_plans_reached", message: "x", data: quota }));
+    expect(plans).toEqual({
+      title: "Hai usato i piani di questo mese",
+      body: "Questo mese hai creato 10 piani su 10. Il prossimo si potrà creare dal 1° novembre.",
+    });
+    const cents = describeSubmitFailure(new QuotaReachedError({ status: 429, code: "quota_cents_reached", message: "x", data: quota }));
+    expect(cents.title).toBe("Hai usato il budget di questo mese");
+    expect(cents.body).toBe("Questo mese i tuoi piani hanno impegnato 12,34 $ su 15,00 $. Il prossimo si potrà creare dal 1° novembre.");
+    // Without the figures (an older backend), the backend's own sentence.
+    const bare = describeSubmitFailure(new QuotaReachedError({ status: 429, code: "quota_plans_reached", message: "Basta così.", data: null }));
+    expect(bare.body).toBe("Basta così.");
+  });
+
+  it("says how long to wait after a burst, and keeps the request", () => {
+    const failure = describeSubmitFailure(new RateLimitedError({ status: 429, code: "too_many_requests", message: "x", data: { retry_after_seconds: 90 } }, 90));
+    expect(failure.title).toBe("Troppe richieste");
+    expect(failure.body).toBe("Hai inviato molte richieste in poco tempo: aspetta 2 minuti e riprova. La richiesta resta qui, pronta da inviare di nuovo.");
+    expect(waitWords(30)).toBe("30 secondi");
+    expect(waitWords(60)).toBe("un minuto");
+    expect(waitWords(600)).toBe("10 minuti");
+  });
+
+  it("says the planner is full (503) with the backend's sentence", () => {
+    const message = "Il planner è al completo in questo momento: riprova tra qualche minuto. Nessun costo è stato addebitato.";
+    const failure = describeSubmitFailure(new ApiError({ kind: "planner_busy", status: 503, code: "planner_busy", message }));
+    expect(failure.title).toBe("Il planner è al completo");
+    expect(failure.body).toContain(message);
+  });
+
+  it("writes the reset day in Italian, in Rome", () => {
+    expect(formatResetDay("2026-11-01T00:00:00+01:00")).toBe("1° novembre");
+    expect(formatResetDay("2026-12-01T00:00:00+01:00")).toBe("1° dicembre");
+    expect(formatResetDay("2026-10-31T23:30:00Z")).toBe("1° novembre"); // 00:30 in Rome
   });
 });

@@ -4,15 +4,22 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
-import { API_ERROR_MESSAGES, ApiError, MonthlyLimitError } from "@/lib/api";
+import { API_ERROR_MESSAGES, ApiError, MonthlyLimitError, QuotaReachedError } from "@/lib/api";
 import { formatUsd } from "@/lib/format";
+
+import { describeQuotaRefusal } from "../request/failure";
 
 import { StateFact, StatePanel } from "./state-panel";
 
 interface BudgetPausedPanelProps {
   costCents: number | null;
   budgetCents: number | null;
-  /** POST /plans/{id}/continue. Throws the client's errors (a 429 is a MonthlyLimitError). */
+  /** How many times "Continua" raised this plan's budget, and how many times it may
+   * (plan detail `continues`, `continues_limit`; a limit of 0 means the backend has no cap). */
+  continues?: number;
+  continuesLimit?: number;
+  /** POST /plans/{id}/continue. Throws the client's errors (a 429 is a MonthlyLimitError or a
+   * QuotaReachedError, a 409 continue_limit_reached an ApiError of kind "continue_limit"). */
   onContinue: () => Promise<void>;
 }
 
@@ -24,6 +31,13 @@ interface Failure {
 }
 
 function failureOf(error: unknown): Failure {
+  if (error instanceof QuotaReachedError) {
+    const { title, body } = describeQuotaRefusal(error);
+    return { title, message: `${body} Il piano resta in pausa e puoi interromperlo.`, final: true };
+  }
+  if (error instanceof ApiError && error.kind === "continue_limit") {
+    return { title: "Proroghe esaurite", message: `${error.message} Il piano resta in pausa e puoi interromperlo.`, final: true };
+  }
   if (error instanceof MonthlyLimitError) {
     const figures =
       error.spentCents !== null && error.limitCents !== null
@@ -45,9 +59,11 @@ function failureOf(error: unknown): Failure {
  * 429 means the month's limit is reached: the button stays off and the plan can only be
  * interrupted.
  */
-export function BudgetPausedPanel({ costCents, budgetCents, onContinue }: BudgetPausedPanelProps) {
+export function BudgetPausedPanel({ costCents, budgetCents, continues = 0, continuesLimit = 0, onContinue }: BudgetPausedPanelProps) {
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
+  /** The plan had every "Continua" it may have: no button, the sentence says so. */
+  const capped = continuesLimit > 0 && continues >= continuesLimit;
 
   async function resume() {
     setBusy(true);
@@ -77,9 +93,11 @@ export function BudgetPausedPanel({ costCents, budgetCents, onContinue }: Budget
         ) : null
       }
       actions={
-        <Button variant="primary" icon="play" busy={busy} disabled={failure?.final} onClick={() => void resume()}>
-          Continua con 2 $ in più
-        </Button>
+        capped ? null : (
+          <Button variant="primary" icon="play" busy={busy} disabled={failure?.final} onClick={() => void resume()}>
+            Continua con 2 $ in più
+          </Button>
+        )
       }
     >
       <StateFact label="Cosa è successo">
@@ -90,7 +108,9 @@ export function BudgetPausedPanel({ costCents, budgetCents, onContinue }: Budget
         Il lavoro fatto finora resta qui sotto, corsia per corsia, e gli agenti riprendono da lì.
       </StateFact>
       <StateFact label="Cosa puoi fare">
-        Aggiungi 2 $ al budget della sessione per farli continuare, oppure interrompi il piano.
+        {capped
+          ? `Questo piano ha già usato ${continuesLimit === 1 ? "la sua proroga" : `le sue ${continuesLimit} proroghe`}: il budget non si può aumentare ancora. Puoi interromperlo, o creare un nuovo piano.`
+          : "Aggiungi 2 $ al budget della sessione per farli continuare, oppure interrompi il piano."}
       </StateFact>
     </StatePanel>
   );

@@ -105,6 +105,10 @@ REQUEST_ERRORS: dict[RequestErrorCode, str] = {
 
 MAX_NIGHTS = MAX_TRIP_DAYS - 1
 
+BUDGET_EUR_MAX = 50_000
+"""The most a request may budget, whole euro: above it the number is a mistake (or a probe), and
+the agents' per-session budget would not research a trip of that size anyway."""
+
 
 def _add(
     problems: Problems, loc: tuple[str, ...], code: RequestErrorCode, value: Any, **ctx: Any
@@ -319,8 +323,13 @@ class PlanRequest(ContractModel):
         max_length=9,
         description="Everyone travelling (1-9 people): at least one adult; children with age.",
     )
-    budget_eur: PositiveInt = Field(
-        description="Total budget in whole euro for the whole party: travel, lodging, activities.",
+    budget_eur: int = Field(
+        gt=0,
+        le=BUDGET_EUR_MAX,
+        description=(
+            "Total budget in whole euro for the whole party: travel, lodging, activities; at most "
+            f"{BUDGET_EUR_MAX}."
+        ),
     )
     preferences: str | None = Field(
         default=None,

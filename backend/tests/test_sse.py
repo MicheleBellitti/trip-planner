@@ -692,3 +692,30 @@ async def test_a_plan_end_to_end_through_the_real_wiring(
     finally:
         await fake.shutdown()
     assert not fake.mismatches
+
+
+# --- the per-user cap on open streams (app/ratelimit.py) ----------------------------------------
+
+
+async def test_a_user_holds_at_most_max_streams_and_a_closed_one_frees_a_slot(
+    make_app: AppFactory,
+    make_settings: Callable[..., Settings],
+    sse_ready: None,
+    plan_rows: PlanRows,
+) -> None:
+    async with make_app(settings=make_settings(max_streams_per_user=1)) as app:
+        record = await plan_rows.add_plan()
+        await plan_rows.add_event(record.id, 0)
+        async with open_stream(app, record.id) as first:
+            assert first.status == 200
+            await first.event()
+            refused = SseStream(app, f"/plans/{record.id}/events", {})
+            await refused.open()
+            assert refused.status == 429
+            assert refused.headers["retry-after"] == "5"
+            body = json.loads(await refused.body())
+            assert body["detail"]["code"] == "too_many_requests"
+            assert body["detail"]["data"] == {"retry_after_seconds": 5}
+            await refused.finished()
+        async with open_stream(app, record.id) as again:  # the first stream's slot is free
+            assert again.status == 200

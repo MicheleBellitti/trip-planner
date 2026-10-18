@@ -465,7 +465,9 @@ async def test_the_history_is_for_admins_only(
             "data": None,
         }
     assert me.status_code == 200
-    assert me.json() == {"email": "test@example.com", "is_admin": False}
+    identity = me.json()
+    assert (identity["email"], identity["is_admin"]) == ("test@example.com", False)
+    assert identity["quota"] is not None  # a plain user sees their month
     assert plans.status_code == 200
 
 

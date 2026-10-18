@@ -325,7 +325,13 @@ export function PlanScreen({ planId, client = liveApi }: { planId: string; clien
       <main className="mx-auto max-w-page px-4 pt-3 lg:px-7 lg:pt-5">
         {status === "budget_paused" ? (
           <Suspense fallback={null}>
-            <BudgetPausedPanel costCents={state.costCents} budgetCents={state.budgetCents} onContinue={resume} />
+            <BudgetPausedPanel
+              costCents={state.costCents}
+              budgetCents={state.budgetCents}
+              continues={detail?.continues ?? 0}
+              continuesLimit={detail?.continues_limit ?? 0}
+              onContinue={resume}
+            />
           </Suspense>
         ) : null}
         {isEndedStatus(status) ? (

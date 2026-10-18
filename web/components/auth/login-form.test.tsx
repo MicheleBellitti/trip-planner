@@ -33,6 +33,27 @@ vi.mock("@/lib/auth-client", () => ({
 vi.mock("@/app/actions/waitlist", () => ({
   joinWaitlistAction: (...args: unknown[]) => join(...args),
 }));
+// The widget stands in: with a site key it hands over "tok-1" on mount and, like the real one, a
+// fresh token after every reset.
+let handOverToken: ((token: string | null) => void) | null = null;
+let issued = 1;
+const turnstileReset = vi.fn(() => {
+  issued += 1;
+  handOverToken?.(`tok-${issued}`);
+});
+vi.mock("@/components/ui/turnstile", async () => {
+  const { useEffect, useImperativeHandle } = await import("react");
+  return {
+    Turnstile: ({ onToken, ref }: { onToken: (token: string | null) => void; ref?: React.Ref<{ reset(): void }> }) => {
+      useImperativeHandle(ref, () => ({ reset: turnstileReset }), []);
+      useEffect(() => {
+        handOverToken = onToken;
+        if (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY) onToken("tok-1");
+      }, [onToken]);
+      return null;
+    },
+  };
+});
 
 const REFUSED = { data: null, error: { status: 403, code: "SIGNUP_NOT_ALLOWED", message: "x" } };
 
@@ -56,6 +77,43 @@ describe("LoginForm", () => {
     getSession.mockReset();
     getSession.mockResolvedValue({ data: null, error: null });
     join.mockReset();
+    turnstileReset.mockClear();
+    issued = 1;
+    delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+  });
+
+  it("sends the challenge's token with the link request and with a join, and asks for a new one after each", async () => {
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "site-key";
+    magicLink.mockResolvedValue(REFUSED);
+    join.mockResolvedValue({ status: "joined", email: "nobody@example.com" });
+    renderForm();
+    typeAndSubmit("nobody@example.com");
+    await screen.findByRole("button", { name: "Mettimi in lista" });
+    expect(magicLink.mock.calls[0]?.[0]).toMatchObject({ fetchOptions: { headers: { "x-turnstile-token": "tok-1" } } });
+    expect(turnstileReset).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mettimi in lista" }));
+    await screen.findByRole("heading", { name: "Sei in lista" });
+    expect((join.mock.calls[0]?.[1] as FormData).get("cf-turnstile-response")).toBe("tok-2"); // the fresh one
+    expect(turnstileReset).toHaveBeenCalledTimes(2);
+  });
+
+  it("without a site key sends no token and never resets", async () => {
+    magicLink.mockResolvedValue(sent);
+    renderForm();
+    typeAndSubmit("a@example.com");
+    await screen.findByRole("heading", { name: "Controlla la posta" });
+    expect(magicLink.mock.calls[0]?.[0]).toMatchObject({ fetchOptions: undefined });
+    expect(turnstileReset).not.toHaveBeenCalled();
+  });
+
+  it("a refused challenge is a notice, not the invite refusal", async () => {
+    magicLink.mockResolvedValue({ data: null, error: { status: 400, code: "CHALLENGE_FAILED", message: "x" } });
+    renderForm();
+    typeAndSubmit("a@example.com");
+    const notice = await screen.findByRole("alert");
+    expect(notice.textContent).toContain("Conferma di non essere un robot e riprova.");
+    expect(screen.queryByRole("button", { name: "Mettimi in lista" })).toBeNull();
   });
 
   afterEach(cleanup);

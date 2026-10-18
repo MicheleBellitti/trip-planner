@@ -344,6 +344,8 @@ class PlanUpdate:
     budget_cents: int | None = None
     """New session budget cap (US cents), `plans.budget_cents`: set at start, raised by
     "Continua"."""
+    continues_increment: int = 0
+    """Added to `plans.continues`: 1 for every "Continua" (its cap: MAX_CONTINUES_PER_PLAN)."""
     interrupt_requested_at: dt.datetime | None = None
     """Sets `plans.interrupt_requested_at` (only when still NULL; never cleared): the user or the
     stuck check asked to interrupt. Persisted so a consumer resumed after a restart still turns
@@ -516,6 +518,8 @@ def _apply_update(plan: PlanRecord, update: PlanUpdate, *, allowed: bool) -> boo
         plan.cost_cents = update.cost_cents
     if update.budget_cents is not None:
         plan.budget_cents = update.budget_cents
+    if update.continues_increment:
+        plan.continues = (plan.continues or 0) + update.continues_increment
     if update.interrupt_requested_at is not None and plan.interrupt_requested_at is None:
         plan.interrupt_requested_at = update.interrupt_requested_at
     if update.submit_attempts_increment:
@@ -541,8 +545,10 @@ async def set_plan_status(
     event_key: str,
     agent: AgentName = AgentName.COORDINATOR,
     budget_cents: int | None = None,
+    continues_increment: int = 0,
 ) -> EmitResult:
-    """Apply `change` (and `budget_cents`, when given) and store a `status` UIEvent titled
+    """Apply `change` (and `budget_cents` and `continues_increment`, when given) and store a
+    `status` UIEvent titled
     `title` (Italian, one line) with `ma_event_id = backend_event_id(plan_id, "status",
     event_key)`, through `EventSink.emit`. The convenience used by sessions (interrupt,
     continue) and jobs (stuck plans).
@@ -560,7 +566,9 @@ async def set_plan_status(
     return await sink._emit(  # pyright: ignore[reportPrivateUsage]
         backend_event(EventKind.STATUS, title, ts=clock.now(), agent=agent, detail=detail),
         ma_event_id=backend_event_id(plan_id, "status", event_key),
-        update=PlanUpdate(status=change, budget_cents=budget_cents),
+        update=PlanUpdate(
+            status=change, budget_cents=budget_cents, continues_increment=continues_increment
+        ),
         all_or_nothing=True,
     )
 

@@ -135,6 +135,8 @@ class PlanRecord(Base):
     # "Continua". NULL until the session exists. The UI draws cost_cents against it.
     budget_cents: Mapped[int | None] = mapped_column(Integer)
     submit_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    # How many times "Continua" raised the budget (its cap: MAX_CONTINUES_PER_PLAN, app/quota.py).
+    continues: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     # Versions of the coordinator, subagents and skills that produced the plan, plus the git sha.
     agent_versions: Mapped[JsonObject | None]
     # Why the plan ended failed/blocked/interrupted, for the UI and the logs.

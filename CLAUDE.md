@@ -37,6 +37,9 @@ backend/                 FastAPI service (uv, Python 3.12). The package is backe
   app/consumer.py          one task per plan: streams, submit_plan, idle decisions, resume, lease
   app/sessions.py          start, interrupt, continue, resume; PlannerServices; the local demo
   app/hub.py               in-memory per-plan pub/sub for SSE
+  app/quota.py             the economics: the month's usage with running budgets reserved, the per-user
+                           quota, the running cap, the continue cap (checked under one advisory lock)
+  app/ratelimit.py         in-process sliding windows (POST /plans per user and IP) and the SSE stream cap
   app/routes.py            every endpoint except /health; SSE; CORS; request body cap
   app/evals_store.py       the eval history: store a run (POST /evals/runs, bearer token), list, read
   app/auth.py              current_user(): the web app's own sessions read from the database
@@ -362,6 +365,18 @@ CI must pass before merge.
   `NEXT_PUBLIC_AUTH_MODE` (where a 401 sends the browser). State-changing requests must send
   `Origin: FRONTEND_ORIGIN`. CORS allows `FRONTEND_ORIGIN` only, plus `TRIPTRACKER_ORIGIN`
   read-only on `GET /plans/{id}/trip`.
+- **Economics** (`app/quota.py`, `app/ratelimit.py`): a plan starts only if the user's month
+  (`USER_MONTHLY_PLANS`, `USER_MONTHLY_CENTS`: recorded cost plus the unspent budget of their
+  running plans; admins exempt) and the global ceiling (`MONTHLY_LIMIT_CENTS`, same reservation)
+  have room for its budget, and fewer than `MAX_RUNNING_PLANS` plans run; the checks and the insert
+  share one transaction under an advisory lock. "Continua" counts `plans.continues` against
+  `MAX_CONTINUES_PER_PLAN`. `POST /plans` is rate-limited per user and per client IP in the
+  process, SSE streams per user; `TRUST_PROXY_HEADERS` decides whether the IP comes from
+  `X-Forwarded-For`. Refusals: 429 `quota_plans_reached` / `quota_cents_reached` /
+  `too_many_requests` (Retry-After), 503 `planner_busy`, 409 `continue_limit_reached`. `GET /me`
+  carries the user's month (`quota`); the web shows it on `/plans` and under the request form.
+  The public forms (waitlist join, magic-link request) carry a Cloudflare Turnstile token when
+  `NEXT_PUBLIC_TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` are set (`web/lib/turnstile.ts`).
 - Every error answer is `{"detail": {"code", "message" (Italian), "data"}}`, framework errors
   (404, 405, 400, 500) included; request validation keeps FastAPI's 422 shape.
 - New variables go in `app/config.py` and in `backend/.env.example` or `web/.env.example`,
