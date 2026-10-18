@@ -11,6 +11,8 @@ export const ROUTES = {
   demo: "/demo",
   /** The app's own sign-in (Better Auth, lib/auth.ts); takes `?returnTo=<same-origin page>`. */
   login: "/login",
+  /** The waitlist and the invitations, for the users who manage the planner (GET /me `is_admin`). */
+  invites: "/admin/waitlist",
 } as const;
 
 /** The public demo run exists (step 3): the landing offers "Guarda una corsa" → /demo. Off, the

@@ -10,9 +10,10 @@ route's protocol: subscribe first, replay, live, gap filling, lag recovery, ping
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import uuid
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from contextlib import AbstractContextManager, asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any, cast
@@ -26,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.pool import QueuePool
 from starlette.types import Message
 
-from app import consumer, routes, sessions
+from app import consumer, ratelimit, routes, sessions
 from app.cli import REPLAY_LOCKFILE_DIR
 from app.config import Settings
 from app.db import EventRecord, PlanRecord, PlanStatus
@@ -692,3 +693,90 @@ async def test_a_plan_end_to_end_through_the_real_wiring(
     finally:
         await fake.shutdown()
     assert not fake.mismatches
+
+
+# --- the per-user cap on open streams (app/ratelimit.py) ----------------------------------------
+
+
+async def test_a_user_holds_at_most_max_streams_and_a_closed_one_frees_a_slot(
+    make_app: AppFactory,
+    make_settings: Callable[..., Settings],
+    sse_ready: None,
+    plan_rows: PlanRows,
+) -> None:
+    async with make_app(settings=make_settings(max_streams_per_user=1)) as app:
+        record = await plan_rows.add_plan()
+        await plan_rows.add_event(record.id, 0)
+        async with open_stream(app, record.id) as first:
+            assert first.status == 200
+            await first.event()
+            refused = SseStream(app, f"/plans/{record.id}/events", {})
+            await refused.open()
+            assert refused.status == 429
+            assert refused.headers["retry-after"] == "5"
+            body = json.loads(await refused.body())
+            assert body["detail"]["code"] == "too_many_requests"
+            assert body["detail"]["data"] == {"retry_after_seconds": 5}
+            await refused.finished()
+        async with open_stream(app, record.id) as again:  # the first stream's slot is free
+            assert again.status == 200
+
+
+async def test_closing_the_counted_stream_closes_the_inner_one_and_frees_the_slot() -> None:
+    counter = ratelimit.StreamCounter(1)
+    assert counter.acquire("me@example.com").allowed
+    lease = routes.StreamLease(lambda: counter.release("me@example.com"))
+    inner_closed = asyncio.Event()
+
+    async def inner() -> AsyncGenerator[Any]:
+        try:
+            while True:
+                yield routes.ping_comment()
+        finally:
+            inner_closed.set()  # where event_stream ends its hub subscription
+
+    counted = routes._counted(inner(), lease=lease)  # pyright: ignore[reportPrivateUsage]
+    await anext(counted)
+    await counted.aclose()
+
+    assert inner_closed.is_set()  # at once, not when the garbage collector gets to it
+    assert counter.held("me@example.com") == 0
+
+
+async def test_a_stream_cancelled_before_its_first_event_frees_its_slot() -> None:
+    counter = ratelimit.StreamCounter(1)
+    assert counter.acquire("me@example.com").allowed
+    lease = routes.StreamLease(lambda: counter.release("me@example.com"))
+    started = False
+
+    async def inner() -> AsyncGenerator[Any]:
+        nonlocal started
+        started = True
+        yield routes.ping_comment()
+
+    response = routes.CountedEventSourceResponse(
+        routes._counted(inner(), lease=lease),  # pyright: ignore[reportPrivateUsage]
+        lease=lease,
+    )
+
+    async def receive() -> Message:
+        await asyncio.Event().wait()  # the client never says anything
+        return {"type": "http.disconnect"}
+
+    sending = asyncio.Event()
+
+    async def send(message: Message) -> None:
+        sending.set()
+        await asyncio.Event().wait()  # the headers never get out
+
+    scope: dict[str, Any] = {"type": "http", "method": "GET", "path": "/", "headers": []}
+    task = asyncio.create_task(response(scope, receive, send))
+    await asyncio.wait_for(sending.wait(), 5)
+    task.cancel()  # the client is gone, the server cancels the request
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
+
+    assert not started  # the body's own `finally` never ran...
+    assert counter.held("me@example.com") == 0  # ...and the slot is free all the same
+    lease.release()  # idempotent: the stream's own release later changes nothing
+    assert counter.held("me@example.com") == 0

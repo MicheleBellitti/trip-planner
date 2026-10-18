@@ -98,8 +98,9 @@
   "description": "A trip request: where from, where to (or \"suggest one\"), when, who, and the budget.",
   "properties": {
     "budget_eur": {
-      "description": "Total budget in whole euro for the whole party: travel, lodging, activities.",
+      "description": "Total budget in whole euro for the whole party: travel, lodging, activities; at most 50000.",
       "exclusiveMinimum": 0,
+      "maximum": 50000,
       "type": "integer"
     },
     "dates": {

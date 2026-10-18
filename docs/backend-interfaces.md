@@ -45,7 +45,7 @@ Contents:
 | `app/links.py` | Booking-link domain allowlist | Sicurezza e privacy | D |
 | `app/triptracker_schema.py` | Fetch and keep trip.json; `validate_trip()` | Contratto del piano, "Una sola fonte di verità" | D |
 | `app/fx.py` | `FxConverter`: Banca d'Italia, then InforEuro, with the `fx_rates` cache | Conversione delle valute | E |
-| `app/auth.py` | `current_user()`, `require_origin()`, the get-session cache | Autenticazione e domini | F |
+| `app/auth.py` | `current_user()`, `require_origin()`, `require_admin()`; the atlas session lookup (`verify_atlas_session`) and TripTracker's get-session cache | Autenticazione e domini | F |
 | `app/hub.py` | In-memory per-plan pub/sub for SSE | Backend FastAPI step 3; "Un solo processo" | F |
 | `app/routes.py` | Every endpoint except /health; SSE; CORS policy; the request body cap | Endpoint table; SSE verso il browser | F |
 | `app/main.py` | `create_app()`, the error envelope of framework errors (decision 20), lifespan wiring (§3) | Deploy e configurazione | F |
@@ -93,7 +93,7 @@ graph acyclic. The parentheses list what each module actually imports.
     hub (db, events)
     fx (clock, db, plan)
     triptracker_schema (clock, config)
-    auth (config)
+    auth (clock, config, db)
  7  mapping (fx, links, plan)                                   pure
  8  consumer (clock, config, db, events, fx, hub, ma_client, mapping, plan, results,
               triptracker_schema)
@@ -251,6 +251,9 @@ Signatures are abbreviated where the code has more keyword defaults; the code is
 |---|---|---|
 | auth | `current_user(request) -> CurrentUser` (via `CurrentUserDep`) | every route |
 | auth | `require_origin(request) -> None` (via `RequireOrigin`) | POST routes |
+| auth | `require_admin(request, user) -> None` (via `RequireAdmin`) | GET /evals/runs* |
+| sessions | `plan_owner_filter(user, *, settings) -> ColumnElement[bool]` | GET /plans |
+| sessions | `get_user_plan(db, plan_id, user, *, settings) -> PlanRecord` (raises `consumer.PlanNotFoundError`) | GET /plans/{id}, /events, /trip, /cover |
 | sessions | `start_plan(request: PlanRequest, user: CurrentUser, *, services: PlannerServices, demo_scenario: str \| None = None) -> uuid.UUID` | POST /plans (`demo_scenario` from `?demo_scenario=`, checked first by `routes.check_demo_scenario` against `services.demo_scenarios`) |
 | sessions | `interrupt_plan(plan_id, user, *, services) -> PlanStatus` | POST /plans/{id}/interrupt |
 | sessions | `continue_plan(plan_id, user, *, services, extra_cents=200) -> int` | POST /plans/{id}/continue |
@@ -741,7 +744,7 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
       {spent_cents, limit_cents}`; the spec gives no status code), `planner_unavailable` 503,
       `agents_unavailable` 502, `request_too_large` 413, `demo_unavailable` 404;
     - auth (`auth.AuthErrorCode`): `not_authenticated` 401, `email_not_allowed` 403,
-      `bad_origin` 403, `auth_unavailable` 503;
+      `bad_origin` 403, `admin_only` 403, `auth_unavailable` 503;
     - the framework's own (`main.AppErrorCode`): `not_found` 404 (unknown path),
       `method_not_allowed` 405 (keeps its `Allow` header), `bad_request` 400 (a body that
       can't be parsed), `internal_error` 500, `http_error` for any other status.
@@ -973,20 +976,124 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
     `auth_verifications`, snake_case through Better Auth's `fields` mapping): one `alembic
     upgrade head` prepares the database for both services, and `tests/test_db.py` keeps the
     models and the migrations together. The web app's Better Auth exempts `/get-session` from
-    its per-IP rate limit, because every check comes from the backend's one egress IP; the
-    `VerificationBudget` stays as a second guard. In `atlas` mode a get-session user without a
-    non-empty string `id` is a malformed answer (`parse_get_session(require_user_id=True)`:
-    the stale user or 503 `auth_unavailable`), never a plan with a NULL `user_id`. A cached
-    user whose `users` row is gone (the cache keeps a verified user up to 15 minutes) makes the
-    insert violate `fk_plans_user_id_users`: `start_plan` raises `UserGoneError` and POST
-    /plans answers 401 `not_authenticated`; any other integrity error stays a 500.
-    `plans.user_id` keeps ON DELETE CASCADE (a deleted account takes its plans), but nothing
-    deletes a `users` row yet. The future delete-account path must, for each of the user's
-    plans, stop its consumer and delete its Managed Agents session before the row, as
-    `jobs._delete_old_plan` does (session first, then row; a session that cannot be deleted
-    keeps the account for a retry): the cascade removes rows, not sessions. Deleting the plans
-    also removes their `cost_cents` from `monthly_spend_cents()`, so that month's spend drops
-    by what the user spent.
+    its per-IP rate limit, because every check came from the backend's one egress IP; the
+    `VerificationBudget` stayed as a second guard. A get-session user without a non-empty
+    string `id` was a malformed answer in `atlas` mode (`parse_get_session(require_user_id=True)`:
+    the stale user or 503 `auth_unavailable`), never a plan with a NULL `user_id`. (This first
+    version of the mode asked the web app's `/get-session` over HTTP; decision 37 replaced that
+    with the session table.) A user whose `users` row is gone by the time the plan is inserted
+    (a cached user on the get-session path; on the session-table path, an account deleted
+    between the check and the insert) makes the insert violate `fk_plans_user_id_users`:
+    `start_plan` raises `UserGoneError` and POST /plans answers 401 `not_authenticated`; any
+    other integrity error stays a 500. `plans.user_id` keeps ON DELETE CASCADE (a deleted
+    account takes its plans), but nothing deletes a `users` row yet. The future delete-account
+    path must, for each of the user's plans, stop its consumer and delete its Managed Agents
+    session before the row, as `jobs._delete_old_plan` does (session first, then row; a session
+    that cannot be deleted keeps the account for a retry): the cascade removes rows, not
+    sessions. Deleting the plans also removes their `cost_cents` from `monthly_spend_cents()`,
+    so that month's spend drops by what the user spent.
+
+37. The backend auth switch (`AUTH_MODE=atlas` reads the session table; the admin role). With
+    the web app's own accounts the sessions live in the database this backend migrates, so
+    `current_user` looks the cookie's token up there (`auth.verify_atlas_session`: one indexed
+    query on `auth_sessions.token`, `expires_at > now`, joined to `users`) instead of asking the
+    web app over HTTP. What goes with it: no `VerificationBudget` and no stale window (they
+    answered TripTracker's per-IP rate limit, decision 19, which only the TripTracker path still
+    needs), no 60 s cache (a sign-out is effective on the next request), and no dependence on
+    Vercel being up for API auth. The web app keeps exempting `/get-session` from its rate
+    limit until this backend has shipped (contract rule 7: a deployed backend from before the
+    switch still asks it from one IP); a later PR can drop the exemption.
+    The signature half of the cookie is not checked: Better Auth's own `getSession` checks it
+    and then looks the token up, and the 32-character random token alone is the secret, so a
+    forged signature with an unknown token finds no row; a database error is 503
+    `auth_unavailable`. Only the `__Secure-atlas.session_token` name is accepted in production
+    with an https `FRONTEND_ORIGIN` (`Settings.secure_session_cookie_only`, both modes): the
+    plain name carries no `__Secure-` guarantee, so a sibling `*.bellittim.com` host could plant
+    it (cookie tossing); development over http keeps accepting both. The `__Secure-` name
+    itself can still carry `Domain=bellittim.com`, so a sibling https host could plant that
+    one too: accepted while every such host is Michele's (review of #11), the fix (a host-only
+    cookie with the API on the web's host, or a host-bound handoff) is issue #17. Access: in `atlas` mode every account
+    may plan (`Settings.may_use_planner`): the web app's `AUTH_ALLOWED_EMAILS` already decided
+    who could sign up, and a second list on Railway would have to be kept in step by hand.
+    Ownership (`sessions.plan_owner_filter`, `owns_plan`, `get_user_plan(..., settings=)`): in
+    `atlas` mode a plan is the user's when `plans.user_id` is their id, or when it has no id
+    (a plan from before the switch) and carries their email, provided `users.email_verified`
+    is true (`CurrentUser.email_verified`): anyone may type another person's address into the
+    sign-up form, and until the account proves it owns the address that address hands it
+    nothing; an unverified account still owns the plans stored with its `user_id`. In the other
+    modes by email alone, as before. The admin role is `ADMIN_EMAILS` (`Settings.admins`,
+    `auth.user_is_admin`): `auth.require_admin` guards `GET /evals/runs*` with 403
+    `admin_only`, and in `atlas` mode it also wants a verified email; empty means the allowed
+    users outside `atlas` mode (the one-user setup keeps working with no new variable) and
+    nobody in it. `GET /me` (`routes.MeResponse`: `email`, `is_admin`) lets the web app
+    show the "Collaudi" station only to admins. The TripTracker path is untouched (contract
+    rule 7): its removal waits until production runs `atlas`.
+
+38. The waitlist (`waitlist`, migration `609ccf5bdc99`; `db.WaitlistRecord`). The closed beta's
+    door is a table the web app owns: one row per address (trimmed, lower-cased), `invited_at`
+    NULL while it is a request (`source` says where it came from: the landing's form, the
+    login's sent state, or an admin adding it; a public form may not claim "admin"), set when an
+    admin invites it (`invited_by`), with `invitation_sent_at` stamped when an admin's
+    invitation claims the sending (one conditional UPDATE, so only one admin sends; cleared
+    again if the email does not leave). A stamp can outlive an email that never left (the
+    process died between the claim and the send): the admin page offers "Invia di nuovo", a
+    compare-and-swap on the stamp it shows, so one email leaves however many clicks; a failed
+    re-send restores that stamp. The web app's sign-up policy lets an address create an account
+    when it is in `AUTH_ALLOWED_EMAILS` (the bootstrap list, or `*`) or has an invited row
+    (web/lib/server/waitlist.ts `signInStanding`, called from Better Auth's hooks). Neither the
+    join nor the magic-link request tells the caller whether an address has an account or an
+    invitation (web/lib/auth.ts, web/lib/waitlist-state.ts); the sign-in email leaves after the
+    response (`after()`), so the timing does not tell either. The backend only migrates the
+    table, as for Better Auth's four, so one `alembic upgrade head` still prepares a database
+    for both services; it never reads it (who may plan is decided by the existence of the
+    account, decision 37). The admin page is the web app's, and its "who is an admin" is this
+    backend's `GET /me` called server side with the request's cookie: the role has one source. A
+    retention rule for pending requests is an open item (§8); the rate limit on the public join
+    came with decision 39.
+39. The economics (`app/quota.py`, `app/ratelimit.py`, migration `22bb438487ee`). One user must
+    not exhaust the month for the others, and N requests sent together must not all pass a check
+    that only knows cost already recorded. So the month's usage counts the recorded cost plus
+    the **reservation**: the unspent budget of the plans still `running` (`budget_cents -
+    cost_cents`, never negative; the profile's session budget stands in while the session does
+    not exist yet), whichever month created them, so on the 1st the plans still running from the
+    month before reserve too (their cost stays with the month that created them: `created_at`
+    accounting). A start that failed before any session existed (`failed` with no `session_id`,
+    `quota.never_started`) is not one of the month's plans: an outage must not eat the quota
+    (Michele, 2026-10-18); its cost, like every plan's, counts. The per-user quota
+    (`USER_MONTHLY_PLANS`, `USER_MONTHLY_CENTS`, calendar month in Europe/Rome like the ceiling)
+    is checked for the signed-in user's plans (`plan_owner_filter`) with the new plan's own
+    budget counted, admins (`auth.user_is_admin`: with AUTH_MODE=atlas, only a verified address)
+    and the eval runner (`start_plan(user_quota_applies=False)`, passed by evals/run.py alone,
+    never by a route) exempt; the global ceiling gets the same reservation and the same "would
+    this budget fit" rule, so the last dollar under it stays unused rather than overshot;
+    `MAX_RUNNING_PLANS` caps the plans `running` for everyone (503 `planner_busy`, `Retry-After`
+    60, nothing spent); `MAX_CONTINUES_PER_PLAN` caps `plans.continues`, which
+    `set_plan_status(continues_increment=1)` raises with every approved $2 (409
+    `continue_limit_reached`; the plan detail carries `continues` and `continues_limit`, so the
+    web offers no "Continua" at the cap). The checks and the insert of the `plans` row run in
+    one transaction that first takes a transaction-level advisory lock (`quota.lock_checks`, key
+    `0x41544C53`, distinct from the plan leases'): two requests cannot both pass a check the
+    other one's insert would have failed. "Continua" takes the same lock and admission (the
+    extra counted, the running cap included: it turns a paused plan back into a running one) and
+    reserves in the same transaction: the row turns `running` with its cap raised by the extra
+    before the session is touched, so the next start or "Continua" already counts it; a failure
+    to raise the session's budget puts the row back (`budget_paused`, the old cap), and the
+    timeline's "continued" event and `continues` follow only once the budget was raised. The
+    rate limits are in-process sliding windows (`POST /plans` per user and per client IP,
+    `PLAN_CREATE_*`, counted in the route's body: a 422, a demo 404 or a 503
+    `planner_unavailable` never uses a slot) and a per-user count of open event streams
+    (`MAX_STREAMS_PER_USER`), 429 `too_many_requests` with `Retry-After`: one replica runs the
+    backend, a redeploy starts them over, and the quotas, not the windows, guard the money;
+    Redis or a Postgres counter comes with more replicas. The client IP is the last
+    `X-Forwarded-For` value (all such headers joined), the one the proxy appended, with
+    `TRUST_PROXY_HEADERS` (default: on in production, behind Railway's proxy); without it
+    `request.client.host`, which behind the image's uvicorn `--proxy-headers` and
+    `FORWARDED_ALLOW_IPS="*"` is the leftmost, client-chosen value: the setting must stay on
+    there. `GET /me` carries the user's month (`quota`, null when exempt), read without the
+    lock. `budget_eur` is capped at 50 000 (`request.BUDGET_EUR_MAX`). The public forms of the
+    web app (the waitlist join, the magic-link request) carry a Cloudflare Turnstile token when
+    the keys are set, verified server side, with a per-address window on the join: the backend
+    has no part in it.
 
 ## 7. Contracts with events.py, the database, config, the web app and the agents
 

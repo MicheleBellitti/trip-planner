@@ -37,10 +37,13 @@ backend/                 FastAPI service (uv, Python 3.12). The package is backe
   app/consumer.py          one task per plan: streams, submit_plan, idle decisions, resume, lease
   app/sessions.py          start, interrupt, continue, resume; PlannerServices; the local demo
   app/hub.py               in-memory per-plan pub/sub for SSE
+  app/quota.py             the economics: the month's usage with running budgets reserved, the per-user
+                           quota, the running cap, the continue cap (checked under one advisory lock)
+  app/ratelimit.py         in-process sliding windows (POST /plans per user and IP) and the SSE stream cap
   app/routes.py            every endpoint except /health; SSE; CORS; request body cap
   app/evals_store.py       the eval history: store a run (POST /evals/runs, bearer token), list, read
-  app/auth.py              current_user() via Better Auth get-session (TripTracker's, or the web app's
-                           own accounts with AUTH_MODE=atlas); the Origin check
+  app/auth.py              current_user(): the web app's own sessions read from the database
+                           (AUTH_MODE=atlas) or TripTracker's get-session; require_admin(); the Origin check
   app/mapping.py           plan_to_trip(): Plan -> TripTracker Trip (pure function)
   app/links.py             check_link(): the booking-link domain allowlist (pure)
   app/fx.py                FxConverter: Banca d'Italia daily rate, InforEuro fallback, fx_rates cache
@@ -60,11 +63,13 @@ backend/                 FastAPI service (uv, Python 3.12). The package is backe
                                yet: the first apply is docs/deploy.md step 7)
 web/                     Next.js 16 (App Router), TypeScript strict, Tailwind 4, Zod 4 (web/README.md)
   app/                     routes: / (landing, public), /demo (demo run, public), /plans (plans), /new (request form), /plans/[id], /evals (eval history),
-                           /evals/[id], /dev/ui (dev only)
+                           /evals/[id], /login, /admin/waitlist (admins: the waitlist and the invitations), /dev/ui (dev only)
   components/ui/           the design system's primitives (DatePair, Timeline, ToolChip, ...)
   lib/                     typed API client, SSE + timeline reducer (lib/plan-events), schemas,
                            auth.ts (the app's own accounts: Better Auth server, Postgres, magic link
-                           and Google), auth-client.ts, server/ (server-only config, the sign-in email)
+                           and Google), auth-client.ts, waitlist-policy.ts, server/ (server-only: the
+                           accounts' config, the shared pg pool, the waitlist queries, the emails
+                           through Resend, the admin check against GET /me); app/actions/ (server actions)
   DESIGN.md, PRODUCT.md    design tokens (the authority) and product decisions
   design/directions/       three static design studies; direction 1 "Linee" was chosen
 agents/                  hand-written agent templates, the single source of the prompts:
@@ -343,15 +348,36 @@ CI must pass before merge.
   one plan binds them with `structlog.contextvars`, so the tasks it creates inherit them.
 - An unset `ENVIRONMENT` means production. `AUTH_MODE=local`, `DEMO_MODE` and `DEMO_PACE` are
   only allowed with `ENVIRONMENT=development`, and Settings refuses to start otherwise.
-- Auth checks a Better Auth session cookie with the provider's
-  `/api/auth/get-session?disableRefresh=true` (a check never refreshes the session), cached
-  for 60 s. `AUTH_MODE` picks the provider: `triptracker` (TripTracker's accounts at
-  `TRIPTRACKER_ORIGIN`, cookie prefix `better-auth`) or `atlas` (the web app's own accounts,
-  `web/lib/auth.ts`, at `FRONTEND_ORIGIN`, cookie prefix `atlas`, the user's id stored in
-  `plans.user_id`). The web app mirrors it with `NEXT_PUBLIC_AUTH_MODE` (where a 401 sends the
-  browser). An empty `PLANNER_ALLOWED_EMAILS` lets nobody in. State-changing requests must send
+- Auth reads a Better Auth session cookie; `AUTH_MODE` picks the provider and the check.
+  `atlas` (the web app's own accounts, `web/lib/auth.ts`, cookie prefix `atlas`): the cookie's
+  token is looked up in `auth_sessions` in the shared database (`auth.verify_atlas_session`),
+  no HTTP call, no cache, so a sign-out is effective at once; every account may plan (sign-up is
+  by invitation: the web app's `AUTH_ALLOWED_EMAILS` bootstrap list or an invited row of the
+  `waitlist` table, which admins manage at `/admin/waitlist`; `PLANNER_ALLOWED_EMAILS` is not consulted);
+  the user's id is stored in `plans.user_id` and ownership goes by it (`sessions.plan_owner_filter`;
+  rows from before the switch, without an id, by email, only when `users.email_verified`).
+  `triptracker` (TripTracker's accounts at
+  `TRIPTRACKER_ORIGIN`, cookie prefix `better-auth`): the cookie is forwarded to
+  `/api/auth/get-session?disableRefresh=true` (a check never refreshes the session), cached for
+  60 s, and the email must be in `PLANNER_ALLOWED_EMAILS` (empty lets nobody in). `ADMIN_EMAILS`
+  is the admin role: who reads `/evals/runs*` (403 `admin_only` otherwise; empty means the allowed
+  users outside `atlas` mode, nobody in it; in `atlas` mode the email must also be verified). `GET /me` tells the web app the email and the admin
+  flag; the header shows "Collaudi" only to admins. The web app mirrors the mode with
+  `NEXT_PUBLIC_AUTH_MODE` (where a 401 sends the browser). State-changing requests must send
   `Origin: FRONTEND_ORIGIN`. CORS allows `FRONTEND_ORIGIN` only, plus `TRIPTRACKER_ORIGIN`
   read-only on `GET /plans/{id}/trip`.
+- **Economics** (`app/quota.py`, `app/ratelimit.py`): a plan starts only if the user's month
+  (`USER_MONTHLY_PLANS`, `USER_MONTHLY_CENTS`: recorded cost plus the unspent budget of their
+  running plans; admins exempt) and the global ceiling (`MONTHLY_LIMIT_CENTS`, same reservation)
+  have room for its budget, and fewer than `MAX_RUNNING_PLANS` plans run; the checks and the insert
+  share one transaction under an advisory lock. "Continua" counts `plans.continues` against
+  `MAX_CONTINUES_PER_PLAN`. `POST /plans` is rate-limited per user and per client IP in the
+  process, SSE streams per user; `TRUST_PROXY_HEADERS` decides whether the IP comes from
+  `X-Forwarded-For`. Refusals: 429 `quota_plans_reached` / `quota_cents_reached` /
+  `too_many_requests` (Retry-After), 503 `planner_busy`, 409 `continue_limit_reached`. `GET /me`
+  carries the user's month (`quota`); the web shows it on `/plans` and under the request form.
+  The public forms (waitlist join, magic-link request) carry a Cloudflare Turnstile token when
+  `NEXT_PUBLIC_TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` are set (`web/lib/turnstile.ts`).
 - Every error answer is `{"detail": {"code", "message" (Italian), "data"}}`, framework errors
   (404, 405, 400, 500) included; request validation keeps FastAPI's 422 shape.
 - New variables go in `app/config.py` and in `backend/.env.example` or `web/.env.example`,
@@ -366,8 +392,10 @@ CI must pass before merge.
   Autogenerate it, then review it by hand. Never change production by hand. Railway's
   pre-deploy command runs `alembic upgrade head` before every deploy. `tests/test_db.py` fails
   when `app/db.py` and the migrations drift apart.
-- The tables are `plans`, `events`, `fx_rates` and `eval_runs` (the eval history, written by CI through
-  `POST /evals/runs` with `EVALS_INGEST_TOKEN`, or by `app.cli import-evals`). A plan's status is one of `running`,
+- The tables are `plans`, `events`, `fx_rates`, `eval_runs` (the eval history, written by CI through
+  `POST /evals/runs` with `EVALS_INGEST_TOKEN`, or by `app.cli import-evals`), Better Auth's four
+  (`users`, `auth_sessions`, `auth_accounts`, `auth_verifications`) and `waitlist` (requests and
+  invitations; the web app writes the last five, the backend only migrates them). A plan's status is one of `running`,
   `ready`, `failed`, `budget_paused`, `blocked`, `interrupted`. `events.ma_event_id` is unique,
   so a resumed consumer never stores an event twice (events with an empty API id get a
   deterministic synthetic key, never NULL). `plans` also keeps the session's current budget

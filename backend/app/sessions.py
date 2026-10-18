@@ -40,12 +40,12 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import structlog
-from sqlalchemy import func, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 
-from app import clock
+from app import clock, quota
 from app import consumer as consumer_api
-from app.auth import SessionVerifier
+from app.auth import SessionVerifier, user_is_admin
 from app.config import BACKEND_DIR
 from app.consumer import (
     ConsumerDeps,
@@ -69,6 +69,7 @@ from app.triptracker_schema import DEV_FALLBACK_SCHEMA_PATH, TripSchemaStore
 
 if TYPE_CHECKING:
     import httpx
+    from sqlalchemy import ColumnElement
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from app.auth import CurrentUser
@@ -78,7 +79,7 @@ if TYPE_CHECKING:
 
 log = structlog.get_logger(__name__)
 
-CONTINUE_INCREMENT_CENTS = 200
+CONTINUE_INCREMENT_CENTS = quota.CONTINUE_INCREMENT_CENTS
 """"Continua con 2 $ in piu'": the budget grows by $2 over what was consumed."""
 
 CONTINUE_RESUME_WAIT_SECONDS = 5.0
@@ -453,20 +454,25 @@ async def start_plan(
     *,
     services: PlannerServices,
     demo_scenario: str | None = None,
+    user_quota_applies: bool = True,
 ) -> uuid.UUID:
     """POST /plans: create a plan and start its session. Returns the new plan id.
 
     1. `services.require_ready()` and `await services.trip_schema.require()`: nothing is spent
        when the plan could never be validated (`PlannerUnavailableError`,
        `TripSchemaUnavailableError`).
-    2. Monthly limit: `monthly_spend_cents()` >= `MONTHLY_LIMIT_CENTS` ->
-       `MonthlyLimitReachedError` (spec: refuse when this month's sum "supera" the limit; at
-       the limit counts as reached).
+    2. The economics (app/quota.py), in one transaction holding the quota lock
+       (`quota.lock_checks`), with the insert of step 3, so two requests never both pass:
+       the user's monthly quota unless they are an admin or `user_quota_applies` is False
+       (`QuotaReachedError`: plans, or cents counting this plan's budget), the global ceiling
+       with the running plans' unspent budgets reserved and this plan's budget included
+       (`MonthlyLimitReachedError`), the cap on running plans (`PlannerBusyError`). Nothing is
+       spent on a refusal.
     3. Insert the `plans` row: `user_email`, `user_id` (the web app's own `users.id`, only
        with `Settings.plans_carry_user_id`), `agent_profile`, status `running` (`running_since`
        defaults to `now()`), `request` (`request.model_dump(mode="json")`), `agent_versions`
        (`roster.agent_versions(git_sha=backend_git_sha(settings), trip_schema_sha256=...)`);
-       emit the `TITLE_PLAN_CREATED` status event.
+       then emit the `TITLE_PLAN_CREATED` status event.
     4. `client.create_session(agent=roster.coordinator, environment_id=roster.environment_id,
        budget_cents=settings.session_budget_cents, metadata=session_metadata(...),
        title=f"plan {plan_id}")`; store `session_id` and `budget_cents` (the cap the UI's cost
@@ -486,6 +492,11 @@ async def start_plan(
        cost in `plans.cost_cents` (`_stop_abandoned_session`), so it neither runs a whole plan
        unwatched nor escapes the monthly limit.
 
+    `user_quota_applies=False` is for the eval runner alone (evals/run.py, a CLI with database
+    access): its fixed user runs six plans per run, several runs a month, against a database
+    that persists between runs. No route passes it, so nobody reaches it from the web; the
+    global ceiling and the running cap still apply.
+
     DEMO_MODE: `demo_scenario` (default `DEFAULT_DEMO_SCENARIO`) goes into the session metadata
     under `DEMO_SCENARIO_METADATA`, where the demo client reads which scenario to play;
     outside demo mode a `demo_scenario` is a ValueError (the route answers 404 first).
@@ -501,57 +512,15 @@ async def start_plan(
     schema = await services.trip_schema.require()
     now = ready.deps.now()
 
-    async with services.session_factory() as db:
-        spent = await monthly_spend_cents(db, now=now)
-    if spent >= settings.monthly_limit_cents:
-        log.warning(
-            "monthly_limit_reached", spent_cents=spent, limit_cents=settings.monthly_limit_cents
-        )
-        raise MonthlyLimitReachedError(spent, settings.monthly_limit_cents)
-
     plan_id = uuid.uuid4()
-    with contextlib.ExitStack() as context:
-        context.enter_context(structlog.contextvars.bound_contextvars(plan_id=str(plan_id)))
-        metadata = session_metadata(plan_id, settings.agent_profile)
-        if settings.demo_mode:
-            metadata[DEMO_SCENARIO_METADATA] = demo_scenario or DEFAULT_DEMO_SCENARIO
-
-        def bind_session(session_id: str) -> None:
-            context.enter_context(structlog.contextvars.bound_contextvars(session_id=session_id))
-
-        return await _create_and_start(
-            request,
-            user,
-            services=services,
-            ready=ready,
-            plan_id=plan_id,
-            metadata=metadata,
-            trip_schema_sha256=schema.sha256,
-            now=now,
-            bind_session=bind_session,
-        )
-
-
-async def _create_and_start(
-    request: PlanRequest,
-    user: CurrentUser,
-    *,
-    services: PlannerServices,
-    ready: ReadyPlanner,
-    plan_id: uuid.UUID,
-    metadata: dict[str, str],
-    trip_schema_sha256: str | None,
-    now: dt.datetime,
-    bind_session: Callable[[str], None],
-) -> uuid.UUID:
-    """Steps 3-5 of `start_plan`, for a plan id already bound in the logging context
-    (`bind_session` binds the session id once the session exists)."""
-    settings = services.settings
-    bound = log.bind(plan_id=str(plan_id), agent_profile=settings.agent_profile)
     agent_versions = ready.roster.agent_versions(
-        git_sha=backend_git_sha(settings), trip_schema_sha256=trip_schema_sha256
+        git_sha=backend_git_sha(settings), trip_schema_sha256=schema.sha256
     )
     async with services.session_factory() as db:
+        await quota.lock_checks(db)
+        await _admit_start(
+            db, user, settings=settings, now=now, user_quota_applies=user_quota_applies
+        )
         db.add(
             PlanRecord(
                 id=plan_id,
@@ -570,8 +539,84 @@ async def _create_and_start(
         except IntegrityError as exc:
             if not is_plans_user_fk_violation(exc):
                 raise
-            bound.warning("plan_refused_user_gone")
+            log.warning("plan_refused_user_gone", plan_id=str(plan_id))
             raise UserGoneError from None
+
+    with contextlib.ExitStack() as context:
+        context.enter_context(structlog.contextvars.bound_contextvars(plan_id=str(plan_id)))
+        metadata = session_metadata(plan_id, settings.agent_profile)
+        if settings.demo_mode:
+            metadata[DEMO_SCENARIO_METADATA] = demo_scenario or DEFAULT_DEMO_SCENARIO
+
+        def bind_session(session_id: str) -> None:
+            context.enter_context(structlog.contextvars.bound_contextvars(session_id=session_id))
+
+        return await _create_and_start(
+            request,
+            services=services,
+            ready=ready,
+            plan_id=plan_id,
+            metadata=metadata,
+            now=now,
+            bind_session=bind_session,
+        )
+
+
+async def _admit_start(
+    db: AsyncSession,
+    user: CurrentUser,
+    *,
+    settings: Settings,
+    now: dt.datetime,
+    user_quota_applies: bool = True,
+) -> None:
+    """Step 2 of `start_plan`, on a connection that holds the quota lock: the user's quota
+    (plans, then cents with this plan's budget counted; admins exempt), the global ceiling with
+    the running plans' unspent budgets reserved and this plan's budget counted, the running
+    cap. Each refusal is logged with its figures, never with the user."""
+    budget = settings.session_budget_cents
+    if user_quota_applies and not user_is_admin(user, settings):
+        mine = await quota.month_usage(
+            db,
+            now=now,
+            owner=plan_owner_filter(user, settings=settings),
+            default_budget_cents=budget,
+        )
+        allowance = quota.user_quota(mine, settings=settings, now=now)
+        kind = allowance.exceeded_by(plans=1, cents=budget)
+        if kind is not None:
+            log.info("quota_reached", kind=kind, **allowance.as_data())
+            raise quota.QuotaReachedError(kind, allowance)
+    everyone = await quota.month_usage(db, now=now, owner=None, default_budget_cents=budget)
+    if everyone.cents + budget > settings.monthly_limit_cents:
+        log.warning(
+            "monthly_limit_reached",
+            spent_cents=everyone.cost_cents,
+            reserved_cents=everyone.reserved_cents,
+            limit_cents=settings.monthly_limit_cents,
+        )
+        raise MonthlyLimitReachedError(everyone.cents, settings.monthly_limit_cents)
+    running = await quota.running_plans(db)
+    if running >= settings.max_running_plans:
+        log.warning("planner_busy", running=running, limit=settings.max_running_plans)
+        raise quota.PlannerBusyError(running, settings.max_running_plans)
+
+
+async def _create_and_start(
+    request: PlanRequest,
+    *,
+    services: PlannerServices,
+    ready: ReadyPlanner,
+    plan_id: uuid.UUID,
+    metadata: dict[str, str],
+    now: dt.datetime,
+    bind_session: Callable[[str], None],
+) -> uuid.UUID:
+    """Steps 3 (the event) to 5 of `start_plan`, for a plan row already inserted and a plan id
+    already bound in the logging context (`bind_session` binds the session id once the session
+    exists)."""
+    settings = services.settings
+    bound = log.bind(plan_id=str(plan_id), agent_profile=settings.agent_profile)
     sink = EventSink(plan_id, session_factory=services.session_factory, hub=services.hub)
     await sink.emit(
         backend_event(EventKind.STATUS, TITLE_PLAN_CREATED, ts=now),
@@ -694,7 +739,7 @@ async def _interrupt_locked(
     plan_id: uuid.UUID, user: CurrentUser, *, services: PlannerServices
 ) -> PlanStatus:
     async with services.session_factory() as db:
-        plan = await get_user_plan(db, plan_id, user)
+        plan = await get_user_plan(db, plan_id, user, settings=services.settings)
     status = PlanStatus(plan.status)
     if status is PlanStatus.RUNNING:
         return await request_interrupt(services, plan, reason=REASON_INTERRUPTED)
@@ -852,27 +897,40 @@ async def continue_plan(
 ) -> int:
     """POST /plans/{id}/continue ("Continua con 2 $ in piu'"). Returns the new budget (cents).
 
-    Only from `budget_paused` (else `PlanStateError`). Checks the monthly limit with the extra
-    spend included (`spent + extra_cents > limit` -> `MonthlyLimitReachedError`). Then, per
-    notes §2d (a `budget_reached` session accepts no `user.message`; only a budget update lets
-    it go on):
+    Only from `budget_paused` (else `PlanStateError`), and only below `MAX_CONTINUES_PER_PLAN`
+    (`ContinueLimitReachedError`). A consumer of the paused plan still winding down is stopped
+    first. Then, per notes §2d (a `budget_reached` session accepts no `user.message`; only a
+    budget update lets it go on):
 
-    1. `info = client.retrieve_session(sid)`; consumed = `info.usage.list_cost_cents` (fallback
+    1. The economics and the reservation (`_reserve_continue`), in one transaction holding the
+       quota lock (`quota.lock_checks`) like a start's: the user's monthly cents with the extra
+       included unless they are an admin (`QuotaReachedError`), the global ceiling with the
+       running plans' budgets reserved and the extra included (`MonthlyLimitReachedError`), the
+       running cap (`PlannerBusyError`: the plan is about to run again). The same transaction
+       turns the row `running` with `budget_cents = max(cap, cost) + extra_cents`, so every
+       later admission counts this plan's extra and its place among the running plans before
+       the session is touched; nothing is shown on the timeline yet.
+    2. `info = client.retrieve_session(sid)`; consumed = `info.usage.list_cost_cents` (fallback
        `plans.cost_cents`); new budget = `max(cap, consumed) + extra_cents` (the cost may
        overshoot the cap by one request per thread, so base it on consumption), where `cap`
        is `plans.budget_cents` read with the status (`info.budget_cents` when NULL): a request
        that somehow raced another one repeats the same cap and never compounds it.
-    2. `client.update_budget(sid, new_budget)` (`budget_not_raised` cannot happen with this
-       formula; any `ApiRejectedError` propagates, the plan stays `budget_paused`).
-    3. Status `budget_paused` -> `running` with `TITLE_CONTINUED`: `set_plan_status(...,
-       budget_cents=new_budget, event_key=f"continue:{new_budget}")`, which also stores the
-       new cap in `plans.budget_cents` and restarts `plans.running_since` (the stuck check's
-       45 minutes). The key is unique per "Continua" because every one raises the budget; if
-       `status_applied` is False (a concurrent change won) raise `PlanStateError`. Then
-       `registry.start(...)` in resume mode (the old `budget_reached` idle is already stored,
-       so it is not acted on).
-    4. [INFERRED, probe P9] if the session is still idle after `CONTINUE_RESUME_WAIT_SECONDS`,
+    3. `client.update_budget(sid, new_budget)` (`budget_not_raised` cannot happen with this
+       formula). Any failure of steps 2-3 (an `ApiRejectedError`, a timeout, a cancellation)
+       gives the reservation back (`_release_continue`: `budget_paused` and the old cap again)
+       and propagates.
+    4. `TITLE_CONTINUED`: `set_plan_status(..., budget_cents=new_budget, continues_increment=1,
+       event_key=f"continue:{new_budget}")`, which stores the final cap in
+       `plans.budget_cents`, counts the "Continua" in `plans.continues` and restarts
+       `plans.running_since` (the stuck check's 45 minutes). The key is unique per "Continua"
+       because every one raises the budget; if `status_applied` is False (a concurrent change
+       won) raise `PlanStateError`. Then `registry.start(...)` in resume mode (the old
+       `budget_reached` idle is already stored, so it is not acted on).
+    5. [INFERRED, probe P9] if the session is still idle after `CONTINUE_RESUME_WAIT_SECONDS`,
        send `CONTINUE_MESSAGE` as a `user.message`.
+
+    A process that dies between steps 1 and 4 leaves the plan `running` with no consumer: the
+    next start resumes it, and the stuck check ends it if the session never moves again.
 
     Everything from the status read to the restart runs under the plan's lock
     (`PlannerServices.plan_locks`): a second "Continua" (double click, two tabs) or an
@@ -896,20 +954,125 @@ async def _continue_locked(
     extra_cents: int,
 ) -> int:
     async with services.session_factory() as db:
-        plan = await get_user_plan(db, plan_id, user)
+        plan = await get_user_plan(db, plan_id, user, settings=services.settings)
     status = PlanStatus(plan.status)
     session_id = plan.session_id
     if status is not PlanStatus.BUDGET_PAUSED or session_id is None:
         raise PlanStateError(plan_id, status, (PlanStatus.BUDGET_PAUSED,))
     with structlog.contextvars.bound_contextvars(session_id=session_id):
         return await _continue_session(
-            plan, session_id, services=services, ready=ready, extra_cents=extra_cents
+            plan, session_id, user, services=services, ready=ready, extra_cents=extra_cents
         )
+
+
+async def _admit_continue(
+    db: AsyncSession,
+    user: CurrentUser,
+    *,
+    settings: Settings,
+    now: dt.datetime,
+    extra_cents: int,
+) -> None:
+    """The economics of a "Continua" (`continue_plan`'s docstring), on a connection that holds
+    the quota lock: a paused plan reserves nothing (its cost reached its budget), so the extra
+    is what counts; and the plan is about to run again, so the running cap applies as for a
+    start."""
+    budget = settings.session_budget_cents
+    if not user_is_admin(user, settings):
+        mine = await quota.month_usage(
+            db,
+            now=now,
+            owner=plan_owner_filter(user, settings=settings),
+            default_budget_cents=budget,
+        )
+        allowance = quota.user_quota(mine, settings=settings, now=now)
+        if allowance.cents_used + extra_cents > allowance.cents_limit:
+            log.info("quota_reached", kind="cents", **allowance.as_data())
+            raise quota.QuotaReachedError("cents", allowance)
+    everyone = await quota.month_usage(db, now=now, owner=None, default_budget_cents=budget)
+    if everyone.cents + extra_cents > settings.monthly_limit_cents:
+        log.warning(
+            "monthly_limit_reached",
+            spent_cents=everyone.cost_cents,
+            reserved_cents=everyone.reserved_cents,
+            extra_cents=extra_cents,
+            limit_cents=settings.monthly_limit_cents,
+        )
+        raise MonthlyLimitReachedError(everyone.cents, settings.monthly_limit_cents)
+    running = await quota.running_plans(db)
+    if running >= settings.max_running_plans:
+        log.warning("planner_busy", running=running, limit=settings.max_running_plans)
+        raise quota.PlannerBusyError(running, settings.max_running_plans)
+
+
+async def _reserve_continue(
+    plan: PlanRecord,
+    user: CurrentUser,
+    *,
+    services: PlannerServices,
+    now: dt.datetime,
+    extra_cents: int,
+) -> int:
+    """Step 1 of `continue_plan`: in one transaction holding the quota lock, the admission
+    (`_admit_continue`) and the **reservation**: the row turns `running` with its cap raised to
+    `max(cap, cost) + extra_cents` (no timeline event yet), so the next admission, a start or
+    another "Continua", already counts this plan's extra and its place among the running plans
+    before the lock is released. Returns the reserved cap. `PlanStateError` when the plan is no
+    longer `budget_paused` (a change from another process won)."""
+    settings = services.settings
+    cap = plan.budget_cents or 0
+    reserved_cap = max(cap, plan.cost_cents) + extra_cents
+    async with services.session_factory() as db:
+        await quota.lock_checks(db)
+        await _admit_continue(db, user, settings=settings, now=now, extra_cents=extra_cents)
+        moved = await db.scalar(
+            update(PlanRecord)
+            .where(
+                PlanRecord.id == plan.id,
+                PlanRecord.status == PlanStatus.BUDGET_PAUSED.value,
+                PlanRecord.continues < settings.max_continues_per_plan,
+            )
+            .values(
+                status=PlanStatus.RUNNING.value,
+                budget_cents=reserved_cap,
+                running_since=func.now(),
+            )
+            .returning(PlanRecord.id)
+        )
+        if moved is None:
+            await db.rollback()
+            raise PlanStateError(
+                plan.id, await _current_status(services, plan.id), (PlanStatus.BUDGET_PAUSED,)
+            )
+        await db.commit()
+    return reserved_cap
+
+
+async def _release_continue(
+    services: PlannerServices, plan: PlanRecord, *, reserved_cap: int
+) -> None:
+    """Give a reservation back after the session's budget could not be raised: the row returns to
+    `budget_paused` with its old cap, unless something else changed it since. Never raises."""
+    try:
+        async with services.session_factory() as db:
+            await db.execute(
+                update(PlanRecord)
+                .where(
+                    PlanRecord.id == plan.id,
+                    PlanRecord.status == PlanStatus.RUNNING.value,
+                    PlanRecord.budget_cents == reserved_cap,
+                )
+                .values(status=PlanStatus.BUDGET_PAUSED.value, budget_cents=plan.budget_cents)
+            )
+            await db.commit()
+    except Exception as exc:
+        log.error("continue_release_failed", plan_id=str(plan.id), error=type(exc).__name__)
 
 
 async def _continue_session(
     plan: PlanRecord,
     session_id: str,
+    user: CurrentUser,
     *,
     services: PlannerServices,
     ready: ReadyPlanner,
@@ -917,35 +1080,47 @@ async def _continue_session(
 ) -> int:
     plan_id = plan.id
     settings = services.settings
-    async with services.session_factory() as db:
-        spent = await monthly_spend_cents(db, now=ready.deps.now())
-    if spent + extra_cents > settings.monthly_limit_cents:
-        log.warning(
-            "monthly_limit_reached",
+    if plan.continues >= settings.max_continues_per_plan:
+        log.info(
+            "continue_limit_reached",
             plan_id=str(plan_id),
-            spent_cents=spent,
-            extra_cents=extra_cents,
-            limit_cents=settings.monthly_limit_cents,
+            continues=plan.continues,
+            limit=settings.max_continues_per_plan,
         )
-        raise MonthlyLimitReachedError(spent, settings.monthly_limit_cents)
+        raise quota.ContinueLimitReachedError(plan.continues, settings.max_continues_per_plan)
+    if ready.registry.get(plan_id) is not None:
+        # The paused consumer is still winding down: it stops before the row turns running, so
+        # none of its late status changes can apply to the plan once it runs again.
+        await ready.registry.stop(plan_id)
+    reserved_cap = await _reserve_continue(
+        plan, user, services=services, now=ready.deps.now(), extra_cents=extra_cents
+    )
 
     bound = log.bind(plan_id=str(plan_id), session_id=session_id)
-    info = await ready.client.retrieve_session(session_id)
-    consumed = info.usage.list_cost_cents
-    if consumed is None:
-        consumed = plan.cost_cents
-    cap = plan.budget_cents if plan.budget_cents is not None else info.budget_cents or 0
-    new_budget = max(cap, consumed) + extra_cents
-    await ready.client.update_budget(session_id, new_budget)
+    try:
+        info = await ready.client.retrieve_session(session_id)
+        consumed = info.usage.list_cost_cents
+        if consumed is None:
+            consumed = plan.cost_cents
+        cap = plan.budget_cents if plan.budget_cents is not None else info.budget_cents or 0
+        new_budget = max(cap, consumed) + extra_cents
+        await ready.client.update_budget(session_id, new_budget)
+    except BaseException:
+        # Nothing was raised on the session (or it is unknown and the next "Continua" repeats the
+        # same cap): the reservation goes back, the plan is paused again.
+        await _release_continue(services, plan, reserved_cap=reserved_cap)
+        raise
 
     result = await set_plan_status(
         services.session_factory,
         services.hub,
         plan_id,
-        StatusChange(PlanStatus.RUNNING, reason=None, only_from=(PlanStatus.BUDGET_PAUSED,)),
+        # The reservation already turned the row `running`.
+        StatusChange(PlanStatus.RUNNING, reason=None, only_from=(PlanStatus.RUNNING,)),
         title=TITLE_CONTINUED,
         event_key=f"continue:{new_budget}",
         budget_cents=new_budget,
+        continues_increment=1,
     )
     if not result.status_applied:
         raise PlanStateError(
@@ -953,8 +1128,6 @@ async def _continue_session(
         )
     bound.info("plan_continued", budget_cents=new_budget, consumed_cents=consumed)
 
-    if ready.registry.get(plan_id) is not None:
-        await ready.registry.stop(plan_id)  # the paused consumer is still winding down
     ready.registry.start(plan_id, session_id)
     _spawn(
         services,
@@ -1085,18 +1258,52 @@ async def _resume_one(
 # --- queries and helpers ------------------------------------------------------------------------
 
 
-async def get_user_plan(db: AsyncSession, plan_id: uuid.UUID, user: CurrentUser) -> PlanRecord:
-    """The plan row if it exists and `user_email == user.email`; else `PlanNotFoundError`
+def plan_owner_filter(user: CurrentUser, *, settings: Settings) -> ColumnElement[bool]:
+    """SQL predicate: the plans that belong to `user`.
+
+    When the signed-in id is one of this backend's `users.id` (`Settings.plans_carry_user_id`,
+    AUTH_MODE=atlas): the rows whose `user_id` is that id, plus, when the account's email is
+    verified (`CurrentUser.email_verified`: it proved it owns the address), the rows from before
+    the switch that have no `user_id` and carry that email. An unverified account sees only the
+    plans stored with its id: anyone may type someone else's address into a sign-up form, and
+    the address alone must not hand them that person's old plans. Otherwise (TripTracker's and
+    the local mode's plans) the rows with the user's email, compared trimmed and lower-cased.
+    `owns_plan` is the same rule for a row already loaded.
+    """
+    email = user.email.strip().lower()
+    by_email = func.lower(PlanRecord.user_email) == email
+    if settings.plans_carry_user_id and user.auth_user_id:
+        by_id = PlanRecord.user_id == user.auth_user_id
+        if not user.email_verified:
+            return by_id
+        return or_(by_id, and_(PlanRecord.user_id.is_(None), by_email))
+    return by_email
+
+
+def owns_plan(plan: PlanRecord, user: CurrentUser, *, settings: Settings) -> bool:
+    """`plan_owner_filter`'s rule for a loaded row."""
+    same_email = plan.user_email.strip().lower() == user.email.strip().lower()
+    if settings.plans_carry_user_id and user.auth_user_id:
+        legacy = user.email_verified and plan.user_id is None and same_email
+        return plan.user_id == user.auth_user_id or legacy
+    return same_email
+
+
+async def get_user_plan(
+    db: AsyncSession, plan_id: uuid.UUID, user: CurrentUser, *, settings: Settings
+) -> PlanRecord:
+    """The plan row if it exists and `owns_plan(plan, user)`; else `PlanNotFoundError`
     (consumer.PlanNotFoundError: another user's plan is indistinguishable from a missing one)."""
     plan = await db.get(PlanRecord, plan_id)
-    if plan is None or plan.user_email.strip().lower() != user.email.strip().lower():
+    if plan is None or not owns_plan(plan, user, settings=settings):
         raise PlanNotFoundError(f"plan {plan_id} not found")
     return plan
 
 
 async def monthly_spend_cents(db: AsyncSession, *, now: dt.datetime) -> int:
     """Sum of `plans.cost_cents` for plans created in `now`'s calendar month in Europe/Rome,
-    all users (the limit protects the organization budget)."""
+    all users: the cost already recorded. The checks use `quota.month_usage`, which adds the
+    running plans' unspent budgets."""
     start, end = month_bounds(now)
     total = await db.scalar(
         select(func.coalesce(func.sum(PlanRecord.cost_cents), 0)).where(
@@ -1106,16 +1313,8 @@ async def monthly_spend_cents(db: AsyncSession, *, now: dt.datetime) -> int:
     return int(total or 0)
 
 
-def month_bounds(now: dt.datetime) -> tuple[dt.datetime, dt.datetime]:
-    """[first instant of the month, first instant of the next month) in Europe/Rome, aware."""
-    if now.tzinfo is None or now.utcoffset() is None:
-        msg = "month_bounds needs a timezone-aware datetime"
-        raise ValueError(msg)
-    local = now.astimezone(clock.HOME_TIMEZONE)
-    start = dt.datetime(local.year, local.month, 1, tzinfo=clock.HOME_TIMEZONE)
-    year, month = (local.year + 1, 1) if local.month == 12 else (local.year, local.month + 1)
-    end = dt.datetime(year, month, 1, tzinfo=clock.HOME_TIMEZONE)
-    return start, end
+month_bounds = quota.month_bounds
+"""The month of the ceiling and the quotas (app/quota.py), kept here for its callers."""
 
 
 def session_metadata(plan_id: uuid.UUID, profile: AgentProfile) -> dict[str, str]:

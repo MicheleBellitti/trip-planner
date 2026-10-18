@@ -13,7 +13,7 @@ import {
   type ApiClientOptions,
 } from "./api";
 import { SIGNED_IN_KEY } from "./returning";
-import { APP_ERROR_CODES, COVER_UNAVAILABLE_CODE, PLAN_ERROR_CODES } from "./schemas/api";
+import { ADMIN_ONLY_CODE, APP_ERROR_CODES, AUTH_ERROR_CODES, COVER_UNAVAILABLE_CODE, PLAN_ERROR_CODES } from "./schemas/api";
 
 const PLAN_ID = happyPath.plan_id;
 const CURRENT_PAGE = "https://atlas.bellittim.com/plans/6f1c2a7e-3b4d-4e5f-8a9b-0c1d2e3f4a5b?tab=piano#giorno-2";
@@ -112,6 +112,18 @@ describe("requests", () => {
     expect(detail.status).toBe("running");
     expect(detail.budget_cents).toBe(60);
     expect(detail.plan).toBeNull();
+  });
+
+  it("GET /me parses the signed-in address and the admin flag", async () => {
+    const { api, fetchMock } = client(json(200, { email: "me@example.com", is_admin: true, extra: 1 }));
+
+    await expect(api.me()).resolves.toEqual({ email: "me@example.com", is_admin: true, quota: null });
+
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(url).toBe("https://atlas.api.test/me");
+    expect(init?.credentials).toBe("include");
+    const broken = client(json(200, { email: "me@example.com" }));
+    expect((await failure(broken.api.me())).kind).toBe("invalid_response");
   });
 
   it("covers interrupt, continue, trip and health", async () => {
@@ -225,7 +237,7 @@ describe("errors", () => {
     const error = await failure(api.getPlan(PLAN_ID));
 
     expect(error.kind).toBe("unauthorized");
-    expect(error.message).toBe("Accedi a TripTracker per usare il planner.");
+    expect(error.message).toBe("Accedi per usare il planner."); // neutral: the login is the mode's
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
 
@@ -323,8 +335,19 @@ describe("errors", () => {
     expect(error.message).toBe(message);
   });
 
+  it("403 admin_only is forbidden and keeps its code, so the eval pages can tell it apart", async () => {
+    const { api } = client(json(403, envelope("admin_only", "Questa sezione è riservata a chi gestisce il planner.")));
+
+    const error = await failure(api.listEvalRuns());
+
+    expect(error.kind).toBe("forbidden");
+    expect(error.code).toBe(ADMIN_ONLY_CODE);
+    expect(error.message).toBe("Questa sezione è riservata a chi gestisce il planner.");
+  });
+
   it("knows every plan, framework and auth error code of the backend", () => {
     expect(PLAN_ERROR_CODES).toContain("demo_unavailable");
+    expect(AUTH_ERROR_CODES).toEqual(["not_authenticated", "email_not_allowed", "bad_origin", "admin_only", "auth_unavailable"]);
     expect(APP_ERROR_CODES).toEqual(["not_found", "method_not_allowed", "bad_request", "internal_error", "http_error"]);
     expect(PLAN_ERROR_CODES).toEqual(expect.arrayContaining([...APP_ERROR_CODES]));
   });

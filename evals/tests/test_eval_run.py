@@ -267,8 +267,11 @@ def context(
     calls: dict[str, Any] = {"interrupted": [], "started": []}
     plan_id = uuid.UUID("00000000-0000-4000-8000-000000000001")
 
-    async def fake_start(request: Any, user: Any, *, services: Any) -> uuid.UUID:
+    async def fake_start(
+        request: Any, user: Any, *, services: Any, user_quota_applies: bool = True
+    ) -> uuid.UUID:
         calls["started"].append(user.email)
+        calls.setdefault("user_quota_applies", []).append(user_quota_applies)
         return plan_id
 
     async def fake_interrupt(pid: uuid.UUID, user: Any, *, services: Any) -> Any:
@@ -314,6 +317,7 @@ def test_run_case_ready_plan(monkeypatch: pytest.MonkeyPatch) -> None:
     ctx, calls = context(monkeypatch, [plan_row("running"), plan_row("ready")])
     entry = asyncio.run(run.run_case(LISBON, request_for(LISBON), ctx))
     assert calls["started"] == [run.EVAL_USER_EMAIL]
+    assert calls["user_quota_applies"] == [False]  # the eval user is exempt from the user quota
     assert calls["interrupted"] == []
     assert calls["ma_client"].retrieved == ["sesn_eval"]
     assert entry["status"] == "ready"
@@ -340,7 +344,7 @@ def test_run_case_timeout_interrupts_the_plan(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_run_case_start_failure_is_recorded(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def refused(request: Any, user: Any, *, services: Any) -> uuid.UUID:
+    async def refused(request: Any, user: Any, **kwargs: Any) -> uuid.UUID:
         raise sessions.MonthlyLimitReachedError(5000, 5000)
 
     ctx, calls = context(monkeypatch, [None], start=refused)

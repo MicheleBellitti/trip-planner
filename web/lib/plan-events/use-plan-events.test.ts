@@ -338,6 +338,8 @@ describe("usePlanEvents", () => {
       booking_links: [],
       alternative_links: [],
       plan: null,
+      continues: 0,
+      continues_limit: 2,
     };
     const { result } = render({ detail });
 

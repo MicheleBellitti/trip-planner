@@ -12,3 +12,6 @@ next-env.d.ts
 # Local settings: only the documented example is committed.
 .env*
 !.env.example
+
+# impeccable's live detector state (the critique's overlay server); the critiques themselves are committed.
+.impeccable/live/

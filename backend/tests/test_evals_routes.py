@@ -437,6 +437,40 @@ async def test_the_history_needs_a_signed_in_user(
         assert detail(response)["code"] == "not_authenticated"
 
 
+async def test_the_history_is_for_admins_only(
+    make_app: AppFactory,
+    make_settings: Callable[..., Settings],
+    stub_planner: StubPlanner,
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """ADMIN_EMAILS names someone else: the signed-in local user may plan but not read the evals;
+    the machine upload is unaffected."""
+    not_an_admin = make_settings(evals_ingest_token=TOKEN, admin_emails="boss@example.com")
+    async with make_app(settings=not_an_admin) as app:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as http:
+            posted = await http.post("/evals/runs", json=payload(), headers=BEARER)
+            run_id = posted.json()["id"]
+            listed = await http.get("/evals/runs")
+            opened = await http.get(f"/evals/runs/{run_id}")
+            me = await http.get("/me")
+            plans = await http.get("/plans")
+
+    assert posted.status_code == 201
+    for response in (listed, opened):
+        assert response.status_code == 403
+        assert detail(response) == {
+            "code": "admin_only",
+            "message": "Questa sezione è riservata a chi gestisce il planner.",
+            "data": None,
+        }
+    assert me.status_code == 200
+    identity = me.json()
+    assert (identity["email"], identity["is_admin"]) == ("test@example.com", False)
+    assert identity["quota"] is not None  # a plain user sees their month
+    assert plans.status_code == 200
+
+
 # --- GET /evals/runs/{id} -----------------------------------------------------------------------
 
 
@@ -514,3 +548,4 @@ async def test_eval_routes_are_documented_with_their_error_models(evals_api: Eva
     assert {"200", "201", "401", "404", "413", "422"} <= set(post["responses"])
     assert "results" in post["requestBody"]["content"]["application/json"]["schema"]["properties"]
     assert "404" in paths["/evals/runs/{run_id}"]["get"]["responses"]
+    assert "403" in paths["/evals/runs"]["get"]["responses"]  # admin_only

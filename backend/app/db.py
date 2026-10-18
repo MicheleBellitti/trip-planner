@@ -147,6 +147,8 @@ class PlanRecord(Base):
     # "Continua". NULL until the session exists. The UI draws cost_cents against it.
     budget_cents: Mapped[int | None] = mapped_column(Integer)
     submit_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    # How many times "Continua" raised the budget (its cap: MAX_CONTINUES_PER_PLAN, app/quota.py).
+    continues: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
     # Versions of the coordinator, subagents and skills that produced the plan, plus the git sha.
     agent_versions: Mapped[JsonObject | None]
     # Why the plan ended failed/blocked/interrupted, for the UI and the logs.
@@ -188,10 +190,12 @@ class EventRecord(Base):
 class AuthSessionRecord(Base):
     """A Better Auth session of the web app's own accounts (its core `session` model).
 
-    The web app writes and reads these; the backend never does (it asks the web app's
-    get-session endpoint, app/auth.py), but Alembic owns the table like every other one, so one
-    `alembic upgrade head` prepares a database for both services (`tests/test_db.py` keeps the
-    models and the migrations together). `token` is the session token the signed cookie carries.
+    The web app writes these (sign-in, sign-out, the daily `updateAge` extension). The backend
+    only reads them: with AUTH_MODE=atlas `auth.verify_atlas_session` looks the cookie's token up
+    here (`token`, unique, so one indexed query) with `expires_at` after now, joined to `users`,
+    and never writes. Alembic owns the table like every other one, so one `alembic upgrade head`
+    prepares a database for both services (`tests/test_db.py` keeps the models and the
+    migrations together). `token` is the session token the signed cookie carries.
     """
 
     __tablename__ = "auth_sessions"
@@ -239,6 +243,30 @@ class AuthVerificationRecord(Base):
     value: Mapped[str] = mapped_column(Text)
     expires_at: Mapped[dt.datetime]
     created_at: Mapped[dt.datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[dt.datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+
+class WaitlistRecord(Base):
+    """An address that asked for an invitation, or that was invited (the web app's closed beta).
+
+    One row per address (`email` is the key, trimmed and lower-cased by the web app). A row with
+    `invited_at` NULL is a request waiting on the landing's or the login's waitlist; once an
+    admin invites it (`invited_at`, `invited_by`), the web app's sign-up policy lets that address
+    create an account (web/lib/auth.ts, web/lib/server/waitlist.ts), and the invitation email's
+    departure is recorded in `invitation_sent_at`. `source` says where the row came from
+    ("landing", "login" or "admin"); `note` is what the person wrote, at most a few lines. The
+    web app writes and reads the table; the backend only migrates it (Alembic owns every table).
+    """
+
+    __tablename__ = "waitlist"
+
+    email: Mapped[str] = mapped_column(Text, primary_key=True)
+    note: Mapped[str] = mapped_column(Text, default="", server_default=text("''"))
+    source: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[dt.datetime] = mapped_column(server_default=func.now())
+    invited_at: Mapped[dt.datetime | None]
+    invited_by: Mapped[str | None] = mapped_column(Text)
+    invitation_sent_at: Mapped[dt.datetime | None]
     updated_at: Mapped[dt.datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 
 
