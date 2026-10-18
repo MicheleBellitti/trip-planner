@@ -12,10 +12,15 @@ import type { JoinInputError } from "./waitlist-policy";
  * address has an account or an invitation (Michele, 2026-10-18: "uguale per tutti"). The query's
  * own outcome (lib/waitlist-policy.ts `JoinOutcome`) stays on the server, for the logs.
  */
+/** Why a join was refused besides the input: the challenge was not passed (Turnstile), too many
+ * joins from this address or this client in a short time (the server's windows), no accounts
+ * configured, or a failure. None of them depends on what the list holds. */
+export type JoinRefusal = "challenge_failed" | "too_many_requests" | "unavailable" | "failed";
+
 export type JoinState =
   | { status: "idle" }
   | { status: "received"; email: string }
-  | { status: "error"; error: JoinInputError | "unavailable" | "failed" };
+  | { status: "error"; error: JoinInputError | JoinRefusal };
 
 export const JOIN_IDLE: JoinState = { status: "idle" };
 

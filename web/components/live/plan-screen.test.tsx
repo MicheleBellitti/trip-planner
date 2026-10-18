@@ -400,12 +400,26 @@ describe("PlanScreen, other states", () => {
     render(<PlanScreen planId={PLAN_ID} client={client} />);
     await flush();
     await replay(BUDGET.filter((event) => event.seq <= 34));
-    expect(screen.getByText(/La sessione ha speso 0,61 \$ su un budget di 0,60 \$/)).toBeTruthy();
+    expect(screen.getByText(/La sessione ha speso 0,61 \$: il budget di 0,60 \$ è finito/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Continua con 2 $ in più" }));
     await flush();
     expect(client.continuePlan).toHaveBeenCalledWith(PLAN_ID);
     expect(screen.queryByRole("button", { name: "Continua con 2 $ in più" })).toBeNull();
     expect(screen.getByText("limite 2,61 $")).toBeTruthy();
+  });
+
+  it("at the cap of 'Continua' offers a new plan instead, from the plan detail's counts", async () => {
+    // Pinned here, at the screen, so moving the panel's props (PR #15 splits PlanScreen) cannot
+    // drop `continues` / `continues_limit` silently.
+    const paused = detail("budget_paused", { cost_cents: 61, continues: 2, continues_limit: 2, updated_at: BUDGET.at(-1)?.ts });
+    const client = fakeClient({ getPlan: vi.fn().mockResolvedValue(paused) });
+    render(<PlanScreen planId={PLAN_ID} client={client} />);
+    await flush();
+    await replay(BUDGET.filter((event) => event.seq <= 34));
+    expect(screen.getByRole("heading", { name: "Budget della sessione raggiunto" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Continua con 2 $ in più" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Crea un nuovo piano" })).toBeTruthy();
+    expect(screen.getByText(/ha già avuto 2 volte i suoi 2 \$ in più/)).toBeTruthy();
   });
 
   it("says the plan's own new state in the live region when a watcher would otherwise miss it", async () => {
@@ -438,7 +452,7 @@ describe("PlanScreen, other states", () => {
     await flush();
     const alert = screen.getByRole("alert");
     expect(alert.textContent).toContain("Limite mensile raggiunto");
-    expect(alert.textContent).toContain("Questo mese sono già stati spesi 98,00 $ su 100,00 $");
+    expect(alert.textContent).toContain("Questo mese il planner ha già impegnato 98,00 $ su 100,00 $");
     expect((button as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByRole("button", { name: "Interrompi" })).toBeTruthy();
   });

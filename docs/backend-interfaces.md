@@ -1048,8 +1048,52 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
     for both services; it never reads it (who may plan is decided by the existence of the
     account, decision 37). The admin page is the web app's, and its "who is an admin" is this
     backend's `GET /me` called server side with the request's cookie: the role has one source. A
-    retention rule for pending requests is an open item (§8), together with the rate limit on
-    the public join (the quotas PR).
+    retention rule for pending requests is an open item (§8); the rate limit on the public join
+    came with decision 39.
+39. The economics (`app/quota.py`, `app/ratelimit.py`, migration `22bb438487ee`). One user must
+    not exhaust the month for the others, and N requests sent together must not all pass a check
+    that only knows cost already recorded. So the month's usage counts the recorded cost plus
+    the **reservation**: the unspent budget of the plans still `running` (`budget_cents -
+    cost_cents`, never negative; the profile's session budget stands in while the session does
+    not exist yet), whichever month created them, so on the 1st the plans still running from the
+    month before reserve too (their cost stays with the month that created them: `created_at`
+    accounting). A start that failed before any session existed (`failed` with no `session_id`,
+    `quota.never_started`) is not one of the month's plans: an outage must not eat the quota
+    (Michele, 2026-10-18); its cost, like every plan's, counts. The per-user quota
+    (`USER_MONTHLY_PLANS`, `USER_MONTHLY_CENTS`, calendar month in Europe/Rome like the ceiling)
+    is checked for the signed-in user's plans (`plan_owner_filter`) with the new plan's own
+    budget counted, admins (`auth.user_is_admin`: with AUTH_MODE=atlas, only a verified address)
+    and the eval runner (`start_plan(user_quota_applies=False)`, passed by evals/run.py alone,
+    never by a route) exempt; the global ceiling gets the same reservation and the same "would
+    this budget fit" rule, so the last dollar under it stays unused rather than overshot;
+    `MAX_RUNNING_PLANS` caps the plans `running` for everyone (503 `planner_busy`, `Retry-After`
+    60, nothing spent); `MAX_CONTINUES_PER_PLAN` caps `plans.continues`, which
+    `set_plan_status(continues_increment=1)` raises with every approved $2 (409
+    `continue_limit_reached`; the plan detail carries `continues` and `continues_limit`, so the
+    web offers no "Continua" at the cap). The checks and the insert of the `plans` row run in
+    one transaction that first takes a transaction-level advisory lock (`quota.lock_checks`, key
+    `0x41544C53`, distinct from the plan leases'): two requests cannot both pass a check the
+    other one's insert would have failed. "Continua" takes the same lock and admission (the
+    extra counted, the running cap included: it turns a paused plan back into a running one) and
+    reserves in the same transaction: the row turns `running` with its cap raised by the extra
+    before the session is touched, so the next start or "Continua" already counts it; a failure
+    to raise the session's budget puts the row back (`budget_paused`, the old cap), and the
+    timeline's "continued" event and `continues` follow only once the budget was raised. The
+    rate limits are in-process sliding windows (`POST /plans` per user and per client IP,
+    `PLAN_CREATE_*`, counted in the route's body: a 422, a demo 404 or a 503
+    `planner_unavailable` never uses a slot) and a per-user count of open event streams
+    (`MAX_STREAMS_PER_USER`), 429 `too_many_requests` with `Retry-After`: one replica runs the
+    backend, a redeploy starts them over, and the quotas, not the windows, guard the money;
+    Redis or a Postgres counter comes with more replicas. The client IP is the last
+    `X-Forwarded-For` value (all such headers joined), the one the proxy appended, with
+    `TRUST_PROXY_HEADERS` (default: on in production, behind Railway's proxy); without it
+    `request.client.host`, which behind the image's uvicorn `--proxy-headers` and
+    `FORWARDED_ALLOW_IPS="*"` is the leftmost, client-chosen value: the setting must stay on
+    there. `GET /me` carries the user's month (`quota`, null when exempt), read without the
+    lock. `budget_eur` is capped at 50 000 (`request.BUDGET_EUR_MAX`). The public forms of the
+    web app (the waitlist join, the magic-link request) carry a Cloudflare Turnstile token when
+    the keys are set, verified server side, with a per-address window on the join: the backend
+    has no part in it.
 
 ## 7. Contracts with events.py, the database, config, the web app and the agents
 

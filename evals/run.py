@@ -620,7 +620,11 @@ async def run_case(case: EvalCase, request: PlanRequest, ctx: RunContext) -> dic
     plan_id: uuid.UUID | None = None
     print(f"[{case.id}] starting", flush=True)
     try:
-        plan_id = await sessions.start_plan(request, user, services=planner)
+        # The eval user is exempt from the per-user quota (six plans a run, several runs a month
+        # on a persistent database), never from the global ceiling or the running cap.
+        plan_id = await sessions.start_plan(
+            request, user, services=planner, user_quota_applies=False
+        )
         extra["plan_id"] = str(plan_id)
         record = await wait_for_terminal(
             planner.session_factory,

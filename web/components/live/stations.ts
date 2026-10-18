@@ -8,7 +8,7 @@
  *   and its result, paired by `tool_use_id`, the second line (the duration, or the failure). The
  *   call still running is not a station: it is the live plate at the end of the line.
  * - Status events are stations only when they change what the lane is doing ("Incarico a voli",
- *   "Turno concluso", "Fermo: budget della sessione esaurito") or come from the backend ("Piano
+ *   "Turno concluso", "Fermo: budget della sessione raggiunto") or come from the backend ("Piano
  *   avviato"). Thinking, model requests, usage and unknown types say nothing to the user.
  * - A message between two lanes shows on both (the backend sends one event, on the subagent's
  *   lane); the agent's own turn output (`agent.message`) stays on its lane. What agents write to
@@ -460,7 +460,7 @@ function summaryFor(
       if (blocker?.agent === agent) {
         return blocker.source ? `Aspettava il permesso per usare ${blocker.source}.` : "Aspettava un permesso che nessuno può dare.";
       }
-      if (planStatus === "budget_paused") return "Fermo: budget della sessione esaurito.";
+      if (planStatus === "budget_paused") return "Fermo: budget della sessione raggiunto.";
       if (planStatus === "interrupted") return "Fermo: il piano è stato interrotto.";
       return "Fermo: il piano si è chiuso.";
   }

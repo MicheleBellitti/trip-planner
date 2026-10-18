@@ -436,7 +436,13 @@ clear error.
    | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` | yes | yes | reference variable; Settings rewrites it to asyncpg |
    | `AGENT_PROFILE` | `production` | yes | yes | required in production; selects `backend/claude-lock.production.json` |
    | `SESSION_BUDGET_CENTS` | `400` | yes | | US cents per session; empty = the profile's default (400) |
-   | `MONTHLY_LIMIT_CENTS` | `5000` | yes | | POST /plans refuses new plans at or above it |
+   | `MONTHLY_LIMIT_CENTS` | `5000` | yes | | the month's recorded cost plus the running plans' unspent budgets; POST /plans refuses a plan whose budget would not fit |
+   | `USER_MONTHLY_PLANS` / `USER_MONTHLY_CENTS` | `10` / `1500` | yes | | the per-user month (plans, and cents with the same reservation); admins are exempt, the ceiling above still applies |
+   | `MAX_CONTINUES_PER_PLAN` | `2` | yes | | "Continua" per plan, $2 each |
+   | `MAX_RUNNING_PLANS` | `8` | yes | | plans running at once, all users; past it POST /plans answers 503 `planner_busy` |
+   | `PLAN_CREATE_LIMIT_PER_USER` / `PLAN_CREATE_LIMIT_PER_IP` / `PLAN_CREATE_WINDOW_SECONDS` | `5` / `20` / `600` | yes | | the sliding windows on POST /plans, kept in the process |
+   | `MAX_STREAMS_PER_USER` | `4` | yes | | event streams open at once per user |
+   | `TRUST_PROXY_HEADERS` | unset | yes | | unset = on in production: the client IP is the last `X-Forwarded-For` value, the one Railway appended. Never `false` on Railway: uvicorn's `--proxy-headers` then hands the app the leftmost, client-chosen value |
    | `PLANNER_ALLOWED_EMAILS` | your TripTracker login email | yes | | empty means nobody; never commit it. TripTracker mode only: with `AUTH_MODE=atlas` the web app's `AUTH_ALLOWED_EMAILS` decides who signs up and this list is not consulted |
    | `ADMIN_EMAILS` | your email | yes | | who reads the eval history (`/evals`); empty = `PLANNER_ALLOWED_EMAILS` in TripTracker mode, nobody with `AUTH_MODE=atlas` |
    | `FRONTEND_ORIGIN` | `https://atlas.bellittim.com` | yes | | the only CORS origin and the required `Origin` on POST |
@@ -516,11 +522,16 @@ also issue and renew their own certificates without interference.
    else is invited from `/admin/waitlist`, which emails them the login page; with
    `AUTH_MODE=atlas` every account may plan, the backend's
    `PLANNER_ALLOWED_EMAILS` is not consulted), `RESEND_API_KEY` and
-   `AUTH_EMAIL_FROM` (a sender on a domain verified at Resend), and optionally
+   `AUTH_EMAIL_FROM` (a sender on a domain verified at Resend), optionally
    `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (OAuth client with redirect URI
-   `https://atlas.bellittim.com/api/auth/callback/google`). The tables already exist: the
-   backend's `alembic upgrade head` (migrations `600fbb922f91` and `609ccf5bdc99`, the waitlist)
-   creates them. On Railway set
+   `https://atlas.bellittim.com/api/auth/callback/google`), and `NEXT_PUBLIC_TURNSTILE_SITE_KEY` /
+   `TURNSTILE_SECRET_KEY` (Cloudflare dashboard > Turnstile > Add widget, hostname
+   `atlas.bellittim.com`, managed mode: the challenge on the waitlist join and the magic-link
+   request; without them no widget is drawn and nothing is checked; set both, before the build that
+   inlines the site key: one alone is logged as an error and checks nothing; the server also checks
+   each token's form and that it was issued on `BETTER_AUTH_URL`'s hostname). The tables already exist:
+   the backend's `alembic upgrade head` (migrations `600fbb922f91`, `609ccf5bdc99` the waitlist,
+   `22bb438487ee` the "Continua" count) creates them. On Railway set
    `AUTH_MODE=atlas` on the `backend` service at the same time, and `ADMIN_EMAILS` to your
    address (in this mode nobody reads `/evals` otherwise); the backend then verifies the cookie
    against the `auth_sessions` table of the shared database instead of asking TripTracker, every

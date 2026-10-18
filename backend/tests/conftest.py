@@ -458,11 +458,12 @@ class PlanRows:
         budget_cents: int | None = 60,
         created_at: dt.datetime | None = None,
         failure_reason: str | None = None,
+        session_id: str | None = "sesn_test",
     ) -> PlanRecord:
         record = PlanRecord(
             user_email=user_email,
             user_id=user_id,
-            session_id="sesn_test",
+            session_id=session_id,
             agent_profile="development",
             status=status.value,
             request=request if request is not None else dict(SAMPLE_REQUEST),

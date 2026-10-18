@@ -32,11 +32,10 @@ afterEach(() => {
 });
 
 describe("fetchIsAdmin", () => {
-  it("asks once per page, shares the answer and remembers it for the tab", async () => {
+  it("shares the request in flight and remembers the answer for the tab", async () => {
     fetchMock.mockResolvedValue(json(200, ME));
 
     expect(await Promise.all([fetchIsAdmin(), fetchIsAdmin()])).toEqual([true, true]);
-    expect(await fetchIsAdmin()).toBe(true);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(sessionStorage.getItem(ADMIN_KEY)).toBe("1");

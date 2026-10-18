@@ -117,7 +117,7 @@ describe("requests", () => {
   it("GET /me parses the signed-in address and the admin flag", async () => {
     const { api, fetchMock } = client(json(200, { email: "me@example.com", is_admin: true, extra: 1 }));
 
-    await expect(api.me()).resolves.toEqual({ email: "me@example.com", is_admin: true });
+    await expect(api.me()).resolves.toEqual({ email: "me@example.com", is_admin: true, quota: null });
 
     const [url, init] = fetchMock.mock.calls[0] ?? [];
     expect(url).toBe("https://atlas.api.test/me");

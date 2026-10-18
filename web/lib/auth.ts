@@ -1,7 +1,7 @@
 import "server-only";
 
 import { betterAuth, type BetterAuthOptions } from "better-auth";
-import { APIError } from "better-auth/api";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 import { after } from "next/server";
 import { magicLink } from "better-auth/plugins";
@@ -9,7 +9,10 @@ import { magicLink } from "better-auth/plugins";
 import { isSignupAllowed, normalizeEmail } from "./auth-policy";
 import { readAuthConfig, type AuthServerConfig } from "./server/auth-config";
 import { getPool } from "./server/db";
+import { clientIp } from "./server/request-ip";
 import { MAGIC_LINK_MINUTES, sendMagicLink } from "./server/send-magic-link";
+import { verifyTurnstile } from "./server/turnstile";
+import { CHALLENGE_FAILED_MESSAGE, TURNSTILE_ACTIONS, TURNSTILE_HEADER } from "./turnstile";
 import { signInStanding } from "./server/waitlist";
 
 /**
@@ -34,13 +37,18 @@ import { signInStanding } from "./server/waitlist";
  *   same 200 whether or not the address may sign in; for one that may not, `sendMagicLink` sends
  *   nothing, so the link's token never leaves the server (and its verification would hit the
  *   `user.create` refusal anyway). For one that may, the email leaves after the response
- *   (`after()`), so the two also answer in the same time. The login form says "if the address is enabled, a link
- *   arrives" and offers the waitlist to everyone.
+ *   (`after()`), so the two also answer in the same time. The login form says "if the address is
+ *   enabled, a link arrives" and offers the waitlist to everyone. Before that, the request must
+ *   pass the Turnstile challenge when it is configured (`hooks.before`, lib/server/turnstile.ts):
+ *   a robot gets CHALLENGE_FAILED whatever the address, so the refusal says nothing about the list.
  *
  * `auth` is null when the accounts are not configured (`readAuthConfig`): the route answers 503
  * and the login page says so.
  */
 export const SIGNUP_REFUSED_MESSAGE = "Questo indirizzo non ha ancora un invito.";
+
+/** The `code` of the magic-link request refused by the challenge (the login form reads it). */
+export const CHALLENGE_FAILED_CODE = "CHALLENGE_FAILED";
 
 export const COOKIE_PREFIX = "atlas";
 
@@ -158,6 +166,23 @@ export function buildAuth(config: AuthServerConfig, deps: AuthDependencies) {
       }),
       nextCookies(), // last, as its docs ask: it applies Set-Cookie from server actions
     ],
+    hooks: {
+      before: createAuthMiddleware(async (ctx) => {
+        // A magic-link request first passes the challenge (lib/turnstile.ts; nothing is checked
+        // without the keys). Who may sign in is decided later, in `sendMagicLink`, with the same
+        // 200 for every address (no enumeration).
+        if (ctx.path !== "/sign-in/magic-link") return;
+        const requestHeaders = ctx.headers ?? null;
+        const verdict = await verifyTurnstile(
+          requestHeaders?.get(TURNSTILE_HEADER) ?? null,
+          requestHeaders ? clientIp(requestHeaders) : null,
+          TURNSTILE_ACTIONS.login,
+        );
+        if (verdict === "failed") {
+          throw new APIError("BAD_REQUEST", { code: CHALLENGE_FAILED_CODE, message: CHALLENGE_FAILED_MESSAGE });
+        }
+      }),
+    },
     databaseHooks: {
       user: {
         create: {

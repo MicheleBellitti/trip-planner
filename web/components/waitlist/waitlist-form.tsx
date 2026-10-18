@@ -8,7 +8,9 @@ import { Button, LinkButton } from "@/components/ui/button";
 import { cx } from "@/components/ui/cx";
 import { Field, TextArea, TextInput } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
+import { Turnstile, type TurnstileHandle } from "@/components/ui/turnstile";
 import { ROUTES } from "@/lib/routes";
+import { CHALLENGE_FAILED_MESSAGE, TURNSTILE_ACTIONS, TURNSTILE_FIELD } from "@/lib/turnstile";
 import { WAITLIST_NOTE_MAX, type WaitlistSource } from "@/lib/waitlist-policy";
 import { JOIN_IDLE, type JoinState } from "@/lib/waitlist-state";
 
@@ -20,6 +22,8 @@ export const WAITLIST_CONSENT = "Usiamo l'indirizzo solo per scriverti quando c'
 export const WAITLIST_INVALID_EMAIL = "Scrivi un indirizzo email completo.";
 export const WAITLIST_NOTE_TOO_LONG = `Accorcia la nota: al massimo ${WAITLIST_NOTE_MAX} caratteri.`;
 export const WAITLIST_FAILED = "Non è stato possibile metterti in lista. Riprova tra poco.";
+export const WAITLIST_CHALLENGE_FAILED = CHALLENGE_FAILED_MESSAGE;
+export const WAITLIST_TOO_MANY = "Troppe richieste da questa connessione in poco tempo: riprova tra qualche minuto.";
 
 export const WAITLIST_RECEIVED_TITLE = "Ricevuto";
 
@@ -161,11 +165,21 @@ function JoinForm({
   const [edited, setEdited] = useState({ email: false, note: false });
   const emailRef = useRef<HTMLInputElement>(null);
   const noteRef = useRef<HTMLTextAreaElement>(null);
+  // The Turnstile token travels in a hidden field; a token is spent by one submit, so it leaves
+  // the field as the form is sent (it is already in the FormData) and the widget is reset after
+  // every answer: the next submit carries the fresh one, never the spent one.
+  const [challenge, setChallenge] = useState<string | null>(null);
+  const turnstile = useRef<TurnstileHandle>(null);
 
   function send(data: FormData) {
     setEdited({ email: false, note: false });
+    setChallenge(null);
     formAction(data);
   }
+
+  useEffect(() => {
+    if (state.status !== "idle") turnstile.current?.reset();
+  }, [state]);
 
   // The way back from an outcome: the field, with the kept address selected so typing replaces it.
   useEffect(() => {
@@ -205,12 +219,20 @@ function JoinForm({
   const error = state.status === "error" ? state.error : null;
   const emailError = error === "invalid_email" && !edited.email ? WAITLIST_INVALID_EMAIL : null;
   const noteError = error === "note_too_long" && !edited.note ? WAITLIST_NOTE_TOO_LONG : null;
-  const failed = error === "failed" || error === "unavailable";
+  const refusal =
+    error === "failed" || error === "unavailable"
+      ? WAITLIST_FAILED
+      : error === "challenge_failed"
+        ? WAITLIST_CHALLENGE_FAILED
+        : error === "too_many_requests"
+          ? WAITLIST_TOO_MANY
+          : null;
 
   return (
     <form action={send} noValidate className={cx("grid gap-4", className)}>
       <input type="hidden" name="source" value={source} />
-      {failed ? <Notice tone="error" role="alert" title={WAITLIST_FAILED} /> : null}
+      <input type="hidden" name={TURNSTILE_FIELD} value={challenge ?? ""} />
+      {refusal ? <Notice tone="error" role="alert" title={refusal} /> : null}
       <Field label={WAITLIST_EMAIL_LABEL} error={emailError}>
         {(control) => (
           <TextInput
@@ -253,6 +275,7 @@ function JoinForm({
         )}
       </Field>
       <p className="text-meta text-ink-2">{WAITLIST_CONSENT}</p>
+      <Turnstile ref={turnstile} onToken={setChallenge} action={TURNSTILE_ACTIONS.waitlist} />
       <Button
         type="submit"
         variant="primary"

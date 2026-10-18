@@ -1,13 +1,17 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 
 import { normalizeEmail } from "@/lib/auth-policy";
 import { ROUTES } from "@/lib/routes";
 import { currentCaller } from "@/lib/server/admin";
 import { readAuthConfig, type AuthServerConfig } from "@/lib/server/auth-config";
 import { getPool } from "@/lib/server/db";
+import { joinWindow } from "@/lib/server/rate-limit";
+import { clientIp } from "@/lib/server/request-ip";
 import { sendInvitation } from "@/lib/server/send-invitation";
+import { verifyTurnstile } from "@/lib/server/turnstile";
 import {
   claimInvitation,
   invite,
@@ -17,20 +21,29 @@ import {
   removeRequest,
   type Queryable,
 } from "@/lib/server/waitlist";
+import { TURNSTILE_ACTIONS, TURNSTILE_FIELD } from "@/lib/turnstile";
 import { parseJoinInput } from "@/lib/waitlist-policy";
 import type { InviteDelivery, InviteState, JoinState, RemoveState } from "@/lib/waitlist-state";
 
 /**
  * The waitlist's server actions (their states and initial values: lib/waitlist-state.ts).
- * `joinWaitlistAction` is public (the landing, the login's refusal); `inviteAction` is for admins,
- * checked here on every call with the backend's `GET /me` (lib/server/admin.ts), never trusted
- * from the page that rendered the button. Neither action ever puts an address in a log: failures
- * are logged by kind only.
+ * `joinWaitlistAction` is public (the landing, the login's sent state): the client IP's window
+ * (lib/server/rate-limit.ts) and the Turnstile token (lib/server/turnstile.ts) are checked before
+ * the input, so a robot learns nothing about the shape check or the list. `inviteAction` is for
+ * admins, checked here on every call with the backend's `GET /me` (lib/server/admin.ts), never
+ * trusted from the page that rendered the button. No action ever puts an address in a log:
+ * failures are logged by kind only.
  */
 
 /** The public join: one answer, "received", whatever the address is (lib/waitlist-state.ts
  * `JoinState`); only the kind of outcome is logged. A public form may not claim the "admin" source. */
 export async function joinWaitlistAction(_previous: JoinState, formData: FormData): Promise<JoinState> {
+  const ip = clientIp(await headers());
+  if (!joinWindow.hit(ip ?? "unknown").allowed) return { status: "error", error: "too_many_requests" };
+  const token = formData.get(TURNSTILE_FIELD);
+  if ((await verifyTurnstile(typeof token === "string" ? token : null, ip, TURNSTILE_ACTIONS.waitlist)) === "failed") {
+    return { status: "error", error: "challenge_failed" };
+  }
   const parsed = parseJoinInput({ email: formData.get("email"), note: formData.get("note"), source: formData.get("source") });
   if (!parsed.ok) return { status: "error", error: parsed.error };
   const config = readAuthConfig();

@@ -181,8 +181,38 @@ class Settings(BaseSettings):
     # 100 for development.
     session_budget_cents: int = Field(gt=0)
 
-    # Monthly spend ceiling across all plans, in cents; POST /plans refuses past it.
+    # Monthly spend ceiling across all plans, in cents (recorded cost plus the unspent budget of
+    # the running plans, app/quota.py); POST /plans refuses a plan whose budget would not fit.
     monthly_limit_cents: int = Field(default=5000, gt=0)
+
+    # Per-user monthly quota (calendar month in Europe/Rome): how many plans one account may
+    # start and how many cents its plans may use, recorded cost plus the unspent budget of its
+    # running plans. Admins (ADMIN_EMAILS) are exempt; the ceiling above still applies to them.
+    user_monthly_plans: int = Field(default=10, gt=0)
+    user_monthly_cents: int = Field(default=1500, gt=0)
+
+    # How many times "Continua" may raise one plan's budget (each adds $2).
+    max_continues_per_plan: int = Field(default=2, ge=0)
+
+    # How many plans may be `running` at once, all users: past it POST /plans answers 503
+    # planner_busy and nothing is spent.
+    max_running_plans: int = Field(default=8, gt=0)
+
+    # Rate limits, kept in the process (one replica; a redeploy starts them over): POST /plans
+    # per user and per client IP in a sliding window of PLAN_CREATE_WINDOW_SECONDS, and how many
+    # event streams (SSE) one user may hold open at once.
+    plan_create_limit_per_user: int = Field(default=5, gt=0)
+    plan_create_limit_per_ip: int = Field(default=20, gt=0)
+    plan_create_window_seconds: int = Field(default=600, gt=0)
+    max_streams_per_user: int = Field(default=4, gt=0)
+
+    # Read the client IP from X-Forwarded-For (its last value, the one the proxy in front
+    # appended) instead of request.client. Unset: on in production (Railway's proxy), off in
+    # development. Never turn it on without a proxy, and never off behind Railway: the image's
+    # uvicorn --proxy-headers with FORWARDED_ALLOW_IPS="*" puts the leftmost, client-chosen
+    # X-Forwarded-For value in request.client (app/ratelimit.py). Either way a client could
+    # then pick its own bucket.
+    trust_proxy_headers: bool | None = None
 
     # Who may use the planner with AUTH_MODE=triptracker (and the user of AUTH_MODE=local). Comma
     # separated, case insensitive; empty means nobody. Not consulted with AUTH_MODE=atlas: there
@@ -316,6 +346,14 @@ class Settings(BaseSettings):
     def _blank_sha_is_missing(cls, value: object) -> object:
         if isinstance(value, str):
             return value.strip() or None
+        return value
+
+    @field_validator("trust_proxy_headers", mode="before")
+    @classmethod
+    def _blank_proxy_flag_is_unset(cls, value: object) -> object:
+        """`TRUST_PROXY_HEADERS=` (the example file's line) means "the environment's default"."""
+        if isinstance(value, str) and not value.strip():
+            return None
         return value
 
     @field_validator("trip_schema_url", mode="before")
@@ -484,6 +522,13 @@ class Settings(BaseSettings):
         if not email:
             return False
         return email.strip().lower() in self.admins
+
+    @property
+    def trusts_proxy_headers(self) -> bool:
+        """`TRUST_PROXY_HEADERS`, or the environment's default: production sits behind a proxy."""
+        if self.trust_proxy_headers is not None:
+            return self.trust_proxy_headers
+        return self.environment == "production"
 
 
 @lru_cache

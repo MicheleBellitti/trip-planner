@@ -231,7 +231,7 @@ _PROVIDER_LABELS: dict[str, str] = {
 _IDLE: dict[str, tuple[str, LaneState]] = {
     "end_turn": ("Turno concluso", "done"),
     "requires_action": ("In attesa di una risposta", "waiting"),
-    "budget_reached": ("Fermo: budget della sessione esaurito", "waiting"),
+    "budget_reached": ("Fermo: budget della sessione raggiunto", "waiting"),
     "retries_exhausted": ("Fermo: troppi errori, tentativi esauriti", "error"),
     "refusal": ("Fermo: il modello ha rifiutato di proseguire", "error"),
 }

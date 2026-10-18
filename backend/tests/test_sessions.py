@@ -40,6 +40,7 @@ from app.fx import FxConverter
 from app.hub import PlanHub
 from app.lockfile import load_roster
 from app.ma_client import ApiRejectedError, ApiUnavailableError, ManagedAgentsError
+from app.quota import ContinueLimitReachedError, PlannerBusyError, QuotaReachedError
 from app.request import PlanRequest
 from app.sessions import (
     CONTINUE_MESSAGE,
@@ -251,9 +252,10 @@ async def insert_plan(
     budget_cents: int | None = 60,
     created_at: dt.datetime | None = None,
     running_since: dt.datetime | None = None,
+    continues: int = 0,
 ) -> uuid.UUID:
     plan_id = uuid.uuid4()
-    values: dict[str, Any] = {"user_id": user_id}
+    values: dict[str, Any] = {"user_id": user_id, "continues": continues}
     if created_at is not None:
         values["created_at"] = created_at
     if running_since is not None:
@@ -437,8 +439,9 @@ async def test_start_plan_uses_the_brief_date_in_rome(planner: Planner) -> None:
     assert first_message.startswith("Today is 2026-10-13 (Europe/Rome).")
 
 
-@pytest.mark.parametrize(("spent", "refused"), [(4999, False), (5000, True), (5300, True)])
-async def test_monthly_limit_refuses_at_or_above_the_cap(
+# The new plan's own budget (60 cents in the test settings) must fit under the ceiling too.
+@pytest.mark.parametrize(("spent", "refused"), [(4940, False), (4941, True), (5300, True)])
+async def test_monthly_limit_refuses_when_the_new_budget_would_not_fit(
     planner: Planner, spent: int, refused: bool
 ) -> None:
     october = dt.datetime(2026, 10, 3, 12, 0, tzinfo=ROME)
@@ -1397,3 +1400,373 @@ async def test_interrupt_with_the_real_consumer(
     assert fake.archived == [fake.session_id]
     titles = [event.title for event in await load_events(db_session_factory, plan_id)]
     assert TITLE_INTERRUPT_REQUESTED in titles
+
+
+# --- the economics (app/quota.py) ----------------------------------------------------------------
+
+OCTOBER = dt.datetime(2026, 10, 2, 9, 0, tzinfo=ROME)
+ADMIN = CurrentUser(email="boss@example.com")
+
+
+@pytest.fixture
+async def quota_planner(
+    make_settings: Callable[..., Settings],
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> AsyncIterator[Planner]:
+    """USER subject to the per-user quota (someone else is the admin), with small limits: 3
+    plans and 300 cents a month, 1 "Continua" per plan, 3 plans running at once."""
+    settings = planner_settings(
+        make_settings,
+        admin_emails=["boss@example.com"],
+        user_monthly_plans=3,
+        user_monthly_cents=300,
+        max_continues_per_plan=1,
+        max_running_plans=3,
+    )
+    async with open_planner(settings, db_session_factory) as opened:
+        yield opened
+
+
+async def count_plans(session_factory: async_sessionmaker[AsyncSession]) -> int:
+    async with session_factory() as db:
+        return len(list(await db.scalars(select(PlanRecord.id))))
+
+
+async def test_quota_refuses_the_users_fourth_plan_of_the_month(quota_planner: Planner) -> None:
+    factory = quota_planner.session_factory
+    await insert_plan(factory, status=PlanStatus.READY, cost_cents=10, created_at=OCTOBER)
+    await insert_plan(factory, status=PlanStatus.FAILED, cost_cents=0, created_at=OCTOBER)
+    await insert_plan(factory, status=PlanStatus.INTERRUPTED, cost_cents=5, created_at=OCTOBER)
+    await insert_plan(  # someone else's: not counted against USER
+        factory, status=PlanStatus.READY, cost_cents=10, created_at=OCTOBER, user_email=ADMIN.email
+    )
+    await insert_plan(  # last month: not counted
+        factory,
+        status=PlanStatus.READY,
+        created_at=dt.datetime(2026, 9, 30, 23, 30, tzinfo=ROME),
+    )
+
+    with pytest.raises(QuotaReachedError) as caught:
+        await start_plan(REQUEST, USER, services=quota_planner.services)
+
+    assert caught.value.kind == "plans"
+    assert (caught.value.quota.plans_used, caught.value.quota.plans_limit) == (3, 3)
+    assert caught.value.quota.resets_at == dt.datetime(2026, 11, 1, tzinfo=ROME)
+    assert quota_planner.fake.created == []  # nothing spent
+    assert await count_plans(factory) == 5  # no row added
+
+
+# USER's month: a finished plan and a running one with 50 of its 60 cents unspent; the new plan's
+# own 60 cents must fit under 300 too.
+@pytest.mark.parametrize(("finished_cost", "refused"), [(180, False), (181, True)])
+async def test_quota_counts_the_running_plans_unspent_budget_and_the_new_one(
+    quota_planner: Planner, finished_cost: int, refused: bool
+) -> None:
+    factory = quota_planner.session_factory
+    await insert_plan(
+        factory, status=PlanStatus.READY, cost_cents=finished_cost, created_at=OCTOBER
+    )
+    await insert_plan(factory, status=PlanStatus.RUNNING, cost_cents=10, created_at=OCTOBER)
+
+    if not refused:
+        await start_plan(REQUEST, USER, services=quota_planner.services)
+        assert len(quota_planner.fake.created) == 1
+        return
+    with pytest.raises(QuotaReachedError) as caught:
+        await start_plan(REQUEST, USER, services=quota_planner.services)
+    assert caught.value.kind == "cents"
+    assert (caught.value.quota.cents_used, caught.value.quota.cents_limit) == (
+        finished_cost + 10 + 50,
+        300,
+    )
+    assert quota_planner.fake.created == []
+
+
+async def test_admins_are_exempt_from_the_user_quota_but_not_from_the_ceiling(
+    quota_planner: Planner,
+) -> None:
+    factory = quota_planner.session_factory
+    for _ in range(4):  # over the 3-plan quota
+        await insert_plan(
+            factory,
+            status=PlanStatus.READY,
+            cost_cents=100,
+            created_at=OCTOBER,
+            user_email=ADMIN.email,
+        )
+
+    await start_plan(REQUEST, ADMIN, services=quota_planner.services)
+    assert len(quota_planner.fake.created) == 1
+
+    await insert_plan(  # the ceiling (5000) still counts everyone, the admin included
+        factory,
+        status=PlanStatus.READY,
+        cost_cents=4700,
+        created_at=OCTOBER,
+        user_email="x@example.com",
+    )
+    with pytest.raises(MonthlyLimitReachedError):
+        await start_plan(REQUEST, ADMIN, services=quota_planner.services)
+
+
+async def test_the_running_cap_refuses_with_planner_busy_and_spends_nothing(
+    quota_planner: Planner,
+) -> None:
+    factory = quota_planner.session_factory
+    for owner in ("a@example.com", "b@example.com", ADMIN.email):
+        await insert_plan(factory, status=PlanStatus.RUNNING, created_at=OCTOBER, user_email=owner)
+
+    with pytest.raises(PlannerBusyError) as caught:
+        await start_plan(REQUEST, ADMIN, services=quota_planner.services)
+
+    assert (caught.value.running, caught.value.limit) == (3, 3)
+    assert quota_planner.fake.created == []
+    assert await count_plans(factory) == 3
+
+
+async def test_the_continue_cap_refuses_before_touching_the_session(quota_planner: Planner) -> None:
+    plan_id = await insert_plan(
+        quota_planner.session_factory,
+        status=PlanStatus.BUDGET_PAUSED,
+        cost_cents=60,
+        created_at=OCTOBER,
+        continues=1,
+    )
+
+    with pytest.raises(ContinueLimitReachedError) as caught:
+        await continue_plan(plan_id, USER, services=quota_planner.services)
+
+    assert (caught.value.continues, caught.value.limit) == (1, 1)
+    assert quota_planner.fake.budget_updates == []
+    plan = await load_plan(quota_planner.session_factory, plan_id)
+    assert (plan.status, plan.continues) == (PlanStatus.BUDGET_PAUSED, 1)
+
+
+async def test_continue_checks_the_users_cents_with_the_extra_included(
+    quota_planner: Planner,
+) -> None:
+    factory = quota_planner.session_factory
+    await insert_plan(factory, status=PlanStatus.READY, cost_cents=101, created_at=OCTOBER)
+    plan_id = await insert_plan(
+        factory, status=PlanStatus.BUDGET_PAUSED, cost_cents=0, created_at=OCTOBER
+    )
+
+    with pytest.raises(QuotaReachedError) as caught:  # 101 + 0 + 200 > 300
+        await continue_plan(plan_id, USER, services=quota_planner.services)
+
+    assert caught.value.kind == "cents"
+    assert quota_planner.fake.budget_updates == []
+
+
+async def test_continue_counts_itself_on_the_plan(
+    planner: Planner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(sessions, "CONTINUE_RESUME_WAIT_SECONDS", 3600.0)
+    plan_id = await insert_plan(
+        planner.session_factory, status=PlanStatus.BUDGET_PAUSED, cost_cents=60, created_at=OCTOBER
+    )
+
+    assert await continue_plan(plan_id, USER, services=planner.services) == 260
+
+    plan = await load_plan(planner.session_factory, plan_id)
+    assert (plan.status, plan.budget_cents, plan.continues) == (PlanStatus.RUNNING, 260, 1)
+
+
+# --- "Continua" reserves its extra before the session is touched -------------------------------
+
+
+@pytest.fixture
+async def ceiling_planner(
+    make_settings: Callable[..., Settings],
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> AsyncIterator[Planner]:
+    """A 1500-cent month for everyone, no per-user limit in the way, 3 plans running at once."""
+    settings = planner_settings(
+        make_settings,
+        monthly_limit_cents=1500,
+        user_monthly_cents=100_000,
+        user_monthly_plans=100,
+        max_running_plans=3,
+    )
+    async with open_planner(settings, db_session_factory) as opened:
+        yield opened
+
+
+def hold_retrieve(planner: Planner, monkeypatch: pytest.MonkeyPatch) -> tuple[Any, Any]:
+    """Make the next `retrieve_session` (step 2 of "Continua") wait: returns (entered, release)."""
+    entered, release = asyncio.Event(), asyncio.Event()
+    original = planner.fake.retrieve_session
+
+    async def held(session_id: str) -> Any:
+        if not entered.is_set():  # only the first call waits
+            entered.set()
+            await release.wait()
+        return await original(session_id)
+
+    monkeypatch.setattr(planner.fake, "retrieve_session", held)
+    return entered, release
+
+
+async def test_a_continue_in_flight_reserves_its_extra_against_a_new_start(
+    ceiling_planner: Planner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(sessions, "CONTINUE_RESUME_WAIT_SECONDS", 3600.0)
+    factory = ceiling_planner.session_factory
+    await insert_plan(
+        factory, status=PlanStatus.READY, cost_cents=1200, created_at=OCTOBER, user_email="x@a.it"
+    )
+    paused = await insert_plan(
+        factory, status=PlanStatus.BUDGET_PAUSED, cost_cents=60, created_at=OCTOBER
+    )
+    entered, release = hold_retrieve(ceiling_planner, monkeypatch)
+
+    continuing = asyncio.create_task(continue_plan(paused, USER, services=ceiling_planner.services))
+    await asyncio.wait_for(entered.wait(), 5)
+    # 1200 + 60 + the continue's 200 = 1460: a start's 60 would make 1520. Without the
+    # reservation the start would see 1260 and pass.
+    try:
+        with pytest.raises(MonthlyLimitReachedError):
+            await start_plan(REQUEST, USER, services=ceiling_planner.services)
+    finally:
+        release.set()
+    assert await continuing == 260
+
+    plan = await load_plan(factory, paused)
+    assert (plan.status, plan.budget_cents, plan.continues) == (PlanStatus.RUNNING, 260, 1)
+    assert ceiling_planner.fake.created == []
+
+
+async def test_a_continue_in_flight_reserves_its_extra_against_another_continue(
+    ceiling_planner: Planner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(sessions, "CONTINUE_RESUME_WAIT_SECONDS", 3600.0)
+    factory = ceiling_planner.session_factory
+    await insert_plan(
+        factory, status=PlanStatus.READY, cost_cents=1080, created_at=OCTOBER, user_email="x@a.it"
+    )
+    first = await insert_plan(
+        factory, status=PlanStatus.BUDGET_PAUSED, cost_cents=60, created_at=OCTOBER
+    )
+    second = await insert_plan(
+        factory, status=PlanStatus.BUDGET_PAUSED, cost_cents=60, created_at=OCTOBER
+    )
+    entered, release = hold_retrieve(ceiling_planner, monkeypatch)
+
+    continuing = asyncio.create_task(continue_plan(first, USER, services=ceiling_planner.services))
+    await asyncio.wait_for(entered.wait(), 5)
+    # 1080 + 120 + 200 = 1400 with the first one's extra reserved: another 200 would make 1600.
+    try:
+        with pytest.raises(MonthlyLimitReachedError):
+            await continue_plan(second, USER, services=ceiling_planner.services)
+    finally:
+        release.set()
+    await continuing
+
+    plan = await load_plan(factory, second)
+    assert (plan.status, plan.budget_cents, plan.continues) == (PlanStatus.BUDGET_PAUSED, 60, 0)
+    assert len(ceiling_planner.fake.budget_updates) == 1
+
+
+async def test_a_continue_in_flight_counts_as_running_for_the_cap(
+    ceiling_planner: Planner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(sessions, "CONTINUE_RESUME_WAIT_SECONDS", 3600.0)
+    factory = ceiling_planner.session_factory
+    for owner in ("a@example.com", "b@example.com"):
+        await insert_plan(factory, status=PlanStatus.RUNNING, created_at=OCTOBER, user_email=owner)
+    paused = await insert_plan(
+        factory, status=PlanStatus.BUDGET_PAUSED, cost_cents=60, created_at=OCTOBER
+    )
+    entered, release = hold_retrieve(ceiling_planner, monkeypatch)
+
+    continuing = asyncio.create_task(continue_plan(paused, USER, services=ceiling_planner.services))
+    await asyncio.wait_for(entered.wait(), 5)
+    try:
+        with pytest.raises(PlannerBusyError) as caught:
+            await start_plan(REQUEST, USER, services=ceiling_planner.services)
+    finally:
+        release.set()
+    assert (caught.value.running, caught.value.limit) == (3, 3)
+    await continuing
+
+
+async def test_continue_respects_the_running_cap(ceiling_planner: Planner) -> None:
+    factory = ceiling_planner.session_factory
+    for owner in ("a@example.com", "b@example.com", "c@example.com"):
+        await insert_plan(factory, status=PlanStatus.RUNNING, created_at=OCTOBER, user_email=owner)
+    paused = await insert_plan(
+        factory, status=PlanStatus.BUDGET_PAUSED, cost_cents=60, created_at=OCTOBER
+    )
+
+    with pytest.raises(PlannerBusyError):
+        await continue_plan(paused, USER, services=ceiling_planner.services)
+
+    assert ceiling_planner.fake.calls_of("retrieve_session") == []
+    assert ceiling_planner.fake.budget_updates == []
+    plan = await load_plan(factory, paused)
+    assert (plan.status, plan.budget_cents, plan.continues) == (PlanStatus.BUDGET_PAUSED, 60, 0)
+
+
+@pytest.mark.parametrize("failing", ["retrieve_session", "update_budget"])
+async def test_a_failed_continue_gives_its_reservation_back(
+    ceiling_planner: Planner, failing: str
+) -> None:
+    factory = ceiling_planner.session_factory
+    await insert_plan(
+        factory, status=PlanStatus.READY, cost_cents=1200, created_at=OCTOBER, user_email="x@a.it"
+    )
+    paused = await insert_plan(
+        factory, status=PlanStatus.BUDGET_PAUSED, cost_cents=60, created_at=OCTOBER
+    )
+    ceiling_planner.fake.fail_next(failing, ApiRejectedError("refused", status_code=400))
+
+    with pytest.raises(ApiRejectedError):
+        await continue_plan(paused, USER, services=ceiling_planner.services)
+
+    plan = await load_plan(factory, paused)
+    assert (plan.status, plan.budget_cents, plan.continues) == (PlanStatus.BUDGET_PAUSED, 60, 0)
+    titles = [event.title for event in await load_events(factory, paused)]
+    assert TITLE_CONTINUED not in titles
+    # 1200 + 60 + a start's 60 = 1320: the released 200 no longer stands in the way.
+    await start_plan(REQUEST, USER, services=ceiling_planner.services)
+    assert len(ceiling_planner.fake.created) == 1
+
+
+async def test_an_outage_does_not_eat_the_users_plans(quota_planner: Planner) -> None:
+    """Michele, 2026-10-18: starts that failed before any session existed (502s) are not plans
+    of the month; the next start after the outage is still admitted."""
+    factory = quota_planner.session_factory
+    await insert_plan(factory, status=PlanStatus.READY, cost_cents=10, created_at=OCTOBER)
+    await insert_plan(factory, status=PlanStatus.FAILED, cost_cents=5, created_at=OCTOBER)
+    for _ in range(4):  # more than the 3-plan quota
+        quota_planner.fake.fail_next("create_session", "api_unavailable")
+        with pytest.raises(ManagedAgentsError):
+            await start_plan(REQUEST, USER, services=quota_planner.services)
+
+    plan_id = await start_plan(REQUEST, USER, services=quota_planner.services)
+
+    assert (await load_plan(factory, plan_id)).status == PlanStatus.RUNNING.value
+    # Now 3 plans (the ready one, the one that failed with a session, this one): the next is one
+    # too many.
+    with pytest.raises(QuotaReachedError) as caught:
+        await start_plan(REQUEST, USER, services=quota_planner.services)
+    assert (caught.value.kind, caught.value.quota.plans_used) == ("plans", 3)
+
+
+async def test_the_eval_runner_is_exempt_from_the_user_quota_not_from_the_ceiling(
+    quota_planner: Planner,
+) -> None:
+    factory = quota_planner.session_factory
+    for _ in range(3):  # USER's 3 plans of the month
+        await insert_plan(factory, status=PlanStatus.READY, cost_cents=10, created_at=OCTOBER)
+    with pytest.raises(QuotaReachedError):
+        await start_plan(REQUEST, USER, services=quota_planner.services)
+
+    await start_plan(REQUEST, USER, services=quota_planner.services, user_quota_applies=False)
+    assert len(quota_planner.fake.created) == 1
+
+    await insert_plan(  # the ceiling (5000) still holds
+        factory, status=PlanStatus.READY, cost_cents=4900, created_at=OCTOBER, user_email="x@a.it"
+    )
+    with pytest.raises(MonthlyLimitReachedError):
+        await start_plan(REQUEST, USER, services=quota_planner.services, user_quota_applies=False)

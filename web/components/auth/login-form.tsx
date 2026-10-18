@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
 import { joinWaitlistAction } from "@/app/actions/waitlist";
 import { StatePanel } from "@/components/states/state-panel";
 import { Button } from "@/components/ui/button";
 import { Field, TextInput } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
-import { WAITLIST_FAILED, WAITLIST_SUBMIT, WaitlistOutcome } from "@/components/waitlist/waitlist-form";
+import { Turnstile, type TurnstileHandle } from "@/components/ui/turnstile";
+import { WAITLIST_FAILED, WAITLIST_SUBMIT, WAITLIST_TOO_MANY, WaitlistOutcome } from "@/components/waitlist/waitlist-form";
 import { authClient } from "@/lib/auth-client";
+import { CHALLENGE_FAILED_MESSAGE, TURNSTILE_ACTIONS, TURNSTILE_FIELD, TURNSTILE_HEADER, turnstileSiteKey } from "@/lib/turnstile";
 import { safeReturnTo } from "@/lib/return-to";
 import { ROUTES } from "@/lib/routes";
 import { JOIN_IDLE } from "@/lib/waitlist-state";
@@ -20,6 +22,11 @@ export const INVITE_ONLY_ERROR = "Questo indirizzo non ha ancora un invito.";
 export const NO_LINK_HINT = "Non arriva niente? Mettiti in lista: ti scriviamo quando c'è posto.";
 /** After the waitlist's answer on this page: what the h1 "Accedi" still promises. */
 export const LISTED_HINT = "Quando ti scriviamo, torna qui con lo stesso indirizzo.";
+
+/** How long a send waits for a fresh Turnstile token after a reset before going without one. */
+export const CHALLENGE_WAIT_MS = 6000;
+/** Better Auth's `code` when the magic-link request did not pass the challenge (lib/auth.ts). */
+const CHALLENGE_FAILED_CODE = "CHALLENGE_FAILED";
 export const INVALID_EMAIL_ERROR = "Scrivi un indirizzo email completo.";
 export const TOO_MANY_REQUESTS_ERROR = "Troppi tentativi: aspetta un minuto e riprova.";
 /** The link request itself failed (the network, the server): the email leaves after the answer
@@ -98,7 +105,9 @@ interface LoginFormProps {
  * where to look, can send another link or change the address, and heals itself: when the tab
  * comes back into view it asks whether the link was used elsewhere and, if so, goes where the user
  * was headed. Focus follows every transition: the input on an error and on the way back, the panel
- * whenever a link leaves. The verb is always "inviare".
+ * whenever a link leaves. The verb is always "inviare". With Turnstile on (lib/turnstile.ts) every
+ * request carries a fresh token: the widget is drawn in the form and again in the sent state, so
+ * "Inviane un altro" and "Mettimi in lista" never go out with a spent token or none.
  */
 export function LoginForm({ returnTo, errorCode, configured, googleEnabled, navigate }: LoginFormProps) {
   const [phase, setPhase] = useState<Phase>({ kind: "form" });
@@ -111,6 +120,16 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled, navi
   const [focusInput, setFocusInput] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const sentRef = useRef<HTMLDivElement>(null);
+  // Turnstile: the latest token, and who is waiting for the next one (a send right after a reset,
+  // before the fresh token arrived). A token is spent by one request, so every request resets the
+  // widget afterwards; the sent state draws its own widget, whose first token is the next one.
+  const challengeToken = useRef<string | null>(null);
+  const challengeWaiters = useRef<Array<(token: string | null) => void>>([]);
+  const turnstile = useRef<TurnstileHandle>(null);
+  const onChallenge = useCallback((token: string | null) => {
+    challengeToken.current = token;
+    if (token) for (const waiter of challengeWaiters.current.splice(0)) waiter(token);
+  }, []);
 
   useEffect(() => {
     if (phase.kind === "sent") sentRef.current?.focus();
@@ -181,6 +200,31 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled, navi
     };
   }, [phase.kind, returnTo, navigate]);
 
+  /** The challenge's token for the next request: null when the challenge is off; otherwise the
+   * one at hand, or the next one within `CHALLENGE_WAIT_MS` (after a reset it takes a moment). */
+  function challenge(): Promise<string | null> {
+    if (!turnstileSiteKey()) return Promise.resolve(null);
+    if (challengeToken.current) return Promise.resolve(challengeToken.current);
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        challengeWaiters.current = challengeWaiters.current.filter((waiter) => waiter !== settle);
+        resolve(null);
+      }, CHALLENGE_WAIT_MS);
+      const settle = (token: string | null) => {
+        clearTimeout(timer);
+        resolve(token);
+      };
+      challengeWaiters.current.push(settle);
+    });
+  }
+
+  /** The token was spent: forget it and ask the widget on screen for the next one. */
+  function spendChallenge() {
+    if (!turnstileSiteKey()) return;
+    challengeToken.current = null;
+    turnstile.current?.reset();
+  }
+
   /** Sends the link to `address`; `again` marks a resend from the sent state. */
   async function send(address: string, again: boolean) {
     setBusy("link");
@@ -188,15 +232,18 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled, navi
     setFieldError(null);
     let error: ClientError | null;
     try {
+      const token = await challenge();
       ({ error } = await authClient.signIn.magicLink({
         email: address,
         callbackURL: callbackURL(),
         errorCallbackURL: errorCallbackURL(),
+        fetchOptions: token ? { headers: { [TURNSTILE_HEADER]: token } } : undefined,
       }));
     } catch {
       // A network failure rejects instead of answering with an error: it is a failed send too.
       error = {};
     } finally {
+      spendChallenge();
       setBusy(null);
     }
     if (error) {
@@ -216,15 +263,22 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled, navi
     data.set("email", address);
     data.set("source", "login");
     try {
+      const token = await challenge();
+      if (token) data.set(TURNSTILE_FIELD, token);
       const state = await joinWaitlistAction(JOIN_IDLE, data);
       if (state.status === "received") {
         setPhase({ kind: "listed", email: state.email });
         return;
       }
-      setNotice({ title: WAITLIST_FAILED });
+      const error = state.status === "error" ? state.error : null;
+      setNotice({
+        title:
+          error === "challenge_failed" ? CHALLENGE_FAILED_MESSAGE : error === "too_many_requests" ? WAITLIST_TOO_MANY : WAITLIST_FAILED,
+      });
     } catch {
       setNotice({ title: WAITLIST_FAILED });
     } finally {
+      spendChallenge();
       setBusy(null);
     }
   }
@@ -232,6 +286,11 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled, navi
   /** Better Auth answers 403 for refusals that are not about the address (an origin or callback it
    * does not trust): those are the generic failure, like everything but a rate limit. */
   function failed(error: ClientError, { inSentState, action }: { inSentState: boolean; action: "link" | "google" }) {
+    if (error.code === CHALLENGE_FAILED_CODE) {
+      setNotice({ title: CHALLENGE_FAILED_MESSAGE });
+      if (!inSentState) setFocusInput((tick) => tick + 1);
+      return;
+    }
     const failure = action === "link" ? SEND_FAILED_ERROR : GENERIC_SIGN_IN_ERROR;
     setNotice({ title: error.status === 429 ? TOO_MANY_REQUESTS_ERROR : failure });
     if (!inSentState) setFocusInput((tick) => tick + 1);
@@ -363,6 +422,8 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled, navi
             <dd className="m-0 mt-1.5 max-w-prose text-small text-ink-2">{NO_LINK_HINT}</dd>
           </div>
         </StatePanel>
+        {/* The form's widget left with the form: this one issues the token of the next request. */}
+        <Turnstile ref={turnstile} onToken={onChallenge} action={TURNSTILE_ACTIONS.login} className="mt-4" />
       </div>
     );
   }
@@ -404,6 +465,7 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled, navi
               />
             )}
           </Field>
+          <Turnstile ref={turnstile} onToken={onChallenge} action={TURNSTILE_ACTIONS.login} />
           <Button
             type="submit"
             variant="primary"

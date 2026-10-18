@@ -14,7 +14,10 @@ const reclaimInvitation = vi.fn();
 const removeRequest = vi.fn();
 const sendInvitation = vi.fn();
 const revalidatePath = vi.fn();
+const verifyTurnstile = vi.fn();
+const hit = vi.fn();
 const pool = { query: vi.fn() };
+const requestHeaders: Record<string, string> = { "x-real-ip": "203.0.113.9" };
 
 vi.mock("@/lib/server/admin", () => ({ currentCaller: (...args: unknown[]) => currentCaller(...args) }));
 vi.mock("@/lib/server/auth-config", () => ({ readAuthConfig: (...args: unknown[]) => readAuthConfig(...args) }));
@@ -29,6 +32,9 @@ vi.mock("@/lib/server/waitlist", () => ({
 }));
 vi.mock("@/lib/server/send-invitation", () => ({ sendInvitation: (...args: unknown[]) => sendInvitation(...args) }));
 vi.mock("next/cache", () => ({ revalidatePath: (...args: unknown[]) => revalidatePath(...args) }));
+vi.mock("next/headers", () => ({ headers: async () => new Headers(requestHeaders) }));
+vi.mock("@/lib/server/turnstile", () => ({ verifyTurnstile: (...args: unknown[]) => verifyTurnstile(...args) }));
+vi.mock("@/lib/server/rate-limit", () => ({ joinWindow: { hit: (...args: unknown[]) => hit(...args) } }));
 
 const CONFIG = { databaseUrl: "postgresql://x", baseUrl: "https://atlas.test" };
 
@@ -39,12 +45,55 @@ function form(fields: Record<string, string>): FormData {
 }
 
 beforeEach(() => {
-  for (const mock of [currentCaller, readAuthConfig, joinWaitlist, invite, claimInvitation, releaseInvitation, reclaimInvitation, removeRequest, sendInvitation, revalidatePath]) mock.mockReset();
+  for (const mock of [currentCaller, readAuthConfig, joinWaitlist, invite, claimInvitation, releaseInvitation, reclaimInvitation, removeRequest, sendInvitation, revalidatePath, verifyTurnstile, hit]) mock.mockReset();
   readAuthConfig.mockReturnValue(CONFIG);
+  verifyTurnstile.mockResolvedValue("off");
+  hit.mockReturnValue({ allowed: true, retryAfterSeconds: 0 });
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
 
 describe("joinWaitlistAction", () => {
+  it("counts the address's window and checks the challenge before reading the input", async () => {
+    hit.mockReturnValue({ allowed: false, retryAfterSeconds: 300 });
+    const data = new FormData();
+    data.set("email", "nobody@example.com");
+    data.set("source", "landing");
+    expect(await joinWaitlistAction(JOIN_IDLE, data)).toEqual({ status: "error", error: "too_many_requests" });
+    expect(hit).toHaveBeenCalledWith("203.0.113.9");
+    expect(verifyTurnstile).not.toHaveBeenCalled();
+    expect(joinWaitlist).not.toHaveBeenCalled();
+
+    hit.mockReturnValue({ allowed: true, retryAfterSeconds: 0 });
+    verifyTurnstile.mockResolvedValue("failed");
+    data.set("cf-turnstile-response", "tok-1");
+    expect(await joinWaitlistAction(JOIN_IDLE, data)).toEqual({ status: "error", error: "challenge_failed" });
+    expect(verifyTurnstile).toHaveBeenCalledWith("tok-1", "203.0.113.9", "waitlist");
+    expect(joinWaitlist).not.toHaveBeenCalled();
+
+    verifyTurnstile.mockResolvedValue("passed");
+    joinWaitlist.mockResolvedValue("joined");
+    expect(await joinWaitlistAction(JOIN_IDLE, data)).toEqual({ status: "received", email: "nobody@example.com" });
+  });
+
+  it("keys the window on the client, never on the address, and a request without an IP shares one bucket", async () => {
+    hit.mockReturnValue({ allowed: false, retryAfterSeconds: 300 });
+    // Two addresses from one connection: the same key, the same answer, whatever the list holds.
+    for (const email of ["listed@example.com", "stranger@example.com"]) {
+      expect(await joinWaitlistAction(JOIN_IDLE, form({ email, source: "landing" }))).toEqual({ status: "error", error: "too_many_requests" });
+    }
+    expect(hit.mock.calls).toEqual([["203.0.113.9"], ["203.0.113.9"]]);
+
+    const ip = requestHeaders["x-real-ip"];
+    delete requestHeaders["x-real-ip"];
+    try {
+      await joinWaitlistAction(JOIN_IDLE, form({ email: "a@b.co", source: "landing" }));
+    } finally {
+      if (ip) requestHeaders["x-real-ip"] = ip;
+    }
+    expect(hit).toHaveBeenLastCalledWith("unknown");
+    expect(joinWaitlist).not.toHaveBeenCalled();
+  });
+
   it("validates before touching anything, and says when the accounts are not configured", async () => {
     expect(await joinWaitlistAction(JOIN_IDLE, form({ email: "nope", source: "landing" }))).toEqual({ status: "error", error: "invalid_email" });
     expect(await joinWaitlistAction(JOIN_IDLE, form({ email: "a@b.co", source: "elsewhere" }))).toEqual({ status: "error", error: "invalid_source" });

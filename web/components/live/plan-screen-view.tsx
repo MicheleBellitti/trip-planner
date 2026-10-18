@@ -188,7 +188,13 @@ export function PlanScreenView({
       <main className="mx-auto max-w-page px-4 pt-3 lg:px-7 lg:pt-5">
         {status === "budget_paused" && onContinue ? (
           <Suspense fallback={null}>
-            <BudgetPausedPanel costCents={state.costCents} budgetCents={state.budgetCents} onContinue={onContinue} />
+            <BudgetPausedPanel
+              costCents={state.costCents}
+              budgetCents={state.budgetCents}
+              continues={detail?.continues ?? 0}
+              continuesLimit={detail?.continues_limit ?? 0}
+              onContinue={onContinue}
+            />
           </Suspense>
         ) : null}
         {isEndedStatus(status) ? (

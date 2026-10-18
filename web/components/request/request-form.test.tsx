@@ -9,9 +9,11 @@ import { RequestForm } from "./request-form";
 const TODAY = "2026-10-12";
 const PLAN_ID = "6f1c2a7e-3b4d-4e5f-8a9b-0c1d2e3f4a5b";
 
-const mocks = vi.hoisted(() => ({ createPlan: vi.fn(), push: vi.fn() }));
+const mocks = vi.hoisted(() => ({ createPlan: vi.fn(), push: vi.fn(), me: vi.fn() }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push }) }));
+
+vi.mock("@/lib/me", () => ({ useMe: () => mocks.me(), useRememberedAdmin: () => null }));
 
 vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
@@ -21,6 +23,8 @@ vi.mock("@/lib/api", async (importOriginal) => {
 beforeEach(() => {
   mocks.createPlan.mockReset();
   mocks.push.mockReset();
+  mocks.me.mockReset();
+  mocks.me.mockReturnValue(null);
 });
 
 afterEach(cleanup);
@@ -295,6 +299,7 @@ describe("RequestForm", () => {
       }),
       "Limite di spesa del mese raggiunto",
       "98,40 $ su 100,00 $",
+      "warning",
     ],
     [
       new ApiError({
@@ -305,8 +310,9 @@ describe("RequestForm", () => {
       }),
       "Il planner non è pronto",
       "nessun costo è stato addebitato",
+      "error",
     ],
-  ])("says clearly why the plan did not start (%#)", async (error, title, figure) => {
+  ])("says clearly why the plan did not start (%#)", async (error, title, figure, tone) => {
     mocks.createPlan.mockRejectedValue(error);
     render(<RequestForm today={TODAY} initialValues={exampleRequestForm(TODAY)} />);
 
@@ -315,10 +321,54 @@ describe("RequestForm", () => {
     const alert = screen.getByRole("alert");
     expect(alert.textContent).toContain(title);
     expect(alert.textContent).toContain(figure);
+    // A refusal by rule is a warning, a failure an error; the button is described by the notice,
+    // and the cost estimate makes room for it.
+    expect(alert.getAttribute("data-tone")).toBe(tone);
+    expect(submitButton().getAttribute("aria-describedby")).toBe("submit-plan-failure");
+    expect(document.getElementById("submit-plan-estimate")).toBeNull();
     expect(mocks.push).not.toHaveBeenCalled();
     expect(submitButton().disabled).toBe(false);
     expect(document.activeElement).toBe(submitButton());
     expect((screen.getByLabelText("Da dove parti") as HTMLInputElement).value).toBe("Milano");
+  });
+
+  it("says the month is used up before the press, keeps the form editable and the estimate out of the way", () => {
+    mocks.me.mockReturnValue({
+      isAdmin: false,
+      quota: { plans_used: 2, plans_limit: 2, cents_used: 200, cents_limit: 1500, resets_at: "2026-11-01T00:00:00+01:00" },
+    });
+    render(<RequestForm today={TODAY} initialValues={exampleRequestForm(TODAY)} />);
+
+    const notice = document.getElementById("submit-plan-quota");
+    expect(notice?.getAttribute("data-tone")).toBe("warning");
+    expect(notice?.getAttribute("role")).toBeNull();
+    expect(notice?.textContent).toContain("Hai usato i piani di questo mese");
+    expect(notice?.textContent).toContain("Questo mese hai creato 2 piani su 2. Il prossimo si potrà creare dal 1° novembre.");
+    expect(submitButton().getAttribute("aria-describedby")).toBe("submit-plan-quota");
+    expect(submitButton().disabled).toBe(false);
+    expect((screen.getByLabelText("Da dove parti") as HTMLInputElement).disabled).toBe(false);
+    expect(document.getElementById("submit-plan-estimate")).toBeNull();
+    expect(screen.queryByTestId("month-usage")).toBeNull();
+  });
+
+  it("says before the press when the next plan's budget would not fit, as the backend would refuse it", () => {
+    mocks.me.mockReturnValue({
+      isAdmin: false,
+      quota: {
+        plans_used: 3,
+        plans_limit: 10,
+        cents_used: 1200,
+        cents_limit: 1500,
+        resets_at: "2026-11-01T00:00:00+01:00",
+        next_plan_cents: 400,
+        continue_cents: 200,
+      },
+    });
+    render(<RequestForm today={TODAY} initialValues={exampleRequestForm(TODAY)} />);
+
+    const notice = document.getElementById("submit-plan-quota");
+    expect(notice?.textContent).toContain("Il budget del mese non basta per un altro piano");
+    expect(notice?.textContent).toContain("ne restano 3,00 $ e un nuovo piano ne impegna 4,00 $");
   });
 
   it("offers the demo scenarios in development and sends the chosen one", async () => {

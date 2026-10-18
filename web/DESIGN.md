@@ -751,9 +751,10 @@ or shape (there is no class merging, on purpose: see JavaScript weight below).
   From 1080 px a lane is a bare column with no card.
 - **Notice:** `rounded-sm`, 8 by 10 px, a 17 px glyph, 13.5 px text. Info on `notice-wash`;
   warning on `notice-wash` with a dashed `rule-strong` edge and the warning glyph in ink (a dead MCP
-  source is a note on its lane, not a plan error); error on `error-wash` with a soft error edge and
-  the red cross, a semibold title saying what happened, the body saying what was saved and what to
-  do, an optional quiet action.
+  source is a note on its lane, not a plan error; a refusal by rule, the month's quota, the planner
+  full, a burst of requests, is the same: nothing failed, so it is never red); error on `error-wash`
+  with a soft error edge and the red cross, a semibold title saying what happened, the body saying
+  what was saved and what to do, an optional quiet action.
 
 ### Inputs / Fields
 

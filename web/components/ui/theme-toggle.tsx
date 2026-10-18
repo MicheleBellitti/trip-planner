@@ -5,9 +5,7 @@ import { useLayoutEffect, useSyncExternalStore } from "react";
 import { cx } from "./cx";
 import { Icon } from "./icon";
 import { iconButtonClasses } from "./icon-button";
-import { DEFAULT_THEME, isThemeName, THEME_COLORS, THEME_STORAGE_KEY, type ThemeName } from "./theme";
-
-const THEME_EVENT = "atlas-theme-change";
+import { DEFAULT_THEME, isThemeName, THEME_COLORS, THEME_EVENT, THEME_STORAGE_KEY, type ThemeName } from "./theme";
 
 function readStored(): ThemeName | null {
   try {

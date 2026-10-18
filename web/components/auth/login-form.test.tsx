@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { WAITLIST_FAILED, WAITLIST_RECEIVED_TITLE } from "@/components/waitlist/waitlist-form";
+import { WAITLIST_FAILED, WAITLIST_RECEIVED_TITLE, WAITLIST_TOO_MANY } from "@/components/waitlist/waitlist-form";
 
 import {
   GENERIC_SIGN_IN_ERROR,
@@ -33,6 +33,47 @@ vi.mock("@/lib/auth-client", () => ({
 vi.mock("@/app/actions/waitlist", () => ({
   joinWaitlistAction: (...args: unknown[]) => join(...args),
 }));
+// The widget stands in: with a site key each drawn widget hands over its own first token on mount
+// ("w1-1" for the first widget drawn) and, like the real one, a fresh token of its own a moment
+// after every reset, only while it is still on screen. A widget that is gone issues nothing.
+let widgets = 0;
+const turnstileReset = vi.fn();
+vi.mock("@/components/ui/turnstile", async () => {
+  const { useEffect, useImperativeHandle, useRef } = await import("react");
+  return {
+    Turnstile: ({ onToken, ref }: { onToken: (token: string | null) => void; ref?: React.Ref<{ reset(): void }> }) => {
+      const self = useRef({ id: 0, issued: 0, mounted: false });
+      useImperativeHandle(
+        ref,
+        () => ({
+          reset: () => {
+            turnstileReset();
+            const widget = self.current;
+            // The real widget solves the new challenge before it calls back: a widget that left
+            // the screen in the meantime never does.
+            setTimeout(() => {
+              if (!widget.mounted) return;
+              widget.issued += 1;
+              onToken(`w${widget.id}-${widget.issued}`);
+            }, 50);
+          },
+        }),
+        [onToken],
+      );
+      useEffect(() => {
+        if (!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY) return;
+        widgets += 1;
+        self.current = { id: widgets, issued: 1, mounted: true };
+        onToken(`w${widgets}-1`);
+        const widget = self.current;
+        return () => {
+          widget.mounted = false;
+        };
+      }, [onToken]);
+      return null;
+    },
+  };
+});
 
 const LABEL = "Indirizzo email";
 
@@ -54,6 +95,62 @@ describe("LoginForm", () => {
     getSession.mockReset();
     getSession.mockResolvedValue({ data: null, error: null });
     join.mockReset();
+    turnstileReset.mockClear();
+    widgets = 0;
+    delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+  });
+
+  it("sends a fresh challenge token with the link, the resend and the join, from the widget on screen", async () => {
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = "site-key";
+    magicLink.mockResolvedValue(sent);
+    join.mockResolvedValue({ status: "received", email: "nobody@example.com" });
+    renderForm();
+    typeAndSubmit("nobody@example.com");
+    await screen.findByRole("heading", { name: "Controlla la posta" });
+    expect(magicLink.mock.calls[0]?.[0]).toMatchObject({ fetchOptions: { headers: { "x-turnstile-token": "w1-1" } } });
+    expect(turnstileReset).toHaveBeenCalledTimes(1);
+
+    // The form's widget left with the form: the sent state's own widget issues the next token, so
+    // the resend neither waits for a token that never comes nor sends a spent one.
+    fireEvent.click(screen.getByRole("button", { name: "Inviane un altro" }));
+    await waitFor(() => expect(magicLink).toHaveBeenCalledTimes(2));
+    expect(magicLink.mock.calls[1]?.[0]).toMatchObject({ fetchOptions: { headers: { "x-turnstile-token": "w2-1" } } });
+    await screen.findByText(/ti arriva un altro link\./);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mettimi in lista" }));
+    await screen.findByRole("heading", { name: WAITLIST_RECEIVED_TITLE });
+    expect((join.mock.calls[0]?.[1] as FormData).get("cf-turnstile-response")).toBe("w2-2"); // after the reset
+    expect(turnstileReset).toHaveBeenCalledTimes(3);
+  });
+
+  it("a refused challenge on the join is its own alert, and a window's refusal says to wait", async () => {
+    magicLink.mockResolvedValue(sent);
+    join.mockResolvedValueOnce({ status: "error", error: "challenge_failed" });
+    join.mockResolvedValueOnce({ status: "error", error: "too_many_requests" });
+    renderForm();
+    typeAndSubmit("nobody@example.com");
+    fireEvent.click(await screen.findByRole("button", { name: "Mettimi in lista" }));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("Conferma di non essere un robot e riprova."));
+    fireEvent.click(screen.getByRole("button", { name: "Mettimi in lista" }));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain(WAITLIST_TOO_MANY));
+  });
+
+  it("without a site key sends no token and never resets", async () => {
+    magicLink.mockResolvedValue(sent);
+    renderForm();
+    typeAndSubmit("a@example.com");
+    await screen.findByRole("heading", { name: "Controlla la posta" });
+    expect(magicLink.mock.calls[0]?.[0]).toMatchObject({ fetchOptions: undefined });
+    expect(turnstileReset).not.toHaveBeenCalled();
+  });
+
+  it("a refused challenge is a notice, not the invite refusal", async () => {
+    magicLink.mockResolvedValue({ data: null, error: { status: 400, code: "CHALLENGE_FAILED", message: "x" } });
+    renderForm();
+    typeAndSubmit("a@example.com");
+    const notice = await screen.findByRole("alert");
+    expect(notice.textContent).toContain("Conferma di non essere un robot e riprova.");
+    expect(screen.queryByRole("heading", { name: "Controlla la posta" })).toBeNull();
   });
 
   afterEach(cleanup);
