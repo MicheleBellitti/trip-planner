@@ -355,7 +355,7 @@ CI must pass before merge.
   60 s, and the email must be in `PLANNER_ALLOWED_EMAILS` (empty lets nobody in). `ADMIN_EMAILS`
   is the admin role: who reads `/evals/runs*` (403 `admin_only` otherwise; empty means the allowed
   users outside `atlas` mode, nobody in it). `GET /me` tells the web app the email and the admin
-  flag; the header shows "Valutazioni" only to admins. The web app mirrors the mode with
+  flag; the header shows "Collaudi" only to admins. The web app mirrors the mode with
   `NEXT_PUBLIC_AUTH_MODE` (where a 401 sends the browser). State-changing requests must send
   `Origin: FRONTEND_ORIGIN`. CORS allows `FRONTEND_ORIGIN` only, plus `TRIPTRACKER_ORIGIN`
   read-only on `GET /plans/{id}/trip`.

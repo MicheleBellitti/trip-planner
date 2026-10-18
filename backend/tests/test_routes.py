@@ -23,7 +23,7 @@ from fastapi import FastAPI
 from starlette.types import Message
 
 from app import main, routes, sessions
-from app.auth import CurrentUser
+from app.auth import AuthErrorCode, CurrentUser, auth_messages
 from app.config import Settings
 from app.consumer import PlanNotFoundError
 from app.db import AuthSessionRecord, PlanStatus
@@ -310,6 +310,22 @@ async def test_create_plan_errors_use_the_envelope(
     else:
         assert body["message"] == PLAN_ERROR_MESSAGES[PlanErrorCode(code)]
         assert body["data"] is None
+
+
+async def test_create_plan_for_a_deleted_account_is_401_not_authenticated(
+    api: Api, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    patch_sessions(monkeypatch, "start_plan", error=sessions.UserGoneError())
+
+    response = await api.client.post("/plans", json=VALID_BODY, headers=POST_HEADERS)
+
+    assert response.status_code == 401
+    assert detail(response) == {
+        "code": "not_authenticated",
+        "message": auth_messages(api.app.state.settings)[AuthErrorCode.NOT_AUTHENTICATED],
+        "data": None,
+    }
+    assert response.headers["www-authenticate"] == "Cookie"
 
 
 async def test_without_a_planner_post_plans_is_503(

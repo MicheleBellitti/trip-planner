@@ -9,6 +9,7 @@ import { ROUTES } from "@/lib/routes";
 
 import { AppHeader } from "./app-header";
 import { AppHeaderBar } from "./app-header-bar";
+import { stationEdge } from "./station";
 
 const isAdmin = vi.fn<() => boolean | null>(() => true);
 
@@ -34,18 +35,18 @@ describe("AppHeader", () => {
     const { unmount } = render(<AppHeader current="plans" />);
     const nav = screen.getByRole("navigation", { name: "Sezioni" });
     expect(within(nav).getByRole("link", { name: "Piani" })).toBeTruthy();
-    expect(within(nav).queryByRole("link", { name: "Valutazioni" })).toBeNull();
+    expect(within(nav).queryByRole("link", { name: "Collaudi" })).toBeNull();
     unmount();
 
     isAdmin.mockReturnValue(null); // not known yet: nothing appears and vanishes
     render(<AppHeader current="plans" />);
-    expect(screen.queryByRole("link", { name: "Valutazioni" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Collaudi" })).toBeNull();
   });
 
   it("on the eval pages the station is always there, as the current one, whoever is looking", () => {
     isAdmin.mockReturnValue(false);
     render(<AppHeader current="evals" />);
-    expect(screen.getByRole("link", { name: "Valutazioni" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("link", { name: "Collaudi" }).getAttribute("aria-current")).toBe("page");
   });
 
   it("links the lockup to the plans and draws both sections as stations, the current one filled", () => {
@@ -53,7 +54,7 @@ describe("AppHeader", () => {
     expect(screen.getByRole("link", { name: "Atlas" }).getAttribute("href")).toBe(ROUTES.plans);
     const nav = screen.getByRole("navigation", { name: "Sezioni" });
     const plans = within(nav).getByRole("link", { name: "Piani" });
-    const evals = within(nav).getByRole("link", { name: "Valutazioni" });
+    const evals = within(nav).getByRole("link", { name: "Collaudi" });
     expect(plans.getAttribute("href")).toBe(ROUTES.plans);
     expect(plans.getAttribute("aria-current")).toBe("page");
     expect(evals.getAttribute("href")).toBe(ROUTES.evals);
@@ -63,7 +64,7 @@ describe("AppHeader", () => {
   it("marks the eval history as the current section on the eval pages", () => {
     render(<AppHeader current="evals" />);
     const nav = screen.getByRole("navigation", { name: "Sezioni" });
-    expect(within(nav).getByRole("link", { name: "Valutazioni" }).getAttribute("aria-current")).toBe("page");
+    expect(within(nav).getByRole("link", { name: "Collaudi" }).getAttribute("aria-current")).toBe("page");
     expect(within(nav).getByRole("link", { name: "Piani" }).getAttribute("aria-current")).toBeNull();
   });
 
@@ -104,10 +105,66 @@ describe("AppHeader", () => {
     render(<AppHeader current="evals" />);
     const items = [...screen.getByRole("navigation", { name: "Sezioni" }).querySelectorAll("li")];
     for (const item of items) expect(item.querySelectorAll("[data-line]")).toHaveLength(2);
-    const current = within(screen.getByRole("link", { name: "Valutazioni" })).getByTestId("station");
+    const current = within(screen.getByRole("link", { name: "Collaudi" })).getByTestId("station");
     const other = within(screen.getByRole("link", { name: "Piani" })).getByTestId("station");
     expect(current.getAttribute("data-current")).toBe("true");
     expect(other.getAttribute("data-current")).toBe("false");
+  });
+
+  it("runs the line a fixed 24 px past the outer stations, 2 px from 1080 px, never over a click", () => {
+    render(<AppHeader current="plans" />);
+    const nav = screen.getByRole("navigation", { name: "Sezioni" });
+    const items = [...nav.querySelectorAll("li")];
+    const firstOuter = items[0]!.querySelectorAll("[data-line]")[0]!;
+    const lastOuter = items.at(-1)!.querySelectorAll("[data-line]")[1]!;
+    expect(firstOuter.className).toMatch(/\bright-1\/2\b/);
+    expect(firstOuter.className).toMatch(/\bw-6\b/);
+    expect(lastOuter.className).toMatch(/\bleft-1\/2\b/);
+    expect(lastOuter.className).toMatch(/\bw-6\b/);
+    // Each link paints above every line, so no line notches a station's focus ring.
+    for (const link of nav.querySelectorAll("a")) expect(link.className).toMatch(/\bz-\[1\]/);
+    for (const line of nav.querySelectorAll("[data-line]")) {
+      expect(line.className).toContain("pointer-events-none");
+      expect(line.className).toMatch(/\bh-px\b/);
+      expect(line.className).toContain("lg:h-0.5");
+    }
+  });
+
+  it("ends the line at the last station drawn: \"Piani\" alone for a visitor who is no admin", () => {
+    isAdmin.mockReturnValue(false);
+    render(<AppHeader current="plans" />);
+    const items = [...screen.getByRole("navigation", { name: "Sezioni" }).querySelectorAll("li")];
+    expect(items).toHaveLength(1);
+    const [before, after] = [...items[0]!.querySelectorAll("[data-line]")];
+    expect(before!.className).toMatch(/\bright-1\/2\b/);
+    expect(before!.className).toMatch(/\bw-6\b/);
+    expect(after!.className).toMatch(/\bleft-1\/2\b/);
+    expect(after!.className).toMatch(/\bw-6\b/);
+    expect(after!.className).not.toMatch(/\bright-0\b/);
+  });
+
+  it("ends the line at \"Collaudi\" for an admin, and runs it on from \"Piani\" to it", () => {
+    render(<AppHeader current="plans" />);
+    const nav = screen.getByRole("navigation", { name: "Sezioni" });
+    const [plans, evals] = [...nav.querySelectorAll("li")];
+    expect(within(plans!).getByRole("link").textContent).toBe("Piani");
+    expect(within(evals!).getByRole("link").textContent).toBe("Collaudi");
+    const [plansBefore, plansAfter] = [...plans!.querySelectorAll("[data-line]")];
+    const [evalsBefore, evalsAfter] = [...evals!.querySelectorAll("[data-line]")];
+    expect(plansBefore!.className).toMatch(/\bw-6\b/);
+    // Between the two stations the halves meet: no overhang, edge to edge.
+    expect(plansAfter!.className).toMatch(/\bright-0\b/);
+    expect(plansAfter!.className).not.toMatch(/\bw-6\b/);
+    expect(evalsBefore!.className).toMatch(/\bleft-0\b/);
+    expect(evalsBefore!.className).not.toMatch(/\bw-6\b/);
+    expect(evalsAfter!.className).toMatch(/\bleft-1\/2\b/);
+    expect(evalsAfter!.className).toMatch(/\bw-6\b/);
+  });
+
+  it("gives the edges from the stations drawn, whatever their number", () => {
+    expect(stationEdge(0, 1)).toBe("only");
+    expect([0, 1].map((index) => stationEdge(index, 2))).toEqual(["first", "last"]);
+    expect([0, 1, 2].map((index) => stationEdge(index, 3))).toEqual(["first", "middle", "last"]);
   });
 
   it("leaves the theme toggle to the live screen's bar in the compact bar", () => {

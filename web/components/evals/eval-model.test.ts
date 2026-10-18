@@ -250,7 +250,7 @@ describe("the judge", () => {
 describe("requests", () => {
   it("words the planner's status, and a request that never started", () => {
     expect(requestStatusLabel("ready")).toBe("Pronto");
-    expect(requestStatusLabel("budget_paused")).toBe("Budget raggiunto");
+    expect(requestStatusLabel("budget_paused")).toBe("Limite raggiunto");
     expect(requestStatusLabel(null)).toBe("Mai partita");
     expect(requestStatusLabel("something_new")).toBe("something_new");
   });

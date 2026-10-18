@@ -60,6 +60,9 @@ function build(config: AuthServerConfig) {
         userAgent: "user_agent",
         userId: "user_id",
       },
+      // Sliding: a get-session that may refresh, at most once a day, extends the session to 30
+      // days again. Only the browser's call from components/auth/session-refresh.tsx can (the
+      // backend sends disableRefresh=true, /login's RSC check cannot write cookies).
       expiresIn: 30 * DAY_SECONDS,
       updateAge: DAY_SECONDS,
     },

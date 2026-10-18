@@ -32,6 +32,7 @@ import { formatCreated, formatDateTime } from "@/lib/format";
 
 import { axisDay, RUN_VERDICT_LABELS, type TrendPoint, type TrendReference } from "./eval-model";
 import { RunVerdictGlyph, verdictTone } from "./marks";
+import { evalRunPath } from "@/lib/page-paths";
 
 /** The plot's inner height in the SVG's units: the viewBox is 100 by 100, stretched. */
 const VIEW = 100;
@@ -79,7 +80,7 @@ export function TrendChart({
 
   const open = (index: number) => {
     const point = points[index];
-    if (point) router.push(`/evals/${point.id}`);
+    if (point) router.push(evalRunPath(point.id));
   };
 
   const nearest = (event: PointerEvent<HTMLDivElement>) => {
@@ -301,10 +302,10 @@ export function TrendChart({
           the page. */}
       <div className="sr-only">
         <table>
-          <caption>{title}, una riga per valutazione, dalla meno recente</caption>
+          <caption>{title}, una riga per collaudo, dal meno recente</caption>
           <thead>
             <tr>
-              <th scope="col">Valutazione</th>
+              <th scope="col">Collaudo</th>
               {verdicts ? null : <th scope="col">{title}</th>}
               <th scope="col">Esito</th>
             </tr>
@@ -324,20 +325,20 @@ export function TrendChart({
   );
 }
 
-/** "Voto medio nelle ultime 5 valutazioni: da 4,0 a 4,6, l'ultima 4,0. Riferimento 4,1." The runs'
+/** "Voto medio negli ultimi 5 collaudi: da 4,0 a 4,6, l'ultimo 4,0. Riferimento 4,1." The runs'
  * own figures, as the caption writes them. */
 function metricSummary(title: string, points: TrendPoint[], reference: TrendReference | null): string {
   const valued = points.filter((point) => point.value !== null);
-  const head = `${title} nelle ultime ${points.length} valutazioni`;
+  const head = `${title} negli ultimi ${points.length} collaudi`;
   if (valued.length === 0) return `${head}: nessun valore.`;
   const lowest = valued.reduce((min, point) => (min.value! <= point.value! ? min : point));
   const highest = valued.reduce((max, point) => (max.value! >= point.value! ? max : point));
-  const body = `${head}: da ${lowest.label} a ${highest.label}, l'ultima ${valued.at(-1)!.label}.`;
+  const body = `${head}: da ${lowest.label} a ${highest.label}, l'ultimo ${valued.at(-1)!.label}.`;
   return reference ? `${body} ${reference.label.charAt(0).toLocaleUpperCase("it")}${reference.label.slice(1)}.` : body;
 }
 
-/** "Esito nelle ultime 5 valutazioni, dalla meno recente: solo report, interrotto, superato." */
+/** "Esito negli ultimi 5 collaudi, dal meno recente: solo report, interrotto, superato." */
 function verdictSummary(title: string, points: TrendPoint[]): string {
   const words = points.map((point) => RUN_VERDICT_LABELS[point.verdict].toLocaleLowerCase("it"));
-  return `${title} nelle ultime ${points.length} valutazioni, dalla meno recente: ${words.join(", ")}.`;
+  return `${title} negli ultimi ${points.length} collaudi, dal meno recente: ${words.join(", ")}.`;
 }

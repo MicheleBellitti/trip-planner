@@ -77,7 +77,7 @@ describe("StatusBadge and PlanStatusBadge", () => {
 
   it("writes a plan status as a word", () => {
     render(<PlanStatusBadge status="budget_paused" />);
-    expect(screen.getByText("Budget raggiunto")).toBeTruthy();
+    expect(screen.getByText("Limite raggiunto")).toBeTruthy();
   });
 });
 

@@ -452,6 +452,7 @@ class SessionVerifier:
             f"{settings.auth_origin}{GET_SESSION_PATH}", params=GET_SESSION_PARAMS
         )
         self._messages = auth_messages(settings)
+        self._require_user_id = settings.plans_carry_user_id
         self._http = http
         self.cache = cache if cache is not None else SessionCache()
         self.budget = budget if budget is not None else VerificationBudget()
@@ -525,7 +526,7 @@ class SessionVerifier:
             return _UNAVAILABLE
         else:
             try:
-                user = parse_get_session(response.json())
+                user = parse_get_session(response.json(), require_user_id=self._require_user_id)
             except ValueError:  # json.JSONDecodeError included
                 log.warning("auth_get_session_malformed", status=response.status_code)
                 return _UNAVAILABLE
@@ -572,9 +573,12 @@ async def verify_atlas_session(
     return CurrentUser(email=email.strip().lower(), auth_user_id=user_id)
 
 
-def parse_get_session(body: Any) -> CurrentUser | None:
+def parse_get_session(body: Any, *, require_user_id: bool = False) -> CurrentUser | None:
     """Pure: Better Auth's get-session JSON -> `CurrentUser` (email lower-cased), None for a
-    `null` body. Raises ValueError when a non-null body has no `user.email` string."""
+    `null` body. Raises ValueError when a non-null body has no `user.email` string, and, with
+    `require_user_id` (`Settings.plans_carry_user_id`: new plans store it in `plans.user_id`),
+    when it has no non-empty `user.id` string: such an answer is malformed, never a user
+    without an id."""
     if body is None:
         return None
     if not isinstance(body, dict):
@@ -590,6 +594,9 @@ def parse_get_session(body: Any) -> CurrentUser | None:
         msg = "get-session user has no email"
         raise ValueError(msg)
     user_id = fields.get("id")
+    if require_user_id and not (isinstance(user_id, str) and user_id):
+        msg = "get-session user has no id"
+        raise ValueError(msg)
     return CurrentUser(
         email=email.strip().lower(),
         auth_user_id=user_id if isinstance(user_id, str) and user_id else None,

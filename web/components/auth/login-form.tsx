@@ -139,12 +139,19 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled }: Lo
     setBusy("link");
     setNotice(null);
     setFieldError(null);
-    const { error } = await authClient.signIn.magicLink({
-      email: address,
-      callbackURL: callbackURL(),
-      errorCallbackURL: errorCallbackURL(),
-    });
-    setBusy(null);
+    let error: ClientError | null;
+    try {
+      ({ error } = await authClient.signIn.magicLink({
+        email: address,
+        callbackURL: callbackURL(),
+        errorCallbackURL: errorCallbackURL(),
+      }));
+    } catch {
+      // A network failure rejects instead of answering with an error: it is a failed send too.
+      error = {};
+    } finally {
+      setBusy(null);
+    }
     if (error) {
       failed(error, { inSentState: again, action: "link" });
       return;
@@ -152,8 +159,11 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled }: Lo
     setPhase({ kind: "sent", email: address, again });
   }
 
+  /** Only the invite rule (lib/auth.ts `SIGNUP_NOT_ALLOWED`) is about the address: Better Auth
+   * answers 403 for other refusals too (an origin or callback it does not trust), and those are
+   * the generic failure. */
   function failed(error: ClientError, { inSentState, action }: { inSentState: boolean; action: "link" | "google" }) {
-    if (error.code === "SIGNUP_NOT_ALLOWED" || error.status === 403) {
+    if (error.code === "SIGNUP_NOT_ALLOWED") {
       if (inSentState) setPhase({ kind: "form" });
       setFieldError(
         <>
@@ -184,11 +194,16 @@ export function LoginForm({ returnTo, errorCode, configured, googleEnabled }: Lo
     setBusy("google");
     setNotice(null);
     setFieldError(null);
-    const { error } = await authClient.signIn.social({
-      provider: "google",
-      callbackURL: callbackURL(),
-      errorCallbackURL: errorCallbackURL(),
-    });
+    let error: ClientError | null;
+    try {
+      ({ error } = await authClient.signIn.social({
+        provider: "google",
+        callbackURL: callbackURL(),
+        errorCallbackURL: errorCallbackURL(),
+      }));
+    } catch {
+      error = {}; // a network failure rejects instead of answering with an error
+    }
     if (error) {
       setBusy(null);
       failed(error, { inSentState: false, action: "google" });

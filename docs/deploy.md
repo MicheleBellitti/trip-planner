@@ -500,11 +500,18 @@ also issue and renew their own certificates without interference.
    Better Auth itself and needs server-side variables (web/.env.example, "Accounts"), set for
    Production only: `DATABASE_URL` (Railway's Postgres, reachable from Vercel only through the
    database service's **public TCP proxy**: Postgres > Settings > Networking > TCP Proxy, then
-   the `DATABASE_PUBLIC_URL` it shows, with `?sslmode=require`; the private URL of step 3 does
-   not resolve outside Railway), `BETTER_AUTH_SECRET` (`openssl rand -base64 32`),
-   `BETTER_AUTH_URL=https://atlas.bellittim.com`, `AUTH_COOKIE_DOMAIN=bellittim.com` (so
-   `atlas.api` receives the `__Secure-atlas.session_token` cookie; its `atlas` prefix keeps it
-   apart from TripTracker's), `AUTH_ALLOWED_EMAILS` (who may sign up), `RESEND_API_KEY` and
+   the `DATABASE_PUBLIC_URL` it shows, with `?uselibpqcompat=true&sslmode=require`; the private
+   URL of step 3 does not resolve outside Railway. node-postgres alone treats `sslmode=require`
+   as verify-full, which refuses the proxy's self-signed certificate; `uselibpqcompat=true`
+   gives it libpq's meaning, encrypted without verifying the certificate),
+   `BETTER_AUTH_SECRET` (`openssl rand -base64 32`),
+   `BETTER_AUTH_URL=https://atlas.bellittim.com`, `AUTH_COOKIE_DOMAIN=bellittim.com` (required:
+   the app refuses to start in production without it, because a host-only cookie never reaches
+   `atlas.api`, every API call answers 401 and `/login` and the page bounce the user back and
+   forth; with it `atlas.api` receives the `__Secure-atlas.session_token` cookie, whose `atlas`
+   prefix keeps it apart from TripTracker's), `AUTH_ALLOWED_EMAILS` (who may sign up; with
+   `AUTH_MODE=atlas` it is the only list: every account may plan, the backend's
+   `PLANNER_ALLOWED_EMAILS` is not consulted), `RESEND_API_KEY` and
    `AUTH_EMAIL_FROM` (a sender on a domain verified at Resend), and optionally
    `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (OAuth client with redirect URI
    `https://atlas.bellittim.com/api/auth/callback/google`). The tables already exist: the

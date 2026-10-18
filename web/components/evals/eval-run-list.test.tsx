@@ -45,7 +45,7 @@ function manyRuns(count: number): EvalRunSummary[] {
   }));
 }
 
-const pager = () => screen.queryByRole("navigation", { name: "Pagine delle valutazioni" });
+const pager = () => screen.queryByRole("navigation", { name: "Pagine dei collaudi" });
 
 const rowOf = (name: RegExp) => screen.getByRole("link", { name }).closest("div") as HTMLElement;
 
@@ -57,7 +57,7 @@ describe("EvalRunList", () => {
     });
     try {
       const html = renderToString(<EvalRunList page={1} />);
-      expect(html).toContain("Carico le valutazioni…");
+      expect(html).toContain("Carico i collaudi…");
       expect(html).toContain('aria-busy="true"');
     } finally {
       now.mockRestore();
@@ -85,7 +85,7 @@ describe("EvalRunList", () => {
     expect(within(nav).getByRole("link", { name: "Pagina 3" }).getAttribute("href")).toBe("/evals?pagina=3");
     expect(within(nav).getByRole("link", { name: /Più recenti/ }).getAttribute("href")).toBe("/evals");
     expect(within(nav).getByRole("link", { name: /Più vecchie/ }).getAttribute("href")).toBe("/evals?pagina=3");
-    expect(document.body.textContent).toContain("Valutazioni da 11 a 20 di 25");
+    expect(document.body.textContent).toContain("Collaudi da 11 a 20 di 25");
   });
 
   it("has no pager when every run fits in one page", async () => {
@@ -112,7 +112,7 @@ describe("EvalRunList", () => {
   it("sends a page past the end back to the last one", async () => {
     mocks.listEvalRuns.mockResolvedValue(answer([], 12));
     await renderList(5);
-    expect(screen.getByText("Le valutazioni finiscono a pagina 2")).toBeTruthy();
+    expect(screen.getByText("I collaudi finiscono a pagina 2")).toBeTruthy();
     expect(screen.getByRole("link", { name: /Vai a pagina 2/ }).getAttribute("href")).toBe("/evals?pagina=2");
   });
 
@@ -181,7 +181,7 @@ describe("EvalRunList", () => {
   it("is an invitation when there is no run yet, with the two ways runs arrive", async () => {
     mocks.listEvalRuns.mockResolvedValue(answer([]));
     await renderList();
-    expect(screen.getByRole("heading", { name: "La prima valutazione arriva dalla CI" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Il primo collaudo arriva dalla CI" })).toBeTruthy();
     expect(document.body.textContent).toContain("python -m app.cli import-evals");
     expect(document.body.textContent).toContain("la CI carica qui i risultati");
   });
@@ -189,7 +189,7 @@ describe("EvalRunList", () => {
   it("says what went wrong and tries again on 'Riprova'", async () => {
     mocks.listEvalRuns.mockRejectedValueOnce(new ApiError({ kind: "server", status: 500, message: "Il planner ha avuto un problema." }));
     await renderList();
-    expect(screen.getByText("Le valutazioni non si sono caricate")).toBeTruthy();
+    expect(screen.getByText("I collaudi non si sono caricati")).toBeTruthy();
     expect(screen.getByText("Il planner ha avuto un problema.")).toBeTruthy();
 
     mocks.listEvalRuns.mockResolvedValueOnce(answer(RUNS));
@@ -204,6 +204,6 @@ describe("EvalRunList", () => {
     mocks.listEvalRuns.mockRejectedValue(new UnauthorizedError({ status: 401 }, "https://viaggi.test/accedi"));
     await renderList();
     expect(document.querySelector("[aria-busy='true']")).toBeTruthy();
-    expect(screen.queryByText("Le valutazioni non si sono caricate")).toBeNull();
+    expect(screen.queryByText("I collaudi non si sono caricati")).toBeNull();
   });
 });

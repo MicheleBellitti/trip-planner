@@ -2,7 +2,7 @@
 
 /**
  * Whether the signed-in user manages the planner (GET /me `is_admin`: the backend's ADMIN_EMAILS),
- * for the header's "Valutazioni" station, which only admins see. One request per page load,
+ * for the header's "Collaudi" station, which only admins see. One request per page load,
  * shared by every header on the page; the answer is kept in sessionStorage so the next page of
  * the same tab draws the station without waiting (a per-viewer convenience: a missing or blocked
  * storage only costs the wait). A 401 is "not an admin" and never redirects from here: the page's

@@ -94,6 +94,14 @@
   color-scheme: light;
 }
 
+/* The theme swap (ThemeToggle): no transition runs in the frame that repaints every colour, so
+   nothing fades from the old theme to the new one through grey. */
+html[data-theme-swap] *,
+html[data-theme-swap] *::before,
+html[data-theme-swap] *::after {
+  transition: none !important;
+}
+
 /* A subtree themed by data-theme repaints its own ground, grain and text. */
 [data-theme] {
   background-color: var(--ground);
