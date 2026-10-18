@@ -21,9 +21,16 @@ export const JOIN_IDLE: JoinState = { status: "idle" };
 
 export type InviteError = "invalid_email" | "note_too_long" | "signed_out" | "forbidden" | "unavailable" | "failed";
 
+/**
+ * What happened to the invitation's email: it left; it had already left (or another admin is
+ * sending it right now); the address already has an account, so nothing is sent; or it did not
+ * leave (the claim is given back, "Invia l'email" tries again).
+ */
+export type InviteDelivery = "sent" | "already_sent" | "has_account" | "failed";
+
 export type InviteState =
   | { status: "idle" }
-  | { status: "invited"; email: string; emailSent: boolean; alreadyInvited: boolean }
+  | { status: "invited"; email: string; delivery: InviteDelivery }
   | { status: "error"; error: InviteError };
 
 export const INVITE_IDLE: InviteState = { status: "idle" };

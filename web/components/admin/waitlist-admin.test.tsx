@@ -90,7 +90,7 @@ describe("WaitlistAdmin", () => {
   });
 
   it("after a row action focus moves to the next request's button, not up to the status line", async () => {
-    vi.mocked(inviteAction).mockResolvedValue({ status: "invited", email: "first@example.com", emailSent: true, alreadyInvited: false });
+    vi.mocked(inviteAction).mockResolvedValue({ status: "invited", email: "first@example.com", delivery: "sent" });
     render(<WaitlistAdmin rows={[row({ email: "first@example.com" }), row({ email: "second@example.com" })]} />);
     fireEvent.click(screen.getByRole("button", { name: "Invita first@example.com" }));
     await screen.findByText("Invito inviato a first@example.com.");
@@ -111,7 +111,7 @@ describe("WaitlistAdmin", () => {
     expect((note as HTMLTextAreaElement).value).toBe("la cugina");
     await waitFor(() => expect(document.activeElement).toBe(email));
 
-    vi.mocked(inviteAction).mockResolvedValueOnce({ status: "invited", email: "cousin@example.com", alreadyInvited: false, emailSent: true });
+    vi.mocked(inviteAction).mockResolvedValueOnce({ status: "invited", email: "cousin@example.com", delivery: "sent" });
     fireEvent.change(email, { target: { value: "cousin@example.com" } });
     fireEvent.click(within(add).getByRole("button", { name: "Invita" }));
     const sent = await screen.findByText("Invito inviato a cousin@example.com."); // the page's one region
@@ -122,14 +122,60 @@ describe("WaitlistAdmin", () => {
 
   it("words each outcome of an invitation", () => {
     expect(inviteOutcome({ status: "idle" })).toBeNull();
-    expect(inviteOutcome({ status: "invited", email: "a@b.co", emailSent: true, alreadyInvited: false })).toEqual({ tone: "info", text: "Invito inviato a a@b.co." });
-    expect(inviteOutcome({ status: "invited", email: "a@b.co", emailSent: false, alreadyInvited: true })?.text).toContain("aveva già un invito");
-    expect(inviteOutcome({ status: "invited", email: "a@b.co", emailSent: false, alreadyInvited: false })?.tone).toBe("warning");
+    expect(inviteOutcome({ status: "invited", email: "a@b.co", delivery: "sent" })).toEqual({ tone: "info", text: "Invito inviato a a@b.co." });
+    expect(inviteOutcome({ status: "invited", email: "a@b.co", delivery: "already_sent" })?.text).toContain("aveva già un invito");
+    expect(inviteOutcome({ status: "invited", email: "a@b.co", delivery: "has_account" })).toEqual({
+      tone: "info",
+      text: "a@b.co ha già un account: nessuna email.",
+    });
+    expect(inviteOutcome({ status: "invited", email: "a@b.co", delivery: "failed" })?.tone).toBe("warning");
     expect(inviteOutcome({ status: "error", error: "forbidden" })).toEqual({ tone: "error", text: INVITE_ERRORS.forbidden });
     expect(removeOutcome({ status: "removed", email: "a@b.co" })).toEqual({ tone: "info", text: "a@b.co è stato tolto dalla lista." });
     expect(removeOutcome({ status: "error", error: "signed_out" })?.text).toBe(INVITE_ERRORS.signed_out);
     expect(removeOutcome({ status: "error", error: "failed" })?.text).toBe(REMOVE_ERRORS.failed);
     expect(REMOVE_ERRORS.failed).toContain("togliere");
+  });
+
+  it("a row action that never answers (a dropped connection, a redeploy) is an error in the status line, not the error page", async () => {
+    vi.mocked(inviteAction).mockRejectedValueOnce(new Error("Failed to find Server Action"));
+    vi.mocked(removeRequestAction).mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    render(<WaitlistAdmin rows={[row({ email: "first@example.com" }), row({ email: "second@example.com" })]} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Invita first@example.com" }));
+    const line = await screen.findByText(INVITE_ERRORS.failed);
+    await waitFor(() => expect(document.activeElement).toBe(line.closest("[role='status']")));
+    const invite = screen.getByRole("button", { name: "Invita first@example.com" });
+    expect(invite).toHaveProperty("disabled", false); // the transition ended: the rows work again
+
+    fireEvent.click(screen.getByRole("button", { name: "Togli second@example.com" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sì, togli second@example.com" }));
+    await screen.findByText(REMOVE_ERRORS.failed);
+  });
+
+  it("the add form survives an action that never answers: an error in the status line, the typing kept", async () => {
+    vi.mocked(inviteAction).mockRejectedValueOnce(new Error("Failed to find Server Action"));
+    render(<WaitlistAdmin rows={[]} />);
+    const add = screen.getByRole("region", { name: "Invita un indirizzo" });
+    const email = within(add).getByLabelText("Indirizzo email") as HTMLInputElement;
+    fireEvent.change(email, { target: { value: "cousin@example.com" } });
+    fireEvent.click(within(add).getByRole("button", { name: "Invita" }));
+
+    await screen.findByText(INVITE_ERRORS.failed);
+    expect(email.value).toBe("cousin@example.com");
+    await waitFor(() => expect(email).toHaveProperty("disabled", false));
+  });
+
+  it("says the list is cut when the page read only its first rows", () => {
+    const { unmount } = render(<WaitlistAdmin rows={[row({})]} />);
+    expect(screen.queryByText(/le prime/)).toBeNull();
+    unmount();
+    render(<WaitlistAdmin rows={[row({})]} truncatedAt={500} />);
+    expect(screen.getByText("Qui ci sono le prime 500 voci, le richieste in attesa per prime: le altre restano salvate.")).toBeTruthy();
+  });
+
+  it("marks a pending request whose address already has an account", () => {
+    render(<WaitlistAdmin rows={[row({ email: "member@example.com", registered: true })]} />);
+    expect(screen.getByRole("listitem").textContent).toContain("ha un account");
   });
 
   it("writes dates in the planner's home time zone, whatever the machine's", () => {

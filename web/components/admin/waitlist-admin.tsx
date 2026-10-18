@@ -48,9 +48,22 @@ export interface Outcome {
 export function inviteOutcome(state: InviteState): Outcome | null {
   if (state.status === "idle") return null;
   if (state.status === "error") return { tone: "error", text: INVITE_ERRORS[state.error] };
-  if (state.alreadyInvited) return { tone: "info", text: `${state.email} aveva già un invito: nessuna nuova email.` };
-  if (state.emailSent) return { tone: "info", text: `Invito inviato a ${state.email}.` };
-  return { tone: "warning", text: `${state.email} è stato invitato, ma l'email non è partita: riprova con «Invia l'email».` };
+  switch (state.delivery) {
+    case "sent":
+      return { tone: "info", text: `Invito inviato a ${state.email}.` };
+    case "already_sent":
+      return { tone: "info", text: `${state.email} aveva già un invito: nessuna nuova email.` };
+    case "has_account":
+      return { tone: "info", text: `${state.email} ha già un account: nessuna email.` };
+    case "failed":
+      return { tone: "warning", text: `${state.email} è stato invitato, ma l'email non è partita: riprova con «Invia l'email».` };
+  }
+}
+
+/** What a row action says when the action itself never answered (a dropped connection, a
+ * redeploy's "Failed to find Server Action"): the action's own failure, not the error page. */
+export function unansweredOutcome(kind: "invite" | "remove"): Outcome {
+  return { tone: "error", text: kind === "invite" ? INVITE_ERRORS.failed : REMOVE_ERRORS.failed };
 }
 
 /** What removing a request did. */
@@ -76,7 +89,7 @@ type RowAction = "invite" | "remove";
  * before the commit. "Togli" asks once, inline, before it removes. The view's one primary is the
  * add form's button: the rows' are secondary and quiet.
  */
-export function WaitlistAdmin({ rows }: { rows: WaitlistRow[] }) {
+export function WaitlistAdmin({ rows, truncatedAt = null }: { rows: WaitlistRow[]; truncatedAt?: number | null }) {
   const pending = rows.filter((row) => row.invitedAt === null);
   const invited = rows.filter((row) => row.invitedAt !== null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
@@ -102,9 +115,14 @@ export function WaitlistAdmin({ rows }: { rows: WaitlistRow[] }) {
     startTransition(async () => {
       const data = new FormData();
       data.set("email", email);
-      setOutcome(
-        kind === "invite" ? inviteOutcome(await inviteAction(INVITE_IDLE, data)) : removeOutcome(await removeRequestAction(REMOVE_IDLE, data)),
-      );
+      try {
+        setOutcome(
+          kind === "invite" ? inviteOutcome(await inviteAction(INVITE_IDLE, data)) : removeOutcome(await removeRequestAction(REMOVE_IDLE, data)),
+        );
+      } catch {
+        // A rejection inside a transition would reach the error boundary: it is a failed action.
+        setOutcome(unansweredOutcome(kind));
+      }
     });
   }
 
@@ -127,6 +145,11 @@ export function WaitlistAdmin({ rows }: { rows: WaitlistRow[] }) {
   return (
     <div className="grid max-w-[40rem] gap-9">
       <AddInvite onOutcome={announce} />
+      {truncatedAt !== null ? (
+        <p className="text-meta text-ink-2">
+          Qui ci sono le prime {truncatedAt} voci, le richieste in attesa per prime: le altre restano salvate.
+        </p>
+      ) : null}
       <div
         ref={statusRef}
         tabIndex={-1}
@@ -197,7 +220,12 @@ function AddInvite({ onOutcome }: { onOutcome: (outcome: Outcome | null) => void
 
   function submit(data: FormData) {
     startTransition(async () => {
-      const result = await inviteAction(INVITE_IDLE, data);
+      let result: InviteState;
+      try {
+        result = await inviteAction(INVITE_IDLE, data);
+      } catch {
+        result = { status: "error", error: "failed" }; // the action never answered: not the error page
+      }
       setState(result);
       if (result.status === "invited") {
         setEmail("");
@@ -296,6 +324,7 @@ function Row({
     if (row.registered) facts.push("ha un account");
   } else {
     facts.push(`${SOURCE_LABELS[row.source]}, ${formatDay(row.createdAt)}`);
+    if (row.registered) facts.push("ha un account");
   }
   const needsEmail = invitedAt !== null && row.invitationSentAt === null && !row.registered;
   const mine = (kind: RowAction) => inFlight && busy?.email === row.email && busy.kind === kind;

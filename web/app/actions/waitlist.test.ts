@@ -8,7 +8,8 @@ const currentCaller = vi.fn();
 const readAuthConfig = vi.fn();
 const joinWaitlist = vi.fn();
 const invite = vi.fn();
-const markInvitationSent = vi.fn();
+const claimInvitation = vi.fn();
+const releaseInvitation = vi.fn();
 const removeRequest = vi.fn();
 const sendInvitation = vi.fn();
 const revalidatePath = vi.fn();
@@ -20,7 +21,8 @@ vi.mock("@/lib/server/db", () => ({ getPool: () => pool }));
 vi.mock("@/lib/server/waitlist", () => ({
   joinWaitlist: (...args: unknown[]) => joinWaitlist(...args),
   invite: (...args: unknown[]) => invite(...args),
-  markInvitationSent: (...args: unknown[]) => markInvitationSent(...args),
+  claimInvitation: (...args: unknown[]) => claimInvitation(...args),
+  releaseInvitation: (...args: unknown[]) => releaseInvitation(...args),
   removeRequest: (...args: unknown[]) => removeRequest(...args),
 }));
 vi.mock("@/lib/server/send-invitation", () => ({ sendInvitation: (...args: unknown[]) => sendInvitation(...args) }));
@@ -35,7 +37,7 @@ function form(fields: Record<string, string>): FormData {
 }
 
 beforeEach(() => {
-  for (const mock of [currentCaller, readAuthConfig, joinWaitlist, invite, markInvitationSent, removeRequest, sendInvitation, revalidatePath]) mock.mockReset();
+  for (const mock of [currentCaller, readAuthConfig, joinWaitlist, invite, claimInvitation, releaseInvitation, removeRequest, sendInvitation, revalidatePath]) mock.mockReset();
   readAuthConfig.mockReturnValue(CONFIG);
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
@@ -78,29 +80,61 @@ describe("inviteAction", () => {
     expect(await inviteAction(INVITE_IDLE, form({ email: "nope" }))).toEqual({ status: "error", error: "invalid_email" });
   });
 
-  it("invites, sends the email once, records it and refreshes the page", async () => {
+  it("invites, claims the sending, sends the email once and refreshes the page", async () => {
     currentCaller.mockResolvedValue({ email: "Me@Example.com", isAdmin: true });
-    invite.mockResolvedValue({ email: "a@b.co", invitationSentAt: null });
+    invite.mockResolvedValue({ email: "a@b.co", invitationSentAt: null, registered: false });
+    claimInvitation.mockResolvedValue("2026-10-18 10:00:00.123456+00");
 
     const state = await inviteAction(INVITE_IDLE, form({ email: "A@b.co", note: "amico" }));
 
-    expect(state).toEqual({ status: "invited", email: "a@b.co", emailSent: true, alreadyInvited: false });
+    expect(state).toEqual({ status: "invited", email: "a@b.co", delivery: "sent" });
     expect(invite).toHaveBeenCalledWith(pool, { email: "a@b.co", by: "me@example.com", note: "amico" });
+    expect(claimInvitation).toHaveBeenCalledWith(pool, "a@b.co");
+    expect(claimInvitation.mock.invocationCallOrder[0]).toBeLessThan(sendInvitation.mock.invocationCallOrder[0]!); // claim first
     expect(sendInvitation).toHaveBeenCalledWith(CONFIG, { email: "a@b.co" });
-    expect(markInvitationSent).toHaveBeenCalledWith(pool, "a@b.co");
+    expect(releaseInvitation).not.toHaveBeenCalled();
     expect(revalidatePath).toHaveBeenCalledWith("/admin/waitlist");
   });
 
-  it("sends nothing to an address already invited, and reports an email that did not leave", async () => {
+  it("sends nothing when the claim is taken: already sent, or another admin sending it right now", async () => {
     currentCaller.mockResolvedValue({ email: "me@example.com", isAdmin: true });
-    invite.mockResolvedValue({ email: "a@b.co", invitationSentAt: "2026-10-16T10:00:00Z" });
-    expect(await inviteAction(INVITE_IDLE, form({ email: "a@b.co" }))).toEqual({ status: "invited", email: "a@b.co", emailSent: false, alreadyInvited: true });
-    expect(sendInvitation).not.toHaveBeenCalled();
+    invite.mockResolvedValue({ email: "a@b.co", invitationSentAt: null, registered: false });
+    // Two admins at once: the database hands the claim to one of them only.
+    claimInvitation.mockResolvedValueOnce("2026-10-18 10:00:00.123456+00").mockResolvedValueOnce(null);
+    let finishSend: () => void = () => undefined;
+    sendInvitation.mockImplementationOnce(() => new Promise<void>((resolve) => (finishSend = resolve)));
 
-    invite.mockResolvedValue({ email: "a@b.co", invitationSentAt: null });
-    sendInvitation.mockRejectedValue(new Error("Resend refused"));
-    expect(await inviteAction(INVITE_IDLE, form({ email: "a@b.co" }))).toEqual({ status: "invited", email: "a@b.co", emailSent: false, alreadyInvited: false });
-    expect(markInvitationSent).not.toHaveBeenCalled();
+    const first = inviteAction(INVITE_IDLE, form({ email: "a@b.co" }));
+    const second = inviteAction(INVITE_IDLE, form({ email: "a@b.co" }));
+    await vi.waitFor(() => expect(claimInvitation).toHaveBeenCalledTimes(2));
+    finishSend();
+
+    expect(await first).toEqual({ status: "invited", email: "a@b.co", delivery: "sent" });
+    expect(await second).toEqual({ status: "invited", email: "a@b.co", delivery: "already_sent" });
+    expect(sendInvitation).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives the claim back when the email did not leave, so the admin can retry", async () => {
+    currentCaller.mockResolvedValue({ email: "me@example.com", isAdmin: true });
+    invite.mockResolvedValue({ email: "a@b.co", invitationSentAt: null, registered: false });
+    claimInvitation.mockResolvedValue("2026-10-18 10:00:00.123456+00");
+    sendInvitation.mockRejectedValueOnce(new Error("Resend refused"));
+
+    expect(await inviteAction(INVITE_IDLE, form({ email: "a@b.co" }))).toEqual({ status: "invited", email: "a@b.co", delivery: "failed" });
+    expect(releaseInvitation).toHaveBeenCalledWith(pool, "a@b.co", "2026-10-18 10:00:00.123456+00");
+
+    // The retry claims again and sends.
+    expect(await inviteAction(INVITE_IDLE, form({ email: "a@b.co" }))).toEqual({ status: "invited", email: "a@b.co", delivery: "sent" });
+    expect(sendInvitation).toHaveBeenCalledTimes(2);
+  });
+
+  it("emails no address that already has an account, and says so", async () => {
+    currentCaller.mockResolvedValue({ email: "me@example.com", isAdmin: true });
+    invite.mockResolvedValue({ email: "a@b.co", invitationSentAt: null, registered: true });
+
+    expect(await inviteAction(INVITE_IDLE, form({ email: "a@b.co" }))).toEqual({ status: "invited", email: "a@b.co", delivery: "has_account" });
+    expect(claimInvitation).not.toHaveBeenCalled();
+    expect(sendInvitation).not.toHaveBeenCalled();
   });
 });
 

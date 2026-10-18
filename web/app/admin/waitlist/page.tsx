@@ -11,7 +11,7 @@ import { ROUTES } from "@/lib/routes";
 import { currentCaller, type Caller } from "@/lib/server/admin";
 import { readAuthConfig } from "@/lib/server/auth-config";
 import { getPool } from "@/lib/server/db";
-import { listWaitlist } from "@/lib/server/waitlist";
+import { listWaitlist, WAITLIST_LIST_LIMIT } from "@/lib/server/waitlist";
 
 export const metadata: Metadata = { title: "Inviti", robots: { index: false } };
 
@@ -63,8 +63,8 @@ async function Gate() {
       </Notice>
     );
   }
-  const rows = await listWaitlist(getPool(config.databaseUrl));
-  return <WaitlistAdmin rows={rows} />;
+  const { rows, truncated } = await listWaitlist(getPool(config.databaseUrl), WAITLIST_LIST_LIMIT);
+  return <WaitlistAdmin rows={rows} truncatedAt={truncated ? WAITLIST_LIST_LIMIT : null} />;
 }
 
 /** The add form and a few rows, in their final rhythm, while the request-time part arrives. */

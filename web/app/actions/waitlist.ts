@@ -5,12 +5,12 @@ import { revalidatePath } from "next/cache";
 import { normalizeEmail } from "@/lib/auth-policy";
 import { ROUTES } from "@/lib/routes";
 import { currentCaller } from "@/lib/server/admin";
-import { readAuthConfig } from "@/lib/server/auth-config";
+import { readAuthConfig, type AuthServerConfig } from "@/lib/server/auth-config";
 import { getPool } from "@/lib/server/db";
 import { sendInvitation } from "@/lib/server/send-invitation";
-import { invite, joinWaitlist, markInvitationSent, removeRequest } from "@/lib/server/waitlist";
+import { claimInvitation, invite, joinWaitlist, releaseInvitation, removeRequest, type Queryable } from "@/lib/server/waitlist";
 import { parseJoinInput } from "@/lib/waitlist-policy";
-import type { InviteState, JoinState, RemoveState } from "@/lib/waitlist-state";
+import type { InviteDelivery, InviteState, JoinState, RemoveState } from "@/lib/waitlist-state";
 
 /**
  * The waitlist's server actions (their states and initial values: lib/waitlist-state.ts).
@@ -58,7 +58,12 @@ async function admin(): Promise<AdminGate> {
   return { ok: true, email: normalizeEmail(caller.email) };
 }
 
-/** Invites the address in `email` (with an optional `note`), sends the invitation, refreshes the page. */
+/**
+ * Invites the address in `email` (with an optional `note`), sends the invitation, refreshes the
+ * page. An address that already has an account gets no email. Otherwise the sending is claimed
+ * first (lib/server/waitlist.ts `claimInvitation`): only the claimer sends, so two admins never
+ * send it twice, and a send that fails gives the claim back for a retry.
+ */
 export async function inviteAction(_previous: InviteState, formData: FormData): Promise<InviteState> {
   const parsed = parseJoinInput({ email: formData.get("email"), note: formData.get("note") ?? "", source: "admin" }, ADMIN_SOURCE);
   if (!parsed.ok) return { status: "error", error: parsed.error === "invalid_source" ? "failed" : parsed.error };
@@ -67,24 +72,29 @@ export async function inviteAction(_previous: InviteState, formData: FormData): 
   const gate = await admin();
   if (!gate.ok) return { status: "error", error: gate.error };
   const db = getPool(config.databaseUrl);
+  const { email } = parsed.value;
   try {
-    const before = await invite(db, { email: parsed.value.email, by: gate.email, note: parsed.value.note });
-    const alreadyInvited = before.invitationSentAt !== null;
-    let emailSent = false;
-    if (!alreadyInvited) {
-      try {
-        await sendInvitation(config, { email: parsed.value.email });
-        await markInvitationSent(db, parsed.value.email);
-        emailSent = true;
-      } catch (error) {
-        console.error("[waitlist] invitation email failed", error instanceof Error ? error.message : typeof error);
-      }
-    }
+    const before = await invite(db, { email, by: gate.email, note: parsed.value.note });
+    const delivery = before.registered ? "has_account" : await deliver(db, config, email);
     revalidatePath(ROUTES.invites);
-    return { status: "invited", email: parsed.value.email, emailSent, alreadyInvited };
+    return { status: "invited", email, delivery };
   } catch (error) {
     console.error("[waitlist] invite failed", error instanceof Error ? error.name : typeof error);
     return { status: "error", error: "failed" };
+  }
+}
+
+/** Claims, sends, and gives the claim back when the email did not leave. */
+async function deliver(db: Queryable, config: AuthServerConfig, email: string): Promise<InviteDelivery> {
+  const claim = await claimInvitation(db, email);
+  if (claim === null) return "already_sent";
+  try {
+    await sendInvitation(config, { email });
+    return "sent";
+  } catch (error) {
+    console.error("[waitlist] invitation email failed", error instanceof Error ? error.message : typeof error);
+    await releaseInvitation(db, email, claim);
+    return "failed";
   }
 }
 
