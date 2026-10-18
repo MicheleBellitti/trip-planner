@@ -12,6 +12,7 @@ import socket
 import ssl
 import time
 from collections.abc import AsyncIterator, Callable, Iterable
+from pathlib import Path
 from typing import Any
 
 import httpcore
@@ -408,6 +409,25 @@ async def test_unknown_host_is_dead_without_fallback(router: respx.MockRouter) -
     assert router.calls.call_count == 0
 
 
+async def test_a_redirect_to_an_unknown_host_keeps_the_homepage_fallback(
+    router: respx.MockRouter,
+) -> None:
+    """Only the URL's own missing host rules the fallback out; this host exists."""
+    router.get(PAGE).respond(302, headers={"Location": "https://gone.example/x"})
+    router.get(HOME).respond(200)
+    resolver = FakeResolver({"gone.example": HostNotFoundError("gone.example")})
+    health = await make_checker(router, resolver).check_url(PAGE)
+    assert verdict(health) == ("dead", "redirect_nxdomain")
+    assert health.fallback == HOME
+
+
+async def test_a_malformed_redirect_location_is_unsafe(router: respx.MockRouter) -> None:
+    router.get(PAGE).respond(302, headers={"Location": "http://[::1/"})
+    health = await make_checker(router).check_url(PAGE)
+    assert verdict(health) == ("unknown", "unsafe_url")
+    assert router.calls.call_count == 1
+
+
 async def test_a_resolver_failure_is_unknown(router: respx.MockRouter) -> None:
     resolver = FakeResolver({"a.example": OSError("temporary failure")})
     health = await make_checker(router, resolver).check_url(PAGE)
@@ -556,14 +576,16 @@ async def test_a_tls_failure_is_unknown() -> None:
 
 
 async def test_a_stalled_request_times_out(router: respx.MockRouter) -> None:
+    """MockTransport ignores httpcore's timeouts: the asyncio guard fires, 0.5 s after them."""
+
     async def stall(request: httpx.Request) -> httpx.Response:
-        await asyncio.sleep(1)
+        await asyncio.sleep(3)
         return httpx.Response(200)
 
     router.get(PAGE).mock(side_effect=stall)
     started = time.perf_counter()
     health = await make_checker(router, request_timeout=0.1).check_url(PAGE)
-    assert time.perf_counter() - started < 0.5
+    assert 0.55 <= time.perf_counter() - started < 1.5
     assert verdict(health) == ("unknown", "timeout")
 
 
@@ -571,14 +593,14 @@ async def test_a_stalled_body_read_times_out(router: respx.MockRouter) -> None:
     class StalledBody(httpx.AsyncByteStream):
         async def __aiter__(self) -> AsyncIterator[bytes]:
             yield b"<html><title>"
-            await asyncio.sleep(1)
+            await asyncio.sleep(3)
             yield b"Page not found</title></html>"
 
     stalled = httpx.Response(200, headers={"Content-Type": "text/html"}, stream=StalledBody())
     router.get(PAGE).mock(return_value=stalled)
     started = time.perf_counter()
     health = await make_checker(router, request_timeout=0.1).check_url(PAGE)
-    assert time.perf_counter() - started < 0.5
+    assert 0.55 <= time.perf_counter() - started < 1.5
     assert verdict(health) == ("unknown", "timeout")
 
 
@@ -597,6 +619,29 @@ async def test_slow_url_becomes_unknown_within_the_deadline(router: respx.MockRo
     assert time.perf_counter() - started < 0.5
     assert verdict(entry_of(health, PAGE)) == ("ok", "ok")
     assert entry_of(health, slow) == LinkHealth(status="unknown", reason="deadline", checked_at=NOW)
+
+
+async def test_check_plan_enforces_its_own_deadline(router: respx.MockRouter) -> None:
+    """Independent of check_url's own deadline: a check that never ends is cut off by the
+    plan's."""
+
+    class HangingChecker(HttpLinkChecker):
+        async def check_url(self, url: str) -> LinkHealth:
+            await asyncio.sleep(3)
+            raise AssertionError("the plan deadline should have cancelled this check")
+
+    checker = HangingChecker(
+        transport=httpx.MockTransport(router.async_handler),
+        resolver=FakeResolver(),
+        user_agent=USER_AGENT,
+        now=lambda: NOW,
+        total_deadline=0.2,
+    )
+    started = time.perf_counter()
+    health = await checker.check_plan(plan_with_urls(PAGE, "https://b.example/y"))
+    assert time.perf_counter() - started < 0.5
+    assert health.counts() == {"ok": 0, "dead": 0, "unknown": 2}
+    assert verdict(entry_of(health, PAGE)) == ("unknown", "deadline")
 
 
 async def test_check_plan_checks_each_distinct_url_once(router: respx.MockRouter) -> None:
@@ -657,6 +702,7 @@ async def test_requests_carry_the_user_agent_and_no_cookie(router: respx.MockRou
         assert request.headers["User-Agent"] == USER_AGENT
         assert request.headers["Accept"] == "text/html,*/*;q=0.8"
         assert request.headers["Accept-Language"] == "it,en;q=0.8"
+        assert request.headers["Accept-Encoding"] == "identity"
         assert "Cookie" not in request.headers
         assert "Authorization" not in request.headers
         assert request.extensions["timeout"] == {
@@ -783,20 +829,26 @@ async def test_pinned_backend_skips_private_answers_and_falls_over() -> None:
 
 
 async def test_the_built_checker_connects_through_the_pinned_backend(
-    make_settings: Callable[..., Settings], monkeypatch: pytest.MonkeyPatch
+    make_settings: Callable[..., Settings], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """build_link_checker replaces httpx 0.28.1's private `AsyncHTTPTransport._pool`: a request
-    through its transport must reach PinnedNetworkBackend (here refused, so offline)."""
+    through its transport must reach PinnedNetworkBackend (here refused, so offline). The pool
+    keeps no idle connection, and nothing comes from the environment: with trust_env, the
+    missing SSL_CERT_FILE would make building the TLS context fail."""
+    monkeypatch.setenv("SSL_CERT_FILE", str(tmp_path / "missing.pem"))
     resolver = FakeResolver({"evil.example": ["10.0.0.1"]})
     monkeypatch.setattr(link_health, "system_resolver", resolver)
     checker = build_link_checker(
         make_settings(frontend_origin="https://atlas.example"), now=lambda: NOW
     )
     try:
+        transport = checker._transport
+        assert isinstance(transport, httpx.AsyncHTTPTransport)
+        pool = transport._pool
+        assert isinstance(pool, httpcore.AsyncConnectionPool)
+        assert (pool._max_connections, pool._max_keepalive_connections) == (100, 0)
         with pytest.raises(httpx.ConnectError, match="no public address"):
-            await checker._transport.handle_async_request(
-                httpx.Request("GET", "https://evil.example/")
-            )
+            await transport.handle_async_request(httpx.Request("GET", "https://evil.example/"))
         assert resolver.calls == ["evil.example"]
         assert checker._user_agent == "AtlasLinkCheck/1.0 (+https://atlas.example)"
     finally:

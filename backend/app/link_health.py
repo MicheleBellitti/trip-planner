@@ -20,9 +20,10 @@ resolved address must be public (`is_public_address`), on every redirect hop; co
 only to vetted addresses; no cookies, no credentials, no proxy from the environment. A link
 never rejects a plan. Logs carry the host and the reason, never a full URL or page content.
 
-Limits: GET only, at most 5 redirects, 5 s per request (resolution, answer and body read), 8
-URLs at a time, 10 s for the whole plan (a URL not checked by then is `unknown`, reason
-`deadline`), at most 65,536 body bytes read.
+Limits: GET only, at most 5 redirects, 5 s per request (httpcore's timeouts; an asyncio guard
+0.5 s later also bounds the resolution and the whole body read), 8 URLs at a time, 10 s for the
+whole plan, exact (a URL not checked by then is `unknown`, reason `deadline`), at most 65,536
+body bytes read.
 """
 
 from __future__ import annotations
@@ -299,6 +300,10 @@ other failure (an OSError) means the answer is not known."""
 _REDIRECT_CODES: Final[frozenset[int]] = frozenset({301, 302, 303, 307, 308})
 _DEAD_CODES: Final[frozenset[int]] = frozenset({404, 410})
 _ALLOWED_PORTS: Final[frozenset[int | None]] = frozenset({None, 80, 443})
+_GUARD_MARGIN: Final[float] = 0.5
+"""Seconds the per-request asyncio guard waits beyond httpcore's own timeouts, so httpcore's
+(which close their socket) fire first; the guard only catches what httpcore does not bound,
+such as a body that trickles in under the read timeout."""
 
 
 class HostNotFoundError(Exception):
@@ -412,9 +417,10 @@ class HttpLinkChecker:
         return health
 
     async def check_url(self, url: str) -> LinkHealth:
-        """The verdict on `url`, within `total_deadline`. A dead URL (except a host that does
-        not exist) gets its homepage as `fallback` when the homepage is not dead too, with
-        `fallback_allowed` from the booking-link allowlist."""
+        """The verdict on `url`, within `total_deadline`. A dead URL gets its homepage as
+        `fallback` when the homepage is not dead too, with `fallback_allowed` from the
+        booking-link allowlist; not when the URL's own host does not exist (`nxdomain`; a
+        missing host further down a redirect chain is `redirect_nxdomain`)."""
         try:
             async with asyncio.timeout(self._total_deadline):
                 health = await self._follow(url)
@@ -438,14 +444,14 @@ class HttpLinkChecker:
     async def _follow(self, url: str) -> LinkHealth:
         """GET `url`, following at most `max_redirects` redirects by hand, every hop vetted."""
         current = url
-        for _hop in range(self._max_redirects + 1):
+        for hop in range(self._max_redirects + 1):
             target = _safe_target(current)
             if target is None:
                 return LinkHealth(status="unknown", reason="unsafe_url")
             request_url, host = target
             try:
-                async with asyncio.timeout(self._request_timeout):
-                    refusal = await self._vet(host)
+                async with asyncio.timeout(self._request_timeout + _GUARD_MARGIN):
+                    refusal = await self._vet(host, own_host=hop == 0)
                     answer = refusal if refusal is not None else await self._get(request_url)
             except TimeoutError:
                 return LinkHealth(status="unknown", reason="timeout")
@@ -453,15 +459,19 @@ class HttpLinkChecker:
                 return LinkHealth(status="unknown", reason=_transport_reason(exc))
             if isinstance(answer, LinkHealth):
                 return answer
-            current = urljoin(current, answer)
+            try:
+                current = urljoin(current, answer)
+            except ValueError:  # a malformed Location, e.g. http://[::1/
+                return LinkHealth(status="unknown", reason="unsafe_url")
         return LinkHealth(status="unknown", reason="redirects")
 
-    async def _vet(self, host: str) -> LinkHealth | None:
-        """None when every address of `host` is public; otherwise the verdict."""
+    async def _vet(self, host: str, *, own_host: bool) -> LinkHealth | None:
+        """None when every address of `host` is public; otherwise the verdict. `own_host`: the
+        host is the checked URL's own, not a redirect's."""
         try:
             addresses = await _resolve(self._resolver, host)
         except HostNotFoundError:
-            return LinkHealth(status="dead", reason="nxdomain")
+            return LinkHealth(status="dead", reason="nxdomain" if own_host else "redirect_nxdomain")
         except OSError:
             return LinkHealth(status="unknown", reason="dns_error")
         if not addresses:
@@ -660,7 +670,9 @@ def build_link_checker(settings: Settings, *, now: Callable[[], dt.datetime]) ->
 
 
 def _pinned_transport(backend: httpcore.AsyncNetworkBackend) -> httpx.AsyncHTTPTransport:
-    """An httpx transport (no proxy, trust_env=False) whose connections go through `backend`.
+    """An httpx transport (no proxy, nothing from the environment) whose connections go
+    through `backend`, and are closed after each answer (no keep-alive: a plan's checks are
+    one burst, and an idle pool would hold sockets for the life of the process).
 
     httpx 0.28.1, the locked version, has no public way to give its transport a network
     backend, so this replaces the transport's private `_pool`. After an httpx upgrade,
@@ -669,6 +681,9 @@ def _pinned_transport(backend: httpcore.AsyncNetworkBackend) -> httpx.AsyncHTTPT
     """
     transport = httpx.AsyncHTTPTransport(trust_env=False)
     transport._pool = httpcore.AsyncConnectionPool(
-        ssl_context=httpx.create_ssl_context(), network_backend=backend
+        ssl_context=httpx.create_ssl_context(trust_env=False),
+        max_connections=100,
+        max_keepalive_connections=0,
+        network_backend=backend,
     )
     return transport
