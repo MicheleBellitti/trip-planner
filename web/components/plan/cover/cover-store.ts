@@ -17,7 +17,7 @@
 
 import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 
-import { api } from "@/lib/api";
+import { lazyApi } from "@/lib/lazy-api";
 import type { Cover } from "@/lib/schemas/api";
 
 import { uniqueCovers } from "./cover-sources";
@@ -68,7 +68,9 @@ function pump(): void {
   }
 }
 
-const defaultLoader: CoverLoader = (planId) => api.getCover(planId);
+/** GET /plans/{id}/cover, importing the API client only when it is called: a page that brings
+ * its own loader (the demo) never evaluates the client. */
+const defaultLoader: CoverLoader = async (planId) => (await lazyApi()).getCover(planId);
 
 /** Starts reading a plan's cover unless it is known (or on its way). Safe to call on every
  * render of an effect: it does nothing twice. */

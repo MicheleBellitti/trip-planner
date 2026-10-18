@@ -25,7 +25,6 @@ import { useIsDesktop } from "@/components/live/hooks";
 import { LinkButton } from "@/components/ui/button";
 import { Disclosure } from "@/components/ui/disclosure";
 import { Notice } from "@/components/ui/notice";
-import { api } from "@/lib/api";
 import { bookingDeadline, tripDueDates, type TripDueDates } from "@/lib/booking-dates";
 import { displayTitle, HOME_TIMEZONE } from "@/lib/format";
 import type { PlanDetail } from "@/lib/schemas/api";
@@ -33,7 +32,10 @@ import type { PlanDetail } from "@/lib/schemas/api";
 import { BookingStrip } from "./booking-strip";
 import { BookingRow } from "./bookings";
 import { Itinerary } from "./itinerary";
+import { lazyApi } from "@/lib/lazy-api";
+
 import { CoverBand } from "./cover/cover-band";
+import type { CoverLoader } from "./cover/cover-store";
 import { ItineraryDays, ItineraryMapPanel, ItineraryMapProvider } from "./map/itinerary-map";
 import {
   alignedChecks,
@@ -52,7 +54,9 @@ import { PlanSummary } from "./plan-summary";
 /** Reads GET /plans/{id}/trip; rejects when it cannot. */
 export type TripLoader = (planId: string, signal: AbortSignal) => Promise<unknown>;
 
-const loadTripFromApi: TripLoader = (planId, signal) => api.getTrip(planId, { signal });
+/** The default reader, importing the API client only when it is called: a page that gives the
+ * Trip or its own loader (the demo) never evaluates the client. */
+const loadTripFromApi: TripLoader = async (planId, signal) => (await lazyApi()).getTrip(planId, { signal });
 
 export interface PlanViewProps {
   /** GET /plans/{id} of a `ready` plan. */
@@ -70,6 +74,8 @@ export interface PlanViewProps {
   /** How to read the Trip when `trip` is not given; defaults to `api.getTrip`. Pass a stable
    * function (a new one on every render reads the Trip again). */
   loadTrip?: TripLoader;
+  /** How to read the destination's cover; defaults to GET /plans/{id}/cover (cover-store). */
+  loadCover?: CoverLoader;
 }
 
 type Fetched = { planId: string; ok: true; trip: unknown } | { planId: string; ok: false };
@@ -125,7 +131,14 @@ function SectionHeading({ id, children, lead }: { id: string; children: ReactNod
 }
 
 /** The finished plan of a `ready` plan. */
-export function PlanView({ detail, trip = null, timeline, arrival = false, loadTrip = loadTripFromApi }: PlanViewProps) {
+export function PlanView({
+  detail,
+  trip = null,
+  timeline,
+  arrival = false,
+  loadTrip = loadTripFromApi,
+  loadCover,
+}: PlanViewProps) {
   const baseId = useId().replace(/[^\w-]/g, "");
   const tripDates = useTripDueDates(detail, trip, loadTrip);
   const plan = detail.plan;
@@ -209,7 +222,7 @@ export function PlanView({ detail, trip = null, timeline, arrival = false, loadT
   return (
     <div className="flex min-w-0 flex-col gap-10 lg:gap-12">
       {/* The destination's photo, with its credit: nothing when the destination has none. */}
-      <CoverBand planId={detail.id} destination={plan.destination} />
+      <CoverBand planId={detail.id} destination={plan.destination} loadCover={loadCover} />
 
       {/* From 1080 px the summary and "Giorno per giorno" share one two-column grid: the text on
           the left, "Da prenotare", the hand-off and the map in one sticky cell on the right
