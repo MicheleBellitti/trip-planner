@@ -129,6 +129,16 @@ export function WaitlistForm({ source, signInHint = false, className }: Waitlist
   );
 }
 
+/** The join, with a rejected action (a dropped connection, a redeploy's "Failed to find Server
+ * Action") answered as the failure it is instead of reaching the error page. */
+async function joinOrFail(previous: JoinState, data: FormData): Promise<JoinState> {
+  try {
+    return await joinWaitlistAction(previous, data);
+  } catch {
+    return { status: "error", error: "failed" };
+  }
+}
+
 function JoinForm({
   source,
   signInHint,
@@ -143,7 +153,7 @@ function JoinForm({
   selectEmail: boolean;
   onChangeAddress: (email: string, note: string) => void;
 }) {
-  const [state, formAction, pending] = useActionState<JoinState, FormData>(joinWaitlistAction, JOIN_IDLE);
+  const [state, formAction, pending] = useActionState<JoinState, FormData>(joinOrFail, JOIN_IDLE);
   const [email, setEmail] = useState(initialEmail);
   const [note, setNote] = useState(initialNote);
   // Which fields were edited since the last submit: a field's error shows only until then (the

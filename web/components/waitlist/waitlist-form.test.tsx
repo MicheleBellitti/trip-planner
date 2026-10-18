@@ -127,6 +127,19 @@ describe("WaitlistForm", () => {
     expect(screen.getByRole("button", { name: WAITLIST_SUBMIT })).toBeTruthy();
   });
 
+  it("a rejected action (a dropped connection, a redeploy) is the same alert, and the form works again", async () => {
+    join.mockRejectedValueOnce(new Error("Failed to find Server Action"));
+    render(<WaitlistForm source="landing" />);
+
+    submit("friend@example.com");
+
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain(WAITLIST_FAILED));
+    expect((screen.getByLabelText(WAITLIST_EMAIL_LABEL) as HTMLInputElement).value).toBe("friend@example.com");
+    join.mockResolvedValueOnce({ status: "received", email: "friend@example.com" });
+    fireEvent.submit(screen.getByLabelText(WAITLIST_EMAIL_LABEL).closest("form")!);
+    await screen.findByRole("heading", { name: WAITLIST_RECEIVED_TITLE });
+  });
+
   it("says the same thing for every address: the panel takes only the address, never an outcome", () => {
     render(<WaitlistOutcome email="friend@example.com" hint="Torna con lo stesso indirizzo." />);
     expect(screen.getByRole("heading", { name: WAITLIST_RECEIVED_TITLE })).toBeTruthy();
