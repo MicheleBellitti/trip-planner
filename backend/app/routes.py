@@ -75,6 +75,7 @@ from app.auth import (
     RequireOrigin,
     auth_error,
     auth_messages,
+    user_is_admin,
 )
 from app.config import AgentProfile, Settings
 from app.covers import Cover, CoverErrorCode, CoverResolver
@@ -668,10 +669,10 @@ me_router = APIRouter(tags=["me"])
 
 @me_router.get("/me", responses=_ERRORS)
 async def me(user: CurrentUserDep, settings: SettingsDep) -> MeResponse:
-    """Who is signed in and whether they may read the eval history (`Settings.is_admin`): the
+    """Who is signed in and whether they may read the eval history (`auth.user_is_admin`): the
     web app shows the "Collaudi" section only to admins. No personal data beyond the email
     the cookie already stands for."""
-    return MeResponse(email=user.email, is_admin=settings.is_admin(user.email))
+    return MeResponse(email=user.email, is_admin=user_is_admin(user, settings))
 
 
 @router.post(

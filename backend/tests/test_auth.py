@@ -59,6 +59,7 @@ from app.auth import (
     session_cookie_names,
     session_token,
     token_cache_key,
+    user_is_admin,
     verify_atlas_session,
 )
 from app.config import Settings
@@ -1046,11 +1047,12 @@ async def add_atlas_session(
     email: str = "Test@Example.com",
     expires_in: dt.timedelta = TOMORROW,
     with_user: bool = True,
+    email_verified: bool = True,
 ) -> None:
     """A `users` row and an `auth_sessions` row, as the web app's Better Auth writes them."""
     async with db_session_factory() as db:
         if with_user:
-            db.add(UserRecord(id=user_id, email=email))
+            db.add(UserRecord(id=user_id, email=email, email_verified=email_verified))
             await db.commit()
         db.add(
             AuthSessionRecord(
@@ -1080,7 +1082,7 @@ async def test_verify_atlas_session_reads_the_session_and_its_user(
 
     user = await verify_atlas_session(db_session_factory, SIGNED_TOKEN)
 
-    assert user == CurrentUser("test@example.com", "usr_1")  # the email lower-cased
+    assert user == CurrentUser("test@example.com", "usr_1", email_verified=True)  # lower-cased
     assert await verify_atlas_session(db_session_factory, "unknown.sig") is None
     assert await verify_atlas_session(db_session_factory, ".sig") is None
     # Expiry is checked against `now`: one second after `expires_at` the session is gone.
@@ -1240,6 +1242,29 @@ async def test_the_admin_role_guards_a_route_after_the_session_check(
         allowed = await client.get("/admin-only", headers=cookie)
     assert allowed.status_code == 200
     assert allowed.json() == {"email": "test@example.com"}
+
+
+async def test_an_admins_address_without_a_verified_email_is_no_admin(
+    make_settings: Callable[..., Settings], db_session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """Anyone may type an admin's address into the sign-up form: until the account proves it
+    owns the address (users.email_verified), ADMIN_EMAILS does not make it an admin."""
+    await add_atlas_session(db_session_factory, email_verified=False)
+    settings = make_settings(auth_mode="atlas", admin_emails="test@example.com")
+    app = atlas_app(settings, db_session_factory)
+
+    async with asgi_client(app) as client:
+        refused = await client.get(
+            "/admin-only", headers={"Cookie": f"{ATLAS_PLAIN_COOKIE}={SIGNED_TOKEN}"}
+        )
+
+    assert refused.status_code == 403
+    assert refused.json()["detail"]["code"] == "admin_only"
+    unverified = CurrentUser("test@example.com", "usr_1", email_verified=False)
+    assert user_is_admin(unverified, settings) is False
+    assert user_is_admin(CurrentUser("test@example.com", "usr_1", True), settings) is True
+    # Outside atlas mode the allowlisted email is trusted, as before.
+    assert user_is_admin(CurrentUser("test@example.com"), make_settings()) is True
 
 
 async def test_in_local_mode_the_allowed_user_is_the_admin_by_default(

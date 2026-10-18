@@ -1010,11 +1010,15 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
     who could sign up, and a second list on Railway would have to be kept in step by hand.
     Ownership (`sessions.plan_owner_filter`, `owns_plan`, `get_user_plan(..., settings=)`): in
     `atlas` mode a plan is the user's when `plans.user_id` is their id, or when it has no id
-    (a plan from before the switch) and carries their verified email; in the other modes by
-    email alone, as before. The admin role is `ADMIN_EMAILS` (`Settings.admins`, `is_admin`):
-    `auth.require_admin` guards `GET /evals/runs*` with 403 `admin_only`; empty means the
-    allowed users outside `atlas` mode (the one-user setup keeps working with no new variable)
-    and nobody in it. `GET /me` (`routes.MeResponse`: `email`, `is_admin`) lets the web app
+    (a plan from before the switch) and carries their email, provided `users.email_verified`
+    is true (`CurrentUser.email_verified`): anyone may type another person's address into the
+    sign-up form, and until the account proves it owns the address that address hands it
+    nothing; an unverified account still owns the plans stored with its `user_id`. In the other
+    modes by email alone, as before. The admin role is `ADMIN_EMAILS` (`Settings.admins`,
+    `auth.user_is_admin`): `auth.require_admin` guards `GET /evals/runs*` with 403
+    `admin_only`, and in `atlas` mode it also wants a verified email; empty means the allowed
+    users outside `atlas` mode (the one-user setup keeps working with no new variable) and
+    nobody in it. `GET /me` (`routes.MeResponse`: `email`, `is_admin`) lets the web app
     show the "Collaudi" station only to admins. The TripTracker path is untouched (contract
     rule 7): its removal waits until production runs `atlas`.
 

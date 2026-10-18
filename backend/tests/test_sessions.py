@@ -746,10 +746,10 @@ async def test_with_the_apps_own_accounts_ownership_goes_by_user_id_then_by_lega
     db_session: AsyncSession,
 ) -> None:
     """AUTH_MODE=atlas: a plan is the user's when `plans.user_id` is their id, or when it has no
-    id (a plan from before the switch) and carries their email. A plan with another user's id is
-    never theirs, whatever its email says."""
+    id (a plan from before the switch) and carries their verified email. A plan with another
+    user's id is never theirs, whatever its email says."""
     atlas = make_settings(auth_mode="atlas")
-    me = CurrentUser(USER.email, "usr_me")
+    me = CurrentUser(USER.email, "usr_me", email_verified=True)
     db_session.add_all(
         [
             UserRecord(id="usr_me", email=USER.email),
@@ -771,6 +771,17 @@ async def test_with_the_apps_own_accounts_ownership_goes_by_user_id_then_by_lega
         select(PlanRecord.id).where(sessions.plan_owner_filter(me, settings=atlas))
     )
     assert set(listed) == {mine, legacy}
+
+    # An account that never verified the address keeps its own plans, but the address alone
+    # does not hand it the legacy plans stored by that email.
+    unverified = CurrentUser(USER.email, "usr_me", email_verified=False)
+    assert (await get_user_plan(db_session, mine, unverified, settings=atlas)).id == mine
+    with pytest.raises(PlanNotFoundError):
+        await get_user_plan(db_session, legacy, unverified, settings=atlas)
+    listed = await db_session.scalars(
+        select(PlanRecord.id).where(sessions.plan_owner_filter(unverified, settings=atlas))
+    )
+    assert set(listed) == {mine}
 
     # Outside atlas mode the id means nothing (TripTracker's ids are not rows of `users`):
     # the email alone decides, as before the switch.

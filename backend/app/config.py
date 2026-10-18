@@ -470,7 +470,8 @@ class Settings(BaseSettings):
         return [] if self.auth_mode == "atlas" else self.planner_allowed_emails
 
     def is_admin(self, email: str | None) -> bool:
-        """True when `email` is one of `admins` (trimmed, case insensitive)."""
+        """True when `email` is one of `admins` (trimmed, case insensitive). The role itself is
+        `auth.user_is_admin`, which also wants a verified email with AUTH_MODE=atlas."""
         if not email:
             return False
         return email.strip().lower() in self.admins

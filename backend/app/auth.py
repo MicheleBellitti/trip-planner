@@ -28,8 +28,9 @@ Two identity providers, both Better Auth, chosen by `AUTH_MODE` (`Settings.auth_
   budget, the stale window and the signed-out cache is this path's.
 
 Roles: `require_admin` (`RequireAdmin`) guards the eval history: the user must be one of
-`Settings.admins` (ADMIN_EMAILS; outside `atlas` mode the allowed users by default), else 403
-`admin_only`. `GET /me` tells the web app whether to show that section.
+`Settings.admins` (ADMIN_EMAILS; outside `atlas` mode the allowed users by default) and, in
+`atlas` mode, have a verified email (`user_is_admin`), else 403 `admin_only`. `GET /me` tells
+the web app whether to show that section.
 
 Better Auth facts (docs/triptracker/schema-notes.md §6 and §8 C1-C5; the same library serves
 both providers):
@@ -215,6 +216,11 @@ class CurrentUser:
     auth_user_id: str | None = None
     """The provider's Better Auth `user.id`; None in AUTH_MODE=local. It is one of this
     backend's `users.id` only with AUTH_MODE=atlas (`Settings.plans_carry_user_id`)."""
+    email_verified: bool = False
+    """`users.email_verified` (AUTH_MODE=atlas): the account proved it owns `email` (a magic
+    link, or Google saying so). Only that mode consults it: without it the email grants neither
+    the legacy plans stored by email (`sessions.plan_owner_filter`) nor the admin role
+    (`user_is_admin`), though the plans stored with the user's id stay theirs."""
 
 
 def auth_error(
@@ -549,7 +555,8 @@ async def verify_atlas_session(
     """The owner of an `atlas` session cookie, read from the shared database (AUTH_MODE=atlas).
 
     One query: the `auth_sessions` row whose `token` is the cookie's `session_token` and whose
-    `expires_at` is after `now` (default `clock.now()`), joined to its `users` row. None when
+    `expires_at` is after `now` (default `clock.now()`), joined to its `users` row (the id, the
+    email and whether it is verified). None when
     there is no such row: signed out, revoked, expired, or a token that was never issued (a
     forged cookie). No cache, so a sign-out is effective on the next request. Never writes:
     Better Auth's `updateAge` refresh happens on the web app's own visits. Database errors
@@ -562,15 +569,17 @@ async def verify_atlas_session(
     async with session_factory() as db:
         row = (
             await db.execute(
-                select(UserRecord.id, UserRecord.email)
+                select(UserRecord.id, UserRecord.email, UserRecord.email_verified)
                 .join(AuthSessionRecord, AuthSessionRecord.user_id == UserRecord.id)
                 .where(AuthSessionRecord.token == token, AuthSessionRecord.expires_at > moment)
             )
         ).first()
     if row is None:
         return None
-    user_id, email = row
-    return CurrentUser(email=email.strip().lower(), auth_user_id=user_id)
+    user_id, email, email_verified = row
+    return CurrentUser(
+        email=email.strip().lower(), auth_user_id=user_id, email_verified=bool(email_verified)
+    )
 
 
 def parse_get_session(body: Any, *, require_user_id: bool = False) -> CurrentUser | None:
@@ -688,12 +697,22 @@ RequireOrigin = Depends(require_origin)
 """`dependencies=[RequireOrigin]` on state-changing routes."""
 
 
+def user_is_admin(user: CurrentUser, settings: Settings) -> bool:
+    """Whether `user` holds the admin role: their email is one of `Settings.admins` and, with
+    AUTH_MODE=atlas, verified (`CurrentUser.email_verified`): an account that never proved it
+    owns an admin's address is no admin. TripTracker's and the local mode's users are trusted
+    by their allowlisted email, as before."""
+    if settings.auth_mode == "atlas" and not user.email_verified:
+        return False
+    return settings.is_admin(user.email)
+
+
 async def require_admin(request: Request, user: CurrentUserDep) -> None:
     """FastAPI dependency of the eval history (`GET /evals/runs*`): the signed-in user must be
-    one of `Settings.admins`, else 403 `admin_only`. Runs after `current_user` (shared within the
-    request by FastAPI's dependency cache), so a signed-out caller still gets its 401."""
+    an admin (`user_is_admin`), else 403 `admin_only`. Runs after `current_user` (shared within
+    the request by FastAPI's dependency cache), so a signed-out caller still gets its 401."""
     settings: Settings = request.app.state.settings
-    if not settings.is_admin(user.email):
+    if not user_is_admin(user, settings):
         raise auth_error(AuthErrorCode.ADMIN_ONLY, auth_messages(settings))
 
 
