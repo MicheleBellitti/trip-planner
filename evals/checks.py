@@ -157,7 +157,8 @@ class RunMetadata:
     web_search_requests: int | None = None
     """`usage.server_tool_use.web_search_requests` of the session, None when unknown."""
     link_health: Mapping[str, Any] | None = None
-    """`plans.link_health` (URL to verdict), None when the links were not checked."""
+    """`plans.link_health` (URL to verdict); None (a plan stored before the check) or `{}`
+    (the checks did not run) when the links were not checked."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -741,17 +742,21 @@ def check_dead_links(
     metadata: RunMetadata,
 ) -> CheckResult:
     """Counts the links the backend found dead when it accepted the plan. Never blocks: a
-    dead link is a warning (the web app shows a fallback), not a failed plan."""
+    dead link is a warning (the web app shows a fallback), not a failed plan. No verdicts
+    (None, or `{}`: the checks did not run) is a skip. "homepage" says whether the dead page has
+    a homepage to show (`fallback`), whatever the booking allowlist says about it
+    (`fallback_allowed`)."""
     if plan is None:
         return replace(_no_plan(DEAD_LINKS, metadata), blocking=False)
-    if metadata.link_health is None:
+    if not metadata.link_health:
         return _result(DEAD_LINKS, "skip", "links were not checked", blocking=False)
     lines: list[str] = []
     for url, verdict in metadata.link_health.items():
         if not isinstance(verdict, Mapping) or verdict.get("status") != "dead":
             continue
         host = (urlsplit(url).hostname or "?").lower().removeprefix("www.")
-        homepage = "yes" if verdict.get("fallback_allowed") else "no"
+        fallback = verdict.get("fallback")
+        homepage = "yes" if isinstance(fallback, str) and fallback else "no"
         lines.append(f"{host} {verdict.get('reason') or 'dead'} (homepage: {homepage})")
     if lines:
         return _result(

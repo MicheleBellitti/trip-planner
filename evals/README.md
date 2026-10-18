@@ -101,7 +101,7 @@ status is `fail` or `error`:
 | `no_empty_days` | Every day strictly between arrival and departure has stops (an empty arrival or departure day only warns) |
 | `submit_plan_attempts` | The plan is `ready`, accepted at the first or second `submit_plan` call |
 | `cost_and_searches_vs_estimate` | Cost and web searches recorded and compared with the spec's estimate (never blocks) |
-| `dead_links` | Counts the plan's links the backend found dead (host and reason only; never blocks) |
+| `dead_links` | Counts the plan's links the backend found dead (host and reason only; never blocks; a skip when the links were not checked) |
 | `matches_request` | Travellers, dates (or a flexible month and nights), destination, `must_mention` keyword groups, no `must_not_book` keyword in a booking |
 
 The judge (`judge.py` + `rubric.md`) scores each accepted plan from 1 to 5, with a reason, on

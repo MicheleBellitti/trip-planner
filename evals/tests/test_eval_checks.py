@@ -72,13 +72,17 @@ def ok_trip() -> Json:
     return json.loads((FIXTURES / "trip_lisbon_ok.json").read_text(encoding="utf-8"))
 
 
-def _verdict(status: str = "ok", reason: str = "ok", *, fallback: str | None = None) -> Json:
+def _verdict(
+    status: str = "ok", reason: str = "ok", *, fallback: str | None = None, allowed: bool = False
+) -> Json:
+    """A stored verdict. `allowed` (the booking allowlist's bit) is independent of `fallback`:
+    a homepage can exist and still be refused for a booking link."""
     return {
         "status": status,
         "reason": reason,
         "http_status": None,
         "fallback": fallback,
-        "fallback_allowed": fallback is not None,
+        "fallback_allowed": allowed,
         "checked_at": "2026-10-18T10:00:00+00:00",
     }
 
@@ -521,7 +525,20 @@ def test_dead_links_passes_with_none_dead() -> None:
     assert not result.blocking
 
 
-def test_dead_links_warns_with_hosts_and_reasons() -> None:
+@pytest.mark.parametrize(
+    ("fallback", "allowed", "homepage"),
+    [
+        ("https://a.example/", True, "yes"),
+        ("https://a.example/", False, "yes"),  # a homepage the booking allowlist refuses
+        (None, False, "no"),
+        ("", False, "no"),
+    ],
+)
+def test_dead_links_warns_with_hosts_and_reasons(
+    fallback: str | None, allowed: bool, homepage: str
+) -> None:
+    """The detail's "homepage" says whether the dead page has a homepage to show, whatever the
+    booking allowlist says about it."""
     metadata = checks.RunMetadata(
         status="ready",
         submit_attempts=1,
@@ -529,7 +546,7 @@ def test_dead_links_warns_with_hosts_and_reasons() -> None:
         web_search_requests=12,
         link_health={
             "https://www.A.example/secret/path?q=1": _verdict(
-                "dead", "http_404", fallback="https://a.example/"
+                "dead", "http_404", fallback=fallback, allowed=allowed
             ),
             "https://b.example/ok": _verdict(),
         },
@@ -538,7 +555,7 @@ def test_dead_links_warns_with_hosts_and_reasons() -> None:
     assert result.status == "warn"
     assert result.blocking is False
     assert not result.blocks
-    assert result.details == ["a.example http_404 (homepage: yes)"]
+    assert result.details == [f"a.example http_404 (homepage: {homepage})"]
 
 
 def test_dead_links_skips_without_a_plan_or_without_verdicts() -> None:
@@ -551,3 +568,15 @@ def test_dead_links_skips_without_a_plan_or_without_verdicts() -> None:
     )[checks.DEAD_LINKS]
     assert unchecked.status == "skip"
     assert "not checked" in unchecked.message
+
+
+def test_dead_links_skips_an_empty_verdict_map() -> None:
+    """`{}` is what the backend stores when the checks did not run (LINK_CHECK_ENABLED=false):
+    nothing was checked, so nothing passed."""
+    metadata = checks.RunMetadata(
+        status="ready", submit_attempts=1, cost_cents=41, web_search_requests=12, link_health={}
+    )
+    result = run_all(ok_plan(), ok_trip(), metadata)[checks.DEAD_LINKS]
+    assert result.status == "skip"
+    assert result.message == "links were not checked"
+    assert result.blocking is False
