@@ -4,11 +4,17 @@
  * and the types on both sides.
  */
 
-import type { JoinInputError, JoinOutcome } from "./waitlist-policy";
+import type { JoinInputError } from "./waitlist-policy";
 
+/**
+ * A public join answers "received" whatever happened to the address (new, already listed, already
+ * invited, already registered, on AUTH_ALLOWED_EMAILS): the page never tells a stranger whether an
+ * address has an account or an invitation (Michele, 2026-10-18: "uguale per tutti"). The query's
+ * own outcome (lib/waitlist-policy.ts `JoinOutcome`) stays on the server, for the logs.
+ */
 export type JoinState =
   | { status: "idle" }
-  | { status: JoinOutcome; email: string }
+  | { status: "received"; email: string }
   | { status: "error"; error: JoinInputError | "unavailable" | "failed" };
 
 export const JOIN_IDLE: JoinState = { status: "idle" };

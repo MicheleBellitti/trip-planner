@@ -7,10 +7,9 @@ import { StatePanel } from "@/components/states/state-panel";
 import { Button, LinkButton } from "@/components/ui/button";
 import { cx } from "@/components/ui/cx";
 import { Field, TextArea, TextInput } from "@/components/ui/field";
-import type { IconName } from "@/components/ui/icon";
 import { Notice } from "@/components/ui/notice";
 import { ROUTES } from "@/lib/routes";
-import { WAITLIST_NOTE_MAX, type JoinOutcome, type WaitlistSource } from "@/lib/waitlist-policy";
+import { WAITLIST_NOTE_MAX, type WaitlistSource } from "@/lib/waitlist-policy";
 import { JOIN_IDLE, type JoinState } from "@/lib/waitlist-state";
 
 export const WAITLIST_EMAIL_LABEL = "Indirizzo email";
@@ -22,36 +21,27 @@ export const WAITLIST_INVALID_EMAIL = "Scrivi un indirizzo email completo.";
 export const WAITLIST_NOTE_TOO_LONG = `Accorcia la nota: al massimo ${WAITLIST_NOTE_MAX} caratteri.`;
 export const WAITLIST_FAILED = "Non è stato possibile metterti in lista. Riprova tra poco.";
 
-/** What each outcome says: the glyph, the title, the sentence around the address, whether to offer sign-in. */
-export const WAITLIST_OUTCOMES: Record<
-  JoinOutcome,
-  { icon: IconName; title: string; before: string; after: string; signIn: boolean }
-> = {
-  joined: {
-    icon: "check-circle",
-    title: "Sei in lista",
-    before: "Ti scriviamo a ",
-    after: " quando c'è posto. Nessun altro messaggio da noi.",
-    signIn: false,
-  },
-  // Nothing was done: the info glyph, not the check.
-  already_listed: { icon: "info", title: "Sei già in lista", before: "Abbiamo già ", after: ": ti scriviamo lì quando c'è posto.", signIn: false },
-  already_invited: { icon: "sign-in", title: "Hai già un invito", before: "", after: " può già entrare: accedi e ti inviamo il link.", signIn: true },
-  already_registered: { icon: "sign-in", title: "Hai già un account", before: "Con ", after: " sei già entrato: accedi e ti inviamo il link.", signIn: true },
-};
+export const WAITLIST_RECEIVED_TITLE = "Ricevuto";
+
+/** The one answer to a join, around the address, true for every address (lib/waitlist-state.ts
+ * `JoinState`): it never says whether the address has an account or an invitation. */
+export const WAITLIST_RECEIVED = {
+  before: "Se ",
+  after: " è già abilitato puoi accedere subito; altrimenti ti scriviamo lì quando c'è posto.",
+} as const;
 
 /** The answer to a join, as a panel: focused on arrival, so a keyboard or screen-reader user lands on
- * the news. `hint` is a second, quieter sentence (what to do next); `actions` come after the sign-in
- * link, when there is one. */
+ * the news. `signIn` offers "Accedi" (not on the login page itself); `hint` is a second, quieter
+ * sentence (what to do next); `actions` come after the sign-in link, when there is one. */
 export function WaitlistOutcome({
-  outcome,
   email,
+  signIn = false,
   hint,
   actions,
   className,
 }: {
-  outcome: JoinOutcome;
   email: string;
+  signIn?: boolean;
   hint?: string;
   actions?: ReactNode;
   className?: string;
@@ -60,7 +50,6 @@ export function WaitlistOutcome({
   useEffect(() => {
     ref.current?.focus();
   }, []);
-  const words = WAITLIST_OUTCOMES[outcome];
   return (
     <div
       ref={ref}
@@ -68,14 +57,14 @@ export function WaitlistOutcome({
       className={cx("rounded-md outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus", className)}
     >
       <StatePanel
-        icon={words.icon}
-        title={words.title}
-        headingId={`waitlist-${outcome}`}
+        icon="check-circle"
+        title={WAITLIST_RECEIVED_TITLE}
+        headingId="waitlist-received"
         actions={
-          words.signIn || actions ? (
+          signIn || actions ? (
             <>
-              {words.signIn ? (
-                <LinkButton href={ROUTES.login} variant="primary" icon="sign-in" className="pointer-coarse:min-h-11">
+              {signIn ? (
+                <LinkButton href={ROUTES.login} variant="secondary" icon="sign-in" className="pointer-coarse:min-h-11">
                   Accedi
                 </LinkButton>
               ) : null}
@@ -87,9 +76,9 @@ export function WaitlistOutcome({
         <div className="min-w-0 lg:col-span-3">
           <dt className="sr-only">Cosa succede ora</dt>
           <dd role="status" className="m-0 max-w-prose text-small text-ink [overflow-wrap:anywhere]">
-            {words.before}
+            {WAITLIST_RECEIVED.before}
             <strong className="font-semibold">{email}</strong>
-            {words.after}
+            {WAITLIST_RECEIVED.after}
           </dd>
           {hint ? (
             <>
@@ -107,7 +96,7 @@ interface WaitlistFormProps {
   /** Where the request comes from (the row's `source`). */
   source: Extract<WaitlistSource, "landing" | "login">;
   /** After the button, "Hai già un invito? Accedi" (to the login, which forwards a live session to
-   * the plans): it goes with the form, so the outcome panel's own "Accedi" is never doubled. */
+   * the plans); the answer's panel then offers "Accedi" in its place. */
   signInHint?: boolean;
   className?: string;
 }
@@ -115,8 +104,8 @@ interface WaitlistFormProps {
 /**
  * Join the waitlist: an address, two optional lines about the trip, one button. The server action
  * (app/actions/waitlist.ts) validates and answers; an address problem is a Field error on the field,
- * which takes focus and clears as soon as the field is edited; a failure is a Notice; the four
- * outcomes replace the form with their panel, and "Cambia indirizzo" brings the form back with the
+ * which takes focus and clears as soon as the field is edited; a failure is a Notice; the answer,
+ * the same for every address, replaces the form with its panel, and "Cambia indirizzo" brings the form back with the
  * address kept and selected and the note as it was (a new key, since an action's state cannot be
  * reset in place). The fields are controlled, so a refused submit keeps what was typed.
  */
@@ -182,11 +171,11 @@ function JoinForm({
     else if (state.error === "note_too_long") noteRef.current?.focus();
   }, [state]);
 
-  if (state.status !== "idle" && state.status !== "error") {
+  if (state.status === "received") {
     return (
       <WaitlistOutcome
-        outcome={state.status}
         email={state.email}
+        signIn={signInHint}
         className={className}
         actions={
           <Button
@@ -194,7 +183,7 @@ function JoinForm({
             size="sm"
             icon="arrow-left"
             onClick={() => onChangeAddress(state.email, note)}
-            className={cx("min-h-11 sm:min-h-8", !WAITLIST_OUTCOMES[state.status].signIn && "-ml-3")}
+            className={cx("min-h-11 sm:min-h-8", !signInHint && "-ml-3")}
           >
             {WAITLIST_CHANGE_ADDRESS}
           </Button>

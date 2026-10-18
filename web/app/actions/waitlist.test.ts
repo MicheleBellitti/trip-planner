@@ -44,17 +44,22 @@ describe("joinWaitlistAction", () => {
   it("validates before touching anything, and says when the accounts are not configured", async () => {
     expect(await joinWaitlistAction(JOIN_IDLE, form({ email: "nope", source: "landing" }))).toEqual({ status: "error", error: "invalid_email" });
     expect(await joinWaitlistAction(JOIN_IDLE, form({ email: "a@b.co", source: "elsewhere" }))).toEqual({ status: "error", error: "invalid_source" });
+    // Only the admin actions write the "admin" source: a public form may not claim it.
+    expect(await joinWaitlistAction(JOIN_IDLE, form({ email: "a@b.co", source: "admin" }))).toEqual({ status: "error", error: "invalid_source" });
     expect(joinWaitlist).not.toHaveBeenCalled();
     readAuthConfig.mockReturnValue(null);
     expect(await joinWaitlistAction(JOIN_IDLE, form({ email: "a@b.co", source: "landing" }))).toEqual({ status: "error", error: "unavailable" });
   });
 
-  it("answers the query's outcome with the normalized address, and a failure as such", async () => {
-    joinWaitlist.mockResolvedValue("joined");
-    expect(await joinWaitlistAction(JOIN_IDLE, form({ email: " Friend@Example.com ", note: " ciao ", source: "login" }))).toEqual({
-      status: "joined",
-      email: "friend@example.com",
-    });
+  it("answers \"received\" with the normalized address whatever the query found, and a failure as such", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    for (const outcome of ["joined", "already_listed", "already_invited", "already_registered"]) {
+      joinWaitlist.mockResolvedValueOnce(outcome);
+      expect(await joinWaitlistAction(JOIN_IDLE, form({ email: " Friend@Example.com ", note: " ciao ", source: "login" }))).toEqual({
+        status: "received",
+        email: "friend@example.com",
+      });
+    }
     expect(joinWaitlist).toHaveBeenCalledWith(pool, { email: "friend@example.com", note: "ciao", source: "login" });
     joinWaitlist.mockRejectedValue(new Error("connection refused"));
     expect(await joinWaitlistAction(JOIN_IDLE, form({ email: "a@b.co", source: "landing" }))).toEqual({ status: "error", error: "failed" });

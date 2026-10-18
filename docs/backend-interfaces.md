@@ -1029,10 +1029,12 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
 38. The waitlist (`waitlist`, migration `609ccf5bdc99`; `db.WaitlistRecord`). The closed beta's
     door is a table the web app owns: one row per address (trimmed, lower-cased), `invited_at`
     NULL while it is a request (`source` says where it came from: the landing's form, the
-    login's refusal, or an admin adding it), set when an admin invites it (`invited_by`), with
+    login's sent state, or an admin adding it; a public form may not claim "admin"), set when an admin invites it (`invited_by`), with
     `invitation_sent_at` once the email left. The web app's sign-up policy lets an address
     create an account when it is in `AUTH_ALLOWED_EMAILS` (the bootstrap list, or `*`) or has
-    an invited row (web/lib/server/waitlist.ts `isInvited`, called from Better Auth's hooks).
+    an invited row (web/lib/server/waitlist.ts `isInvited`, called from Better Auth's hooks). Neither
+    the join nor the magic-link request tells the caller whether an address has an account or
+    an invitation (web/lib/auth.ts, web/lib/waitlist-state.ts).
     The backend only migrates the table, as for Better Auth's four, so one `alembic upgrade
     head` still prepares a database for both services; it never reads it (who may plan is
     decided by the existence of the account, decision 37). The admin page is the web app's,

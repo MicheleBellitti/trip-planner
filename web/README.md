@@ -116,7 +116,7 @@ lib/server/                server-only: the accounts' configuration, the shared 
                            the emails through Resend (sign-in link, invitation), the admin check (GET /me)
 app/actions/waitlist.ts    server actions: join the waitlist (public), invite (admins)
 components/auth/           the login form and the signed-out header; app/login the page
-components/waitlist/       the waitlist form and its outcomes (the landing's closing, the login's refusal)
+components/waitlist/       the waitlist form and its one answer (the landing's closing, the login's sent state)
 components/admin/          the invitations page's body; app/admin/waitlist the page (admins only)
 lib/request-form.ts        form metadata from schema/request.json + validation (Italian)
 lib/plan-events/           usePlanEvents (SSE), the timeline reducer, labels, detail keys, virtualization
