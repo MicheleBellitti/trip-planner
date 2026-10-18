@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { EvalRunScreen } from "@/components/evals/eval-run-screen";
 import { EvalRunSkeleton } from "@/components/evals/eval-run-skeleton";
 
-export const metadata: Metadata = { title: "Valutazione" };
+export const metadata: Metadata = { title: "Collaudo" };
 
 /** "/evals/[id]": one eval run with its comparison, its requests and the agents it used.
  * Everything is fetched in the browser, which carries the TripTracker cookie; the server only

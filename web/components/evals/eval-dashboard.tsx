@@ -49,6 +49,7 @@ import { DeltaNote } from "./delta";
 import { Sha } from "./external-link";
 import { RunVerdictPill } from "./marks";
 import { TrendChart } from "./trend-chart";
+import { evalRunPath } from "@/lib/page-paths";
 
 type DashboardState =
   | { kind: "loading" }
@@ -120,12 +121,12 @@ function LatestRun({ run, previous, openedAt }: { run: EvalRunSummary; previous:
     // One grid: the answer reads first; the way in comes last in the markup, so on the phone it
     // follows the figures, and from 640 px it moves up beside the title.
     <section
-      aria-labelledby="ultima-valutazione"
+      aria-labelledby="ultimo-collaudo"
       className="grid grid-cols-1 rounded-md border border-rule bg-surface px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-x-4 lg:px-5"
     >
       <div className="min-w-0 sm:col-start-1 sm:row-start-1">
-        <h2 id="ultima-valutazione" className="font-cond text-heading font-semibold">
-          Ultima valutazione
+        <h2 id="ultimo-collaudo" className="font-cond text-heading font-semibold">
+          Ultimo collaudo
         </h2>
         <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-meta text-ink-2">
           <time dateTime={run.started_at} title={formatDateTime(run.started_at)}>
@@ -158,17 +159,17 @@ function LatestRun({ run, previous, openedAt }: { run: EvalRunSummary; previous:
       </dl>
       {previous ? (
         <p className="mt-3 text-micro text-ink-2 sm:col-span-2">
-          Variazioni rispetto alla valutazione precedente (
+          Variazioni rispetto al collaudo precedente (
           {formatCreated(previous.started_at, openedAt).toLocaleLowerCase("it")}).
         </p>
       ) : null}
 
       <LinkButton
-        href={`/evals/${run.id}`}
+        href={evalRunPath(run.id)}
         size="sm"
         className="mt-4 justify-self-start sm:col-start-2 sm:row-start-1 sm:mt-0 sm:self-start"
       >
-        Apri la valutazione
+        Apri il collaudo
       </LinkButton>
     </section>
   );
@@ -186,7 +187,7 @@ function Reasons({ run }: { run: EvalRunSummary }) {
   const rest = findings.length - SHOWN_REASONS;
   return (
     <div className="mt-3 sm:col-span-2">
-      <ul aria-label="Perché si è fermata" className="grid gap-2.5">
+      <ul aria-label="Perché si è fermato" className="grid gap-2.5">
         {findings.slice(0, SHOWN_REASONS).map((finding, index) => (
           <li key={index} className="grid grid-cols-[1rem_minmax(0,1fr)] gap-x-2">
             <Icon name="x-circle" size={15} className="mt-[3px] text-error" />
@@ -195,7 +196,7 @@ function Reasons({ run }: { run: EvalRunSummary }) {
                 <span className="font-semibold text-error">{ruleLabel(finding.rule)}</span>
                 {finding.request_id ? (
                   <Link
-                    href={`/evals/${run.id}#${requestAnchor(finding.request_id)}`}
+                    href={`${evalRunPath(run.id)}#${requestAnchor(finding.request_id)}`}
                     className="font-medium text-ink underline-offset-[0.2em] hover:underline"
                   >
                     {finding.request_title ?? finding.request_id}
@@ -212,10 +213,10 @@ function Reasons({ run }: { run: EvalRunSummary }) {
       {rest > 0 ? (
         <p className="mt-1.5 text-meta">
           <Link
-            href={`/evals/${run.id}#confronto`}
+            href={`${evalRunPath(run.id)}#confronto`}
             className="text-ink-2 underline underline-offset-[0.2em] hover:text-ink"
           >
-            {rest === 1 ? "Un altro motivo nella valutazione" : `Altri ${rest} motivi nella valutazione`}
+            {rest === 1 ? "Un altro motivo nel collaudo" : `Altri ${rest} motivi nel collaudo`}
           </Link>
         </p>
       ) : null}
@@ -252,7 +253,7 @@ function Trends({ runs, openedAt }: { runs: EvalRunSummary[]; openedAt: number }
         <h2 id="andamento" className="font-cond text-heading font-semibold">
           Andamento
         </h2>
-        {count >= MIN_TREND_RUNS ? <p className="text-meta text-ink-2">ultime {count} valutazioni</p> : null}
+        {count >= MIN_TREND_RUNS ? <p className="text-meta text-ink-2">ultimi {count} collaudi</p> : null}
       </div>
       {count >= MIN_TREND_RUNS ? (
         <div className="mt-2 rounded-md border border-rule bg-surface">
@@ -276,7 +277,7 @@ function Trends({ runs, openedAt }: { runs: EvalRunSummary[]; openedAt: number }
           </div>
         </div>
       ) : (
-        <p className="mt-1.5 max-w-prose text-small text-ink-2">L&apos;andamento compare dalla terza valutazione.</p>
+        <p className="mt-1.5 max-w-prose text-small text-ink-2">L&apos;andamento compare dal terzo collaudo.</p>
       )}
     </section>
   );

@@ -39,8 +39,8 @@ export interface MapPalette {
 
 const FALLBACK_COLOR = "gray";
 
-/** Reads the palette from the CSS variables in force on an element (the tokens of globals.css, so
- * a pinned theme or the system's both come through) and its `color-scheme`. */
+/** Reads the palette from the CSS variables in force on an element (the tokens of globals.css: dark
+ * by default, light where `data-theme` pins it) and its `color-scheme`. */
 export function readPalette(element: Element): MapPalette {
   const computed = getComputedStyle(element);
   const read = (name: string) => computed.getPropertyValue(name).trim() || FALLBACK_COLOR;

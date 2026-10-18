@@ -7,11 +7,11 @@ import { cx } from "@/components/ui/cx";
 export function EvalEmptyInvitation({ className }: { className?: string }) {
   return (
     <section
-      aria-labelledby="valutazioni-vuote"
+      aria-labelledby="collaudi-vuoti"
       className={cx("rounded-md border border-rule bg-surface px-4 py-5 sm:px-6 sm:py-6", className)}
     >
-      <h2 id="valutazioni-vuote" className="font-cond text-heading font-semibold">
-        La prima valutazione arriva dalla CI
+      <h2 id="collaudi-vuoti" className="font-cond text-heading font-semibold">
+        Il primo collaudo arriva dalla CI
       </h2>
       <p className="mt-1.5 max-w-prose text-small text-ink-2">
         Dopo ogni run delle eval, la CI carica qui i risultati: li trovi in questa pagina con l&apos;esito del

@@ -37,7 +37,7 @@ async function renderDashboard(runs: EvalRunSummary[] = RUNS) {
   });
 }
 
-const latest = () => screen.getByRole("heading", { name: "Ultima valutazione" }).closest("section") as HTMLElement;
+const latest = () => screen.getByRole("heading", { name: "Ultimo collaudo" }).closest("section") as HTMLElement;
 const fact = (label: string) => within(latest()).getByText(label).closest("div") as HTMLElement;
 
 describe("EvalDashboard", () => {
@@ -61,7 +61,7 @@ describe("EvalDashboard", () => {
     expect(pill.closest("[data-verdict]")?.className).toContain("bg-error-wash");
     expect(panel.textContent).toContain("Il confronto con il riferimento non lascia passare questa modifica.");
     expect(panel.textContent).toContain("Oggi, 20:12");
-    expect(within(panel).getByRole("link", { name: /Apri la valutazione/ }).getAttribute("href")).toBe(
+    expect(within(panel).getByRole("link", { name: /Apri il collaudo/ }).getAttribute("href")).toBe(
       `/evals/${RUNS[1]!.id}`,
     );
   });
@@ -72,12 +72,12 @@ describe("EvalDashboard", () => {
     expect(fact("Piani accettati").textContent).toContain("0/5");
     const fewer = within(fact("Piani accettati")).getByText(/−2/);
     expect(fewer.className).toContain("text-error");
-    expect(fewer.textContent).toContain("rispetto alla precedente");
+    expect(fewer.textContent).toContain("rispetto al precedente");
     const dearer = within(fact("Costo")).getByText(/\+0,21 \$/);
     expect(dearer.className).toContain("text-error");
     expect(fact("Voto medio").textContent).toContain("nessuno");
     // What the changes are measured against, in words.
-    expect(latest().textContent).toContain("Variazioni rispetto alla valutazione precedente (oggi, 20:12).");
+    expect(latest().textContent).toContain("Variazioni rispetto al collaudo precedente (oggi, 20:12).");
   });
 
   it("colours a figure that improved green", async () => {
@@ -106,13 +106,13 @@ describe("EvalDashboard", () => {
     expect(rows[0]?.textContent).toContain("Solo report");
     expect(rows[1]?.textContent).toContain("nessun voto");
     expect(within(judge).getByRole("group").getAttribute("aria-label")).toBe(
-      "Voto medio nelle ultime 5 valutazioni: da 4,0 a 4,6, l'ultima 4,0.",
+      "Voto medio negli ultimi 5 collaudi: da 4,0 a 4,6, l'ultimo 4,0.",
     );
     expect(within(charts[2]!).getByRole("group").getAttribute("aria-label")).toBe(
-      "Costo a piano nelle ultime 5 valutazioni: da 0,32 $ a 2,53 $, l'ultima 0,62 $.",
+      "Costo a piano negli ultimi 5 collaudi: da 0,32 $ a 2,53 $, l'ultimo 0,62 $.",
     );
     expect(within(charts[0]!).getByRole("group").getAttribute("aria-label")).toBe(
-      "Esito nelle ultime 5 valutazioni, dalla meno recente: solo report, interrotto, superato, bloccato, senza confronto.",
+      "Esito negli ultimi 5 collaudi, dal meno recente: solo report, interrotto, superato, bloccato, senza confronto.",
     );
     // The table is for screen readers, inside a box that never widens the page, read in its place
     // (not again as the chart's description).
@@ -161,7 +161,7 @@ describe("EvalDashboard", () => {
       { rule: "judge criteria", message: "Realistic transfers dropped", request_id: null, request_title: null },
     ];
     await renderDashboard([{ ...RUNS[1]!, blocking_findings: findings }, ...RUNS.slice(2)]);
-    const reasons = within(latest()).getByRole("list", { name: "Perché si è fermata" });
+    const reasons = within(latest()).getByRole("list", { name: "Perché si è fermato" });
     const items = within(reasons).getAllByRole("listitem");
     expect(items).toHaveLength(2);
     expect(items[0]?.textContent).toContain("Controlli");
@@ -169,13 +169,13 @@ describe("EvalDashboard", () => {
     expect(link.getAttribute("href")).toBe(`/evals/${RUNS[1]!.id}#richiesta-sea-week-family`);
     expect(items[0]?.querySelector("[lang='en']")?.textContent).toBe("2 prices without a source_url");
     expect(items[1]?.textContent).toContain("Esecuzione");
-    const more = within(latest()).getByRole("link", { name: "Un altro motivo nella valutazione" });
+    const more = within(latest()).getByRole("link", { name: "Un altro motivo nel collaudo" });
     expect(more.getAttribute("href")).toBe(`/evals/${RUNS[1]!.id}#confronto`);
   });
 
   it("names no reasons for a run that passed", async () => {
     await renderDashboard([RUNS[2]!, ...RUNS.slice(3)]);
-    expect(within(latest()).queryByRole("list", { name: "Perché si è fermata" })).toBeNull();
+    expect(within(latest()).queryByRole("list", { name: "Perché si è fermato" })).toBeNull();
   });
 
   it("reads a chart from the keyboard, saying each run it moves to, and opens the run on Enter", async () => {
@@ -209,7 +209,7 @@ describe("EvalDashboard", () => {
   it("waits for a third run before drawing trends", async () => {
     await renderDashboard(RUNS.slice(0, 2));
     expect(screen.queryByRole("figure")).toBeNull();
-    expect(document.body.textContent).toContain("L'andamento compare dalla terza valutazione.");
+    expect(document.body.textContent).toContain("L'andamento compare dal terzo collaudo.");
   });
 
   it("draws nothing before the first run: the list below is the invitation", async () => {
@@ -227,6 +227,6 @@ describe("EvalDashboard", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /Riprova/ }));
     });
-    expect(screen.getByRole("heading", { name: "Ultima valutazione" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Ultimo collaudo" })).toBeTruthy();
   });
 });

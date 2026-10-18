@@ -108,8 +108,8 @@ function evalNotFound(error: unknown): unknown {
     code: error.code,
     message:
       error.code === "not_found"
-        ? "La cronologia delle valutazioni non è disponibile su questo planner."
-        : "Questa valutazione non c'è.",
+        ? "La cronologia dei collaudi non è disponibile su questo planner."
+        : "Questo collaudo non c'è.",
   });
 }
 
