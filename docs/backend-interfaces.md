@@ -1009,7 +1009,10 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
     `auth_unavailable`. Only the `__Secure-atlas.session_token` name is accepted in production
     with an https `FRONTEND_ORIGIN` (`Settings.secure_session_cookie_only`, both modes): the
     plain name carries no `__Secure-` guarantee, so a sibling `*.bellittim.com` host could plant
-    it (cookie tossing); development over http keeps accepting both. Access: in `atlas` mode every account
+    it (cookie tossing); development over http keeps accepting both. The `__Secure-` name
+    itself can still carry `Domain=bellittim.com`, so a sibling https host could plant that
+    one too: accepted while every such host is Michele's (review of #11), the fix (a host-only
+    cookie with the API on the web's host, or a host-bound handoff) is issue #17. Access: in `atlas` mode every account
     may plan (`Settings.may_use_planner`): the web app's `AUTH_ALLOWED_EMAILS` already decided
     who could sign up, and a second list on Railway would have to be kept in step by hand.
     Ownership (`sessions.plan_owner_filter`, `owns_plan`, `get_user_plan(..., settings=)`): in
