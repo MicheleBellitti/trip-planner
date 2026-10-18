@@ -253,6 +253,8 @@ export interface BookingStripItem {
   deadline: BookingDeadline;
   /** The backend's verdict on the booking's link (which line found it). */
   check?: LinkCheck | null;
+  /** The booking starts from home: its "Quando" leads with the clock at home (DatePair). */
+  startsAtHome?: boolean;
 }
 
 function stripRank(deadline: BookingDeadline): number {
