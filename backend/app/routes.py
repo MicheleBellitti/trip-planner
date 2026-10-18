@@ -824,26 +824,29 @@ def get_rate_limits(request: Request) -> RateLimits:
 RateLimitsDep = Annotated[RateLimits, Depends(get_rate_limits)]
 
 
-async def check_create_rate(
-    request: Request, user: CurrentUserDep, settings: SettingsDep, limits: RateLimitsDep
-) -> None:
-    """POST /plans: the user's and the client IP's sliding windows (`ratelimit`), after the
-    user is known and before any quota query; over either: 429 `too_many_requests` with
-    `Retry-After`. The IP window is hit first, so a refused request still counts against the
-    address (a burst from one address is what it guards)."""
-    by_ip = limits.create_per_ip.hit(
-        ratelimit.client_ip(request, trust_proxy=settings.trusts_proxy_headers)
-    )
+def check_create_rate(
+    request: Request, user: CurrentUser, *, settings: Settings, limits: RateLimits
+) -> Callable[[], None]:
+    """POST /plans: the user's and the client IP's sliding windows (`ratelimit`), called from
+    the route's body once the request is one that may start a plan (validated, the demo
+    parameter checked) and before any quota query; over either: 429 `too_many_requests` with
+    `Retry-After`. The IP window is hit first, so a request the user's window refuses still
+    counts against the address (a burst from one address is what it guards). Returns what
+    gives both slots back (a 503 `planner_unavailable` is not a request the windows guard)."""
+    ip = ratelimit.client_ip(request, trust_proxy=settings.trusts_proxy_headers)
+    by_ip = limits.create_per_ip.hit(ip)
     by_user = limits.create_per_user.hit(user.email) if by_ip.allowed else by_ip
-    refused = by_ip if not by_ip.allowed else by_user
-    if not refused.allowed:
+    if not by_user.allowed:
         log.info("plan_create_rate_limited", by="ip" if not by_ip.allowed else "user")
         raise plan_error(
-            PlanErrorCode.TOO_MANY_REQUESTS, retry_after_seconds=refused.retry_after_seconds
+            PlanErrorCode.TOO_MANY_REQUESTS, retry_after_seconds=by_user.retry_after_seconds
         )
 
+    def give_back() -> None:
+        limits.create_per_ip.undo(ip, by_ip)
+        limits.create_per_user.undo(user.email, by_user)
 
-RequireCreateRate = Depends(check_create_rate)
+    return give_back
 
 
 _ERRORS: dict[int | str, dict[str, Any]] = {
@@ -890,7 +893,7 @@ async def me(user: CurrentUserDep, settings: SettingsDep, db: DbSession) -> MeRe
 @router.post(
     "",
     status_code=201,
-    dependencies=[RequireOrigin, RequireCreateRate],
+    dependencies=[RequireOrigin],
     responses={
         **_ERRORS,
         413: {"model": ErrorResponse},
@@ -900,9 +903,11 @@ async def me(user: CurrentUserDep, settings: SettingsDep, db: DbSession) -> MeRe
 )
 async def create_plan(
     body: PlanRequest,
+    request: Request,
     user: CurrentUserDep,
     planner: PlannerDep,
     settings: SettingsDep,
+    limits: RateLimitsDep,
     demo_scenario: Annotated[
         str | None,
         Query(
@@ -922,8 +927,10 @@ async def create_plan(
     `PlannerUnavailableError`/`TripSchemaUnavailableError` -> 503 `planner_unavailable`,
     `ManagedAgentsError` or a start `TimeoutError` -> 502 `agents_unavailable`,
     `UserGoneError` (the account was deleted while its session was still cached) -> 401
-    `not_authenticated`. `demo_scenario`: `check_demo_scenario`."""
+    `not_authenticated`. `demo_scenario`: `check_demo_scenario`. The rate limits
+    (`check_create_rate`) count only the requests that get this far."""
     check_demo_scenario(demo_scenario, settings=settings, planner=planner)
+    give_back = check_create_rate(request, user, settings=settings, limits=limits)
     try:
         plan_id = await sessions.start_plan(
             body, user, services=planner, demo_scenario=demo_scenario
@@ -943,11 +950,13 @@ async def create_plan(
             retry_after_seconds=quota.PLANNER_BUSY_RETRY_SECONDS,
         ) from None
     except sessions.PlannerUnavailableError as exc:
+        give_back()
         log.error("plan_refused_planner_unavailable", reasons=exc.reasons)
         raise plan_error(PlanErrorCode.PLANNER_UNAVAILABLE) from None
     except sessions.UserGoneError:
         raise auth_error(AuthErrorCode.NOT_AUTHENTICATED, auth_messages(settings)) from None
     except TripSchemaUnavailableError as exc:
+        give_back()
         log.error("plan_refused_trip_schema_unavailable", error=str(exc))
         raise plan_error(PlanErrorCode.PLANNER_UNAVAILABLE) from None
     except (ManagedAgentsError, TimeoutError) as exc:

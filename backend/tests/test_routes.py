@@ -402,6 +402,36 @@ async def test_create_plan_is_rate_limited_per_user(
     assert third.headers["Retry-After"] == "600"
 
 
+async def test_only_a_request_that_could_start_a_plan_counts_in_the_windows(
+    make_app: AppFactory,
+    make_settings: Callable[..., Settings],
+    stub_planner: StubPlanner,
+    db_session_factory: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = make_settings(plan_create_limit_per_user=1, plan_create_limit_per_ip=1)
+    async with make_app(settings=settings) as app:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+
+            async def post(body: Any, query: str = "") -> int:
+                response = await client.post(f"/plans{query}", json=body, headers=POST_HEADERS)
+                return response.status_code
+
+            invalid = [await post({"origin": ""}) for _ in range(3)]
+            demo = [await post(VALID_BODY, "?demo_scenario=happy_path") for _ in range(3)]
+            # The stub planner is not ready: a 503 gives its slot back.
+            unavailable = [await post(VALID_BODY) for _ in range(3)]
+            patch_sessions(monkeypatch, "start_plan", result=uuid.uuid4())
+            started = await post(VALID_BODY)
+            again = await post(VALID_BODY)
+
+    assert invalid == [422, 422, 422]
+    assert demo == [404, 404, 404]
+    assert unavailable == [503, 503, 503]
+    assert (started, again) == (201, 429)
+
+
 async def test_create_plan_is_rate_limited_per_proxied_client_ip(
     make_app: AppFactory,
     make_settings: Callable[..., Settings],

@@ -1072,9 +1072,10 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
     reserves in the same transaction: the row turns `running` with its cap raised by the extra
     before the session is touched, so the next start or "Continua" already counts it; a failure
     to raise the session's budget puts the row back (`budget_paused`, the old cap), and the
-    timeline's "continued" event and `continues` follow only once the budget was raised. The rate limits are in-process sliding windows
-    (`POST /plans` per user and per client IP, `PLAN_CREATE_*`) and a per-user count of open
-    event streams (`MAX_STREAMS_PER_USER`), 429 `too_many_requests` with `Retry-After`: one
+    timeline's "continued" event and `continues` follow only once the budget was raised. The
+    rate limits are in-process sliding windows (`POST /plans` per user and per client IP,
+    `PLAN_CREATE_*`, counted in the route's body: a 422, a demo 404 or a 503
+    `planner_unavailable` never uses a slot) and a per-user count of open event streams (`MAX_STREAMS_PER_USER`), 429 `too_many_requests` with `Retry-After`: one
     replica runs the backend, a redeploy starts them over, and the quotas, not the windows,
     guard the money; Redis or a Postgres counter comes with more replicas. The client IP is
     the last `X-Forwarded-For` value (all such headers joined), the one the proxy appended,

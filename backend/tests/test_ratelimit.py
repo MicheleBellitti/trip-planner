@@ -79,6 +79,34 @@ def test_stream_counter_holds_the_limit_and_releases() -> None:
     assert streams.acquire("v").allowed
 
 
+def test_sliding_window_drops_the_keys_whose_events_left_the_window() -> None:
+    clock = Clock()
+    window = SlidingWindow(limit=2, window_seconds=60, now=clock)
+    for n in range(100):
+        window.hit(f"203.0.113.{n}")
+    assert len(window._hits) == 100  # pyright: ignore[reportPrivateUsage]
+
+    clock.now += 61
+    window.hit("198.51.100.1")  # the first hit after a window sweeps the stale keys
+
+    assert list(window._hits) == ["198.51.100.1"]  # pyright: ignore[reportPrivateUsage]
+
+
+def test_sliding_window_undo_takes_back_one_allowed_hit() -> None:
+    clock = Clock()
+    window = SlidingWindow(limit=1, window_seconds=60, now=clock)
+    first = window.hit("a")
+    assert first.allowed
+    refused = window.hit("a")
+    assert not refused.allowed
+
+    window.undo("a", refused)  # a refusal recorded nothing: nothing to take back
+    assert not window.hit("a").allowed
+    window.undo("a", first)
+    assert "a" not in window._hits  # pyright: ignore[reportPrivateUsage]
+    assert window.hit("a").allowed
+
+
 def request_with(headers: dict[str, str], client: tuple[str, int] | None) -> Request:
     scope: dict[str, Any] = {
         "type": "http",

@@ -9,9 +9,12 @@ Postgres counter, comes with more replicas.
 What is limited and where (app/routes.py):
 
 - `POST /plans`: `PLAN_CREATE_LIMIT_PER_USER` and `PLAN_CREATE_LIMIT_PER_IP` requests per
-  `PLAN_CREATE_WINDOW_SECONDS`, checked after the user is known (an anonymous request is a 401
-  before it counts) and before any quota query. Over the limit: 429 `too_many_requests` with
-  `Retry-After` = seconds until the oldest request in the window leaves it.
+  `PLAN_CREATE_WINDOW_SECONDS`, checked in the route's body: after the user is known (an
+  anonymous request is a 401 before it counts), the body validated (a 422 never counts) and
+  the demo parameter checked (nor does a 404), and before any quota query. A request refused
+  because the planner is not ready (503 `planner_unavailable`) gives its slot back. Over the
+  limit: 429 `too_many_requests` with `Retry-After` = seconds until the oldest request in the
+  window leaves it.
 - `GET /plans/{id}/events`: at most `MAX_STREAMS_PER_USER` event streams open per user at any
   moment, every tab of theirs counted; over it: 429 with `Retry-After` 5. The count is released
   when the stream ends, however it ends.
@@ -46,49 +49,71 @@ class Decision:
 
     allowed: bool
     retry_after_seconds: int = 0
+    at: float | None = None
+    """When an allowed hit was recorded (`SlidingWindow.undo` takes it back)."""
 
 
 @dataclass
 class SlidingWindow:
     """At most `limit` events per `window_seconds`, per key, over the last `window_seconds`.
 
-    `now` returns a monotonic-or-wall clock in seconds (tests inject one). Keys with an empty
-    deque are dropped, so the store does not grow with every address ever seen.
+    `now` returns a monotonic-or-wall clock in seconds (tests inject one). Keys whose events
+    all left the window are dropped: `hit` sweeps every key at most once per window, so the
+    store holds only the keys seen in the last two windows, not every address ever seen.
     """
 
     limit: int
     window_seconds: float
     now: Callable[[], float]
     _hits: dict[str, deque[float]] = field(default_factory=dict, repr=False)
+    _swept_at: float | None = field(default=None, repr=False)
 
     def hit(self, key: str) -> Decision:
         """Record one event for `key` if it fits; refuse (recording nothing) when it does not."""
         moment = self.now()
+        horizon = moment - self.window_seconds
+        if self._swept_at is None or moment - self._swept_at >= self.window_seconds:
+            self._sweep(horizon)
+            self._swept_at = moment
         hits = self._hits.get(key)
         if hits is None:
             hits = deque()
             self._hits[key] = hits
-        horizon = moment - self.window_seconds
         while hits and hits[0] <= horizon:
             hits.popleft()
         if len(hits) >= self.limit:
             retry = max(1, math.ceil(hits[0] + self.window_seconds - moment))
             return Decision(allowed=False, retry_after_seconds=retry)
         hits.append(moment)
-        return Decision(allowed=True)
+        return Decision(allowed=True, at=moment)
+
+    def undo(self, key: str, decision: Decision) -> None:
+        """Take back the event an allowed `decision` recorded for `key` (a request that turned
+        out not to be one the window guards, e.g. refused because the planner is not ready)."""
+        hits = self._hits.get(key)
+        if not decision.allowed or decision.at is None or hits is None:
+            return
+        try:
+            hits.remove(decision.at)
+        except ValueError:
+            return
+        if not hits:
+            del self._hits[key]
 
     def forget(self, key: str) -> None:
         """Drop `key`'s events (tests, and a future admin reset)."""
         self._hits.pop(key, None)
 
-    def __len__(self) -> int:
-        """How many keys have events in the window: the expired ones are swept first."""
-        horizon = self.now() - self.window_seconds
+    def _sweep(self, horizon: float) -> None:
         for key, hits in list(self._hits.items()):
             while hits and hits[0] <= horizon:
                 hits.popleft()
             if not hits:
                 del self._hits[key]
+
+    def __len__(self) -> int:
+        """How many keys have events in the window: the expired ones are swept first."""
+        self._sweep(self.now() - self.window_seconds)
         return len(self._hits)
 
 
