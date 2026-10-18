@@ -1083,7 +1083,10 @@ async def evaluate_submission(
     and the link check (`_check_links`) together, then `translate_submission(...,
     now=deps.now(), ids=deps.ids(), health=...)`. `TripSchemaUnavailableError` propagates (the
     plan fails with a backend reason; it does not count as the agent's attempt). A link never
-    rejects the plan, and neither does a failing link check."""
+    rejects the plan, and neither does a failing link check. The check runs before translation,
+    beside the FX prefetch and the trip.json load, so it adds no wait to an accepted plan; a
+    submission that translation then rejects may spend up to the checker's deadline on it (a
+    spec divergence, docs/backend-interfaces.md decision 40)."""
     parsed = parse_submission(tool_input)
     if isinstance(parsed, Rejected):
         return parsed

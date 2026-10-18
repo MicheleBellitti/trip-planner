@@ -46,7 +46,8 @@ backend/                 FastAPI service (uv, Python 3.12). The package is backe
                            (AUTH_MODE=atlas) or TripTracker's get-session; require_admin(); the Origin check
   app/mapping.py           plan_to_trip(): Plan -> TripTracker Trip (pure function)
   app/links.py             check_link(): the booking-link domain allowlist (pure)
-  app/link_health.py       the link check at delivery: verdicts ok/dead/unknown, homepage fallback, a transport pinned to public addresses
+  app/link_health.py       the link check at delivery: verdicts ok/dead/unknown, homepage
+                           fallback, a transport pinned to public addresses
   app/fx.py                FxConverter: Banca d'Italia daily rate, InforEuro fallback, fx_rates cache
   app/triptracker_schema.py  TripTracker's trip.json: load, refresh, validate_trip()
   app/lockfile.py          reads backend/claude-lock.<profile>.json into a Roster
@@ -260,9 +261,10 @@ CI must pass before merge.
 4. **Never hand-write booking URLs**, in code or in agent output. New links come only from
    `skills/booking-links/build_link.py` (domains in `templates.json`). Links returned by an MCP
    are used exactly as received. The backend checks each one against a per-provider domain
-   allowlist, and a link outside the list is shown as text, not as a button. At delivery the backend also checks every plan URL: a dead one points to its
-   site's homepage (derived by code from the URL, never written) or reads "Pagina non trovata",
-   and a booking link uses the homepage only when it passes the allowlist.
+   allowlist, and a link outside the list is shown as text, not as a button. At delivery the
+   backend also checks every plan URL: a dead one points to its site's homepage (derived by code
+   from the URL, never written) or reads "Pagina non trovata", and a booking link uses the
+   homepage only when both the link and the homepage pass the allowlist.
 5. **Every price carries `source_url` and `retrieved_at`.** It is `"verified"` only when it
    comes from an MCP, otherwise `"estimated"`.
 6. The planner never writes to TripTracker's database. The Trip travels through
@@ -402,7 +404,8 @@ CI must pass before merge.
   `ready`, `failed`, `budget_paused`, `blocked`, `interrupted`. `events.ma_event_id` is unique,
   so a resumed consumer never stores an event twice (events with an empty API id get a
   deterministic synthetic key, never NULL). `plans` also keeps the session's current budget
-  cap, when the plan last entered `running`, and whether an interrupt was asked, and the link check's verdicts (`link_health`).
+  cap, when the plan last entered `running`, whether an interrupt was asked and the link check's
+  verdicts (`link_health`).
 - One consumer per plan across processes: a consumer follows a plan only while it holds the
   plan's Postgres advisory lock (`consumer.PlanLease`), on a dedicated connection outside the
   app's pool. During a redeploy's overlap the other process waits and takes over.
