@@ -3,6 +3,7 @@ import "server-only";
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { APIError } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
+import { after } from "next/server";
 import { magicLink } from "better-auth/plugins";
 
 import { isSignupAllowed, normalizeEmail } from "./auth-policy";
@@ -32,7 +33,8 @@ import { isInvited } from "./server/waitlist";
  * - No enumeration (Michele, 2026-10-18: "uguale per tutti"): a magic-link request answers the
  *   same 200 whether or not the address may sign in; for one that may not, `sendMagicLink` sends
  *   nothing, so the link's token never leaves the server (and its verification would hit the
- *   `user.create` refusal anyway). The login form says "if the address is enabled, a link
+ *   `user.create` refusal anyway). For one that may, the email leaves after the response
+ *   (`after()`), so the two also answer in the same time. The login form says "if the address is enabled, a link
  *   arrives" and offers the waitlist to everyone.
  *
  * `auth` is null when the accounts are not configured (`readAuthConfig`): the route answers 503
@@ -49,6 +51,14 @@ export interface AuthDependencies {
   database: BetterAuthOptions["database"];
   /** True when the normalized address was invited on the waitlist. */
   isInvited: (email: string) => Promise<boolean>;
+  /** Runs a task once the response has left: Next's `after()` in the app (the auth route handler
+   * runs inside Next's request scope, where `after` is allowed); the tests record the tasks. */
+  defer: (task: () => Promise<void>) => void;
+}
+
+/** A failure's message without anything shaped like an address, for the logs. */
+export function redactAddresses(message: string): string {
+  return message.replace(/[^\s@<>"'`]+@[^\s@<>"'`]+/g, "<address>");
 }
 
 export function buildAuth(config: AuthServerConfig, deps: AuthDependencies) {
@@ -122,13 +132,24 @@ export function buildAuth(config: AuthServerConfig, deps: AuthDependencies) {
         expiresIn: MAGIC_LINK_MINUTES * 60,
         sendMagicLink: async ({ email, url }, ctx) => {
           // The same answer for every address (no enumeration): one that may not sign in gets no
-          // email, and the request still answers 200. Never log the address.
+          // email, and the request still answers 200. The decision is taken here; the email itself
+          // leaves after the response, so an enabled address does not answer later than a refused
+          // one (Resend's round trip would tell them apart). Never log the address.
           const existing = ctx ? await ctx.context.internalAdapter.findUserByEmail(email) : null;
           if (!existing && !(await mayCreateAccount(email))) {
             console.info("[auth] magic link withheld: the address may not sign up");
             return;
           }
-          await sendMagicLink(config, { email, url });
+          deps.defer(async () => {
+            try {
+              await sendMagicLink(config, { email, url });
+            } catch (error) {
+              // It can no longer reach the browser: the sent state already says what to do when
+              // nothing arrives. Logged here, and never thrown out of the deferred task.
+              const message = error instanceof Error ? redactAddresses(error.message) : typeof error;
+              console.error("[auth] sign-in email failed", message);
+            }
+          });
         },
       }),
       nextCookies(), // last, as its docs ask: it applies Set-Cookie from server actions
@@ -152,7 +173,7 @@ export const authConfig = readAuthConfig();
 
 function build(config: AuthServerConfig) {
   const pool = getPool(config.databaseUrl);
-  return buildAuth(config, { database: pool, isInvited: (email) => isInvited(pool, email) });
+  return buildAuth(config, { database: pool, isInvited: (email) => isInvited(pool, email), defer: after });
 }
 
 export const auth = authConfig ? build(authConfig) : null;

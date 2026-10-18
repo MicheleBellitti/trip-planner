@@ -180,7 +180,8 @@ Taken by Michele on 2026-10-12. They replace the first pass's open questions.
   è abilitato ti arriva un link" and offers the list to everyone; a join always answers
   "Ricevuto" with one sentence true in every case. The distinctions stay on the server (logs)
   and on the admin page. Google's refusal still says "non ha ancora un invito": it needs the
-  Google account itself.
+  Google account itself. The link's email leaves after the response, so an enabled address does
+  not answer more slowly than a refused one.
 
 ## Brand Commitments
 

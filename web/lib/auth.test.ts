@@ -12,7 +12,7 @@ vi.mock("./server/send-magic-link", () => ({
   sendMagicLink: (config: unknown, message: { email: string; url: string }) => sendMagicLink(config, message),
 }));
 
-const { buildAuth } = await import("./auth");
+const { buildAuth, redactAddresses } = await import("./auth");
 
 const BASE = "http://localhost:3000";
 
@@ -27,6 +27,15 @@ const config: AuthServerConfig = {
   production: false,
 };
 
+/** The tasks deferred past the response, as Next's `after()` would hold them. */
+let deferred: (() => Promise<void>)[] = [];
+
+async function runDeferred() {
+  const tasks = deferred;
+  deferred = [];
+  for (const task of tasks) await task();
+}
+
 function setup(invited: string[] = []) {
   const now = new Date();
   const db: Record<string, Record<string, unknown>[]> = {
@@ -38,6 +47,7 @@ function setup(invited: string[] = []) {
   const auth = buildAuth(config, {
     database: memoryAdapter(db),
     isInvited: async (email) => invited.includes(email),
+    defer: (task) => void deferred.push(task),
   });
   return { auth, db };
 }
@@ -55,6 +65,7 @@ async function requestLink(auth: ReturnType<typeof setup>["auth"], email: string
 
 describe("the magic-link request (no account enumeration)", () => {
   beforeEach(() => {
+    deferred = [];
     sendMagicLink.mockReset();
     sendMagicLink.mockResolvedValue(undefined);
   });
@@ -66,6 +77,8 @@ describe("the magic-link request (no account enumeration)", () => {
 
     expect(member).toEqual({ status: 200, body: JSON.stringify({ status: true }) });
     expect(stranger).toEqual(member);
+    expect(deferred).toHaveLength(1); // the member's email, after the response
+    await runDeferred();
     expect(sendMagicLink).toHaveBeenCalledTimes(1);
     expect(sendMagicLink.mock.calls[0]?.[1].email).toBe("member@example.com");
   });
@@ -74,6 +87,7 @@ describe("the magic-link request (no account enumeration)", () => {
     const { auth } = setup(["guest@example.com"]);
     expect((await requestLink(auth, "Boss@Example.com")).status).toBe(200);
     expect((await requestLink(auth, "guest@example.com")).status).toBe(200);
+    await runDeferred();
     expect(sendMagicLink.mock.calls.map((call) => call[1].email.toLowerCase())).toEqual([
       "boss@example.com",
       "guest@example.com",
@@ -83,6 +97,27 @@ describe("the magic-link request (no account enumeration)", () => {
   it("keeps the request's own validation for everyone: an address without a shape is a 400", async () => {
     const { auth } = setup();
     expect((await requestLink(auth, "not-an-address")).status).toBe(400);
+    expect(deferred).toHaveLength(0);
     expect(sendMagicLink).not.toHaveBeenCalled();
+  });
+
+  it("answers before the email leaves: a send that never finishes still gives the 200", async () => {
+    sendMagicLink.mockImplementation(() => new Promise<void>(() => undefined)); // Resend hangs
+    const { auth } = setup();
+    expect(await requestLink(auth, "member@example.com")).toEqual({ status: 200, body: JSON.stringify({ status: true }) });
+    expect(sendMagicLink).not.toHaveBeenCalled(); // not even started while the request was open
+    void runDeferred();
+    await vi.waitFor(() => expect(sendMagicLink).toHaveBeenCalledTimes(1));
+  });
+
+  it("logs a failed send without the address, and never throws it out of the deferred task", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    sendMagicLink.mockRejectedValueOnce(new Error("Resend refused the sign-in email: validation_error member@example.com is invalid"));
+    const { auth } = setup();
+    expect((await requestLink(auth, "member@example.com")).status).toBe(200);
+    await expect(runDeferred()).resolves.toBeUndefined();
+    expect(log).toHaveBeenCalledWith("[auth] sign-in email failed", "Resend refused the sign-in email: validation_error <address> is invalid");
+    expect(JSON.stringify(log.mock.calls)).not.toContain("member@example.com");
+    expect(redactAddresses("to <a.b+c@x.it>, cc d@e.f")).toBe("to <<address>>, cc <address>");
   });
 });

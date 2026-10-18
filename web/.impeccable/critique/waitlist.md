@@ -187,7 +187,8 @@ the round found were fixed after it and verified, not re-scored.
   magic-link request answers as sent for every address (no email for one that may not sign in),
   and the sent state says "Se … è abilitato, ti arriva un link." with "Non arriva niente? Mettiti
   in lista" and the join beside it. The field's invite refusal is gone; Google's refusal (after
-  OAuth, the account is the caller's own) keeps its notice.
+  OAuth, the account is the caller's own) keeps its notice. Timing too (2026-10-18): the email
+  leaves after the response (`after()`), so both answers take the same time.
 - The note could seed the first request ("Il prossimo viaggio"): keep it for triage only, or
   prefill the request form from it after sign-up?
 - One invitation email for everyone: a person who asked ("ti avevamo in lista") and a cold invite
