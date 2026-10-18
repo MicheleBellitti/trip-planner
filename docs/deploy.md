@@ -621,7 +621,7 @@ later). The run:
 
 ## 8. Day-1 live probe
 
-The probe (notes §4, P1-P13) answers what the docs can't: whether the travel MCP servers
+The probe (notes §4, P1-P14) answers what the docs can't: whether the travel MCP servers
 accept a Managed Agents session (the main project risk), the real MCP tool names, inter-agent
 tools, budget pause and resume, ids and cross-posted events, and how `ant apply` behaves
 (P12). `scripts/probe_session.py` runs it. Run it on the morning of day 1, before building on
@@ -638,8 +638,8 @@ uv run python ../scripts/probe_session.py --yes --only P4,P5      # or a subset
 unset ANTHROPIC_API_KEY
 ```
 
-- Each session is capped at the development profile's budget (60 cents; P9 uses 3 to reach
-  the budget pause). No new session starts once the sessions' list cost reaches
+- Each session is capped at the development profile's budget (100 cents; P9 uses 3 to reach
+  the budget pause, P14 25). No new session starts once the sessions' list cost reaches
   `--max-total-cents` (default 150, so $1.50; the dry run prints the worst case, at most one
   session's budget above it). Every resource it creates is named `probe-<stamp>-...` and
   removed at the end.
