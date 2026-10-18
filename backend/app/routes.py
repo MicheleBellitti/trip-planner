@@ -45,13 +45,14 @@ exception is GET (and its preflight) on /plans/{id}/trip, which also allows
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import datetime as dt
 import hashlib
 import hmac
 import re
 import time
 import uuid
-from collections.abc import AsyncIterator, Callable, Mapping
+from collections.abc import AsyncGenerator, AsyncIterator, Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Annotated, Any, cast
@@ -598,16 +599,52 @@ def plan_detail(record: PlanRecord, *, settings: Settings) -> PlanDetail:
     )
 
 
+class StreamLease:
+    """One slot of `ratelimit.StreamCounter`, given back exactly once (`release` is
+    idempotent): by the stream when it ends and by the response however it ends, so a slot is
+    never kept by a stream that was cancelled before it started."""
+
+    def __init__(self, release: Callable[[], None]) -> None:
+        self._release: Callable[[], None] | None = release
+
+    def release(self) -> None:
+        release, self._release = self._release, None
+        if release is not None:
+            release()
+
+    @property
+    def released(self) -> bool:
+        return self._release is None
+
+
+class CountedEventSourceResponse(EventSourceResponse):
+    """`EventSourceResponse` that gives its `StreamLease` back once the response is over, sent
+    or not: a client gone (or a task cancelled) before the first event never starts the body's
+    generator, whose own `finally` would then never run."""
+
+    def __init__(self, content: Any, *, lease: StreamLease, **kwargs: Any) -> None:
+        super().__init__(content, **kwargs)
+        self.lease = lease
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            self.lease.release()
+
+
 async def _counted(
-    stream: AsyncIterator[ServerSentEvent], *, release: Callable[[], None]
-) -> AsyncIterator[ServerSentEvent]:
-    """`stream`, with `release()` called once it ends, however it ends (the client went away,
-    the plan finished, an error)."""
+    stream: AsyncGenerator[ServerSentEvent], *, lease: StreamLease
+) -> AsyncGenerator[ServerSentEvent]:
+    """`stream`, closed with this wrapper (so its hub subscription ends at once, not when the
+    garbage collector finds it), with `lease` given back once it ends, however it ends (the
+    client went away, the plan finished, an error)."""
     try:
-        async for item in stream:
-            yield item
+        async with contextlib.aclosing(stream) as inner:
+            async for item in inner:
+                yield item
     finally:
-        release()
+        lease.release()
 
 
 def sse_message(event: UIEvent) -> ServerSentEvent:
@@ -680,7 +717,7 @@ async def _consumer_settled(planner: PlannerServices, plan_id: uuid.UUID) -> Non
 
 async def event_stream(
     plan_id: uuid.UUID, after_seq: int | None, *, planner: PlannerServices, request: Request
-) -> AsyncIterator[ServerSentEvent]:
+) -> AsyncGenerator[ServerSentEvent]:
     """The SSE body (an async generator): subscribe to the hub, replay `events` with
     `seq > after_seq` from Postgres (`consumer.load_events_after`, in pages), then the live
     subscription:
@@ -1009,8 +1046,8 @@ async def plan_events(
 ) -> EventSourceResponse:
     """SSE of the plan's UI events (module docstring). Checks ownership first (404), then the
     user's open streams (`MAX_STREAMS_PER_USER`, 429 `too_many_requests` with `Retry-After`;
-    the count is released when the stream ends), then returns
-    `EventSourceResponse(event_stream(...), ping=PING_SECONDS,
+    the slot, a `StreamLease`, is given back when the stream or the response ends, whichever
+    comes first), then returns `CountedEventSourceResponse(event_stream(...), ping=PING_SECONDS,
     ping_message_factory=ping_comment, send_timeout=SEND_TIMEOUT_SECONDS,
     headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})`. The request's DB
     session is released before streaming (the stream opens its own short sessions)."""
@@ -1022,7 +1059,8 @@ async def plan_events(
         raise plan_error(
             PlanErrorCode.TOO_MANY_REQUESTS, retry_after_seconds=held.retry_after_seconds
         )
-    return EventSourceResponse(
+    lease = StreamLease(lambda: limits.streams.release(user.email))
+    return CountedEventSourceResponse(
         _counted(
             event_stream(
                 plan_id,
@@ -1030,8 +1068,9 @@ async def plan_events(
                 planner=planner,
                 request=request,
             ),
-            release=lambda: limits.streams.release(user.email),
+            lease=lease,
         ),
+        lease=lease,
         ping=PING_SECONDS,
         ping_message_factory=ping_comment,
         send_timeout=SEND_TIMEOUT_SECONDS,
