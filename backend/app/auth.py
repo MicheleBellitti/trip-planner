@@ -566,11 +566,11 @@ async def verify_atlas_session(
 
     One query: the `auth_sessions` row whose `token` is the cookie's `session_token` and whose
     `expires_at` is after `now` (default `clock.now()`), joined to its `users` row (the id, the
-    email and whether it is verified). None when
-    there is no such row: signed out, revoked, expired, or a token that was never issued (a
-    forged cookie). No cache, so a sign-out is effective on the next request. Never writes:
-    Better Auth's `updateAge` refresh happens on the web app's own visits. Database errors
-    propagate (`current_user` turns them into 503 `auth_unavailable`).
+    email and whether it is verified). None when there is no such row: signed out, revoked,
+    expired, or a token that was never issued (a forged cookie). No cache, so a sign-out is
+    effective on the next request. Never writes: Better Auth's `updateAge` refresh happens on
+    the web app's own visits. Database errors propagate (`current_user` turns them into 503
+    `auth_unavailable`).
     """
     token = session_token(raw_cookie_value)
     if not token:
