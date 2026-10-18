@@ -33,6 +33,19 @@ function PlanStateLabel({ status, interrupting }: { status: PlanStatus | null; i
   );
 }
 
+/** The state group's areas, spelled whole so Tailwind sees every class: the state and its
+ * actions, the meter while the plan runs, and the demo's bar on a row of its own. */
+function gridAreas(finished: boolean, bar: boolean): string {
+  if (finished) {
+    return bar
+      ? "[grid-template-areas:'status_actions'_'bar_bar'] lg:[grid-template-areas:'status_actions'_'bar_bar']"
+      : "[grid-template-areas:'status_actions'] lg:[grid-template-areas:'status_actions']";
+  }
+  return bar
+    ? "[grid-template-areas:'status_actions'_'meter_meter'_'bar_bar'] lg:[grid-template-areas:'status_meter_actions'_'bar_bar_bar']"
+    : "[grid-template-areas:'status_actions'_'meter_meter'] lg:[grid-template-areas:'status_meter_actions']";
+}
+
 interface LiveHeaderProps {
   title: string;
   /** "Da Milano, 2 adulti e 2 bambini (8 e 11 anni), budget 2.400 €". */
@@ -47,6 +60,13 @@ interface LiveHeaderProps {
   costPending?: boolean;
   /** "Interrompi", when the plan can still be stopped. */
   action?: ReactNode;
+  /** A row of its own across the state group, under the state and the meter: the demo's bar
+   * (what this run is, and its controls). */
+  bar?: ReactNode;
+  /** How a finished plan's cost is named: "Costo del piano", or the demo's recorded run. */
+  costLabel?: string;
+  /** How a finished plan's duration is named: "Durata", or the demo's recorded run. */
+  durationLabel?: string;
   /** The bar stays on screen while scrolling (a running or paused plan). The finished plan
    * scrolls with the page: there is nothing left to watch. */
   sticky?: boolean;
@@ -68,6 +88,9 @@ export function LiveHeader({
   budgetCents,
   costPending = false,
   action,
+  bar,
+  costLabel = "Costo del piano",
+  durationLabel = "Durata",
   sticky = true,
 }: LiveHeaderProps) {
   const running = status === "running" || status === null;
@@ -120,22 +143,21 @@ export function LiveHeader({
           role="group"
           className={cx(
             "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2.5 border-b border-rule px-4 pt-3 pb-3.5",
-            finished ? "[grid-template-areas:'status_actions']" : "[grid-template-areas:'status_actions'_'meter_meter']",
+            gridAreas(finished, bar !== undefined && bar !== null),
             sticky && "sticky top-0 z-20 bg-[color-mix(in_srgb,var(--ground)_92%,transparent)] backdrop-blur-[8px]",
             "lg:static lg:z-auto lg:gap-x-7 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none",
-            finished
-              ? "lg:grid-cols-[auto_auto] lg:[grid-template-areas:'status_actions']"
-              : "lg:grid-cols-[auto_minmax(15rem,18.75rem)_auto] lg:[grid-template-areas:'status_meter_actions']",
+            finished ? "lg:grid-cols-[auto_auto]" : "lg:grid-cols-[auto_minmax(15rem,18.75rem)_auto]",
           )}
         >
           <div className="flex min-w-0 flex-col gap-px [grid-area:status]">
             <PlanStateLabel status={status} interrupting={interrupting} />
             <span className="text-small text-ink-2">
-              {running || status === "budget_paused" ? "Trascorsi" : "Durata"}{" "}
+              {running || status === "budget_paused" ? "Trascorsi" : durationLabel}{" "}
               <b className="font-semibold text-ink">{elapsed ?? "…"}</b>
               {finished && costCents !== null ? (
                 <>
-                  {" · "}Costo del piano <b className="font-semibold text-ink">{formatUsd(costCents)}</b>
+                  {" · "}
+                  {costLabel} <b className="font-semibold text-ink">{formatUsd(costCents)}</b>
                 </>
               ) : null}
             </span>
@@ -153,6 +175,7 @@ export function LiveHeader({
             {action}
             <ThemeToggle variant="bare" className="pointer-coarse:size-11" />
           </div>
+          {bar ? <div className="min-w-0 [grid-area:bar]">{bar}</div> : null}
         </div>
       </div>
     </header>

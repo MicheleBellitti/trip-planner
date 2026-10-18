@@ -18,7 +18,6 @@ const COVER: Cover = {
 };
 
 const mocks = vi.hoisted(() => ({ getCover: vi.fn() }));
-vi.mock("@/lib/api", () => ({ api: { getCover: mocks.getCover } }));
 
 beforeEach(() => {
   mocks.getCover.mockReset();
@@ -43,7 +42,7 @@ describe("CoverThumb", () => {
       },
     );
     mocks.getCover.mockResolvedValue(COVER);
-    const { container } = render(<CoverThumb planId="plan-1" destination="Lisbona" />);
+    const { container } = render(<CoverThumb planId="plan-1" destination="Lisbona" loadCover={mocks.getCover} />);
     expect(mocks.getCover).not.toHaveBeenCalled();
     expect(container.querySelector("[data-cover='tile']")?.textContent).toBe("L");
     expect(container.querySelector("img")).toBeNull();
@@ -57,14 +56,14 @@ describe("CoverThumb", () => {
 
   it("is decorative: an empty alt text, because the row's title names the place", async () => {
     requestCover("plan-1", async () => COVER);
-    const { container } = render(<CoverThumb planId="plan-1" destination="Lisbona" />);
+    const { container } = render(<CoverThumb planId="plan-1" destination="Lisbona" loadCover={mocks.getCover} />);
     await act(async () => {});
     expect(container.querySelector("img")?.getAttribute("alt")).toBe("");
   });
 
   it("falls back to the tile when the file does not load", async () => {
     requestCover("plan-1", async () => COVER);
-    const { container } = render(<CoverThumb planId="plan-1" destination="Lisbona" />);
+    const { container } = render(<CoverThumb planId="plan-1" destination="Lisbona" loadCover={mocks.getCover} />);
     await act(async () => {});
     const image = container.querySelector("img");
     expect(image).toBeTruthy();
@@ -74,7 +73,7 @@ describe("CoverThumb", () => {
   });
 
   it("shows a pin instead of an initial when the name has no letter", () => {
-    const { container } = render(<CoverThumb planId="plan-1" destination="--" />);
+    const { container } = render(<CoverThumb planId="plan-1" destination="--" loadCover={mocks.getCover} />);
     expect(container.querySelector("svg")).toBeTruthy();
   });
 });

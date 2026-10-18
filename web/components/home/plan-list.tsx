@@ -24,6 +24,7 @@ import { useEffect, useId, useState } from "react";
 import { CoverCreditNote } from "@/components/plan/cover/cover-credit";
 import { CoverFeature } from "@/components/plan/cover/cover-feature";
 import { destinationFromTitle } from "@/components/plan/cover/cover-sources";
+import type { CoverLoader } from "@/components/plan/cover/cover-store";
 import { CoverThumb } from "@/components/plan/cover/cover-thumb";
 import { Button } from "@/components/ui/button";
 import { cx } from "@/components/ui/cx";
@@ -61,6 +62,9 @@ export const RECENT_ROWS = 8;
 /** The rail's column: 36 px wide, so its centre (18 px) is where the rail and every node sit (the
  * node is 18 px: it just fits, and the title column keeps the width). */
 const RAIL_COL = "2.25rem";
+
+/** The rows' and the featured card's photos: GET /plans/{id}/cover. */
+const loadCover: CoverLoader = (planId) => api.getCover(planId);
 /** Narrow: rail, cover, title over meta, caret, 10 px apart. Wide: rail, cover, title, status,
  * cost, created, caret. "Wide" is the list's own width (a container query at 58 rem), not the
  * window's: beside the featured plan, from 1280 px, the list is narrower than at 1080 px, and the
@@ -220,7 +224,12 @@ function FeaturedPlan({ plan, openedAt, className }: { plan: PlanSummary; opened
           "focus-visible:-outline-offset-2",
         )}
       >
-        <CoverFeature planId={plan.id} destination={destinationFromTitle(plan.title)} className="border-b border-rule" />
+        <CoverFeature
+          planId={plan.id}
+          destination={destinationFromTitle(plan.title)}
+          loadCover={loadCover}
+          className="border-b border-rule"
+        />
         <span className="flex items-start gap-3 px-4 py-3.5">
           <span aria-hidden="true" className={cx("mt-[3px] shrink-0", NODE_TONE[plan.status])}>
             <PlanStatusGlyph status={plan.status} size="node" />
@@ -335,6 +344,7 @@ function PlanRow({ plan, openedAt }: { plan: PlanSummary; openedAt: number }) {
         <PlanStatusGlyph status={plan.status} size="node" />
       </span>
       <CoverThumb
+        loadCover={loadCover}
         planId={plan.id}
         destination={destinationFromTitle(plan.title)}
         className="col-start-2 row-span-2 row-start-1 w-full @min-[58rem]:row-span-1"
