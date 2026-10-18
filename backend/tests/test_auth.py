@@ -179,6 +179,21 @@ def test_parse_get_session() -> None:
     for malformed in ({}, {"user": None}, {"user": {"email": ""}}, {"user": {"email": 3}}, []):
         with pytest.raises(ValueError, match="get-session"):
             parse_get_session(malformed)
+    # Without `require_user_id` (TripTracker's provider) a missing id is tolerated.
+    assert parse_get_session({"user": {"email": "a@example.com"}}) == CurrentUser("a@example.com")
+
+
+def test_parse_get_session_requires_the_id_when_plans_store_it() -> None:
+    assert parse_get_session(session_body(), require_user_id=True) == CurrentUser(
+        email="test@example.com", auth_user_id="usr_1"
+    )
+    assert parse_get_session(None, require_user_id=True) is None  # signed out stays signed out
+    for user_id in (None, "", 7, ["usr_1"]):
+        body = {"user": {"email": "a@example.com", "id": user_id}}
+        with pytest.raises(ValueError, match="get-session user has no id"):
+            parse_get_session(body, require_user_id=True)
+    with pytest.raises(ValueError, match="get-session user has no id"):
+        parse_get_session({"user": {"email": "a@example.com"}}, require_user_id=True)
 
 
 def test_auth_errors_use_the_api_envelope() -> None:
@@ -1050,3 +1065,43 @@ async def test_atlas_mode_failures_do_not_name_triptracker(
         response.json()["detail"]["message"]
         == "Non riesco a verificare l'accesso. Riprova tra poco."
     )
+
+
+async def test_atlas_mode_treats_a_user_without_an_id_as_a_malformed_answer(
+    atlas_settings: Settings, http: httpx.AsyncClient, mock_tt: respx.MockRouter
+) -> None:
+    # New plans store the id in plans.user_id: a user without one is never let through as NULL.
+    body = session_body()
+    del body["user"]["id"]
+    route = mock_tt.get(ATLAS_GET_SESSION_URL).respond(200, json=body)
+    verifier = SessionVerifier(atlas_settings, http)
+    app = auth_app(atlas_settings, verifier)
+
+    async with asgi_client(app) as client:
+        response = await client.get(
+            "/me", headers={"Cookie": f"{ATLAS_PLAIN_COOKIE}={SIGNED_TOKEN}"}
+        )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == {
+        "code": "auth_unavailable",
+        "message": ATLAS_AUTH_ERROR_MESSAGES[AuthErrorCode.AUTH_UNAVAILABLE],
+        "data": None,
+    }
+    assert route.call_count == 1
+    assert len(verifier.cache) == 0  # a malformed answer is never cached
+
+
+async def test_triptracker_mode_still_accepts_a_user_without_an_id(
+    triptracker_settings: Settings, http: httpx.AsyncClient, mock_tt: respx.MockRouter
+) -> None:
+    assert triptracker_settings.plans_carry_user_id is False
+    route = mock_tt.get(GET_SESSION_URL).respond(200, json={"user": {"email": "test@example.com"}})
+    app = auth_app(triptracker_settings, SessionVerifier(triptracker_settings, http))
+
+    async with asgi_client(app) as client:
+        response = await client.get("/me", headers={"Cookie": f"{SECURE_COOKIE}={SIGNED_TOKEN}"})
+
+    assert response.status_code == 200
+    assert response.json() == {"email": "test@example.com", "id": None}
+    assert route.call_count == 1
