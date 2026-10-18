@@ -1077,8 +1077,11 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
     event streams (`MAX_STREAMS_PER_USER`), 429 `too_many_requests` with `Retry-After`: one
     replica runs the backend, a redeploy starts them over, and the quotas, not the windows,
     guard the money; Redis or a Postgres counter comes with more replicas. The client IP is
-    the socket's peer unless `TRUST_PROXY_HEADERS` (default: on in production, behind
-    Railway's proxy), then the last `X-Forwarded-For` value, the one the proxy appended.
+    the last `X-Forwarded-For` value (all such headers joined), the one the proxy appended,
+    with `TRUST_PROXY_HEADERS` (default: on in production, behind Railway's proxy); without it
+    `request.client.host`, which behind the image's uvicorn `--proxy-headers` and
+    `FORWARDED_ALLOW_IPS="*"` is the leftmost, client-chosen value: the setting must stay on
+    there.
     `GET /me` carries the user's month (`quota`, null when exempt), read without the lock.
     `budget_eur` is capped at 50 000 (`request.BUDGET_EUR_MAX`). The public forms of the web
     app (the waitlist join, the magic-link request) carry a Cloudflare Turnstile token when the

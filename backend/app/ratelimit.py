@@ -17,9 +17,14 @@ What is limited and where (app/routes.py):
   when the stream ends, however it ends.
 
 Keys are the user's email (lower-cased, as `CurrentUser.email` already is) and the client IP.
-The IP is the socket's peer unless `Settings.trusts_proxy_headers`, then the last value of
-`X-Forwarded-For` (the one appended by the proxy in front, which a client cannot forge; the
-earlier values are the client's own and are ignored). Nothing here is logged with a key.
+With `Settings.trusts_proxy_headers` (the default in production) the IP is the last value of
+`X-Forwarded-For`, every such header joined in order: the one appended by the proxy in front
+(Railway's edge), which a client cannot forge; the earlier values are the client's own and are
+ignored. Otherwise it is `request.client.host`, which is the socket's peer only without proxy
+handling: the image runs uvicorn with `--proxy-headers` and `FORWARDED_ALLOW_IPS="*"`, and then
+uvicorn has already replaced it with the **leftmost** `X-Forwarded-For` value, which the client
+chose. So behind Railway `TRUST_PROXY_HEADERS` must stay on (unset or true); turning it off there
+lets a client pick its own bucket. Nothing here is logged with a key.
 """
 
 from __future__ import annotations
@@ -113,11 +118,14 @@ class StreamCounter:
 
 
 def client_ip(request: Request, *, trust_proxy: bool) -> str:
-    """The client's address for a rate-limit key: the socket's peer, or with `trust_proxy` the
-    last `X-Forwarded-For` value (what the proxy appended). "unknown" when neither exists, so
-    every such request shares one bucket rather than escaping the limit."""
+    """The client's address for a rate-limit key: with `trust_proxy` the last `X-Forwarded-For`
+    value (what the proxy appended; a client that sends its own header gets the proxy's value
+    appended after it, in the same header or in a second one, so every header is read, joined
+    in order), else `request.client.host` (the module docstring says what uvicorn's proxy
+    handling puts there). "unknown" when neither exists, so every such request shares one
+    bucket rather than escaping the limit."""
     if trust_proxy:
-        forwarded = request.headers.get("x-forwarded-for")
+        forwarded = ", ".join(request.headers.getlist("x-forwarded-for"))
         if forwarded:
             last = forwarded.rsplit(",", 1)[-1].strip()
             if last:

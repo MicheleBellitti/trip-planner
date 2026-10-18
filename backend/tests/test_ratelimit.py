@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 from fastapi import Request
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.ratelimit import Decision, SlidingWindow, StreamCounter, client_ip
 
@@ -111,3 +112,44 @@ def test_client_ip(
     headers: dict[str, str], client: tuple[str, int] | None, trust: bool, expected: str
 ) -> None:
     assert client_ip(request_with(headers, client), trust_proxy=trust) == expected
+
+
+def test_client_ip_reads_every_forwarded_header_in_order() -> None:
+    # A client that sends its own X-Forwarded-For may get the proxy's value in a second header.
+    scope: dict[str, Any] = {
+        "type": "http",
+        "method": "GET",
+        "path": "/",
+        "query_string": b"",
+        "headers": [
+            (b"x-forwarded-for", b"9.9.9.9"),
+            (b"x-forwarded-for", b"203.0.113.9"),
+        ],
+        "client": ("10.0.0.7", 1234),
+    }
+    assert client_ip(Request(scope), trust_proxy=True) == "203.0.113.9"
+
+
+async def test_behind_uvicorns_proxy_headers_only_the_last_value_is_safe() -> None:
+    """The image runs uvicorn with --proxy-headers and FORWARDED_ALLOW_IPS="*": it rewrites
+    request.client to the leftmost X-Forwarded-For value, the one the client chose. That is why
+    TRUST_PROXY_HEADERS must stay on behind Railway."""
+    seen: dict[str, str] = {}
+
+    async def app(scope: Any, receive: Any, send: Any) -> None:
+        request = Request(scope)
+        seen["client"] = request.client.host if request.client else ""
+        seen["key"] = client_ip(request, trust_proxy=True)
+
+    wrapped = ProxyHeadersMiddleware(app, trusted_hosts="*")
+    scope: dict[str, Any] = {
+        "type": "http",
+        "method": "GET",
+        "path": "/",
+        "query_string": b"",
+        "headers": [(b"x-forwarded-for", b"6.6.6.6, 203.0.113.9")],
+        "client": ("100.64.0.2", 4321),  # Railway's edge
+    }
+    await wrapped(scope, None, None)  # pyright: ignore[reportArgumentType]
+
+    assert seen == {"client": "6.6.6.6", "key": "203.0.113.9"}

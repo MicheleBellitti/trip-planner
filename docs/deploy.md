@@ -442,7 +442,7 @@ clear error.
    | `MAX_RUNNING_PLANS` | `8` | yes | | plans running at once, all users; past it POST /plans answers 503 `planner_busy` |
    | `PLAN_CREATE_LIMIT_PER_USER` / `PLAN_CREATE_LIMIT_PER_IP` / `PLAN_CREATE_WINDOW_SECONDS` | `5` / `20` / `600` | yes | | the sliding windows on POST /plans, kept in the process |
    | `MAX_STREAMS_PER_USER` | `4` | yes | | event streams open at once per user |
-   | `TRUST_PROXY_HEADERS` | unset | yes | | unset = on in production: the client IP is the last `X-Forwarded-For` value, the one Railway appended |
+   | `TRUST_PROXY_HEADERS` | unset | yes | | unset = on in production: the client IP is the last `X-Forwarded-For` value, the one Railway appended. Never `false` on Railway: uvicorn's `--proxy-headers` then hands the app the leftmost, client-chosen value |
    | `PLANNER_ALLOWED_EMAILS` | your TripTracker login email | yes | | empty means nobody; never commit it. TripTracker mode only: with `AUTH_MODE=atlas` the web app's `AUTH_ALLOWED_EMAILS` decides who signs up and this list is not consulted |
    | `ADMIN_EMAILS` | your email | yes | | who reads the eval history (`/evals`); empty = `PLANNER_ALLOWED_EMAILS` in TripTracker mode, nobody with `AUTH_MODE=atlas` |
    | `FRONTEND_ORIGIN` | `https://atlas.bellittim.com` | yes | | the only CORS origin and the required `Origin` on POST |

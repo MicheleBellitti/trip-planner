@@ -207,8 +207,11 @@ class Settings(BaseSettings):
     max_streams_per_user: int = Field(default=4, gt=0)
 
     # Read the client IP from X-Forwarded-For (its last value, the one the proxy in front
-    # appended) instead of the socket's peer. Unset: on in production (Railway's proxy), off in
-    # development. Never turn it on without a proxy: a client could then pick its own bucket.
+    # appended) instead of request.client. Unset: on in production (Railway's proxy), off in
+    # development. Never turn it on without a proxy, and never off behind Railway: the image's
+    # uvicorn --proxy-headers with FORWARDED_ALLOW_IPS="*" puts the leftmost, client-chosen
+    # X-Forwarded-For value in request.client (app/ratelimit.py). Either way a client could
+    # then pick its own bucket.
     trust_proxy_headers: bool | None = None
 
     # Who may use the planner with AUTH_MODE=triptracker (and the user of AUTH_MODE=local). Comma
