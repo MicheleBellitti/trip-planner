@@ -46,6 +46,15 @@ function failureOf(error: unknown): Failure {
     // The backend's sentence already says what to do (interrupt, or a new plan).
     return { title: "Il budget non si può aumentare ancora", message: error.message, tone: "warning", final: true };
   }
+  if (error instanceof ApiError && error.kind === "planner_busy") {
+    // "Continua" runs the plan again, so it waits for a free place like a new plan (503).
+    return {
+      title: "Il planner è al completo",
+      message: `Tutti i posti sono occupati in questo momento: riprova tra qualche minuto. Nessun costo è stato addebitato. ${STAYS_PAUSED}`,
+      tone: "warning",
+      final: false,
+    };
+  }
   if (error instanceof MonthlyLimitError) {
     const figures =
       error.spentCents !== null && error.limitCents !== null

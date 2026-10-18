@@ -72,6 +72,19 @@ describe("BudgetPausedPanel and the economics", () => {
     expect(cap.textContent).toContain(message);
   });
 
+  it("a full planner (503) is a warning, and the button can be tried again in a while", async () => {
+    const busy = vi.fn(async () => {
+      throw new ApiError({ kind: "planner_busy", status: 503, code: "planner_busy", message: "x" });
+    });
+    render(<BudgetPausedPanel costCents={60} budgetCents={60} onContinue={busy} />);
+    fireEvent.click(screen.getByRole("button", { name: /Continua/ }));
+    const alert = await screen.findByRole("alert");
+    expect(alert.getAttribute("data-tone")).toBe("warning");
+    expect(alert.textContent).toContain("Il planner è al completo");
+    expect(alert.textContent).toContain("Nessun costo è stato addebitato. Il piano resta in pausa e puoi interromperlo.");
+    await waitFor(() => expect((screen.getByRole("button", { name: /Continua/ }) as HTMLButtonElement).disabled).toBe(false));
+  });
+
   it("anything else is an error, in red, and the button can be tried again", async () => {
     const fail = vi.fn(async () => {
       throw new ApiError({ kind: "server", status: 500 });
