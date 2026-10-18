@@ -24,6 +24,25 @@ describe("LiveHeader", () => {
     expect(screen.getByText("Barra della demo").parentElement?.className).toContain("[grid-area:bar]");
   });
 
+  it("names a finished plan's duration as it is told (the demo's recorded run)", () => {
+    render(
+      <LiveHeader
+        title="Lisbona"
+        summary={null}
+        status="ready"
+        interrupting={false}
+        elapsed="1:18"
+        costCents={41}
+        budgetCents={60}
+        durationLabel="Corsa registrata: durata"
+        costLabel="costo"
+      />,
+    );
+    expect(screen.getByRole("group", { name: "Stato del piano" }).textContent).toMatch(
+      /Corsa registrata: durata 1:18 · costo 0,41\s\$/,
+    );
+  });
+
   it("names a finished plan's cost as it is told (the demo's recorded run)", () => {
     render(
       <LiveHeader

@@ -10,6 +10,7 @@
 import { useEffect, useState } from "react";
 
 import { PublicHeader } from "@/components/landing/public-header";
+import { PLAN_STATE_ID } from "@/components/live/live-header";
 import { loadPlanView, PlanScreenView } from "@/components/live/plan-screen-view";
 import detailJson from "@/components/plan/__fixtures__/happy-path.detail.json";
 import tripJson from "@/components/plan/__fixtures__/happy-path.trip.json";
@@ -17,6 +18,7 @@ import type { CoverLoader } from "@/components/plan/cover/cover-store";
 import { Notice } from "@/components/ui/notice";
 import coverJson from "@/lib/demo/cover.json";
 import { DEMO_REQUEST } from "@/lib/demo/request";
+import { formatElapsed } from "@/lib/format";
 import { useReplayEvents } from "@/lib/demo/use-replay-events";
 import backend from "@/lib/plan-events/__fixtures__/backend/happy-path.json";
 import { ROUTES } from "@/lib/routes";
@@ -27,6 +29,10 @@ import { DemoBar } from "./demo-bar";
 
 const EVENTS = backend.events as unknown as UIEvent[];
 const EPOCH = EVENTS[0]!.ts;
+/** The recorded run's own length (the replay compresses it to 45 s): what the finished plan says. */
+const RECORDED_DURATION = formatElapsed(Date.parse(EVENTS.at(-1)!.ts) - Date.parse(EPOCH));
+/** The plan's relative dates read on the recording's day, so the showcase never goes stale. */
+const RECORDED_NOW = Date.parse(EPOCH);
 
 /** The recorded plan, told with the request its run was given and no TripTracker link. */
 const DETAIL = { ...detailJson, request: DEMO_REQUEST, import_url: null } as unknown as PlanDetail;
@@ -35,7 +41,7 @@ const loadCover: CoverLoader = async () => COVER;
 
 const HANDOFF = {
   title: "Il tuo viaggio",
-  text: "Descrivi il tuo viaggio: cinque agenti lo pianificano così, con le date entro cui prenotare.",
+  text: "Se hai un invito, descrivi il tuo viaggio: cinque agenti lo pianificano così, con le date entro cui prenotare.",
   label: "Pianifica il tuo viaggio",
   href: ROUTES.newPlan,
 };
@@ -47,8 +53,13 @@ const NOTICE = (
 export function DemoPlanScreen() {
   const [run, setRun] = useState(0);
   const [speed, setSpeed] = useState(1);
-  // "Ricomincia" remounts the run: the reducer, the lanes and the live baseline start over.
-  return <DemoRun key={run} speed={speed} onSpeed={setSpeed} onRestart={() => setRun((count) => count + 1)} />;
+  // "Ricomincia" remounts the run: the reducer, the lanes and the live baseline start over. The
+  // focus, which sat on the button that just went away, moves to the plan's state.
+  const restart = () => {
+    setRun((count) => count + 1);
+    requestAnimationFrame(() => document.getElementById(PLAN_STATE_ID)?.focus());
+  };
+  return <DemoRun key={run} speed={speed} onSpeed={setSpeed} onRestart={restart} />;
 }
 
 function DemoRun({
@@ -77,9 +88,12 @@ function DemoRun({
       connection="open"
       header={<PublicHeader themeToggle={false} />}
       bar={<DemoBar speed={speed} onSpeed={onSpeed} onRestart={onRestart} onSkip={skip} done={done} />}
-      costLabel="Costo della corsa registrata"
+      followLanes="show"
+      durationLabel="Corsa registrata: durata"
+      finishedElapsed={RECORDED_DURATION}
+      costLabel="costo"
       trip={tripJson}
-      planView={{ loadCover, handoff: HANDOFF, notice: NOTICE }}
+      planView={{ loadCover, handoff: HANDOFF, notice: NOTICE, now: RECORDED_NOW }}
     />
   );
 }

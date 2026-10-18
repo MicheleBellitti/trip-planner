@@ -20,7 +20,7 @@ import { AGENTS, PLAN_STATUS_LABELS, type ConnectionStatus } from "@/lib/plan-ev
 import { elapsedMs, type PlanLiveState } from "@/lib/plan-events/reducer";
 import type { PlanDetail } from "@/lib/schemas/api";
 
-import { AgentLanes } from "./agent-lanes";
+import { AgentLanes, type LaneFollow } from "./agent-lanes";
 import { useLiveBaseline } from "./hooks";
 import { LiveHeader } from "./live-header";
 import { requestSummary } from "./request-summary";
@@ -46,6 +46,8 @@ export interface PlanViewExtras {
   loadCover?: CoverLoader;
   handoff?: PlanHandoff;
   notice?: ReactNode;
+  /** A fixed "now" for the plan's relative dates (the demo's recording date). */
+  now?: number;
 }
 
 export interface PlanScreenViewProps {
@@ -65,6 +67,12 @@ export interface PlanScreenViewProps {
   bar?: ReactNode;
   /** How a finished plan's cost is named (the demo's recorded run). */
   costLabel?: string;
+  /** How a finished plan's duration is named, and the duration to show (the demo's recorded run,
+   * not its replay). */
+  durationLabel?: string;
+  finishedElapsed?: string;
+  /** How the phone's open lane follows the work (`show` in the demo). */
+  followLanes?: LaneFollow;
   /** The stream's own line under the header (live). */
   streamLine?: ReactNode;
   /** The viewer asked to interrupt and the plan has not stopped yet. */
@@ -87,6 +95,9 @@ export function PlanScreenView({
   action,
   bar,
   costLabel,
+  durationLabel,
+  finishedElapsed,
+  followLanes,
   streamLine,
   interrupting = false,
   onContinue,
@@ -123,7 +134,8 @@ export function PlanScreenView({
 
   const title = displayTitle(detail?.title ?? "Piano");
   const status = state.status;
-  const elapsed = clock === null ? null : formatElapsed(elapsedMs(state, clock));
+  const measured = clock === null ? null : formatElapsed(elapsedMs(state, clock));
+  const elapsed = status === "ready" && finishedElapsed ? finishedElapsed : measured;
   const ready = state.planReady && detail?.plan ? detail : null;
   // A finished plan sets its total against the budget and states its dates in its own facts, so
   // the header says who travels and from where, and the length when the title has no dates.
@@ -144,7 +156,14 @@ export function PlanScreenView({
   const stationCount = AGENTS.reduce((sum, agent) => sum + views[agent].stations.length, 0);
 
   const lanes = (
-    <AgentLanes state={state} views={views} now={clock} freshAfterSeq={baseline.freshAfterSeq} stale={stale} />
+    <AgentLanes
+      state={state}
+      views={views}
+      now={clock}
+      freshAfterSeq={baseline.freshAfterSeq}
+      stale={stale}
+      follow={followLanes}
+    />
   );
 
   return (
@@ -163,6 +182,7 @@ export function PlanScreenView({
         action={action}
         bar={bar}
         costLabel={costLabel}
+        durationLabel={durationLabel}
       />
       {streamLine}
       <main className="mx-auto max-w-page px-4 pt-3 lg:px-7 lg:pt-5">
@@ -192,6 +212,7 @@ export function PlanScreenView({
               loadCover={planView?.loadCover}
               handoff={planView?.handoff}
               notice={planView?.notice}
+              now={planView?.now}
               arrival={watchedRun}
               timeline={
                 <RunSection title="Il lavoro degli agenti" meta={`${stationCount} eventi`}>

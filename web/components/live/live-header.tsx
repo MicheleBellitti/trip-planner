@@ -65,6 +65,8 @@ interface LiveHeaderProps {
   bar?: ReactNode;
   /** How a finished plan's cost is named: "Costo del piano", or the demo's recorded run. */
   costLabel?: string;
+  /** How a finished plan's duration is named: "Durata", or the demo's recorded run. */
+  durationLabel?: string;
   /** The bar stays on screen while scrolling (a running or paused plan). The finished plan
    * scrolls with the page: there is nothing left to watch. */
   sticky?: boolean;
@@ -88,6 +90,7 @@ export function LiveHeader({
   action,
   bar,
   costLabel = "Costo del piano",
+  durationLabel = "Durata",
   sticky = true,
 }: LiveHeaderProps) {
   const running = status === "running" || status === null;
@@ -149,7 +152,7 @@ export function LiveHeader({
           <div className="flex min-w-0 flex-col gap-px [grid-area:status]">
             <PlanStateLabel status={status} interrupting={interrupting} />
             <span className="text-small text-ink-2">
-              {running || status === "budget_paused" ? "Trascorsi" : "Durata"}{" "}
+              {running || status === "budget_paused" ? "Trascorsi" : durationLabel}{" "}
               <b className="font-semibold text-ink">{elapsed ?? "…"}</b>
               {finished && costCents !== null ? (
                 <>

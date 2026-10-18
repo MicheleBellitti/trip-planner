@@ -24,6 +24,32 @@ interface AgentLanesProps {
   stale: boolean;
   /** The section's heading, for screen readers (the eye reads the lanes from their place). */
   heading?: string;
+  /** How the phone's open card follows the work: `reader` (live) never swaps a card on screen;
+   * `show` (the demo) follows the work until the viewer takes over. */
+  follow?: LaneFollow;
+}
+
+export type LaneFollow = "reader" | "show";
+
+/** Whether the phone's open card may move to where the work is now (see AgentLanes). */
+export function mayFollowLane({
+  caughtUp,
+  layout,
+  chosen,
+  touched,
+  followedOnScreen,
+  follow,
+}: {
+  caughtUp: boolean;
+  layout: string;
+  chosen: ReadonlySet<AgentName> | null;
+  touched: boolean;
+  followedOnScreen: boolean;
+  follow: LaneFollow;
+}): boolean {
+  if (!caughtUp) return true;
+  if (layout !== "stack" || chosen !== null || touched) return false;
+  return follow === "show" || !followedOnScreen;
 }
 
 const SUBAGENTS = AGENTS.filter((agent) => agent !== "coordinator");
@@ -46,7 +72,15 @@ const HEADS_STRIP =
  * - from 1280 px: five columns, the coordinator's trunk 1.3 times wider, one row of heads that
  *   sticks under the top bar.
  */
-export function AgentLanes({ state, views, now, freshAfterSeq, stale, heading = "Corsie degli agenti" }: AgentLanesProps) {
+export function AgentLanes({
+  state,
+  views,
+  now,
+  freshAfterSeq,
+  stale,
+  heading = "Corsie degli agenti",
+  follow = "reader",
+}: AgentLanesProps) {
   const layout = useLaneLayout();
   const coordinatorEnd = useRef<HTMLDivElement>(null);
   const headsStrip = useRef<HTMLDivElement>(null);
@@ -73,7 +107,16 @@ export function AgentLanes({ state, views, now, freshAfterSeq, stale, heading = 
   // yet: follow the work freely (the coordinator gives way as soon as a subagent is at work). Live,
   // swap the open lane only when nobody is looking at it: a card that touches the screen is never
   // closed, and once the viewer has scrolled or chosen, the row below is the only pointer.
-  const mayFollow = !caughtUp || (layout === "stack" && chosen === null && !touched && !onScreen.has(followed));
+  // In the demo (`show`) the open card keeps following the work on screen: a visitor who only
+  // watches sees each agent at work, until they scroll or choose.
+  const mayFollow = mayFollowLane({
+    caughtUp,
+    layout,
+    chosen,
+    touched,
+    followedOnScreen: onScreen.has(followed),
+    follow,
+  });
   if (followedIsStale && mayFollow) setFollowed(focus);
 
   useEffect(() => {

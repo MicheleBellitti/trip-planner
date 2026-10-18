@@ -129,6 +129,13 @@ describe("how it works", () => {
     expect(sample.className).not.toContain(buttonClasses("primary"));
   });
 
+  it("samples the same request the demo replays: children of 9 and 6, 2.800 €", () => {
+    const { container } = render(<HowItWorks />);
+    const request = container.querySelectorAll("figure")[0]!;
+    expect(request.textContent).toContain("9 e 6 anni");
+    expect(request.textContent).toContain("2.800 €");
+  });
+
   it("shows a booking's two dates, the due one in amber words, and a button that is not a link", () => {
     const { container } = render(<HowItWorks />);
     const booking = container.querySelectorAll("figure")[2]!;
@@ -146,6 +153,12 @@ describe("the closing", () => {
     expect(screen.getByRole("heading", { level: 2, name: "Atlas è su invito." })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Accedi" }).getAttribute("href")).toBe(ROUTES.plans);
     expect(container.querySelector(`a[href="${ROUTES.demo}"]`)).toBeNull();
+  });
+
+  it("promises what the demo shows: the cost of the run, not a cost that climbs", () => {
+    render(<LandingClose demoReady />);
+    expect(document.body.textContent).toContain("il costo della corsa");
+    expect(document.body.textContent).not.toContain("il costo che sale");
   });
 
   it("with the demo, offers it first, then sign in, and says access is by invitation", () => {

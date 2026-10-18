@@ -33,6 +33,7 @@ import { BookingStrip } from "./booking-strip";
 import { BookingRow } from "./bookings";
 import { Itinerary } from "./itinerary";
 import { CoverBand } from "./cover/cover-band";
+import { PlanNowContext } from "./plan-now";
 import type { CoverLoader } from "./cover/cover-store";
 import { ItineraryDays, ItineraryMapPanel, ItineraryMapProvider } from "./map/itinerary-map";
 import {
@@ -77,6 +78,8 @@ export interface PlanViewProps {
   handoff?: PlanHandoff;
   /** A notice above the plan (the demo's: the prices are an example). */
   notice?: ReactNode;
+  /** A fixed "now" for the relative dates (the demo's recording date); none, the live clock. */
+  now?: number;
 }
 
 export interface PlanHandoff {
@@ -148,6 +151,7 @@ export function PlanView({
   loadCover,
   handoff: ownHandoff,
   notice,
+  now,
 }: PlanViewProps) {
   const baseId = useId().replace(/[^\w-]/g, "");
   const tripDates = useTripDueDates(detail, trip, loadTrip);
@@ -243,6 +247,7 @@ export function PlanView({
   ) : null;
 
   return (
+    <PlanNowContext.Provider value={now ?? null}>
     <div className="flex min-w-0 flex-col gap-10 lg:gap-12">
       {notice ? <div>{notice}</div> : null}
       {/* The destination's photo, with its credit: nothing when the destination has none. */}
@@ -363,5 +368,6 @@ export function PlanView({
       {timeline}
 
     </div>
+    </PlanNowContext.Provider>
   );
 }

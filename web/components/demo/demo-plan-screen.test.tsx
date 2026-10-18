@@ -1,10 +1,11 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEMO_REQUEST } from "@/lib/demo/request";
 import { REPLAY_TARGET_MS } from "@/lib/demo/schedule";
 import { REPLAY_SETTLE_MS } from "@/lib/demo/use-replay-events";
 import backend from "@/lib/plan-events/__fixtures__/backend/happy-path.json";
+import { PLAN_STATE_ID } from "@/components/live/live-header";
 import { ROUTES } from "@/lib/routes";
 
 import { DemoPlanScreen } from "./demo-plan-screen";
@@ -126,7 +127,38 @@ describe("DemoPlanScreen", () => {
     expect(plan.length).toBeGreaterThan(0);
     for (const link of plan) expect(link.getAttribute("href")).toBe(ROUTES.newPlan);
     expect(screen.queryByRole("link", { name: /TripTracker/ })).toBeNull();
-    expect(document.body.textContent).toMatch(/Costo della corsa registrata 0,41\s\$/);
     expect(document.body.textContent).toContain("prezzi e disponibilità sono un esempio");
+  });
+  it("ends with its own ask in the bar, where the arrival lands, honest about the invitation", async () => {
+    render(<DemoPlanScreen />);
+    await advance(WHOLE_RUN);
+    const bar = screen.getByRole("group", { name: "Stato del piano" });
+    const ask = within(bar).getByRole("link", { name: "Pianifica il tuo viaggio" });
+    expect(ask.getAttribute("href")).toBe(ROUTES.newPlan);
+    expect(bar.textContent).toContain("Atlas è su invito");
+    expect(document.body.textContent).toContain("Se hai un invito");
+  });
+
+  it("gives the recorded run's real duration when it ends, not the replay's", async () => {
+    render(<DemoPlanScreen />);
+    await advance(WHOLE_RUN);
+    expect(screen.getByRole("group", { name: "Stato del piano" }).textContent).toMatch(
+      /Corsa registrata: durata 1:17 · costo 0,41\s\$/,
+    );
+  });
+
+  it("reads the deadlines on the recording's date, so the showcase never goes stale", async () => {
+    vi.setSystemTime(Date.parse("2027-03-01T10:00:00+01:00"));
+    render(<DemoPlanScreen />);
+    await advance(WHOLE_RUN);
+    expect(document.body.textContent).not.toMatch(/Scadenza passata|In scadenza/);
+  });
+
+  it("brings the focus back to the plan's state after 'Ricomincia'", async () => {
+    render(<DemoPlanScreen />);
+    await advance(WHOLE_RUN);
+    fireEvent.click(screen.getByRole("button", { name: "Ricomincia" }));
+    await advance(50);
+    expect(document.activeElement?.id).toBe(PLAN_STATE_ID);
   });
 });

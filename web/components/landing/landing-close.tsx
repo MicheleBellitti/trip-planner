@@ -18,8 +18,8 @@ export function LandingClose({ demoReady = DEMO_READY }: { demoReady?: boolean }
             Guarda una corsa intera, senza account.
           </h2>
           <p className="mt-2.5 max-w-[34em] text-lede text-ink-2">
-            Una corsa registrata, riprodotta con i veri componenti di Atlas: gli agenti al lavoro, il costo che
-            sale, il piano finito con le sue prenotazioni. Dura meno di un minuto e non costa nulla.
+            Una corsa registrata, riprodotta con i veri componenti di Atlas: gli agenti al lavoro, il costo della
+            corsa, il piano finito con le sue prenotazioni. Dura meno di un minuto e non costa nulla.
           </p>
           <div className="mt-5.5 flex flex-wrap gap-2.5">
             <LinkButton href={ROUTES.demo} variant="primary" icon="play" className="pointer-coarse:min-h-11">

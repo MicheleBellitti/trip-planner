@@ -8,7 +8,7 @@ import { AGENTS } from "@/lib/plan-events/labels";
 import { reducePlanEvents } from "@/lib/plan-events/reducer";
 import { UIEventSchema } from "@/lib/schemas/generated/ui-event";
 
-import { AgentLane, LaneBody, LaneColumn, LaneHead, RECENT_STATIONS } from "./agent-lane";
+import { AgentLane, JumpToLatest, LaneBody, LaneColumn, LaneHead, RECENT_STATIONS } from "./agent-lane";
 import { buildLaneViews, type LaneView, type Station } from "./stations";
 
 afterEach(cleanup);
@@ -215,5 +215,25 @@ describe("the desktop heads", () => {
     expect(head.querySelector(".line-clamp-2")).toBeTruthy();
     // The dashed note would push this lane's first station below the others'.
     expect(container.querySelector("[role=group] .border-dashed")).toBeNull();
+  });
+});
+
+describe("JumpToLatest", () => {
+  it("is an opaque pill over the lane's text (its surface wins over the button's transparent ground)", () => {
+    // The lane's end is below the screen: the pill shows.
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(private readonly callback: IntersectionObserverCallback) {}
+        observe() {
+          this.callback([{ isIntersecting: false, boundingClientRect: { top: 400 } } as IntersectionObserverEntry], this as never);
+        }
+        disconnect() {}
+      },
+    );
+    const target = { current: document.createElement("div") };
+    render(<JumpToLatest target={target} />);
+    expect(screen.getByRole("button").className).toMatch(/(^|\s)bg-surface!(\s|$)/);
+    vi.unstubAllGlobals();
   });
 });

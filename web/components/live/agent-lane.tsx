@@ -264,7 +264,9 @@ export function JumpToLatest({ target, label = "Vai all\u2019ultimo" }: { target
         <Button
           size="sm"
           icon="caret-down"
-          className="min-h-11 bg-surface shadow-pop"
+          // `!`: the secondary button's transparent ground would win over the surface (classes are
+          // concatenated, not merged), and the pill sits over the lane's text.
+          className="min-h-11 bg-surface! shadow-pop"
           onClick={() =>
             target.current?.scrollIntoView({
               block: "end",

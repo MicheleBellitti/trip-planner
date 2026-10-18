@@ -1,11 +1,13 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { Button, LinkButton } from "@/components/ui/button";
+import { ROUTES } from "@/lib/routes";
 
 /**
  * The demo's bar (spec, "Demo"), in place of "Interrompi": what this run is, then "Ricomincia",
- * "2×" and "Salta al piano" (the last two only while the run plays). Its own row in the live
- * header's state group, so it fits a phone beside nothing else.
+ * "2×" and "Salta al piano" while it plays; once it ends, "Ricomincia" and the demo's own ask,
+ * "Pianifica il tuo viaggio", where the arrival lands, honest that access is by invitation. Its
+ * own row in the live header's state group, so it fits a phone beside nothing else.
  */
 export function DemoBar({
   speed,
@@ -22,19 +24,25 @@ export function DemoBar({
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-rule pt-2.5 lg:border-0 lg:pt-0">
-      <p className="text-meta text-ink-2">Corsa dimostrativa: dati di esempio, gratis per te</p>
+      <p className="text-meta text-ink-2">
+        {done ? "Fine della corsa dimostrativa. Atlas è su invito." : "Corsa dimostrativa: dati di esempio, gratis per te"}
+      </p>
       <div className="flex items-center gap-2">
         <Button size="sm" variant="quiet" icon="arrows-clockwise" onClick={onRestart} className="pointer-coarse:min-h-11">
           Ricomincia
         </Button>
-        {done ? null : (
+        {done ? (
+          <LinkButton href={ROUTES.newPlan} variant="primary" size="sm" className="pointer-coarse:min-h-11">
+            Pianifica il tuo viaggio
+          </LinkButton>
+        ) : (
           <>
             <Button
               size="sm"
               variant="secondary"
               aria-pressed={speed === 2}
               onClick={() => onSpeed(speed === 2 ? 1 : 2)}
-              className="pointer-coarse:min-h-11 pointer-coarse:min-w-11 aria-pressed:inset-ring-[1.5px] aria-pressed:inset-ring-ink"
+              className="pointer-coarse:min-h-11 pointer-coarse:min-w-11 aria-pressed:bg-notice-wash aria-pressed:inset-ring-[1.5px] aria-pressed:inset-ring-ink"
             >
               2×
             </Button>
