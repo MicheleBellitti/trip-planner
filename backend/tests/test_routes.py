@@ -323,6 +323,8 @@ QUOTA = quota.UserQuota(
     cents_used=1234,
     cents_limit=1500,
     resets_at=dt.datetime(2026, 11, 1, tzinfo=dt.timezone(dt.timedelta(hours=1))),
+    next_plan_cents=400,
+    continue_cents=200,
 )
 
 
@@ -371,6 +373,8 @@ async def test_create_plan_quota_and_busy_refusals(
             "cents_used": 1234,
             "cents_limit": 1500,
             "resets_at": "2026-11-01T00:00:00+01:00",
+            "next_plan_cents": 400,
+            "continue_cents": 200,
         }
     else:
         assert body["data"] == {"retry_after_seconds": 60, "running": 8, "limit": 8}
@@ -1076,6 +1080,11 @@ async def test_me_carries_the_month_against_the_quota_for_a_plain_user(
         "cents_limit": 1500,
     }
     assert body["quota"]["resets_at"].startswith("20")
+    # What the next start and a "Continua" need, so the web app applies the backend's own rule.
+    assert (body["quota"]["next_plan_cents"], body["quota"]["continue_cents"]) == (
+        settings.session_budget_cents,
+        200,
+    )
 
 
 async def test_me_needs_a_session(tt_api: httpx.AsyncClient) -> None:

@@ -79,7 +79,7 @@ if TYPE_CHECKING:
 
 log = structlog.get_logger(__name__)
 
-CONTINUE_INCREMENT_CENTS = 200
+CONTINUE_INCREMENT_CENTS = quota.CONTINUE_INCREMENT_CENTS
 """"Continua con 2 $ in piu'": the budget grows by $2 over what was consumed."""
 
 CONTINUE_RESUME_WAIT_SECONDS = 5.0

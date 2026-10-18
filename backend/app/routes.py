@@ -294,6 +294,18 @@ class QuotaView(BaseModel):
     )
     cents_limit: int = Field(description="USER_MONTHLY_CENTS.")
     resets_at: AwareDatetime = Field(description="The first instant of the next month.")
+    next_plan_cents: int = Field(
+        description=(
+            "US cents a new plan reserves (the session budget): a start is refused when "
+            "cents_used + next_plan_cents > cents_limit."
+        )
+    )
+    continue_cents: int = Field(
+        description=(
+            "US cents a 'Continua' adds: it is refused when cents_used + continue_cents > "
+            "cents_limit."
+        )
+    )
 
     @classmethod
     def from_quota(cls, allowance: quota.UserQuota) -> QuotaView:
@@ -303,6 +315,8 @@ class QuotaView(BaseModel):
             cents_used=allowance.cents_used,
             cents_limit=allowance.cents_limit,
             resets_at=allowance.resets_at,
+            next_plan_cents=allowance.next_plan_cents,
+            continue_cents=allowance.continue_cents,
         )
 
 

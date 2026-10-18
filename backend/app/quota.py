@@ -45,6 +45,10 @@ from app.db import PlanRecord, PlanStatus
 QUOTA_LOCK_KEY = 0x41544C53
 """The advisory lock key of the quota checks ("ATLS"), distinct from the plan leases'."""
 
+CONTINUE_INCREMENT_CENTS = 200
+""""Continua con 2 $ in piu'": the budget grows by $2 over what was consumed (and the quota
+counts these 200 cents, `UserQuota.continue_cents`)."""
+
 PLANNER_BUSY_RETRY_SECONDS = 60
 """What the 503 `planner_busy` answer suggests as `Retry-After`: a plan takes minutes."""
 
@@ -75,6 +79,12 @@ class UserQuota:
     cents_limit: int
     resets_at: dt.datetime
     """The first instant of the next month (Europe/Rome), when the counters start again."""
+    next_plan_cents: int
+    """What a new plan reserves (the profile's session budget): a start needs
+    `cents_used + next_plan_cents <= cents_limit`."""
+    continue_cents: int
+    """What a "Continua" adds (`CONTINUE_INCREMENT_CENTS`): it needs `cents_used +
+    continue_cents <= cents_limit`."""
 
     def exceeded_by(self, *, plans: int = 0, cents: int = 0) -> QuotaKind | None:
         """Which limit `plans` more plans and `cents` more cents would break, plans first."""
@@ -92,6 +102,8 @@ class UserQuota:
             "cents_used": self.cents_used,
             "cents_limit": self.cents_limit,
             "resets_at": self.resets_at.isoformat(),
+            "next_plan_cents": self.next_plan_cents,
+            "continue_cents": self.continue_cents,
         }
 
 
@@ -202,4 +214,6 @@ def user_quota(usage: Usage, *, settings: Settings, now: dt.datetime) -> UserQuo
         cents_used=usage.cents,
         cents_limit=settings.user_monthly_cents,
         resets_at=end,
+        next_plan_cents=settings.session_budget_cents,
+        continue_cents=CONTINUE_INCREMENT_CENTS,
     )

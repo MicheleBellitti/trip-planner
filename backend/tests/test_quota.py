@@ -152,6 +152,8 @@ def test_user_quota_says_what_would_break_first(make_settings: Callable[..., Set
         cents_used=240,
         cents_limit=300,
         resets_at=dt.datetime(2026, 11, 1, tzinfo=ROME),
+        next_plan_cents=settings.session_budget_cents,
+        continue_cents=200,
     )
     assert allowance.exceeded_by(plans=1, cents=60) is None  # 3 plans, 300 cents: at the limits
     assert allowance.exceeded_by(plans=1, cents=61) == "cents"
@@ -163,12 +165,20 @@ def test_user_quota_says_what_would_break_first(make_settings: Callable[..., Set
         "cents_used": 240,
         "cents_limit": 300,
         "resets_at": "2026-11-01T00:00:00+01:00",
+        "next_plan_cents": settings.session_budget_cents,
+        "continue_cents": 200,
     }
 
 
 def test_quota_error_carries_the_kind_and_the_figures() -> None:
     allowance = UserQuota(
-        plans_used=10, plans_limit=10, cents_used=100, cents_limit=1500, resets_at=NOW
+        plans_used=10,
+        plans_limit=10,
+        cents_used=100,
+        cents_limit=1500,
+        resets_at=NOW,
+        next_plan_cents=400,
+        continue_cents=200,
     )
     error = QuotaReachedError("plans", allowance)
     assert (error.kind, error.quota) == ("plans", allowance)
