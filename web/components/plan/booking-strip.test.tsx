@@ -82,6 +82,15 @@ describe("BookingStrip", () => {
     expect(valueOf(rowOf("Oceanário"), "Quando").textContent).toBe("da definire");
   });
 
+  it("previews a flight from home on the day at home, with no lone clock time", () => {
+    const bookings = happyBookings();
+    strip([{ index: 0, booking: bookings[0]!, deadline: { kind: "date", at: bookings[0]!.book_by! }, startsAtHome: true }]);
+    const flight = rowOf("Volo TAP");
+    // It leaves Milan at 09:40 (08:40 in Lisbon): the strip says the day, the row below both clocks.
+    expect(valueOf(flight, "Quando").textContent).toBe("mer 14 apr");
+    expect(flight.textContent).not.toMatch(/\d{1,2}:\d{2}|a Lisbona/);
+  });
+
   it("draws amber only on a 'Prenota entro' within 72 hours", () => {
     const bookings = happyBookings();
     const deadlines: BookingDeadline[] = [

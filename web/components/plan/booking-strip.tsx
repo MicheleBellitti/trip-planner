@@ -28,8 +28,8 @@ export function dueSoonCount(count: number): string {
  * "Da prenotare": the plan's bookings by deadline, one row each, under the summary's facts, so
  * the first thing to do is the first thing on the page. Each row jumps to the booking below
  * (`#prenotazione-N`) and is at least 44 px tall on the phone. Under the title it previews both
- * dates, "Prenota entro" and "Quando" (DatePair, compact), read on the same clocks as the row
- * below. DatePair alone draws amber, on a deadline within 72 hours; the words say it too ("In
+ * dates, "Prenota entro" and "Quando" (DatePair, compact): the days alone, on the same clocks as
+ * the row below, which has the times. DatePair alone draws amber, on a deadline within 72 hours; the words say it too ("In
  * scadenza · tra 2 giorni", "Scadenza passata").
  */
 export function BookingStrip({ items, anchor, headingId, timeZone, tripLabel = null }: BookingStripProps) {

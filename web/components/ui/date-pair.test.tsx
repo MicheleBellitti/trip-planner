@@ -110,6 +110,51 @@ describe("DatePair", () => {
     expect(dueSoonMarks(container)).toBe(1);
     expect(screen.getByText(", in scadenza")).toBeTruthy();
   });
+
+  // A flight from home: it leaves Milan at 09:40 in Rome, which is 08:40 in Lisbon.
+  const fromHome = {
+    deadline: { kind: "date", at: "2027-02-26T20:00:00Z" },
+    timeZone: LISBON,
+    deadlineTimeZone: "Europe/Rome",
+    startsAtHome: true,
+    tripLabel: "a Lisbona",
+    now: NOW,
+  } as const;
+
+  function valueOf(term: "Prenota entro" | "Quando"): HTMLElement {
+    const value = screen.getByText(term, { selector: "dt" }).nextElementSibling;
+    if (!(value instanceof HTMLElement)) throw new Error(`no ${term} value`);
+    return value;
+  }
+
+  it("reads the compact variant in days alone, with no lone clock time on the other clock", () => {
+    const { container } = render(<DatePair variant="compact" scheduledFor="2027-04-14T08:40:00+01:00" {...fromHome} />);
+    expect(valueOf("Prenota entro").textContent).toBe("ven 26 feb");
+    expect(valueOf("Quando").textContent).toBe("mer 14 apr");
+    expect(container.textContent).not.toMatch(/\d{1,2}:\d{2}|a Lisbona|in Italia/);
+    // The instants stay whole for the machine and the screen reader.
+    expect(valueOf("Quando").querySelector("time")?.getAttribute("datetime")).toBe("2027-04-14T08:40:00+01:00");
+  });
+
+  it("takes the compact day from the clock the full row leads with", () => {
+    // 00:30 on 15 Apr in Rome is still 23:30 on 14 Apr in Lisbon: the row leads with Rome's day.
+    const scheduledFor = "2027-04-14T23:30:00+01:00";
+    render(<DatePair scheduledFor={scheduledFor} {...fromHome} />);
+    expect(valueOf("Quando").querySelector("time")?.textContent).toBe("gio 15 apr, 00:30");
+    expect(valueOf("Quando").textContent).toContain("23:30 a Lisbona");
+    cleanup();
+    render(<DatePair variant="compact" scheduledFor={scheduledFor} {...fromHome} />);
+    expect(valueOf("Quando").textContent).toBe("gio 15 apr");
+  });
+
+  it("sets each compact value one space from its label, not two", () => {
+    render(<DatePair variant="compact" deadline={{ kind: "none" }} scheduledFor={null} timeZone={LISBON} now={NOW} />);
+    for (const term of ["Prenota entro", "Quando"] as const) {
+      const pair = screen.getByText(term, { selector: "dt" }).parentElement;
+      expect(pair?.className.split(" ")).toContain("gap-1");
+      expect(pair?.className.split(" ")).not.toContain("gap-1.5");
+    }
+  });
 });
 
 describe("formatBookingInstant", () => {

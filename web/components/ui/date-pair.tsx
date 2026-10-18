@@ -63,7 +63,9 @@ interface DatePairProps {
   /** A second line under "Quando", e.g. "fino a mer 18 nov" or "ritorno mer 18 nov". */
   scheduledHint?: string;
   /** `fields`: two labelled boxes side by side (the plan, the booking preview). `compact`: one
-   * wrapping line with both labels, for strips and lists. Both dates, both labels, always. */
+   * wrapping line with both labels, for strips and lists. Both dates, both labels, always.
+   * Compact says the days alone, each on the clock the fields lead with, and so drops the trip's
+   * clock note: with no time beside it, "(08:40 a Lisbona)" would read as the booking's time. */
   variant?: "fields" | "compact";
   className?: string;
 }
@@ -122,7 +124,7 @@ export function DatePair({
   if (compact) {
     return (
       <dl className={cx("flex flex-wrap items-baseline gap-x-4 gap-y-1 text-meta", className)}>
-        <div className="flex items-baseline gap-1.5">
+        <div className="flex items-baseline gap-1">
           <dt className="text-ink-2">Prenota entro</dt>
           <dd
             data-due-soon={dueSoon || undefined}
@@ -140,11 +142,10 @@ export function DatePair({
             {dueSoon ? <VisuallyHidden>, in scadenza</VisuallyHidden> : null}
           </dd>
         </div>
-        <div className="flex items-baseline gap-1.5">
+        <div className="flex items-baseline gap-1">
           <dt className="text-ink-2">Quando</dt>
           <dd className={scheduledFor ? "font-semibold text-ink" : "text-ink-2"}>
             {scheduledValue}
-            {zoneNote ? <span className="ml-1 font-normal text-ink-2">({zoneNote})</span> : null}
           </dd>
         </div>
       </dl>

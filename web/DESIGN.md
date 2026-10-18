@@ -578,7 +578,9 @@ layout, not a stretched phone.
   clock at home in bold ("mer 14 apr, 09:40") and the trip's clock is the ink-2 second line, naming
   its zone ("08:40 a Lisbona", `startsAtHome` and `tripLabel`). A booking at the destination shows
   the trip's clock alone: no second clock, no zone words. He reads the plan from home: a flight is
-  not read on the wrong clock.
+  not read on the wrong clock. The compact variant (the "Da prenotare" strip, the alternatives) says
+  the days alone, each on the clock the fields lead with, and never the second clock: a time in
+  brackets after a bare date ("mer 14 apr (08:40 a Lisbona)") reads as the booking's time.
 - **When the plan arrives** under someone watching the run, the page scrolls to the plan's top
   (never down) and the focus goes to its summary heading (`tabIndex -1`); a plan that is merely
   opened does neither. The one live region stays for lane states only.
