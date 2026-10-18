@@ -272,7 +272,6 @@ export function PlanView({
                 anchor={bookingAnchor}
                 items={items}
                 timeZone={plan.timezone}
-                tripLabel={tripLabel}
               />
             ) : null}
           </PlanSummary>

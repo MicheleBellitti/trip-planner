@@ -15,8 +15,6 @@ interface BookingStripProps {
   headingId: string;
   /** The trip's time zone (plan.timezone): the clock of "Quando". */
   timeZone: string;
-  /** The words after the trip's clock when it is the second one ("a Lisbona", see DatePair). */
-  tripLabel?: string | null;
 }
 
 /** "2 in scadenza", "1 in scadenza": how many are due within 72 hours, in words. */
@@ -33,7 +31,7 @@ export function dueSoonCount(count: number): string {
  * the words say it too ("In scadenza · tra 2 giorni", "Scadenza passata"). Relative dates read
  * the plan's clock (`usePlanNow`: the demo's fixed one, else the live one).
  */
-export function BookingStrip({ items, anchor, headingId, timeZone, tripLabel = null }: BookingStripProps) {
+export function BookingStrip({ items, anchor, headingId, timeZone }: BookingStripProps) {
   const now = usePlanNow();
   const sorted = sortByDeadline(items);
   const soon = (item: BookingStripItem) =>
@@ -80,7 +78,6 @@ export function BookingStrip({ items, anchor, headingId, timeZone, tripLabel = n
                     timeZone={timeZone}
                     deadlineTimeZone={HOME_TIMEZONE}
                     startsAtHome={item.startsAtHome}
-                    tripLabel={tripLabel}
                     now={now}
                     className="mt-1"
                   />

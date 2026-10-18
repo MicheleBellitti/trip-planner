@@ -34,7 +34,6 @@ function strip(items: BookingStripItem[]) {
       anchor={(index) => `prenotazione-${index + 1}`}
       headingId="da-prenotare"
       timeZone="Europe/Lisbon"
-      tripLabel="a Lisbona"
     />,
   );
 }
@@ -88,7 +87,7 @@ describe("BookingStrip", () => {
     const flight = rowOf("Volo TAP");
     // It leaves Milan at 09:40 (08:40 in Lisbon): the strip says the day, the row below both clocks.
     expect(valueOf(flight, "Quando").textContent).toBe("mer 14 apr");
-    expect(flight.textContent).not.toMatch(/\d{1,2}:\d{2}|a Lisbona/);
+    expect(flight.textContent).not.toMatch(/\d{1,2}:\d{2}|a Lisbona|ora locale/);
   });
 
   it("draws amber only on a 'Prenota entro' within 72 hours", () => {
