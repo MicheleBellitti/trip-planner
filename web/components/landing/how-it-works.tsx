@@ -44,13 +44,13 @@ export function HowItWorks() {
         <Stop
           title="Descrivi il viaggio"
           text="Da dove parti e dove vuoi andare, oppure solo un'idea. Le date, chi viaggia, il budget. Bastano poche righe."
-          caption="Esempio di richiesta: da Milano a Lisbona, dal 14 al 18 aprile 2027, 4 notti, 2 adulti e 2 bambini di 8 e 11 anni, 2.400 euro in tutto."
+          caption="Esempio di richiesta: da Milano a Lisbona, dal 14 al 18 aprile 2027, 4 notti, 2 adulti e 2 bambini di 9 e 6 anni, 2.800 euro in tutto."
         >
           <RouteLine origin={{ text: "Milano" }} destination={{ text: "Lisbona" }} />
           <ul className="mt-3.5 grid gap-2 border-t border-rule pt-3 text-small">
             <TripFact icon="calendar-blank">14–18 aprile 2027, 4 notti</TripFact>
-            <TripFact icon="users">2 adulti, 2 bambini di 8 e 11 anni</TripFact>
-            <TripFact icon="wallet">2.400 € in tutto</TripFact>
+            <TripFact icon="users">2 adulti, 2 bambini di 9 e 6 anni</TripFact>
+            <TripFact icon="wallet">2.800 € in tutto</TripFact>
           </ul>
         </Stop>
         <Stop
