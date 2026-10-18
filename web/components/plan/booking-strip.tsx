@@ -4,7 +4,7 @@ import { AgentRoundel } from "@/components/ui/agent";
 import { DatePair } from "@/components/ui/date-pair";
 import { dueDistance, isDueSoon } from "@/components/ui/due-soon";
 import { HOME_TIMEZONE } from "@/lib/format";
-import { useNow } from "@/lib/use-now";
+import { usePlanNow } from "./plan-now";
 
 import { bookingLine, sortByDeadline, type BookingStripItem } from "./plan-model";
 
@@ -29,11 +29,12 @@ export function dueSoonCount(count: number): string {
  * the first thing to do is the first thing on the page. Each row jumps to the booking below
  * (`#prenotazione-N`) and is at least 44 px tall on the phone. Under the title it previews both
  * dates, "Prenota entro" and "Quando" (DatePair, compact): the days alone, on the same clocks as
- * the row below, which has the times. DatePair alone draws amber, on a deadline within 72 hours; the words say it too ("In
- * scadenza · tra 2 giorni", "Scadenza passata").
+ * the row below, which has the times. DatePair alone draws amber, on a deadline within 72 hours;
+ * the words say it too ("In scadenza · tra 2 giorni", "Scadenza passata"). Relative dates read
+ * the plan's clock (`usePlanNow`: the demo's fixed one, else the live one).
  */
 export function BookingStrip({ items, anchor, headingId, timeZone, tripLabel = null }: BookingStripProps) {
-  const now = useNow();
+  const now = usePlanNow();
   const sorted = sortByDeadline(items);
   const soon = (item: BookingStripItem) =>
     now !== null && item.deadline.kind === "date" && isDueSoon(item.deadline.at, now);

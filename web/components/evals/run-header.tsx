@@ -68,7 +68,7 @@ export function RunHeader({ run, className }: { run: EvalRunDetail; className?: 
   return (
     <header className={className}>
       <h1 className="font-cond text-display font-semibold lg:text-display-lg">
-        <time dateTime={run.started_at}>Valutazione del {formatDateTime(run.started_at)}</time>
+        <time dateTime={run.started_at}>Collaudo del {formatDateTime(run.started_at)}</time>
       </h1>
       <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-small text-ink-2">
         <Sha sha={run.git_sha} short={sha} className="text-ink" />
@@ -116,7 +116,7 @@ export function RunHeader({ run, className }: { run: EvalRunDetail; className?: 
         </dl>
         {previous ? (
           <p className="mt-3 text-micro text-ink-2">
-            Variazioni rispetto alla valutazione precedente ({formatDateTime(previous.started_at)}).
+            Variazioni rispetto al collaudo precedente ({formatDateTime(previous.started_at)}).
           </p>
         ) : null}
       </div>

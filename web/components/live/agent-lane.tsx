@@ -50,7 +50,9 @@ function gutter(ts: string, startedAt: number | null): string {
 }
 
 export const laneCardId = (agent: LaneView["agent"]) => `lane-${agent}`;
-const ids = (agent: LaneView["agent"]) => ({ bodyId: `lane-${agent}-body`, nameId: `lane-${agent}-name` });
+/** The phone card's collapsible body (closed, it stays in the DOM, 0 px tall). */
+export const laneBodyId = (agent: LaneView["agent"]) => `lane-${agent}-body`;
+const ids = (agent: LaneView["agent"]) => ({ bodyId: laneBodyId(agent), nameId: `lane-${agent}-name` });
 
 /** The roundel, the name and the state: two words and a glyph for screen readers. */
 function HeadContent({ view, desktop }: { view: LaneView; desktop: boolean }) {
@@ -196,7 +198,7 @@ export function LaneBody({ view, startedAt, now, freshAfterSeq, running, stale, 
           {running && (live || view.state === "working" || view.state === "waiting") ? <TimelineNext /> : null}
         </Timeline>
       )}
-      {endRef ? <div ref={endRef} aria-hidden="true" /> : null}
+      {endRef ? <div ref={endRef} data-lane-end="" aria-hidden="true" /> : null}
     </>
   );
 }
@@ -264,7 +266,9 @@ export function JumpToLatest({ target, label = "Vai all\u2019ultimo" }: { target
         <Button
           size="sm"
           icon="caret-down"
-          className="min-h-11 bg-surface shadow-pop"
+          // `!`: the secondary button's transparent ground would win over the surface (classes are
+          // concatenated, not merged), and the pill sits over the lane's text.
+          className="min-h-11 bg-surface! shadow-pop"
           onClick={() =>
             target.current?.scrollIntoView({
               block: "end",

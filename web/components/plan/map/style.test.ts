@@ -1,3 +1,7 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
 import { buildMapModel, lineFeatures, mixColors, parseColor, stopFeatures, type MapPlan } from "./model";
@@ -13,26 +17,34 @@ import {
   type MapPalette,
 } from "./style";
 
-const light: MapPalette = {
-  scheme: "light",
-  ground: "#f2f4f7",
-  surface: "#fbfcfd",
-  ink: "#0f1a2a",
-  ink2: "#4b5768",
-  rule: "#d5dbe3",
-  ruleStrong: "#7a8597",
-  hues: { flights: "#1f55c4", lodging: "#0f7348", activities: "#6d3fc0", transport: "#08707f", coordinator: "#33404f" },
-};
-const dark: MapPalette = {
-  scheme: "dark",
-  ground: "#0c121b",
-  surface: "#131b26",
-  ink: "#e6ebf2",
-  ink2: "#9ba7b8",
-  rule: "#263241",
-  ruleStrong: "#5f6c7e",
-  hues: { flights: "#7aa2f7", lodging: "#43c08a", activities: "#b497f5", transport: "#3fc0d3", coordinator: "#a9b6c7" },
-};
+const webDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+const css = readFileSync(path.join(webDir, "app/globals.css"), "utf8");
+
+/** A theme's palette, read from its block in globals.css (the map reads the same variables live). */
+function themePalette(scheme: "light" | "dark", selector: string): MapPalette {
+  const start = css.indexOf(`${selector} {`);
+  const block = css.slice(start, css.indexOf("}", start));
+  const tokens = Object.fromEntries([...block.matchAll(/--([a-z0-9-]+):\s*(#[0-9a-f]{6});/g)].map((m) => [m[1]!, m[2]!]));
+  return {
+    scheme,
+    ground: tokens.ground!,
+    surface: tokens.surface!,
+    ink: tokens.ink!,
+    ink2: tokens["ink-2"]!,
+    rule: tokens.rule!,
+    ruleStrong: tokens["rule-strong"]!,
+    hues: {
+      flights: tokens["line-flights"]!,
+      lodging: tokens["line-lodging"]!,
+      activities: tokens["line-activities"]!,
+      transport: tokens["line-transport"]!,
+      coordinator: tokens["line-coordinator"]!,
+    },
+  };
+}
+
+const light = themePalette("light", '\n[data-theme="light"]');
+const dark = themePalette("dark", ':root,\n[data-theme="dark"]');
 
 const plan: MapPlan = {
   start_date: "2027-04-14",
@@ -86,9 +98,9 @@ describe("buildStyle", () => {
 
   it("puts the day colours of the theme into the lines", () => {
     const text = (palette: MapPalette) => JSON.stringify(buildStyle(palette, data, { selected: null, picked: null }));
-    expect(text(light)).toContain("#1f55c4");
-    expect(text(dark)).toContain("#7aa2f7");
-    expect(text(dark)).not.toContain("#1f55c4");
+    expect(text(light)).toContain(light.hues.flights);
+    expect(text(dark)).toContain(dark.hues.flights);
+    expect(text(dark)).not.toContain(light.hues.flights);
   });
 
   it("leaves no raw hex of its own: every tone comes from the palette", () => {
@@ -162,6 +174,15 @@ describe("water", () => {
 
   it("stays the darkest step in dark, as it was", () => {
     expect(baseTones(dark).water).toBe(mixColors(dark.ground, dark.rule, 0.9));
+  });
+
+  it("states the worst day line over the water as DESIGN.md does", () => {
+    const design = readFileSync(path.join(webDir, "DESIGN.md"), "utf8");
+    const stated = design.match(/at least ([\d.]+):1 over it \(([a-zà]+), the worst\) in light, ([\d.]+):1 in dark/);
+    expect(stated, "DESIGN.md's water sentence").toBeTruthy();
+    const worst = (palette: MapPalette) =>
+      Math.min(...Object.values(palette.hues).map((color) => contrast(color, baseTones(palette).water))).toFixed(2);
+    expect([stated![1], stated![3]]).toEqual([worst(light), worst(dark)]);
   });
 
   for (const palette of [light, dark]) {

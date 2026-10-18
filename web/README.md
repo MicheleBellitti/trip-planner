@@ -84,7 +84,7 @@ CI (`ci-web.yml`) runs `gen:schemas --check`, lint, typecheck, test and build; `
 ## Structure
 
 ```
-app/                       routes: / (landing, public), /plans (plans), /new (request form), /plans/[id] (live + finished plan),
+app/                       routes: / (landing, public), /demo (demo run, public), /plans (plans), /new (request form), /plans/[id] (live + finished plan),
                            /dev/ui and /dev/plan (development only), not-found.tsx
 components/ui/             the design system's primitives (Button, Chip, Timeline, DatePair, CostMeter,
                            Disclosure, Field, Notice, Sheet, Toast, ...) and the tokens' tests
@@ -155,6 +155,24 @@ Re-measured on 2026-10-17 for the front door (step 2): `/` is now the public lan
 (the list moved to `/plans`, 176.5 KB); `/plans/[id]` is 192.4 KB, unchanged from the branch's start
 (the eval history, PR #3, had added 0.2 KB). The landing skip's script strings live in
 `lib/skip-landing.ts`, so the API client carries only the mark's two functions.
+
+Re-measured on 2026-10-17 for the step 1 polish, at the branch's last commit: `/plans/[id]` is
+192.8 KB (+0.4: the theme swap's transition guard, the small mark's geometry and the header line's
+fixed overhang), `/` 140.3, `/plans` 176.9, `/new` 177.1, `/evals/[id]` 186.7 (+1.2, ungated: its
+error boundary's chunk now carries its own copy of the theme toggle and the mark). Turbopack keeps every export of a module a page loads, so code only
+some pages need lives apart: the path builders in `lib/page-paths.ts`, the mark's geometry in
+`lib/mark-geometry.ts` (not `lib/brand-mark.ts`), the tagline's line break in
+`lib/tagline-lines.ts`.
+
+Re-measured on 2026-10-18 for the demo (step 3), at the branch's last commit: `/demo` is 179.5 KB
+gzip (ungated; it was 199.7 before `lib/plan-events/detail.ts` stopped importing the zod enums, which
+pulled zod and every schema onto its first load). The live pages grow by about 2 KB with almost none
+of their own code: `/plans/[id]` 195.5 (was 192.8; the lanes' demo camera is about 0.3 of it),
+`/plans` 178.9, `/new` 178.8, `/evals` 178.3. Cause: Turbopack groups modules by the set of routes
+that load them, and `/demo` reuses part of what used to be one shared chunk (the live screen, the ui
+primitives) but not the rest (the API client, zod), so that chunk is split and two files compress
+worse than one. Keeping it whole would mean loading the API client on `/demo`, which the spec
+forbids. The 190 gate on `/plans/[id]` is still Michele's decision.
 
 ## Accessibility
 

@@ -98,8 +98,9 @@ describe("live screen invariants", () => {
   });
 
   it("has one aria-live region, the plan screen's, for lane state changes", () => {
+    // The plan screen's view draws it, for the live plan and the demo alike.
     expect(files.filter((file) => read(file).includes("aria-live=")).map((file) => path.basename(file))).toEqual([
-      "plan-screen.tsx",
+      "plan-screen-view.tsx",
     ]);
   });
 });

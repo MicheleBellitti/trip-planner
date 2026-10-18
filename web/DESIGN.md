@@ -220,7 +220,7 @@ Where things live:
 | Product name ("Atlas"), tagline, description, site URL | `web/lib/brand.ts` (`BRAND_NAME`, `BRAND_TAGLINE`, `BRAND_DESCRIPTION`, `BRAND_URL`), nowhere else |
 | The mark's geometry and its fixed night colours | `web/lib/brand-mark.ts`; drawn by `components/ui/mark.tsx` |
 | Tab icon, home-screen icon, link preview | `web/app/icon.svg`, `web/app/apple-icon.tsx`, `web/app/opengraph-image.tsx` (font: `web/assets/fonts/`, OFL) |
-| Links between pages | `web/lib/routes.ts` (`ROUTES`, and `DEMO_READY` until step 3 builds /demo), never a hand-written path |
+| Links between pages | `web/lib/routes.ts` (`ROUTES`, `DEMO_READY`) and `web/lib/page-paths.ts`, never a hand-written path |
 | The landing (`/`, public) | `web/app/page.tsx`, `web/components/landing/` |
 | Returning visitors skip the landing | `web/lib/returning.ts` (the mark), `web/lib/skip-landing.ts` (the decision, the inline script) |
 | The app header | `web/components/nav/app-header.tsx` |
@@ -275,16 +275,22 @@ a 40-unit square (`web/lib/brand-mark.ts`, `MARK_GEOMETRY`):
 - right leg: `M31.5 35 L20 7` in `line-lodging`
 - crossbar: `M13.5 25 H26.5` in `line-coordinator`, 4.5 wide
 - the station: r 4.6 at (20, 7.5), `ground` fill and `ink` stroke at 2.8
+- **at 28 px and below** (`MARK_GEOMETRY_SMALL`, `<Mark small>`): lines 5.4, the crossbar
+  `M12.6 25 H27.4` at 5.6, the station r 3.5 with a 2 stroke. At that size the full mark's cream
+  ring dominated and the "A" read as a drafting compass; Michele chose this from a mockup on
+  2026-10-17.
 
 `<Mark>` draws it in token utilities, so it follows the nearest `data-theme`. Images that cannot
 read CSS variables use `NIGHT`, the night values, which a test keeps equal to `globals.css`.
 
-- **Lockup** (`Wordmark`): the mark (28 px) and "Atlas" in Semi Condensed 600. `compact` hides the
-  name below 400 px (the header on a phone); the name stays the link's accessible name.
-- **Tab icon** (`app/icon.svg`): the mark on a night tile, with thicker strokes for 16 px.
-  **Home-screen icon** (`app/apple-icon.tsx`): the mark on the night ground, 180 px. There is no
-  `favicon.ico`.
-- **Link preview** (`app/opengraph-image.tsx`): mark and name, the tagline, the five lines
+- **Lockup** (`Wordmark`): the small mark (28 px) and "Atlas" in Semi Condensed 600. `compact` hides the
+  name below 360 px (the header on the narrowest phones; at 393 px "Atlas" shows); the name stays the link's accessible name.
+- **Tab icon** (`app/icon.svg`): the small mark on a night tile, scaled to 32 units.
+  **`/favicon.ico`** (`app/favicon.ico/route.tsx`): `icon.svg` itself rasterised to a 32 px PNG,
+  prerendered at build time, for the clients that ask for it by name. **Home-screen icon** (`app/apple-icon.tsx`): the
+  full mark on the night ground, 180 px.
+- **Link preview** (`app/opengraph-image.tsx`): mark and name, the tagline on two lines broken by
+  `taglineLines()` (before its article: "Ogni viaggio ha / il suo atlante."), the five lines
   converging on a destination; 1200 × 630, rendered at build time with the vendored Semi
   Condensed 700.
 - **Tagline**: "Ogni viaggio ha il suo atlante." (`BRAND_TAGLINE`): the landing hero, the
@@ -380,6 +386,7 @@ WCAG 2.x ratios, measured on the background each element actually sits on (2026-
 | success on surface / ground / success-wash | 5.28 / 4.88 / 4.79 | 7.71 / 8.53 / 7.37 | 4.5 |
 | ink / ink-2 on success-wash | 13.65 / 5.55 | 11.28 / 5.59 | 4.5 |
 | on-line on coordinatore / voli / alloggio / attività / spostamenti | 9.96 / 6.28 / 5.55 / 6.34 / 5.45 | 6.87 / 5.49 / 5.42 / 5.37 / 5.74 | 4.5 |
+| ink on selection, over ground / surface | 10.62 / 11.44 | 7.82 / 7.22 | 4.5 |
 | on-line at 92 % on the plate, blended on 8-bit channels (worst) | 4.87 (spostamenti) | 4.77 (attività) | 4.5 |
 | line strokes on surface (worst) | 5.45 (spostamenti) | 4.85 (attività) | 3 |
 | line strokes on ground (worst) | 5.04 (spostamenti) | 5.37 (attività) | 3 |
@@ -594,6 +601,9 @@ layout, not a stretched phone.
   moves to the next field; only the budget, the last one, sends the form. The error summary
   appears from three problems (or one with no field of its own), lists the fields by name as
   links, and takes the focus; with one or two problems the focus goes to the field.
+- **`/plans` ends on its help** (`PlansFooter`): after the list and its photo credit, a rule and
+  "Come funziona Atlas", a link to the landing's section (`/#come-funziona`, which shows the landing
+  even to a signed-in browser). The page no longer ends on a credit line.
 - **The home list is a line** ("Plan rail"): a 3 px ink rail down the left of the card, clipped by
   its corners, and each plan a station on it, the plan's status glyph as its node (`PlanStatusGlyph`,
   20 px on a surface disc that hides the rail; the running plan's is the large ink ring, 18 px with
@@ -613,7 +623,7 @@ layout, not a stretched phone.
   17:36", "Ieri, 21:40", "8 ott", the year only when it is not the current one); the full date and
   time are in the element's `title`. The clock is read in the fetch callbacks, never in render
   (Cache Components prerenders the route: a `Date.now()` in render is frozen into the shell).
-- **The eval history** (`/evals`) is a dashboard over a line. On top, "Ultima valutazione": the
+- **The eval history** (`/evals`) is a dashboard over a line. On top, "Ultimo collaudo": the
   newest run's verdict as a pill on its wash (green passed, red blocked, the notice wash otherwise),
   what it means, why it stopped (its first two blocking findings, the rule in Italian, the request
   linked to its open row, compare.py's sentence), and four figures (piani accettati, richieste
@@ -629,9 +639,9 @@ layout, not a stretched phone.
   tight clean bounds, the plans from zero) and its two ends' days. One tab stop per chart (arrows,
   Home, End, Enter opens the run), the reading in the caption (never a floating box), each key
   move said once, the values in a table for screen readers. The charts wait for the third run.
-  Then "Tutte le valutazioni", the rail list, ten runs a page with numbered pages (`?pagina=N`,
+  Then "Tutti i collaudi", the rail list, ten runs a page with numbered pages (`?pagina=N`,
   the scroll kept). A run's page steps to its neighbours ("Più recente" to the left, "Più
-  vecchia" to the right, as the list reads), gives its figures with their changes since the run
+  vecchio" to the right, as the list reads), gives its figures with their changes since the run
   before, and lists its reference requests as closed rows (glyph and colour, title, plan, checks,
   score, cost, and the blocking check and the low scores named), the failing ones first; a row
   opens the deep dive, and `#richiesta-<id>` opens one.
@@ -696,7 +706,7 @@ or shape (there is no class merging, on purpose: see JavaScript weight below).
 | `ToolChip` | `chip.tsx` | The running tool | `plate` (line colour, "in corso da 0:14"), `inline` (ring + title + time) |
 | `AgentRoundel`, `AGENT_ICONS` | `agent.tsx` | The agent's disc with its icon | sm 26, md 30, lg 34 px |
 | `StatusBadge` | `status-badge.tsx` | A lane's state, word + glyph | in attesa, al lavoro, finito, errore, fermato, **non partita** (a dashed ring, for a lane with no event on a plan that is over: "in attesa" would promise work that will not come) |
-| `PlanStatusBadge`, `PlanStatusGlyph` | `status-badge.tsx` | A plan's status, word + glyph; the glyph alone (the home rail's node) | In corso, Pronto, Budget raggiunto, Interrotto, Non riuscito, Bloccato; md, lg; glyph also `node` |
+| `PlanStatusBadge`, `PlanStatusGlyph` | `status-badge.tsx` | A plan's status, word + glyph; the glyph alone (the home rail's node) | In corso, Pronto, Limite raggiunto ("budget" stays with the trip's money), Interrotto, Non riuscito, Bloccato; md, lg; glyph also `node` |
 | `CostMeter` | `cost-meter.tsx` | The session's API cost on a line that ends at its limit ("limite 0,60 $": the word "budget" stays with the trip's money), `role="meter"`, `aria-valuetext` in words | loading, **pending** ("Costo non ancora aggiornato": no usage reported yet, the backend reports at the end of a turn), no budget, 0, partial, at limit, over limit |
 | `Disclosure` | `disclosure.tsx` | Native `<details>` | `row` (message, `contentLang="en"`), `section` (closed section with a count); open, closed, exclusive `name` |
 | `Notice`, `InlineStatus` | `notice.tsx` | Framed note; the discreet one-line status | info, warning (the MCP-source style), error with title and action; turning, static |
@@ -710,7 +720,7 @@ or shape (there is no class merging, on purpose: see JavaScript weight below).
 | `Icon`, `IconSprite`, `ICON_PATHS` | `icon.tsx`, `icon-sprite.tsx`, `icons.ts` | Phosphor bold, from a sprite | 35 icons |
 | `Field`, `TextInput`, `TextArea`, `Select`, `NumberStepper`, `SegmentedControl` | `field.tsx` | Form controls with label above, hint, error below | default, hint, error, disabled, optional |
 | `Mark` | `mark.tsx` | "A di linee" in the theme's line tokens (Brand) | any size via `className` |
-| `Wordmark` | `wordmark.tsx` | The lockup: mark and "Atlas", optionally the link home | `compact` (name hidden below 400 px) |
+| `Wordmark` | `wordmark.tsx` | The lockup: mark and "Atlas", optionally the link home | `compact` (name hidden below 360 px) |
 | `ThemeScript` | `theme-script.tsx` | Applies the pinned theme before the first paint | |
 | `cx` | `cx.ts` | Joins class names | |
 
@@ -766,9 +776,10 @@ or shape (there is no class merging, on purpose: see JavaScript weight below).
 
 - **One header on every signed-in page** (`AppHeader`), in this order:
   - the lockup, the link to the plans (`ROUTES.plans`)
-  - the sections "Piani" and "Valutazioni" as **stations on one line**. The line runs past the
-    outer stations, a route that goes on beyond the map's edge, so the pair never reads as a
-    two-step progress bar. The current station is the larger "you are here" ring (11 px, 3 px ink
+  - the sections "Piani" and "Collaudi" (the eval history, named for a visitor) as **stations on
+    one line**. The line runs the same 24 px past the outer stations, a route that goes on beyond
+    the map's edge, so the pair never reads as a two-step progress bar; 1 px on the phone, 2 px
+    from 1080 px, where the header has room for it. The current station is the larger "you are here" ring (11 px, 3 px ink
     edge) with `aria-current="page"`; the others are 9 px hollow nodes that fill on hover.
   - the theme toggle, **bare** (no ring), so it never reads as a twin of the button after it
   - "Nuovo piano", **always the last item**, so the corner never changes meaning from page to
@@ -831,6 +842,7 @@ space:
 | Toast | fades in and rises 8 px, 200 ms expo | fades in, 120 ms |
 | Skeleton | breathes between 100 % and 55 % opacity, 1.6 s | still |
 | Button and icon button press | scale to 0.98 / 0.96, 120 ms; hover colour 160 ms | no scale; colour stays |
+| Theme switch | instant: every transition is off for the frame that repaints (`data-theme-swap` on `<html>`, two frames), so no colour fades through grey | the same |
 | The landing map, once per load | lines draw with `--ease-pen`, 2 s, staggered; stations stamp (scale 1.35 to 1, 350 ms); the live tool plate rises, holds and retires before the destination stamps; the destination's ring draws, 1.2 s | the final map, still, without the plate (the finished plan) |
 
 **The Report, Don't Perform Rule.** If an animation does not report a state change or answer the
@@ -852,7 +864,7 @@ never as JavaScript; the icon names are a TypeScript type.
 
 Agents: `tree-structure` coordinatore, `airplane-tilt` voli, `bed` alloggio, `ticket` attività,
 `tram` spostamenti. States: `hourglass-medium` in attesa, `check-circle` finito, `x-circle` errore,
-`stop-circle` fermato and interrotto, `pause-circle` budget raggiunto, `prohibit` bloccato. Copy
+`stop-circle` fermato and interrotto, `pause-circle` limite raggiunto, `prohibit` bloccato. Copy
 the path of any new icon from the same version and weight; never draw one, never mix a family.
 
 **Why not lucide-react** (the spec lists it as Agent Plan's dependency): one family per product,
@@ -908,12 +920,13 @@ Its only client JavaScript is the theme toggle and `next/link`. Components live 
   back). A link to a part of the page (`/#come-funziona`) always shows the landing: that is how a
   signed-in browser still reaches it, and what to share. Blocked storage or an unreadable referrer
   fail safe: the landing shows. Client-side navigation never runs it.
-- **Public header** (`PublicHeader`): the lockup to `/`, "Come funziona" (a jump down the page,
-  hidden below 480 px), the bare theme toggle, "Accedi" to `/plans` (which sends a signed-out
-  visitor to TripTracker's login and back).
+- **Public header** (`PublicHeader`, the landing's and the demo's): the lockup to `/`, "Come
+  funziona" (`/#come-funziona`, hidden below 480 px), the bare theme toggle (not on `/demo`, whose
+  control bar carries one), "Accedi" to `/plans` (which sends a signed-out visitor to TripTracker's
+  login and back).
 - **Hero**: the tagline in `font-hero text-hero` (Semi Condensed 700), the lede in `text-lede`, one
-  call to action: "Guarda una corsa" once `/demo` exists, "Scopri come funziona" until then
-  (`DEMO_READY`). "Accedi" lives in the header and the closing, never in the hero. The legend names
+  call to action: "Guarda una corsa" → `/demo` (`DEMO_READY`; off, it falls back to "Scopri come
+  funziona", so no button can lead to a 404). "Accedi" lives in the header and the closing, never in the hero. The legend names
   the five lines in run order with their jobs; on the phone the line map comes before it.
 - **Line map** (`LineMap`): horizontal from 768 px, vertical below (the lines converge at the
   bottom, like the phone's lanes). Each line carries its name at its head (`AGENT_LABELS`,
@@ -941,6 +954,43 @@ Its only client JavaScript is the theme toggle and `next/link`. Components live 
   del fornitore.").
 - **Motion**: the line map is a named exception to The Report, Don't Perform Rule, for the landing
   (and the demo in step 3) only: it presents the product. Nothing else on the landing moves.
+
+## Demo
+
+`/demo` is public and prerendered: the recorded `happy-path` run replayed in the browser through
+the live screen's own view (`PlanScreenView`), then the real finished plan. Decided with Michele
+from a mockup on a real demo run, 2026-10-17. Components live in `web/components/demo/`, the
+replay in `web/lib/demo/`.
+
+- **No backend.** The events, the plan, the Trip and the cover (`lib/demo/cover.json`) are in the
+  bundle. Neither API client is evaluated in its module graph: the shared components (PlanView,
+  the cover store) have no default loaders, the live pages pass their own, and the demo passes its
+  copies; `lib/plan-events/detail.ts` checks its enums against the labels' lists, not zod. A test
+  mocks both clients to throw.
+- **The replay** (`useReplayEvents`): the recorded gaps clamped to 80 ms–2.5 s and scaled to 45 s,
+  the events re-stamped on the replay's clock, which is also the elapsed time and the lanes' clock.
+  It starts by itself after the live baseline settles, pauses while the page is hidden and never
+  leaps more than a second; 2× rescales what is left.
+- **The camera** (`AgentLanes follow="show"`): while the visitor only watches, the work stays on
+  screen. On the phone the open card follows the agent at work, even on screen, and comes into
+  view when the work moves to it; on wider layouts the coordinator's newest station stays in view.
+  `block: "nearest"` moves the page only when something is out of view, smoothly unless reduced
+  motion is asked; the first scroll, key or toggle hands the page back. Live, `follow="reader"`
+  never moves anything under a reader.
+- **Demo bar** (`DemoBar`), a row of its own in the live header's state group, in place of
+  "Interrompi". While it plays: "Corsa dimostrativa: dati di esempio, gratis per te", "Ricomincia"
+  (remounts the run and moves the focus to the plan's state), "2×" (named "Velocità doppia",
+  pressed) and "Salta al piano". When it ends, where the arrival lands: "Fine della corsa
+  dimostrativa. Atlas è su invito.", "Ricomincia" and the ask, "Pianifica il tuo viaggio" → `/new`
+  for a browser that has signed in before (the returning-visitor mark), "Accedi" → `/plans`
+  otherwise, since the form would only send a visitor to the login after it was filled in.
+- **The story agrees.** The detail carries the request the run was given (`lib/demo/request.ts`:
+  children of 9 and 6, 2.800 €; the landing's samples say the same), and the finished line gives
+  the recorded run's own figures, "Corsa registrata: durata 1:17 · costo 0,41 $", not the replay's
+  45 s. The plan's relative dates read on the recording's day (PlanView `now`, `PlanNowContext`),
+  so the showcase never turns amber or past. A notice says the prices are an example, the
+  hand-off below the plan matches the bar's ask in place of "Apri in TripTracker", and the
+  booking links stay the real, allowlisted ones.
 
 ## Map
 
@@ -1012,7 +1062,7 @@ day-by-day list stays the primary content and says everything the map does.
   `mixColors` computes them). **Water is the one cool tone**: in light it is that grey leaned 12 %
   toward `line-flights` (`WATER_COOL`), so the Tagus is told from land at a glance and a quarter on
   its bank is not "in the river" (land against water 1.44:1, was 1.22:1); the day lines keep
-  at least 3.64:1 over it (spostamenti, the worst) in light, 5.4:1 in dark (`style.test.ts`
+  at least 3.49:1 over it (spostamenti, the worst) in light, 3.98:1 in dark (attività there; `style.test.ts`
   recomputes both); in dark water stays the darkest step. No POIs, no road names, no shields, no rail. Labels are only
   places (city, town, district, neighbourhood) and water names, in Noto Sans (the glyphs
   OpenFreeMap serves), `ink-2` with a ground halo, Italian names first. Dark is the same

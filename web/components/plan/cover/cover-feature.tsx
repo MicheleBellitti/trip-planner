@@ -15,7 +15,7 @@ import { cx } from "@/components/ui/cx";
 import { Icon } from "@/components/ui/icon";
 
 import { coverSources, destinationInitial } from "./cover-sources";
-import { useCover } from "./cover-store";
+import { useCover, type CoverLoader } from "./cover-store";
 
 /** The card's width is the phone's (up to 24 rem) or the right column's (22 rem). */
 const WIDTHS = [500, 960, 1280] as const;
@@ -25,12 +25,15 @@ export function CoverFeature({
   planId,
   destination,
   className,
+  loadCover,
 }: {
   planId: string;
   destination: string;
   className?: string;
+  /** Where the photo comes from (GET /plans/{id}/cover on the plans list); none, the tile. */
+  loadCover?: CoverLoader;
 }) {
-  const state = useCover(planId, true);
+  const state = useCover(planId, true, loadCover);
   const [broken, setBroken] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const cover = state.kind === "ready" && !broken ? state.cover : null;

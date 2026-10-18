@@ -17,7 +17,6 @@
 
 import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 
-import { api } from "@/lib/api";
 import type { Cover } from "@/lib/schemas/api";
 
 import { uniqueCovers } from "./cover-sources";
@@ -30,7 +29,8 @@ export type CoverState =
   /** No photo to show. `retry`: the answer was a failure, not a 404. */
   | { kind: "none"; retry: boolean };
 
-/** Loads a plan's cover; the default reads it from the planner API. */
+/** Loads a plan's cover: the page that shows it passes one (GET /plans/{id}/cover on the live
+ * pages, a bundled copy in the demo); with none, nothing is requested. */
 export type CoverLoader = (planId: string) => Promise<Cover | null>;
 
 export const MAX_IN_FLIGHT = 4;
@@ -68,11 +68,9 @@ function pump(): void {
   }
 }
 
-const defaultLoader: CoverLoader = (planId) => api.getCover(planId);
-
 /** Starts reading a plan's cover unless it is known (or on its way). Safe to call on every
  * render of an effect: it does nothing twice. */
-export function requestCover(planId: string, load: CoverLoader = defaultLoader): void {
+export function requestCover(planId: string, load: CoverLoader): void {
   const known = states.get(planId);
   if (known && !(known.kind === "none" && known.retry)) return;
   states.set(planId, LOADING);
@@ -111,7 +109,9 @@ export function useCover(planId: string, enabled = true, load?: CoverLoader): Co
     loader.current = load;
   });
   useEffect(() => {
-    if (enabled) requestCover(planId, loader.current);
+    // No loader, no request: the page that shows the cover says where it comes from (the live
+    // pages read GET /plans/{id}/cover, the demo its own copy), so this store needs no client.
+    if (enabled && loader.current) requestCover(planId, loader.current);
   }, [planId, enabled]);
   return state;
 }

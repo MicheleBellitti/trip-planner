@@ -166,6 +166,13 @@ Taken by Michele on 2026-10-12. They replace the first pass's open questions.
 - **2026-10-17: the landing**, approved from a mockup: "Accedi" only in the header and the
   closing, the line map before the legend on the phone, one choreographed moment (the map). Until
   `/demo` exists (step 3) its demo calls to action are off (`DEMO_READY`).
+- **2026-10-17: the demo**, from a mockup on a real demo run: the recorded run's cost is shown,
+  named as the recorded run's, and the bar says the demo is free for the visitor; the run starts
+  by itself. The landing opens it ("Guarda una corsa").
+- **2026-10-17: the step 1 polish**, from a mockup: the header's station line stays local to the
+  sections, 2 px from 1080 px with the same overhang on both sides; at 28 px and below the mark
+  draws a smaller station and thicker strokes, so it reads as an "A" rather than a compass; the
+  eval history is called "Collaudi" on screen.
 
 ## Brand Commitments
 

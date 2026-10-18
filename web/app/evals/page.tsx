@@ -6,7 +6,7 @@ import { EvalDashboard } from "@/components/evals/eval-dashboard";
 import { parsePage } from "@/components/evals/eval-model";
 import { EvalRunList, EvalRunListPlaceholder } from "@/components/evals/eval-run-list";
 
-export const metadata: Metadata = { title: "Valutazioni" };
+export const metadata: Metadata = { title: "Collaudi" };
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -18,7 +18,7 @@ export default function EvalsPage({ searchParams }: { searchParams: SearchParams
     <>
       <AppHeader current="evals" />
       <main className="mx-auto max-w-page px-4 pt-6 pb-16 lg:px-7 lg:pt-8">
-        <h1 className="font-cond text-display font-semibold lg:text-display-lg">Valutazioni</h1>
+        <h1 className="font-cond text-display font-semibold lg:text-display-lg">Collaudi</h1>
         <p className="mt-1.5 max-w-prose text-small text-ink-2">
           Le richieste di riferimento girano a ogni modifica di agenti, prompt o skill: qui l&apos;esito di ogni giro.
         </p>

@@ -61,6 +61,15 @@ describe("PlanList", () => {
     expect(document.querySelector("[aria-busy='true']")).toBeTruthy();
   });
 
+  it("draws the featured card's place while loading, so the list does not jump when the plans arrive", () => {
+    mocks.listPlans.mockReturnValue(new Promise(() => {}));
+    const { container } = render(<PlanList />);
+    const placeholder = container.querySelector("[data-featured-placeholder]");
+    expect(placeholder).toBeTruthy();
+    expect(placeholder?.querySelector(".h-44")).toBeTruthy();
+    expect(placeholder?.className).toContain("xl:col-start-2");
+  });
+
   it("lists each plan with its title, status word, cost in dollars and date, linking to it", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(Date.parse("2026-10-12T15:00:00Z"));
