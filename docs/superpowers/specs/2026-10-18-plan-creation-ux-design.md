@@ -340,14 +340,15 @@ When `submit_plan` delivers a Plan that validates and translates, and before the
   its site, no personal data.
 - **Never** rejects the plan or sends anything back to the coordinator: resubmitting the plan
   would cost more than the problem.
-- **Stored** as a new column `plans.link_checks` (jsonb, the link check PR's own migration):
+- **Stored** as a new column `plans.link_health` (jsonb, the link check PR's own migration):
   `{url: {status, http_status, reason, fallback, checked_at}}`.
 - **Logs:** one `link_check` line per plan with the counts per verdict; per dead URL its host and
   reason.
 
 ### What the user sees
 
-`PlanDetail` exposes `link_checks`. The web, wherever a plan URL is drawn (`itinerary.tsx` stop
+`PlanDetail` exposes `link_health` (not `link_checks`: `LinkCheck` already names the
+allowlist verdict in `routes.py`). The web, wherever a plan URL is drawn (`itinerary.tsx` stop
 pages, `bookings.tsx` booking buttons and price sources, the alternatives):
 
 - `ok` or `unknown`: the link as today.
@@ -374,7 +375,7 @@ search snippet cites that result's URL. The coordinator only copies, as today.
 
 ### Evals
 
-`evals/checks.py` gains `dead_links`: the number of `dead` URLs in the stored `link_checks`,
+`evals/checks.py` gains `dead_links`: the number of `dead` URLs in the stored `link_health`,
 reported in the eval history. It does not fail a run at first. Michele approved (2026-10-18) one
 paid evals run right after PR 1 is merged, before any prompt change, so the count has a
 starting point; PR 4's run then shows the prompt rule's effect.
