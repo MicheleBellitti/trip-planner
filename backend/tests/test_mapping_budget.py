@@ -15,6 +15,7 @@ from decimal import Decimal
 
 from app import mapping, plan
 from app.fx import FxQuote
+from app.link_health import LinkHealth, LinkHealthMap
 from app.links import check_link
 
 LONGEST_AMOUNT = "1000000000,00"  # format_amount(plan.MAX_AMOUNT_CENTS): 10**11 cents
@@ -52,6 +53,14 @@ def worst_case_provenance_after_cuts() -> list[str]:
 
 def test_mapping_and_plan_share_the_notes_cap() -> None:
     assert mapping.MAX_NOTES == plan.MAX_NOTES == 4000
+
+
+def test_the_missing_source_line_with_the_longest_host_still_fits() -> None:
+    host = "h" * 253  # the longest DNS name
+    lines = worst_case_provenance_after_cuts()
+    lines[1] = mapping.NOTE_PRICE_SOURCE_MISSING.format(host=host)
+
+    assert len("\n".join(lines)) <= mapping.MAX_NOTES
 
 
 def test_provenance_lines_fit_the_notes_once_urls_are_cut() -> None:
@@ -118,3 +127,23 @@ def test_a_missing_conversion_also_fits() -> None:
     assert notes is not None
     assert len(notes) <= mapping.MAX_NOTES
     assert mapping.NOTE_FX_MISSING.format(amount=LONGEST_AMOUNT, currency=CURRENCY) in notes
+
+
+def test_a_dead_price_source_at_every_cap_still_fits() -> None:
+    booking = _booking_at_every_cap()
+    price = booking.price
+    assert price is not None
+    entry = LinkHealth("dead", "http_404", 404)
+    health = LinkHealthMap({str(price.source_url): entry})
+
+    notes = mapping.booking_notes(
+        booking,
+        quote=None,
+        link=check_link(booking.link or ""),
+        book_now=True,
+        health=health,
+    )
+
+    assert notes is not None
+    assert len(notes) <= mapping.MAX_NOTES
+    assert "pagina non trovata (prices.example)" in notes

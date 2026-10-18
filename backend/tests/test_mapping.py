@@ -23,6 +23,7 @@ import time_machine
 
 from app import mapping
 from app.fx import FxQuote, FxRates, convert_cents
+from app.link_health import LinkHealth, LinkHealthMap
 from app.links import check_link
 from app.mapping import (
     COVER_SEED_RANGE,
@@ -35,6 +36,7 @@ from app.mapping import (
     NOTE_FX_MISSING,
     NOTE_PRICE_ESTIMATED,
     NOTE_PRICE_SOURCE,
+    NOTE_PRICE_SOURCE_MISSING,
     NOTE_PRICE_VERIFIED,
     NOTE_UNCHECKED_LINK,
     NOTE_URL_KEEP,
@@ -129,6 +131,17 @@ def make_plan(
 
 def run(plan: Plan, *, now: dt.datetime = NOW, fx: FxRates = FX, seed: int = 7) -> TripMapping:
     return plan_to_trip(plan, now=now, fx=fx, ids=SeededTripIds(seed))
+
+
+def run_with(
+    plan: Plan, *, health: LinkHealthMap | None, now: dt.datetime = NOW, seed: int = 7
+) -> TripMapping:
+    return plan_to_trip(plan, now=now, fx=FX, ids=SeededTripIds(seed), health=health)
+
+
+def dead(url: str, *, fallback: str | None = None, allowed: bool = False) -> LinkHealthMap:
+    entry = LinkHealth("dead", "http_404", 404, fallback=fallback, fallback_allowed=allowed)
+    return LinkHealthMap({url: entry})
 
 
 def trip_of(result: TripMapping) -> dict[str, Any]:
@@ -996,3 +1009,114 @@ def test_the_module_defaults_are_triptracker_constants() -> None:
     assert mapping.SORT_ORDER_STEP == 1000
     assert mapping.COVER_SEED_RANGE == 10_000
     assert mapping.MAX_NOTES == 4000
+
+
+# --- the link check's verdicts ---------------------------------------------------------------
+
+
+def stop_plan(url: str) -> Plan:
+    return make_plan(
+        days=[
+            {
+                "date": "2027-06-14",
+                "stops": [{"ref": "s", "title": "Museo", "kind": "activity", "url": url}],
+            }
+        ]
+    )
+
+
+def test_dead_stop_url_uses_the_homepage() -> None:
+    url = "https://a.example/mostra/2027"
+    plan = stop_plan(url)
+
+    trip = trip_of(run_with(plan, health=dead(url, fallback="https://a.example/")))
+
+    assert all_stops(trip)[0]["url"] == "https://a.example/"
+
+
+def test_dead_stop_url_without_fallback_is_omitted() -> None:
+    url = "https://a.example/"
+    trip = trip_of(run_with(stop_plan(url), health=dead(url)))
+
+    assert "url" not in all_stops(trip)[0]
+
+
+def test_dead_booking_link_with_allowed_fallback_points_to_it() -> None:
+    link = "https://www.booking.com/hotel/it/x.html"
+    plan = make_plan(bookings=[{"title": "Hotel", "kind": "lodging", "link": link}])
+
+    health = dead(link, fallback="https://www.booking.com/", allowed=True)
+    booking = trip_of(run_with(plan, health=health))["bookings"][0]
+
+    assert booking["url"] == "https://www.booking.com/"
+    assert "notes" not in booking
+
+
+def test_dead_booking_link_with_a_disallowed_fallback_is_dropped() -> None:
+    link = "https://www.musikverein.at/konzerte/x"
+    plan = make_plan(bookings=[{"title": "Concerto", "kind": "ticket", "link": link}])
+
+    health = dead(link, fallback="https://www.musikverein.at/", allowed=False)
+    booking = trip_of(run_with(plan, health=health))["bookings"][0]
+
+    assert "url" not in booking
+    assert "notes" not in booking
+
+
+def test_dead_google_flights_link_has_no_url_and_no_unchecked_note() -> None:
+    plan = fixture_plan("city_weekend.json")
+    link = plan.bookings[0].link
+    assert link is not None
+
+    flights = booking_titled(
+        trip_of(run_with(plan, health=dead(link))), "Voli Milano Malpensa ⇄ Vienna"
+    )
+
+    assert "url" not in flights
+    assert "Link da verificare" not in flights["notes"]
+
+
+def test_an_alive_link_outside_the_allowlist_keeps_the_unchecked_note() -> None:
+    link = "https://www.musikverein.at/konzerte"
+    plan = make_plan(bookings=[{"title": "Concerto", "kind": "ticket", "link": link}])
+    health = LinkHealthMap({link: LinkHealth("ok", "ok", 200)})
+
+    booking = trip_of(run_with(plan, health=health))["bookings"][0]
+
+    assert "url" not in booking
+    assert booking["notes"] == NOTE_UNCHECKED_LINK.format(url=link)
+
+
+def priced_booking(source: str) -> list[dict[str, Any]]:
+    price = {**PRICE, "source_url": source}
+    return [{"title": "Museo", "kind": "ticket", "price": price}]
+
+
+def test_dead_price_source_note_says_page_not_found() -> None:
+    source = "https://www.A.example/prezzi"
+    plan = make_plan(bookings=priced_booking(source))
+    price = plan.bookings[0].price
+    assert price is not None
+
+    booking = trip_of(run_with(plan, health=dead(str(price.source_url))))["bookings"][0]
+
+    assert NOTE_PRICE_SOURCE_MISSING.format(host="a.example") in booking["notes"]
+    assert "Fonte del prezzo: pagina non trovata (a.example)" in booking["notes"]
+    assert "prezzi" not in booking["notes"]
+
+
+def test_dead_price_source_with_a_homepage_shows_the_homepage() -> None:
+    source = "https://a.example/prezzi"
+    plan = make_plan(bookings=priced_booking(source))
+
+    booking = trip_of(run_with(plan, health=dead(source, fallback="https://a.example/")))[
+        "bookings"
+    ][0]
+
+    assert "Fonte del prezzo: https://a.example/" in booking["notes"]
+
+
+def test_without_health_the_trip_is_unchanged() -> None:
+    plan = fixture_plan("city_weekend.json")
+
+    assert run(plan) == run_with(plan, health=None) == run_with(plan, health=LinkHealthMap.empty())
