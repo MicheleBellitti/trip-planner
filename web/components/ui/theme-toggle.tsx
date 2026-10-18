@@ -4,6 +4,7 @@ import { useLayoutEffect, useSyncExternalStore } from "react";
 
 import { cx } from "./cx";
 import { Icon } from "./icon";
+import { iconButtonClasses } from "./icon-button";
 import { DEFAULT_THEME, isThemeName, THEME_COLORS, THEME_STORAGE_KEY, type ThemeName } from "./theme";
 
 const THEME_EVENT = "atlas-theme-change";
@@ -36,6 +37,23 @@ function syncThemeColor(theme: ThemeName) {
   }
 }
 
+/** The latest swap: only its frames take the guard off, so quick toggles never strand it on. */
+let latestSwap = 0;
+
+/** The swap repaints every colour at once. Transitions (hover washes, borders) would fade the
+ * old colours into the new ones through grey, so `data-theme-swap` turns them off (globals.css)
+ * until two frames later, when the new theme is on screen. */
+function guardSwap() {
+  const root = document.documentElement;
+  const swap = ++latestSwap;
+  root.setAttribute("data-theme-swap", "");
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      if (swap === latestSwap) root.removeAttribute("data-theme-swap");
+    }),
+  );
+}
+
 /**
  * The theme toggle: a round icon button that pins the other theme (dark is the default) and
  * remembers it (localStorage, read before paint by ThemeScript). `bare` drops the ring. The glyph is chosen by CSS
@@ -58,6 +76,7 @@ export function ThemeToggle({ className, variant = "outline" }: { className?: st
 
   function toggle() {
     const next: ThemeName = resolvedTheme() === "dark" ? "light" : "dark";
+    guardSwap();
     document.documentElement.setAttribute("data-theme", next);
     syncThemeColor(next);
     try {
@@ -77,15 +96,9 @@ export function ThemeToggle({ className, variant = "outline" }: { className?: st
       onClick={toggle}
       aria-label={label}
       title={label}
-      className={cx(
-        "inline-grid size-10 shrink-0 place-items-center rounded-full border-[1.5px] bg-transparent text-ink",
-        // `bare`: no ring, beside another round control (the header's "Nuovo piano"), so the two
-        // never read as twins.
-        variant === "outline" ? "border-rule-strong" : "border-transparent",
-        "transition-[background-color,scale] duration-(--duration-hover) ease-out hover:bg-notice-wash",
-        "active:scale-[0.96] active:duration-(--duration-press) motion-reduce:active:scale-100",
-        className,
-      )}
+      // `bare`: no ring, beside another round control (the header's "Nuovo piano"), so the two
+      // never read as twins.
+      className={cx(iconButtonClasses("md", variant), className)}
     >
       <Icon name="moon" size={18} className="[display:var(--show-in-light)]" />
       <Icon name="sun" size={18} className="[display:var(--show-in-dark)]" />

@@ -186,7 +186,7 @@ export default function ItineraryMapGL({
       if (failure.sourceId === "openmaptiles" && !failure.tile) live.current.onBaseFailed();
     });
 
-    // A theme change (the toggle pins data-theme on <html>; the system can change too) rebuilds
+    // A theme change (the toggle pins data-theme on <html>; the system's scheme plays no part) rebuilds
     // the style from the new tokens. The lines and stations come from the same data.
     const restyle = () => {
       const next = readPalette(container);
@@ -202,12 +202,9 @@ export default function ItineraryMapGL({
     };
     const observer = new MutationObserver(themeChanged);
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-    const scheme$ = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-color-scheme: dark)") : null;
-    scheme$?.addEventListener("change", themeChanged);
 
     return () => {
       observer.disconnect();
-      scheme$?.removeEventListener("change", themeChanged);
       mapRef.current = null;
       map.remove();
     };
