@@ -75,4 +75,22 @@ describe("the demo's camera", () => {
     expect(scrolled).toHaveBeenCalled();
     for (const [, options] of scrolled.mock.calls) expect(options).toMatchObject({ block: "nearest" });
   });
+  it("hands the page back when the visitor scrolls it away from the work in any way (scrollbar, assistive tech)", () => {
+    screenWidth(false);
+    vi.useFakeTimers();
+    try {
+      const { rerender } = render(lanes(10, "show"));
+      // Long after the camera's own move, the page is scrolled and the work is out of view.
+      vi.advanceTimersByTime(2_000);
+      for (const end of document.querySelectorAll("[data-lane-end], [id^='lane-']")) {
+        end.getBoundingClientRect = () => ({ top: 5_000, bottom: 5_100 }) as DOMRect;
+      }
+      window.dispatchEvent(new Event("scroll"));
+      scrolled.mockReset();
+      rerender(lanes(14, "show"));
+      expect(scrolled).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

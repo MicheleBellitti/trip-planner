@@ -959,8 +959,10 @@ from a mockup on a real demo run, 2026-10-17. Components live in `web/components
 replay in `web/lib/demo/`.
 
 - **No backend.** The events, the plan, the Trip and the cover (`lib/demo/cover.json`) are in the
-  bundle. Neither API client is evaluated in its module graph (PlanView's and the covers' default
-  loaders import the client on first use, `lib/lazy-api.ts`); a test mocks both to throw.
+  bundle. Neither API client is evaluated in its module graph: the shared components (PlanView,
+  the cover store) have no default loaders, the live pages pass their own, and the demo passes its
+  copies; `lib/plan-events/detail.ts` checks its enums against the labels' lists, not zod. A test
+  mocks both clients to throw.
 - **The replay** (`useReplayEvents`): the recorded gaps clamped to 80 ms–2.5 s and scaled to 45 s,
   the events re-stamped on the replay's clock, which is also the elapsed time and the lanes' clock.
   It starts by itself after the live baseline settles, pauses while the page is hidden and never

@@ -34,9 +34,16 @@
  * | source                           | error       | a failed source that is not an MCP server        |
  */
 
-import { PlanStatusSchema, type PlanStatus } from "../schemas/api";
-import { AgentNameSchema, type AgentName, type UIEvent } from "../schemas/generated/ui-event";
-import type { LaneState } from "./labels";
+import type { PlanStatus } from "../schemas/api";
+import type { AgentName, UIEvent } from "../schemas/generated/ui-event";
+import { AGENTS, PLAN_STATUS_LABELS, type LaneState } from "./labels";
+
+// Membership checks against the labels' own lists, not the zod enums: this module is on the demo's
+// first load, and two enum checks would bring zod and every schema with them.
+const AGENT_NAMES: ReadonlySet<string> = new Set(AGENTS);
+const isAgentName = (value: string): value is AgentName => AGENT_NAMES.has(value);
+const isPlanStatus = (value: unknown): value is PlanStatus =>
+  typeof value === "string" && Object.hasOwn(PLAN_STATUS_LABELS, value);
 
 type Detail = UIEvent["detail"];
 
@@ -78,8 +85,7 @@ function readAgent(detail: Detail, ...keys: string[]): AgentName | null {
   const value = pick(detail, keys);
   if (typeof value !== "string") return null;
   const key = value.trim().normalize("NFC").toLocaleLowerCase("it");
-  const parsed = AgentNameSchema.safeParse(key);
-  if (parsed.success) return parsed.data;
+  if (isAgentName(key)) return key;
   return AGENT_BY_LABEL.get(key) ?? null;
 }
 
@@ -106,8 +112,8 @@ export function readPendingEventIds(detail: Detail): string[] {
 }
 
 export function readPlanStatus(detail: Detail): PlanStatus | null {
-  const parsed = PlanStatusSchema.safeParse(pick(detail, ["plan_status"]));
-  return parsed.success ? parsed.data : null;
+  const value = pick(detail, ["plan_status"]);
+  return isPlanStatus(value) ? value : null;
 }
 
 export function readBudgetCents(detail: Detail): number | null {

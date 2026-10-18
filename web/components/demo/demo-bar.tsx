@@ -52,7 +52,8 @@ export function DemoBar({
               size="sm"
               variant="secondary"
               aria-pressed={speed === 2}
-              aria-label="Velocità doppia"
+              // The visible "2×" leads the name, so a voice user can say what they see (WCAG 2.5.3).
+              aria-label="2×, velocità doppia"
               onClick={() => onSpeed(speed === 2 ? 1 : 2)}
               className="pointer-coarse:min-h-11 pointer-coarse:min-w-11 aria-pressed:bg-notice-wash aria-pressed:inset-ring-[1.5px] aria-pressed:inset-ring-ink"
             >

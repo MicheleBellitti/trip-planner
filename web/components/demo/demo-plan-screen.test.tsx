@@ -73,6 +73,30 @@ describe("DemoPlanScreen", () => {
     expect(finishedPlan().length).toBeGreaterThan(0);
   });
 
+  it("after 'Ricomincia', draws the run again and announces it live", async () => {
+    render(<DemoPlanScreen />);
+    await advance(WHOLE_RUN);
+    fireEvent.click(screen.getByRole("button", { name: "Ricomincia" }));
+    // In steps, as time passes: the live baseline settles between them, as it does in a browser.
+    for (let step = 0; step < 4; step += 1) await advance(2_000);
+    const live = document.querySelector("[aria-live='polite']");
+    expect(live?.textContent).toMatch(/: al lavoro/);
+    // From the start again: a few seconds in, at the first wave.
+    expect(document.body.textContent).toMatch(/Trascorsi 0:0\d/);
+    expect(document.body.textContent).toContain("Ondata 1");
+  });
+
+  it("runs twice as fast once '2×' is pressed mid-run", async () => {
+    render(<DemoPlanScreen />);
+    await advance(REPLAY_SETTLE_MS + 5_000);
+    fireEvent.click(screen.getByRole("button", { name: "2×, velocità doppia" }));
+    await advance(5_000);
+    // 5 s at 1× and 5 s at 2×: about 15 s of the run.
+    const elapsed = /Trascorsi 0:(\d+)/.exec(document.body.textContent ?? "");
+    expect(Number(elapsed?.[1])).toBeGreaterThanOrEqual(14);
+    expect(Number(elapsed?.[1])).toBeLessThanOrEqual(16);
+  });
+
   it("starts again from the first station on 'Ricomincia'", async () => {
     render(<DemoPlanScreen />);
     await advance(WHOLE_RUN);
@@ -92,11 +116,11 @@ describe("DemoPlanScreen", () => {
 
   it("toggles 2× as a pressed button", async () => {
     render(<DemoPlanScreen />);
-    const fast = screen.getByRole("button", { name: "Velocità doppia" });
+    const fast = screen.getByRole("button", { name: "2×, velocità doppia" });
     expect(fast.textContent).toBe("2×");
     expect(fast.getAttribute("aria-pressed")).toBe("false");
     fireEvent.click(fast);
-    expect(screen.getByRole("button", { name: "Velocità doppia" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "2×, velocità doppia" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("tells the request the run was given: the header, the coordinator and the budget agree", async () => {

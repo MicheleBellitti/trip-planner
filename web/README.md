@@ -164,12 +164,15 @@ some pages need lives apart: the path builders in `lib/page-paths.ts`, the mark'
 `lib/mark-geometry.ts` (not `lib/brand-mark.ts`), the tagline's line break in
 `lib/tagline-lines.ts`.
 
-Re-measured on 2026-10-18 for the demo (step 3), at the branch's last commit: `/demo` is 199.7 KB
-gzip (ungated). The live pages grow by about 2 KB, almost none of it their own code: `/plans/[id]`
-195.6 (was 192.8; the lanes' demo camera adds about 0.3), `/plans` 179.0, `/new` 179.0, `/evals` 178.5. Cause: on `main` one 22.1 KB chunk held zod and the API client together;
-`/demo` shares zod but must not load the client, so Turbopack splits that chunk in two (19.0 + 7.5 KB),
-and two files compress worse than one. Keeping them together would mean loading the API client on
-`/demo`, which the spec forbids. The 190 gate on `/plans/[id]` is still Michele's decision.
+Re-measured on 2026-10-18 for the demo (step 3), at the branch's last commit: `/demo` is 179.5 KB
+gzip (ungated; it was 199.7 before `lib/plan-events/detail.ts` stopped importing the zod enums, which
+pulled zod and every schema onto its first load). The live pages grow by about 2 KB with almost none
+of their own code: `/plans/[id]` 195.5 (was 192.8; the lanes' demo camera is about 0.3 of it),
+`/plans` 178.9, `/new` 178.8, `/evals` 178.3. Cause: Turbopack groups modules by the set of routes
+that load them, and `/demo` reuses part of what used to be one shared chunk (the live screen, the ui
+primitives) but not the rest (the API client, zod), so that chunk is split and two files compress
+worse than one. Keeping it whole would mean loading the API client on `/demo`, which the spec
+forbids. The 190 gate on `/plans/[id]` is still Michele's decision.
 
 ## Accessibility
 

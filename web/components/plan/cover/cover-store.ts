@@ -29,7 +29,8 @@ export type CoverState =
   /** No photo to show. `retry`: the answer was a failure, not a 404. */
   | { kind: "none"; retry: boolean };
 
-/** Loads a plan's cover; the default reads it from the planner API. */
+/** Loads a plan's cover: the page that shows it passes one (GET /plans/{id}/cover on the live
+ * pages, a bundled copy in the demo); with none, nothing is requested. */
 export type CoverLoader = (planId: string) => Promise<Cover | null>;
 
 export const MAX_IN_FLIGHT = 4;

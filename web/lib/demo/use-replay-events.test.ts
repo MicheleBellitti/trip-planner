@@ -85,4 +85,12 @@ describe("useReplayEvents", () => {
     await advance(REPLAY_TARGET_MS);
     expect(result.current.state.status).toBe("ready");
   });
+  it("never runs its clock back, even if the system clock does", async () => {
+    const { result } = renderHook(() => useReplayEvents(events, { speed: 1, epoch }));
+    await advance(REPLAY_SETTLE_MS + 5_000);
+    const before = result.current.now;
+    vi.setSystemTime(Date.now() - 60_000);
+    await advance(300);
+    expect(result.current.now).toBeGreaterThanOrEqual(before);
+  });
 });

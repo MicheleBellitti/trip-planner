@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { cx } from "@/components/ui/cx";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
@@ -130,19 +130,34 @@ export function AgentLanes({
   // phone the open card's newest station stays in view as the work moves and grows; on wider
   // layouts the coordinator's newest station does. "nearest" moves the page only when the thing is out of view; a scroll, a key or
   // a toggle (`touched`) hands the page back to the visitor.
-  const followedStations = views[followed].stations.length;
-  useEffect(() => {
-    if (follow !== "show" || touched || layout !== "stack") return;
-    // The open card's end, where its newest station is (the card itself before it opens).
+  // What the camera keeps in view: the open card's end, where its newest station is (the card
+  // itself before it opens), or the coordinator's newest station on wider layouts.
+  const cameraTarget = useCallback((): HTMLElement | null => {
+    if (layout !== "stack") return coordinatorEnd.current;
     const card = document.getElementById(laneCardId(followed));
-    const end = card?.querySelector<HTMLElement>("[data-lane-end]") ?? card;
-    end?.scrollIntoView?.({ block: "nearest", behavior: cameraMotion() });
-  }, [follow, touched, layout, followed, followedStations]);
+    return card?.querySelector<HTMLElement>("[data-lane-end]") ?? card;
+  }, [layout, followed]);
+  // Until when a scroll is the camera's own (a smooth move takes a few hundred ms).
+  const cameraUntil = useRef(0);
+  const followedStations = views[followed].stations.length;
   const coordinatorStations = views.coordinator.stations.length;
   useEffect(() => {
-    if (follow !== "show" || touched || layout === "stack") return;
-    coordinatorEnd.current?.scrollIntoView?.({ block: "nearest", behavior: cameraMotion() });
-  }, [follow, touched, layout, coordinatorStations]);
+    if (follow !== "show" || touched) return;
+    cameraUntil.current = Date.now() + 1_000;
+    cameraTarget()?.scrollIntoView?.({ block: "nearest", behavior: cameraMotion() });
+  }, [follow, touched, cameraTarget, followedStations, coordinatorStations]);
+  // Any other scroll that takes the work out of view is the visitor's (the scrollbar, a screen
+  // reader, a magnifier, an anchor: none of them sends a wheel or a key), and hands the page back.
+  useEffect(() => {
+    if (follow !== "show" || touched) return;
+    const onScroll = () => {
+      if (Date.now() < cameraUntil.current) return;
+      const box = cameraTarget()?.getBoundingClientRect();
+      if (box && (box.bottom < 0 || box.top > window.innerHeight)) setTouched(true);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [follow, touched, cameraTarget]);
 
   useEffect(() => {
     const mark = () => setTouched(true);

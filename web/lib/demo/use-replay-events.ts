@@ -97,7 +97,8 @@ export function useReplayEvents(events: readonly UIEvent[], { speed, epoch }: Re
       if (finished.current) return;
       const realNow = Date.now();
       const hidden = typeof document !== "undefined" && document.visibilityState === "hidden";
-      const step = hidden ? 0 : Math.min(realNow - last, MAX_STEP_MS);
+      // Never negative: a system clock set back must not run the replay backwards.
+      const step = hidden ? 0 : Math.max(0, Math.min(realNow - last, MAX_STEP_MS));
       last = realNow;
       position.current = Math.min(total, position.current + step * speedRef.current);
 
