@@ -55,10 +55,16 @@ function row(raw: RawRow): WaitlistRow {
   };
 }
 
-/** True when `email` (normalized) was invited: it may create an account. */
-export async function isInvited(db: Queryable, email: string): Promise<boolean> {
-  const { rows } = await db.query("SELECT 1 FROM waitlist WHERE email = $1 AND invited_at IS NOT NULL", [email]);
-  return rows.length > 0;
+/** Where an address stands for signing in, from one query: so every magic-link request makes the
+ * same lookup, whatever the answer (lib/auth.ts: no enumeration, by content or by timing). */
+export async function signInStanding(db: Queryable, email: string): Promise<{ hasAccount: boolean; invited: boolean }> {
+  const { rows } = await db.query<{ has_account: boolean; invited: boolean }>(
+    `SELECT EXISTS (SELECT 1 FROM users WHERE lower(email) = $1) AS has_account,
+            EXISTS (SELECT 1 FROM waitlist WHERE email = $1 AND invited_at IS NOT NULL) AS invited`,
+    [email],
+  );
+  const row = rows[0];
+  return { hasAccount: row?.has_account === true, invited: row?.invited === true };
 }
 
 /**

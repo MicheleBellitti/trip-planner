@@ -1034,7 +1034,7 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
     invitation claims the sending (one conditional UPDATE, so only one admin sends; cleared
     again if the email does not leave). The web app's sign-up policy lets an address create an
     account when it is in `AUTH_ALLOWED_EMAILS` (the bootstrap list, or `*`) or has an invited
-    row (web/lib/server/waitlist.ts `isInvited`, called from Better Auth's hooks). Neither the
+    row (web/lib/server/waitlist.ts `signInStanding`, called from Better Auth's hooks). Neither the
     join nor the magic-link request tells the caller whether an address has an account or an
     invitation (web/lib/auth.ts, web/lib/waitlist-state.ts); the sign-in email leaves after the
     response (`after()`), so the timing does not tell either. The backend only migrates the

@@ -3,11 +3,11 @@ import { describe, expect, it, vi } from "vitest";
 import {
   claimInvitation,
   invite,
-  isInvited,
   joinWaitlist,
   listWaitlist,
   releaseInvitation,
   removeRequest,
+  signInStanding,
   WAITLIST_LIST_LIMIT,
   type Queryable,
 } from "./waitlist";
@@ -28,11 +28,15 @@ function fakeDb(...answers: unknown[][]): Queryable & { calls: { text: string; v
 const NOW = new Date("2026-10-17T18:00:00Z");
 
 describe("the waitlist queries", () => {
-  it("isInvited asks for a row with invited_at", async () => {
-    const db = fakeDb([{ "?column?": 1 }]);
-    expect(await isInvited(db, "friend@example.com")).toBe(true);
-    expect(db.calls[0]).toEqual({ text: "SELECT 1 FROM waitlist WHERE email = $1 AND invited_at IS NOT NULL", values: ["friend@example.com"] });
-    expect(await isInvited(fakeDb([]), "nobody@example.com")).toBe(false);
+  it("signInStanding asks for the account and the invitation in one query", async () => {
+    const db = fakeDb([{ has_account: false, invited: true }]);
+    expect(await signInStanding(db, "friend@example.com")).toEqual({ hasAccount: false, invited: true });
+    expect(db.calls).toHaveLength(1);
+    expect(db.calls[0]).toEqual({
+      text: "SELECT EXISTS (SELECT 1 FROM users WHERE lower(email) = $1) AS has_account, EXISTS (SELECT 1 FROM waitlist WHERE email = $1 AND invited_at IS NOT NULL) AS invited",
+      values: ["friend@example.com"],
+    });
+    expect(await signInStanding(fakeDb([{ has_account: true, invited: false }]), "a@b.co")).toEqual({ hasAccount: true, invited: false });
   });
 
   it("joinWaitlist inserts a new request, keeps a repeat and tells an invited or registered address apart", async () => {
