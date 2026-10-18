@@ -155,9 +155,11 @@ describe("the closing", () => {
     expect(screen.getByText("Accesso su invito.")).toBeTruthy();
   });
 
-  it("puts no demo link anywhere on today's landing, and ends with a footer", () => {
-    const { container } = render(<LandingPage />);
-    expect(container.querySelector(`a[href="${ROUTES.demo}"]`)).toBeNull();
+  it("opens the demo from today's landing, in the hero and the closing, and ends with a footer", () => {
+    render(<LandingPage />);
+    const runs = screen.getAllByRole("link", { name: "Guarda una corsa" });
+    expect(runs).toHaveLength(2);
+    for (const link of runs) expect(link.getAttribute("href")).toBe(ROUTES.demo);
     expect(screen.getByRole("contentinfo")).toBeTruthy();
   });
 });
