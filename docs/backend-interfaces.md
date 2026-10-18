@@ -974,7 +974,19 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
     upgrade head` prepares the database for both services, and `tests/test_db.py` keeps the
     models and the migrations together. The web app's Better Auth exempts `/get-session` from
     its per-IP rate limit, because every check comes from the backend's one egress IP; the
-    `VerificationBudget` stays as a second guard.
+    `VerificationBudget` stays as a second guard. In `atlas` mode a get-session user without a
+    non-empty string `id` is a malformed answer (`parse_get_session(require_user_id=True)`:
+    the stale user or 503 `auth_unavailable`), never a plan with a NULL `user_id`. A cached
+    user whose `users` row is gone (the cache keeps a verified user up to 15 minutes) makes the
+    insert violate `fk_plans_user_id_users`: `start_plan` raises `UserGoneError` and POST
+    /plans answers 401 `not_authenticated`; any other integrity error stays a 500.
+    `plans.user_id` keeps ON DELETE CASCADE (a deleted account takes its plans), but nothing
+    deletes a `users` row yet. The future delete-account path must, for each of the user's
+    plans, stop its consumer and delete its Managed Agents session before the row, as
+    `jobs._delete_old_plan` does (session first, then row; a session that cannot be deleted
+    keeps the account for a retry): the cascade removes rows, not sessions. Deleting the plans
+    also removes their `cost_cents` from `monthly_spend_cents()`, so that month's spend drops
+    by what the user spent.
 
 ## 7. Contracts with events.py, the database, config, the web app and the agents
 
