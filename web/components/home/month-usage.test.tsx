@@ -22,6 +22,9 @@ describe("monthUsageWords", () => {
     expect(monthUsageWords({ ...QUOTA, plans_used: 1 }).summary).toBe("Questo mese: 1 piano su 10 · 4,20 $ impegnati su 15,00 $");
     expect(monthUsageWords({ ...QUOTA, plans_used: 10 }).note).toBe("Il prossimo piano dal 1° novembre.");
     expect(monthUsageWords({ ...QUOTA, cents_used: 1500 }).note).not.toBeNull();
+    // The backend's rule: the next plan's own budget must fit, not just a cent left.
+    expect(monthUsageWords({ ...QUOTA, cents_used: 1200, next_plan_cents: 400 }).note).toBe("Il prossimo piano dal 1° novembre.");
+    expect(monthUsageWords({ ...QUOTA, cents_used: 1100, next_plan_cents: 400 }).note).toBeNull();
   });
 });
 

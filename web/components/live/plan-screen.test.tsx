@@ -408,6 +408,20 @@ describe("PlanScreen, other states", () => {
     expect(screen.getByText("limite 2,61 $")).toBeTruthy();
   });
 
+  it("at the cap of 'Continua' offers a new plan instead, from the plan detail's counts", async () => {
+    // Pinned here, at the screen, so moving the panel's props (PR #15 splits PlanScreen) cannot
+    // drop `continues` / `continues_limit` silently.
+    const paused = detail("budget_paused", { cost_cents: 61, continues: 2, continues_limit: 2, updated_at: BUDGET.at(-1)?.ts });
+    const client = fakeClient({ getPlan: vi.fn().mockResolvedValue(paused) });
+    render(<PlanScreen planId={PLAN_ID} client={client} />);
+    await flush();
+    await replay(BUDGET.filter((event) => event.seq <= 34));
+    expect(screen.getByRole("heading", { name: "Budget della sessione raggiunto" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Continua con 2 $ in più" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Crea un nuovo piano" })).toBeTruthy();
+    expect(screen.getByText(/ha già avuto 2 volte i suoi 2 \$ in più/)).toBeTruthy();
+  });
+
   it("says the plan's own new state in the live region when a watcher would otherwise miss it", async () => {
     const paused = detail("budget_paused", { cost_cents: 61, updated_at: BUDGET.at(-1)?.ts });
     const client = fakeClient({ getPlan: vi.fn().mockResolvedValueOnce(detail("running")).mockResolvedValue(paused) });

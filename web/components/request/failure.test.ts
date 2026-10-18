@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { ApiError, MonthlyLimitError, QuotaReachedError, RateLimitedError } from "@/lib/api";
 
-import { describeQuotaStanding, describeSubmitFailure, formatResetDay, quotaReached, waitWords } from "./failure";
+import { describeQuotaLimit, describeQuotaStanding, describeSubmitFailure, formatResetDay, quotaBlocks, quotaReached, waitWords } from "./failure";
 
 describe("describeSubmitFailure", () => {
   it("says the monthly limit with the backend's figures and no 'send it again'", () => {
@@ -96,6 +96,38 @@ describe("the economics' refusals", () => {
       title: "Hai usato il budget di questo mese",
       body: "Questo mese i tuoi piani hanno impegnato 15,00 $ su 15,00 $. Il prossimo si potrà creare dal 1° novembre.",
     });
+  });
+
+  it("judges the cents like the backend: the next step's own budget must fit", () => {
+    const month = { ...quota, plans_used: 3, cents_used: 1200, next_plan_cents: 400, continue_cents: 200 };
+    expect(quotaBlocks(month, "plan")).toBe("cents"); // 1200 + 400 > 1500
+    expect(quotaBlocks({ ...month, cents_used: 1100 }, "plan")).toBeNull(); // 1500: at the limit, admitted
+    expect(quotaBlocks(month, "continue")).toBeNull(); // 1200 + 200 fits
+    expect(quotaBlocks({ ...month, cents_used: 1301 }, "continue")).toBe("cents");
+    expect(quotaBlocks({ ...month, plans_used: 10 }, "continue")).toBeNull(); // a "Continua" is no new plan
+    expect(quotaReached(month)).toBe(true);
+    // The words are true when the month is not used up to the cent: what is left, what is needed.
+    expect(describeQuotaStanding(month)).toEqual({
+      title: "Il budget del mese non basta per un altro piano",
+      body: "Questo mese i tuoi piani hanno impegnato 12,00 $ su 15,00 $: ne restano 3,00 $ e un nuovo piano ne impegna 4,00 $. Il prossimo si potrà creare dal 1° novembre.",
+    });
+    expect(describeQuotaLimit("cents", { ...month, cents_used: 1500 }, "continue")).toEqual({
+      title: "Hai usato il budget di questo mese",
+      body: "Questo mese i tuoi piani hanno impegnato 15,00 $ su 15,00 $. Si potrà continuare dal 1° novembre.",
+    });
+    // The 429 of a start says the same.
+    const refusal = describeSubmitFailure(
+      new QuotaReachedError({ status: 429, code: "quota_cents_reached", message: "x", data: month }),
+    );
+    expect(refusal.title).toBe("Il budget del mese non basta per un altro piano");
+  });
+
+  it("says one plan and one second in the singular", () => {
+    expect(describeQuotaLimit("plans", { ...quota, plans_used: 1, plans_limit: 1 }).body).toBe(
+      "Questo mese hai creato 1 piano su 1. Il prossimo si potrà creare dal 1° novembre.",
+    );
+    expect(waitWords(1)).toBe("1 secondo");
+    expect(waitWords(2)).toBe("2 secondi");
   });
 
   it("writes the reset day in Italian, in Rome", () => {

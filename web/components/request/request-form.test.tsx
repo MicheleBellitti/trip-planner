@@ -351,6 +351,26 @@ describe("RequestForm", () => {
     expect(screen.queryByTestId("month-usage")).toBeNull();
   });
 
+  it("says before the press when the next plan's budget would not fit, as the backend would refuse it", () => {
+    mocks.me.mockReturnValue({
+      isAdmin: false,
+      quota: {
+        plans_used: 3,
+        plans_limit: 10,
+        cents_used: 1200,
+        cents_limit: 1500,
+        resets_at: "2026-11-01T00:00:00+01:00",
+        next_plan_cents: 400,
+        continue_cents: 200,
+      },
+    });
+    render(<RequestForm today={TODAY} initialValues={exampleRequestForm(TODAY)} />);
+
+    const notice = document.getElementById("submit-plan-quota");
+    expect(notice?.textContent).toContain("Il budget del mese non basta per un altro piano");
+    expect(notice?.textContent).toContain("ne restano 3,00 $ e un nuovo piano ne impegna 4,00 $");
+  });
+
   it("offers the demo scenarios in development and sends the chosen one", async () => {
     mocks.createPlan.mockResolvedValue({ id: PLAN_ID });
     render(

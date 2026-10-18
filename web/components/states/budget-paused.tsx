@@ -6,9 +6,10 @@ import { Button, LinkButton } from "@/components/ui/button";
 import { Notice, type NoticeTone } from "@/components/ui/notice";
 import { API_ERROR_MESSAGES, ApiError, MonthlyLimitError, QuotaReachedError } from "@/lib/api";
 import { formatUsd } from "@/lib/format";
+import { useMe } from "@/lib/me";
 import { ROUTES } from "@/lib/routes";
 
-import { describeQuotaRefusal } from "../request/failure";
+import { describeQuotaLimit, describeQuotaRefusal, quotaBlocks } from "../request/failure";
 
 import { StateFact, StatePanel } from "./state-panel";
 
@@ -38,7 +39,7 @@ const STAYS_PAUSED = "Il piano resta in pausa e puoi interromperlo.";
 
 function failureOf(error: unknown): Failure {
   if (error instanceof QuotaReachedError) {
-    const { title, body } = describeQuotaRefusal(error);
+    const { title, body } = describeQuotaRefusal(error, "continue");
     return { title, message: `${body} ${STAYS_PAUSED}`, tone: "warning", final: true };
   }
   if (error instanceof ApiError && error.kind === "continue_limit") {
@@ -65,14 +66,23 @@ function failureOf(error: unknown): Failure {
  * `budget_paused`: the session reached its budget and the agents stopped where they were. Says how
  * much was spent (less than the budget: the next step did not fit in it) and offers "Continua con
  * 2 $ in più", the one primary action of the view. At the cap of "Continua" the plan can only be
- * interrupted (the header's control) or replaced: the panel offers a new plan instead. A 429 means
- * the month's limit is reached: the button stays off and the plan can only be interrupted.
+ * interrupted (the header's control) or replaced: the panel offers a new plan instead. When GET
+ * /me's month says the 2 $ would not fit (the backend's rule, `quotaBlocks(quota, "continue")`) the
+ * panel says so before the press and the button stays off; a 429 after the press says the same.
  */
 export function BudgetPausedPanel({ costCents, budgetCents, continues = 0, continuesLimit = 0, onContinue }: BudgetPausedPanelProps) {
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
   /** The plan had every "Continua" it may have: no button, the sentence says so. */
   const capped = continuesLimit > 0 && continues >= continuesLimit;
+  const me = useMe();
+  /** The month would refuse the 2 $ (null for the users exempt from the quota, or while unknown). */
+  const standing =
+    !capped && me?.quota && quotaBlocks(me.quota, "continue") !== null
+      ? describeQuotaLimit("cents", me.quota, "continue")
+      : null;
+  const notice: Failure | null =
+    failure ?? (standing ? { title: standing.title, message: `${standing.body} ${STAYS_PAUSED}`, tone: "warning", final: true } : null);
 
   async function resume() {
     setBusy(true);
@@ -104,9 +114,9 @@ export function BudgetPausedPanel({ costCents, budgetCents, continues = 0, conti
       title="Budget della sessione raggiunto"
       headingId="state-budget"
       footer={
-        failure ? (
-          <Notice tone={failure.tone} role="alert" title={failure.title}>
-            {failure.message}
+        notice ? (
+          <Notice tone={notice.tone} role={failure ? "alert" : undefined} title={notice.title}>
+            {notice.message}
           </Notice>
         ) : null
       }
@@ -120,7 +130,7 @@ export function BudgetPausedPanel({ costCents, budgetCents, continues = 0, conti
             variant="primary"
             icon="play"
             busy={busy}
-            disabled={failure?.final}
+            disabled={notice?.final}
             onClick={() => void resume()}
             // 44 px on the phone, 40 px from 640 px (DESIGN.md, Buttons).
             className="min-h-11 sm:min-h-10"

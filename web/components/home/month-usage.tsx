@@ -17,11 +17,11 @@ import { formatUsd } from "@/lib/format";
 import { useMe, useRememberedAdmin } from "@/lib/me";
 import type { Quota } from "@/lib/schemas/api";
 
-import { formatResetDay, quotaReached } from "../request/failure";
+import { formatResetDay, plansWord, quotaReached } from "../request/failure";
 
 /** The line's words, for the component and its tests. */
 export function monthUsageWords(quota: Quota): { summary: string; note: string | null } {
-  const plans = `${quota.plans_used} ${quota.plans_used === 1 ? "piano" : "piani"} su ${quota.plans_limit}`;
+  const plans = `${plansWord(quota.plans_used)} su ${quota.plans_limit}`;
   const summary = `Questo mese: ${plans} · ${formatUsd(quota.cents_used)} impegnati su ${formatUsd(quota.cents_limit)}`;
   const note = quotaReached(quota) ? `Il prossimo piano dal ${formatResetDay(quota.resets_at)}.` : null;
   return { summary, note };

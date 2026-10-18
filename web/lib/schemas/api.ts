@@ -470,6 +470,11 @@ export const QuotaSchema = z.object({
   cents_limit: z.int().check(z.gte(0)),
   /** The first instant of the next month (Europe/Rome). */
   resets_at: InstantSchema,
+  /** What a new plan reserves (the session budget): a start is refused when `cents_used +
+   * next_plan_cents > cents_limit`. Absent from a backend that predates it. */
+  next_plan_cents: z.optional(z.int().check(z.gte(0))),
+  /** What a "Continua" adds (200): refused when `cents_used + continue_cents > cents_limit`. */
+  continue_cents: z.optional(z.int().check(z.gte(0))),
 });
 export type Quota = z.output<typeof QuotaSchema>;
 

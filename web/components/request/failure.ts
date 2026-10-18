@@ -40,33 +40,80 @@ const CODE_TITLES: Readonly<Record<string, string>> = {
   bad_origin: "Richiesta rifiutata",
 };
 
+/** What the quota is asked for: a new plan (POST /plans) or a "Continua" (+2 $ on a paused plan). */
+export type QuotaAction = "plan" | "continue";
+
+/** The cents `action` needs under the quota (GET /me `next_plan_cents`, `continue_cents`); null
+ * from a backend that predates them. */
+function centsNeeded(quota: Quota, action: QuotaAction): number | null {
+  const needed = action === "plan" ? quota.next_plan_cents : quota.continue_cents;
+  return needed ?? null;
+}
+
+/**
+ * Which limit would refuse `action` now, by the backend's own rule (app/quota.py): a new plan needs
+ * a plan left (`plans_used < plans_limit`, checked first) and its budget to fit (`cents_used +
+ * next_plan_cents <= cents_limit`); a "Continua" only needs its 2 $ to fit. Null when it would pass.
+ * Without the needed cents (an older backend) only a month used up to the cent counts as reached.
+ */
+export function quotaBlocks(quota: Quota, action: QuotaAction = "plan"): "plans" | "cents" | null {
+  if (action === "plan" && quota.plans_used >= quota.plans_limit) return "plans";
+  const needed = centsNeeded(quota, action);
+  const over = needed === null ? quota.cents_used >= quota.cents_limit : quota.cents_used + needed > quota.cents_limit;
+  return over ? "cents" : null;
+}
+
 /** A limit of the month is reached: the next plan waits for the month to turn. */
 export function quotaReached(quota: Quota): boolean {
-  return quota.plans_used >= quota.plans_limit || quota.cents_used >= quota.cents_limit;
+  return quotaBlocks(quota, "plan") !== null;
 }
 
-/** A reached limit in the form's words: which one, the figures, the day the month turns. */
-export function describeQuotaLimit(limit: "plans" | "cents", quota: Quota): { title: string; body: string } {
-  const title = limit === "plans" ? "Hai usato i piani di questo mese" : "Hai usato il budget di questo mese";
-  const figures =
-    limit === "plans"
-      ? `Questo mese hai creato ${quota.plans_used} piani su ${quota.plans_limit}.`
-      : `Questo mese i tuoi piani hanno impegnato ${formatUsd(quota.cents_used)} su ${formatUsd(quota.cents_limit)}.`;
-  return { title, body: `${figures} Il prossimo si potrà creare dal ${formatResetDay(quota.resets_at)}.` };
+/** "1 piano", "3 piani". */
+export function plansWord(count: number): string {
+  return `${count} ${count === 1 ? "piano" : "piani"}`;
 }
 
-/** Said before the user fills the form: the month GET /me reported is used up (null while it is
- * not). The plans come first, like the backend's own check. */
-export function describeQuotaStanding(quota: Quota): { title: string; body: string } | null {
-  if (quota.plans_used >= quota.plans_limit) return describeQuotaLimit("plans", quota);
-  if (quota.cents_used >= quota.cents_limit) return describeQuotaLimit("cents", quota);
-  return null;
+/** A reached limit in the form's words (or the paused plan's, for a "Continua"): which one, the
+ * figures, what the next step needs when the month is not used up to the cent, the day it turns. */
+export function describeQuotaLimit(
+  limit: "plans" | "cents",
+  quota: Quota,
+  action: QuotaAction = "plan",
+): { title: string; body: string } {
+  const reset = formatResetDay(quota.resets_at);
+  const after = action === "plan" ? `Il prossimo si potrà creare dal ${reset}.` : `Si potrà continuare dal ${reset}.`;
+  if (limit === "plans") {
+    return {
+      title: "Hai usato i piani di questo mese",
+      body: `Questo mese hai creato ${plansWord(quota.plans_used)} su ${quota.plans_limit}. ${after}`,
+    };
+  }
+  const committed = `Questo mese i tuoi piani hanno impegnato ${formatUsd(quota.cents_used)} su ${formatUsd(quota.cents_limit)}`;
+  const needed = centsNeeded(quota, action);
+  if (quota.cents_used >= quota.cents_limit || needed === null) {
+    return { title: "Hai usato il budget di questo mese", body: `${committed}. ${after}` };
+  }
+  // Not used up to the cent: the next step's own budget is what does not fit.
+  const left = formatUsd(Math.max(0, quota.cents_limit - quota.cents_used));
+  const what = action === "plan" ? `un nuovo piano ne impegna ${formatUsd(needed)}` : `continuare ne impegna ${formatUsd(needed)}`;
+  return {
+    title: action === "plan" ? "Il budget del mese non basta per un altro piano" : "Il budget del mese non basta per continuare",
+    body: `${committed}: ne restano ${left} e ${what}. ${after}`,
+  };
 }
 
-/** The quota's refusal in the form's own words: which limit, the figures, when it turns. */
-export function describeQuotaRefusal(error: QuotaReachedError): SubmitFailure {
+/** Said before the user fills the form: GET /me's month would refuse a new plan (null while it
+ * would not). The plans come first, like the backend's own check. */
+export function describeQuotaStanding(quota: Quota, action: QuotaAction = "plan"): { title: string; body: string } | null {
+  const limit = quotaBlocks(quota, action);
+  return limit === null ? null : describeQuotaLimit(limit, quota, action);
+}
+
+/** The quota's refusal in the form's own words (or the paused plan's): which limit, the figures,
+ * when it turns. */
+export function describeQuotaRefusal(error: QuotaReachedError, action: QuotaAction = "plan"): SubmitFailure {
   const title = error.limit === "plans" ? "Hai usato i piani di questo mese" : "Hai usato il budget di questo mese";
-  const described = error.quota ? describeQuotaLimit(error.limit, error.quota) : { title, body: error.message };
+  const described = error.quota ? describeQuotaLimit(error.limit, error.quota, action) : { title, body: error.message };
   return { ...described, tone: "warning", quota: true };
 }
 
@@ -110,9 +157,9 @@ export function describeSubmitFailure(error: unknown): SubmitFailure {
   return { title: "Il piano non è partito", body: `Qualcosa è andato storto. Riprova. ${KEPT}`, tone: "error", quota: false };
 }
 
-/** "30 secondi", "un minuto", "10 minuti": a Retry-After in words. */
+/** "1 secondo", "30 secondi", "un minuto", "10 minuti": a Retry-After in words. */
 export function waitWords(seconds: number): string {
-  if (seconds < 60) return `${seconds} secondi`;
+  if (seconds < 60) return seconds === 1 ? "1 secondo" : `${seconds} secondi`;
   const minutes = Math.ceil(seconds / 60);
   return minutes === 1 ? "un minuto" : `${minutes} minuti`;
 }
