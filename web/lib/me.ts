@@ -4,14 +4,16 @@
  * Who the signed-in user is to the backend (GET /me): whether they manage the planner
  * (`is_admin`, the backend's ADMIN_EMAILS: the header's "Valutazioni" and "Inviti" stations, which
  * only admins see) and their month against the per-user quota (`quota`: the usage line on the
- * plans page and under the request form, null for the users exempt from it). One request per page
- * load, shared by every reader on the page; the admin flag is kept in sessionStorage so the next
- * page of the same tab draws the stations without waiting (a per-viewer convenience: a missing or
- * blocked storage only costs the wait). The quota is never stored: it changes with every plan. A
- * 401 is "not an admin, no quota" and never redirects from here: the page's own calls do that.
+ * plans page and under the request form, null for the users exempt from it). Every page asks again
+ * when it mounts, so the figures follow the plan just created or continued; the readers of one page
+ * share the request in flight, and the last answer is drawn at once while the fresh one is on its
+ * way. The admin flag is also kept in sessionStorage so the next page of the same tab draws the
+ * stations without waiting (a per-viewer convenience: a missing or blocked storage only costs the
+ * wait). The quota is never stored: it changes with every plan. A 401 is "not an admin, no quota"
+ * and never redirects from here: the page's own calls do that.
  */
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 import { ApiError, createApiClient } from "./api";
 import { ADMIN_ONLY_CODE, type Me, type Quota } from "./schemas/api";
@@ -31,7 +33,26 @@ export interface Identity {
 
 const NOBODY: Identity = { isAdmin: false, quota: null };
 
+/** The last answer of this page load, drawn at once by the next reader while it asks again, and
+ * pushed to every mounted reader when a fresh one lands (a small external store: the server render
+ * and the hydration read null, so a chunk that hydrates after the header's request answered still
+ * matches the server's HTML). */
+let known: Identity | null = null;
+const listeners = new Set<() => void>();
+/** The request in flight, shared by the readers that mount together. */
 let pending: Promise<Identity> | null = null;
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function publish(identity: Identity | null): void {
+  known = identity;
+  for (const listener of listeners) listener();
+}
 
 function remembered(): boolean | null {
   try {
@@ -50,9 +71,11 @@ function remember(isAdmin: boolean): void {
   }
 }
 
-/** The answer of GET /me, asked once per page load; any failure means a plain user. */
+/** The answer of GET /me: a fresh request, unless one is already on its way; any failure means a
+ * plain user. */
 export function fetchMe(): Promise<Identity> {
-  pending ??= createApiClient({ onUnauthorized: () => undefined })
+  if (pending) return pending;
+  const request: Promise<Identity> = createApiClient({ onUnauthorized: () => undefined })
     .me()
     .then(
       (me: Me): Identity => ({ isAdmin: me.is_admin, quota: me.quota }),
@@ -60,9 +83,14 @@ export function fetchMe(): Promise<Identity> {
     )
     .then((identity) => {
       remember(identity.isAdmin);
+      publish(identity);
       return identity;
+    })
+    .finally(() => {
+      if (pending === request) pending = null;
     });
-  return pending;
+  pending = request;
+  return request;
 }
 
 /** The admin flag alone, from the same shared request. */
@@ -70,36 +98,38 @@ export function fetchIsAdmin(): Promise<boolean> {
   return fetchMe().then((identity) => identity.isAdmin);
 }
 
-/** Tests: forget the shared request. */
+/** Tests: forget the request in flight and the last answer. */
 export function resetMeCache(): void {
   pending = null;
+  publish(null);
 }
 
 function subscribeToNothing(): () => void {
   return () => undefined;
 }
 
-/** null until the answer arrives, then it. Pages that need the quota read this; the header reads
- * `useIsAdmin`, which also knows what the tab remembered. */
+/** The last answer while the fresh one is on its way (null on the first page of the load), then
+ * the fresh one. Pages that need the quota read this; the header reads `useIsAdmin`, which also
+ * knows what the tab remembered. */
 export function useMe(): Identity | null {
-  const [identity, setIdentity] = useState<Identity | null>(null);
+  const identity = useSyncExternalStore(subscribe, () => known, () => null);
   useEffect(() => {
-    let live = true;
-    void fetchMe().then((value) => {
-      if (live) setIdentity(value);
-    });
-    return () => {
-      live = false;
-    };
+    void fetchMe();
   }, []);
   return identity;
 }
 
-/** null until known, then the answer: what this tab remembered from an earlier page (read as an
- * external store, so the server render and the hydration see null and the client's first paint
- * after it sees the stored value), replaced by this page's own answer once it arrives. */
+/** What this tab remembered of the admin flag from an earlier page, read as an external store
+ * (the server render and the hydration see null, the client's first paint after it the stored
+ * value); null when nothing is remembered. */
+export function useRememberedAdmin(): boolean | null {
+  return useSyncExternalStore(subscribeToNothing, remembered, () => null);
+}
+
+/** null until known, then the answer: what this tab remembered, replaced by this page's own
+ * answer once it arrives. */
 export function useIsAdmin(): boolean | null {
-  const stored = useSyncExternalStore(subscribeToNothing, remembered, () => null);
+  const stored = useRememberedAdmin();
   const fetched = useMe();
   return fetched === null ? stored : fetched.isAdmin;
 }

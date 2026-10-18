@@ -24,6 +24,7 @@ import { useIsDesktop } from "@/components/live/hooks";
 import { Notice } from "@/components/ui/notice";
 import { MonthUsage } from "@/components/home/month-usage";
 import { api, RequestValidationError, UnauthorizedError } from "@/lib/api";
+import { useMe } from "@/lib/me";
 import {
   childAgePath,
   fieldConstraints,
@@ -36,7 +37,7 @@ import {
 import { applyRemembered, readRemembered, rememberRequest } from "@/lib/remembered-request";
 
 import { advanceOnEnter } from "./advance-on-enter";
-import { describeSubmitFailure, type SubmitFailure } from "./failure";
+import { describeQuotaStanding, describeSubmitFailure, type SubmitFailure } from "./failure";
 import {
   ADULTS_ID,
   CHILDREN_ID,
@@ -60,6 +61,9 @@ const DEFAULT_NIGHTS = "7";
 
 const SUBMIT_ID = "submit-plan";
 const ESTIMATE_ID = "submit-plan-estimate";
+/** The quota's notice before the press, and the refusal's after it: what the button is described by. */
+const STANDING_ID = "submit-plan-quota";
+const FAILURE_ID = "submit-plan-failure";
 const SUMMARY_ID = "request-errors";
 const AGE_OPTIONS = childAgeOptions();
 
@@ -105,6 +109,7 @@ export function RequestForm({ today, initialValues, restoreLast = false, demoSce
   const [submitting, setSubmitting] = useState(false);
   const [demoScenario, setDemoScenario] = useState("");
   const desktop = useIsDesktop();
+  const me = useMe();
   const destinationMode = useId();
   const dateMode = useId();
 
@@ -179,6 +184,18 @@ export function RequestForm({ today, initialValues, restoreLast = false, demoSce
       document.getElementById(SUBMIT_ID)?.focus();
     }
   }
+
+  // GET /me already says the month is used up: said before the fields, not after the press. The
+  // form stays editable (the backend has the last word); once a refusal answers, it says the same.
+  const standing = me?.quota ? describeQuotaStanding(me.quota) : null;
+  const quotaNotice =
+    standing && !failure ? (
+      <Notice tone="warning" id={STANDING_ID} title={standing.title}>
+        {standing.body}
+      </Notice>
+    ) : null;
+  // One note at a time around the button: the estimate yields to the quota's words or a refusal.
+  const noted = quotaNotice !== null || failure !== null;
 
   const errorCount = placed.length + unplaced.length;
   // Three or more problems: a count and a link to each field. On the phone it sits at the top,
@@ -553,6 +570,7 @@ export function RequestForm({ today, initialValues, restoreLast = false, demoSce
           screen. */}
       <div className="grid gap-8 lg:grid-cols-2 lg:gap-x-12 lg:gap-y-6">
         {desktop ? null : summary}
+        {desktop ? null : quotaNotice}
         <div className="contents lg:grid lg:content-start lg:gap-6">
           {tripSection}
           {whenSection}
@@ -569,8 +587,9 @@ export function RequestForm({ today, initialValues, restoreLast = false, demoSce
 
         {desktop ? summary : null}
 
+        {desktop ? quotaNotice : null}
         {failure ? (
-          <Notice tone="error" role="alert" title={failure.title}>
+          <Notice tone={failure.tone} id={FAILURE_ID} role="alert" title={failure.title}>
             {failure.body}
           </Notice>
         ) : null}
@@ -581,21 +600,26 @@ export function RequestForm({ today, initialValues, restoreLast = false, demoSce
             type="submit"
             variant="primary"
             busy={submitting}
-            aria-describedby={ESTIMATE_ID}
+            aria-describedby={joinIds(!noted && ESTIMATE_ID, quotaNotice !== null && STANDING_ID, failure !== null && FAILURE_ID)}
             // 44 px on the phone, like the fields above it; 40 px from 640 px (DESIGN.md, Buttons).
             className="min-h-11 w-full sm:min-h-10 sm:w-auto lg:w-full"
           >
             {submitting ? "Avvio il piano…" : "Pianifica il viaggio"}
           </Button>
-          <p
-            id={ESTIMATE_ID}
-            className="flex items-center gap-1.5 text-meta text-ink-2 sm:justify-self-start lg:justify-self-center"
-          >
-            <Icon name="wallet" size={15} />
-            {COST_ESTIMATE}
-          </p>
-          {/* Where the month stands against the quota (nothing for the users exempt from it). */}
-          <MonthUsage className="text-meta sm:col-span-full lg:text-center" />
+          {noted ? null : (
+            <p
+              id={ESTIMATE_ID}
+              className="flex items-center gap-1.5 text-meta text-ink-2 sm:justify-self-start lg:justify-self-center"
+            >
+              <Icon name="wallet" size={15} />
+              {COST_ESTIMATE}
+            </p>
+          )}
+          {/* Where the month stands against the quota (nothing for the users exempt from it); when
+              the month is used up, the quota's notice carries the figures instead. */}
+          {quotaNotice !== null || failure?.quota ? null : (
+            <MonthUsage size="meta" withNote={false} className="sm:justify-self-start lg:justify-self-center" />
+          )}
         </div>
       </div>
     </form>

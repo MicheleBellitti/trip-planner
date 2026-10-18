@@ -486,7 +486,7 @@
       "ts": "2026-10-12T10:00:24.051000Z",
       "agent": "lodging",
       "kind": "status",
-      "title": "Fermo: budget della sessione esaurito",
+      "title": "Fermo: budget della sessione raggiunto",
       "detail": {
         "event_type": "session.thread_status_idle",
         "stop_reason": "budget_reached",
@@ -519,7 +519,7 @@
       "ts": "2026-10-12T10:00:24.254000Z",
       "agent": "coordinator",
       "kind": "status",
-      "title": "Fermo: budget della sessione esaurito",
+      "title": "Fermo: budget della sessione raggiunto",
       "detail": {
         "event_type": "session.status_idle",
         "stop_reason": "budget_reached",

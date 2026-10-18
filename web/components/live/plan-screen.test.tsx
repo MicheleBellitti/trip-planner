@@ -400,7 +400,7 @@ describe("PlanScreen, other states", () => {
     render(<PlanScreen planId={PLAN_ID} client={client} />);
     await flush();
     await replay(BUDGET.filter((event) => event.seq <= 34));
-    expect(screen.getByText(/La sessione ha speso 0,61 \$ su un budget di 0,60 \$/)).toBeTruthy();
+    expect(screen.getByText(/La sessione ha speso 0,61 \$: il budget di 0,60 \$ è finito/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Continua con 2 $ in più" }));
     await flush();
     expect(client.continuePlan).toHaveBeenCalledWith(PLAN_ID);
@@ -438,7 +438,7 @@ describe("PlanScreen, other states", () => {
     await flush();
     const alert = screen.getByRole("alert");
     expect(alert.textContent).toContain("Limite mensile raggiunto");
-    expect(alert.textContent).toContain("Questo mese sono già stati spesi 98,00 $ su 100,00 $");
+    expect(alert.textContent).toContain("Questo mese il planner ha già impegnato 98,00 $ su 100,00 $");
     expect((button as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByRole("button", { name: "Interrompi" })).toBeTruthy();
   });

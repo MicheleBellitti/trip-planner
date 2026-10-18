@@ -703,7 +703,7 @@ async def test_continue_at_its_cap_is_409(
     body = detail(response)
     assert body["code"] == "continue_limit_reached"
     assert body["data"] == {"continues": 2, "limit": 2}
-    assert "2 proroghe" in body["message"]
+    assert "(2 su 2)" in body["message"]
 
 
 async def test_continue_over_the_users_quota_is_429(

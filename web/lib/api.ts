@@ -108,7 +108,7 @@ export const API_ERROR_MESSAGES: Record<ApiErrorKind, string> = {
   quota_reached: "Questo mese hai usato tutti i piani a tua disposizione: il prossimo si potrà creare il mese prossimo.",
   rate_limited: "Troppe richieste in poco tempo: aspetta un momento e riprova.",
   planner_busy: "Il planner è al completo in questo momento: riprova tra qualche minuto. Nessun costo è stato addebitato.",
-  continue_limit: "Questo piano ha già usato tutte le sue proroghe: il budget non si può aumentare ancora.",
+  continue_limit: "Questo piano ha già avuto tutti gli aumenti di budget previsti: il budget non si può aumentare ancora.",
   agents_unavailable: "Gli agenti non rispondono: il piano non è partito. Riprova tra qualche minuto.",
   planner_unavailable:
     "Il planner non è pronto in questo momento: nessun costo è stato addebitato. Riprova più tardi.",

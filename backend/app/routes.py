@@ -185,8 +185,9 @@ PLAN_ERROR_MESSAGES: dict[PlanErrorCode, str] = {
         "è stato addebitato."
     ),
     PlanErrorCode.CONTINUE_LIMIT_REACHED: (
-        "Questo piano ha già usato le sue {limit} proroghe: il budget non si può aumentare "
-        "ancora. Puoi interromperlo, o creare un nuovo piano."
+        "Questo piano ha già avuto tutti gli aumenti di budget previsti ({continues} su "
+        "{limit}): il budget non si può aumentare ancora. Puoi interromperlo, o creare un "
+        "nuovo piano."
     ),
     PlanErrorCode.PLANNER_UNAVAILABLE: (
         "Il planner non è pronto in questo momento: nessun costo è stato addebitato. Riprova "

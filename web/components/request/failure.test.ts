@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { ApiError, MonthlyLimitError, QuotaReachedError, RateLimitedError } from "@/lib/api";
 
-import { describeSubmitFailure, formatResetDay, waitWords } from "./failure";
+import { describeQuotaStanding, describeSubmitFailure, formatResetDay, quotaReached, waitWords } from "./failure";
 
 describe("describeSubmitFailure", () => {
   it("says the monthly limit with the backend's figures and no 'send it again'", () => {
@@ -10,7 +10,7 @@ describe("describeSubmitFailure", () => {
     const failure = describeSubmitFailure(
       new MonthlyLimitError({ status: 429, code: "monthly_limit_reached", message, data: { spent_cents: 9840, limit_cents: 10000 } }),
     );
-    expect(failure).toEqual({ title: "Limite di spesa del mese raggiunto", body: message });
+    expect(failure).toEqual({ title: "Limite di spesa del mese raggiunto", body: message, tone: "warning", quota: false });
   });
 
   it("says the planner is not ready (503) and that the request is kept", () => {
@@ -20,6 +20,7 @@ describe("describeSubmitFailure", () => {
     );
     expect(failure.title).toBe("Il planner non è pronto");
     expect(failure.body).toBe(`${message} La richiesta resta qui, pronta da inviare di nuovo.`);
+    expect(failure.tone).toBe("error");
   });
 
   it("tells a demo scenario sent to a backend without DEMO_MODE what to change", () => {
@@ -55,6 +56,8 @@ describe("the economics' refusals", () => {
     expect(plans).toEqual({
       title: "Hai usato i piani di questo mese",
       body: "Questo mese hai creato 10 piani su 10. Il prossimo si potrà creare dal 1° novembre.",
+      tone: "warning",
+      quota: true,
     });
     const cents = describeSubmitFailure(new QuotaReachedError({ status: 429, code: "quota_cents_reached", message: "x", data: quota }));
     expect(cents.title).toBe("Hai usato il budget di questo mese");
@@ -66,18 +69,33 @@ describe("the economics' refusals", () => {
 
   it("says how long to wait after a burst, and keeps the request", () => {
     const failure = describeSubmitFailure(new RateLimitedError({ status: 429, code: "too_many_requests", message: "x", data: { retry_after_seconds: 90 } }, 90));
-    expect(failure.title).toBe("Troppe richieste");
+    expect(failure.title).toBe("Un momento");
+    expect(failure.tone).toBe("warning");
     expect(failure.body).toBe("Hai inviato molte richieste in poco tempo: aspetta 2 minuti e riprova. La richiesta resta qui, pronta da inviare di nuovo.");
     expect(waitWords(30)).toBe("30 secondi");
     expect(waitWords(60)).toBe("un minuto");
     expect(waitWords(600)).toBe("10 minuti");
   });
 
-  it("says the planner is full (503) with the backend's sentence", () => {
+  it("says the planner is full (503) in its own words, which do not repeat the title, and not in red", () => {
     const message = "Il planner è al completo in questo momento: riprova tra qualche minuto. Nessun costo è stato addebitato.";
     const failure = describeSubmitFailure(new ApiError({ kind: "planner_busy", status: 503, code: "planner_busy", message }));
     expect(failure.title).toBe("Il planner è al completo");
-    expect(failure.body).toContain(message);
+    expect(failure.body).toBe(
+      "Tutti i posti sono occupati in questo momento: riprova tra qualche minuto. Nessun costo è stato addebitato. La richiesta resta qui, pronta da inviare di nuovo.",
+    );
+    expect(failure.tone).toBe("warning");
+  });
+
+  it("says the month is used up before the press, the plans first, like the backend", () => {
+    expect(quotaReached({ ...quota, plans_used: 3 })).toBe(false);
+    expect(quotaReached(quota)).toBe(true);
+    expect(describeQuotaStanding({ ...quota, plans_used: 3 })).toBeNull();
+    expect(describeQuotaStanding(quota)?.title).toBe("Hai usato i piani di questo mese");
+    expect(describeQuotaStanding({ ...quota, plans_used: 3, cents_used: 1500 })).toEqual({
+      title: "Hai usato il budget di questo mese",
+      body: "Questo mese i tuoi piani hanno impegnato 15,00 $ su 15,00 $. Il prossimo si potrà creare dal 1° novembre.",
+    });
   });
 
   it("writes the reset day in Italian, in Rome", () => {
