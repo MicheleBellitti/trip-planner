@@ -102,6 +102,13 @@ describe("design invariants", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("says \"pagina non trovata\" for a dead link, never another phrase for it", () => {
+    const offenders = [...componentFiles, ...sources(path.join(webDir, "app"))]
+      .filter((file) => /non esiste più|non funziona più|non funzionano più|senza link/i.test(readFileSync(file, "utf8")))
+      .map((file) => path.relative(webDir, file));
+    expect(offenders).toEqual([]);
+  });
+
   it("calls the eval history \"Collaudi\" on screen, never \"Valutazioni\"", () => {
     const offenders = [...sources(path.join(webDir, "components")), ...sources(path.join(webDir, "app"))]
       .filter((file) => /valutazion/i.test(readFileSync(file, "utf8")))

@@ -115,7 +115,7 @@ function ActionSide({
   sourceName: string | null;
 }) {
   if (action.kind === "button") {
-    return (
+    const button = (
       <LinkButton
         href={action.href}
         external
@@ -126,16 +126,36 @@ function ActionSide({
         {alternative ? `Vedi su ${action.site}` : `Prenota su ${action.site}`}
       </LinkButton>
     );
+    if (!action.fallback) return button;
+    // The link was dead: the button goes to the site's home, so the search starts over.
+    return (
+      <div className="min-w-0 flex-1">
+        {button}
+        <p className="mt-1.5 text-micro text-ink-2">{`Porta alla home di ${action.site}: la ricerca va rifatta.`}</p>
+      </div>
+    );
   }
   if (action.kind === "missing") {
+    const hasWay = source.kind === "link" || source.kind === "homepage" || Boolean(vendor) || Boolean(phone);
     return (
       <div className="min-w-0 text-meta text-ink-2" data-link-text="">
-        <WarningTitle>Pagina non trovata</WarningTitle>
-        <p>La pagina non esiste più, quindi il link resta testo.</p>
-        <p className="mt-1 line-clamp-3 text-micro select-all [overflow-wrap:anywhere]">{action.text}</p>
-        {sourceNameText ? <p className="mt-1">{`Il prezzo è stato letto su ${sourceNameText}: cerca l'offerta lì.`}</p> : null}
+        <WarningTitle>Pagina di prenotazione non trovata</WarningTitle>
+        <p>Il link del piano non apre nessuna pagina.</p>
+        {source.kind === "link" && sourceNameText ? (
+          <p className="mt-1">
+            <QuietExternalLink href={source.href}>{`Cerca l'offerta su ${sourceNameText}`}</QuietExternalLink>
+          </p>
+        ) : source.kind === "homepage" ? (
+          <p className="mt-1">
+            <QuietExternalLink href={source.href}>{`Cerca l'offerta sul sito di ${source.host}`}</QuietExternalLink>
+          </p>
+        ) : null}
         {vendor ? <p>{`Prenota direttamente con ${vendor}.`}</p> : null}
         <PhoneLine phone={phone} />
+        {hasWay ? null : <p className="mt-1">Cerca il servizio sul sito del fornitore.</p>}
+        <p className="mt-1.5 line-clamp-3 text-micro [overflow-wrap:anywhere]">
+          Indirizzo originale: <span className="select-all">{action.text}</span>
+        </p>
       </div>
     );
   }

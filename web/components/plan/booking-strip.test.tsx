@@ -111,18 +111,30 @@ describe("BookingStrip", () => {
     expect(rowOf("Aerobus").querySelector("[data-due-soon]")).toBeNull();
   });
 
-  it("marks 'senza link' on the booking with a dead link only, never in amber", () => {
+  it("marks a dead booking page on its row only: glyph and words, after the deadline words, never amber", () => {
     const bookings = happyBookings();
-    const deadline: BookingDeadline = { kind: "date", at: new Date(NOW + 30 * HOUR).toISOString() };
+    const soon: BookingDeadline = { kind: "date", at: new Date(NOW + 30 * HOUR).toISOString() };
+    const later: BookingDeadline = { kind: "date", at: new Date(NOW + 10 * 24 * HOUR).toISOString() };
     const { container } = strip(
-      bookings.slice(0, 3).map((booking, index) => ({ index, booking, deadline, noLink: index === 1 })),
+      bookings.slice(0, 3).map((booking, index) => ({ index, booking, deadline: index === 1 ? soon : later, noLink: index === 1 || index === 2 })),
     );
-    expect(within(rowOf(bookings[1]!.title)).getByText("senza link")).toBeTruthy();
-    expect(within(rowOf(bookings[0]!.title)).queryByText("senza link")).toBeNull();
-    expect(within(rowOf(bookings[2]!.title)).queryByText("senza link")).toBeNull();
-    const label = screen.getByText("senza link");
-    expect(label.className).not.toMatch(/amber|due-soon|bg-/);
-    expect(label.closest("[data-due-soon]")).toBeNull();
-    expect(container.querySelectorAll("[data-due-soon]").length).toBeGreaterThanOrEqual(0);
+    const LABEL = "pagina di prenotazione non trovata";
+    const dead = rowOf(bookings[1]!.title);
+    // Joined after the deadline words with ", ".
+    const line = within(dead).getByText(/In scadenza · tra un giorno/);
+    expect(line.textContent?.trim()).toBe(`In scadenza · tra un giorno, ${LABEL}`);
+    expect(line.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+    // Alone when there are no deadline words.
+    const alone = within(rowOf(bookings[2]!.title)).getByText(LABEL);
+    expect(alone.textContent?.trim()).toBe(LABEL);
+    expect(alone.querySelector("svg")).toBeTruthy();
+    // Nothing on a booking without a dead link.
+    expect(within(rowOf(bookings[0]!.title)).queryByText(new RegExp(LABEL))).toBeNull();
+    for (const label of [line, alone]) {
+      expect(label.closest(".text-ink-2")).toBeTruthy();
+      expect(label.className).not.toMatch(/amber|due-soon|bg-/);
+      expect(label.closest("[data-due-soon]")).toBeNull();
+    }
+    expect(container.textContent).not.toMatch(/senza link/);
   });
 });

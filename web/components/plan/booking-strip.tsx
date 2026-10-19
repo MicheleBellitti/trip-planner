@@ -2,6 +2,7 @@
 
 import { AgentRoundel } from "@/components/ui/agent";
 import { DatePair } from "@/components/ui/date-pair";
+import { Icon } from "@/components/ui/icon";
 import { dueDistance, isDueSoon } from "@/components/ui/due-soon";
 import { HOME_TIMEZONE } from "@/lib/format";
 import { usePlanNow } from "./plan-now";
@@ -71,7 +72,6 @@ export function BookingStrip({ items, anchor, headingId, timeZone }: BookingStri
                   <span className="block text-small font-medium underline decoration-rule-strong underline-offset-[0.2em] [overflow-wrap:anywhere] group-hover/row:decoration-ink">
                     {item.booking.title}
                   </span>
-                  {item.noLink ? <span className="block text-micro text-ink-2">senza link</span> : null}
                   <DatePair
                     variant="compact"
                     deadline={item.deadline}
@@ -82,9 +82,16 @@ export function BookingStrip({ items, anchor, headingId, timeZone }: BookingStri
                     now={now}
                     className="mt-1"
                   />
-                  {distance ? (
+                  {distance || item.noLink ? (
                     <span className="mt-0.5 block text-micro text-ink-2">
-                      {distance === "scadenza passata" ? "Scadenza passata" : `In scadenza · ${distance}`}
+                      {distance ? (distance === "scadenza passata" ? "Scadenza passata" : `In scadenza · ${distance}`) : null}
+                      {distance && item.noLink ? ", " : null}
+                      {item.noLink ? (
+                        <span className="inline-flex items-center gap-1 align-middle">
+                          <Icon name="warning" size={13} />
+                          pagina di prenotazione non trovata
+                        </span>
+                      ) : null}
                     </span>
                   ) : null}
                 </div>

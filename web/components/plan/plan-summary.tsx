@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 
 import { cx } from "@/components/ui/cx";
 import { Notice } from "@/components/ui/notice";
@@ -54,9 +54,9 @@ interface PlanSummaryProps {
   /** From 1080 px only: what the right column adds under the strip (the TripTracker hand-off). */
   aside?: ReactNode;
   headingId: string;
-  /** The titles of the bookings whose link is dead with no button to send the reader to: the
-   * notice names them, and their rows hold the address as text. */
-  deadLinkTitles?: readonly string[];
+  /** The bookings whose link is dead with no button to send the reader to: the notice gives each
+   * one an item that jumps to its row (`href`, an in-page anchor), where the way forward is. */
+  deadLinks?: readonly { title: string; href: string }[];
 }
 
 /**
@@ -72,21 +72,30 @@ interface PlanSummaryProps {
  * stops instead of scrolling away after the first 400 px. Without that grid (the phone, a test)
  * the parts simply stack.
  */
-export function PlanSummary({ plan, title, budgetEur, children, aside, headingId, deadLinkTitles = [] }: PlanSummaryProps) {
+export function PlanSummary({ plan, title, budgetEur, children, aside, headingId, deadLinks = [] }: PlanSummaryProps) {
   const total = planTotal(plan.bookings);
   // The total has its own fact right below: the agent's line that restates it is left out.
   const lines = summaryLines(plan.summary, total.cents !== null);
   const length = tripLength(plan.start_date, plan.end_date);
   const datesInTitle = titleStatesDates(title, plan.start_date, plan.end_date);
   const warnings = (plan.warnings ?? []).map((warning) => warning.trim()).filter(Boolean);
-  const dead = deadLinkTitles.map((title) => title.trim()).filter(Boolean);
-  if (dead.length === 1) {
-    warnings.push(`Il link di prenotazione di ${dead[0]} non funziona più: nella sua riga trovi l'indirizzo come testo.`);
-  } else if (dead.length > 1) {
-    warnings.push(
-      `${dead.length} link di prenotazione non funzionano più (${dead.join(", ")}): nelle loro righe trovi gli indirizzi come testo.`,
-    );
-  }
+  // Each dead booking link is its own item, ahead of the plan's own warnings.
+  const notices: ReactNode[] = [
+    ...deadLinks
+      .filter((dead) => dead.title.trim())
+      .map((dead) => (
+        <Fragment key={dead.href}>
+          <a
+            href={dead.href}
+            className="rounded-xs text-ink underline decoration-rule-strong underline-offset-[0.2em] hover:decoration-ink"
+          >
+            {dead.title.trim()}
+          </a>
+          : pagina di prenotazione non trovata. Nella sua riga trovi dove prenotare.
+        </Fragment>
+      )),
+    ...warnings,
+  ];
 
   return (
     <section
@@ -137,14 +146,14 @@ export function PlanSummary({ plan, title, budgetEur, children, aside, headingId
         </div>
       ) : null}
 
-      {warnings.length > 0 ? (
+      {notices.length > 0 ? (
         <Notice tone="warning" title="Da sapere prima di prenotare" className="mt-5 max-w-prose lg:col-start-1">
-          {warnings.length === 1 ? (
-            <p>{warnings[0]}</p>
+          {notices.length === 1 ? (
+            <p>{notices[0]}</p>
           ) : (
             <ul className="list-disc space-y-0.5 pl-4">
-              {warnings.map((warning, index) => (
-                <li key={index}>{warning}</li>
+              {notices.map((notice, index) => (
+                <li key={index}>{notice}</li>
               ))}
             </ul>
           )}

@@ -239,7 +239,7 @@ function StopRow({ stop, number, first, last, lastDay, homeClock, bookings, heal
                   </QuietExternalLink>
                 </p>
               ) : url.kind === "missing" ? (
-                <p className="text-ink-2">Pagina non trovata</p>
+                <p className="text-ink-2">{`${url.host ?? ""} (pagina non trovata)`.trim()}</p>
               ) : null}
             </div>
           ) : null}

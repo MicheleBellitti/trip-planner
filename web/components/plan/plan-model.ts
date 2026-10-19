@@ -81,8 +81,9 @@ export function planUrl(url: string | null | undefined, health: LinkHealthMap): 
 /** What a booking's link becomes on screen. */
 export type BookingAction =
   /** "Prenota su <site>": the backend's allowlist accepted the link (CLAUDE.md, contract rule 4).
-   * `href` is the link exactly as the plan has it, never rewritten. */
-  | { kind: "button"; href: string; site: string }
+   * `href` is the link exactly as the plan has it, never rewritten. `fallback` is set when the
+   * link was dead and the button goes to its site's homepage instead: the search must be redone. */
+  | { kind: "button"; href: string; site: string; fallback?: true }
   /** A link outside the allowlist (or unchecked, or not https): shown as plain text. */
   | { kind: "text"; text: string }
   /** The link check found the page dead and there is no allowed homepage to send the reader to:
@@ -113,7 +114,7 @@ export function bookingAction(
     const fallback = safeHttpUrl(entry.fallback);
     if (entry.fallback_allowed && check?.allowed === true && fallback?.protocol === "https:" && entry.fallback) {
       const site = check.label?.trim() || check.host?.trim() || hostLabel(fallback);
-      return { kind: "button", href: entry.fallback, site };
+      return { kind: "button", href: entry.fallback, site, fallback: true };
     }
     return { kind: "missing", text };
   }
@@ -299,7 +300,7 @@ export interface BookingStripItem {
   check?: LinkCheck | null;
   /** The booking starts from home: its "Quando" leads with the clock at home (DatePair). */
   startsAtHome?: boolean;
-  /** The link check found the booking's link dead and offered no button: the row says "senza link". */
+  /** The link check found the booking's link dead and offered no button: the strip, the notice and the row say "pagina di prenotazione non trovata". */
   noLink?: boolean;
 }
 

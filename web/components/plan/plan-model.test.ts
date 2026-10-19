@@ -332,7 +332,7 @@ describe("planUrl and dead links", () => {
     const link = "https://www.booking.com/hotel/pt/gone.html";
     const check: LinkCheck = { allowed: true, provider: "booking", label: "Booking.com", host: "www.booking.com" };
     const health: LinkHealthMap = { [link]: { status: "dead", fallback: "https://www.booking.com/", fallback_allowed: true } };
-    expect(bookingAction(link, check, health)).toEqual({ kind: "button", href: "https://www.booking.com/", site: "Booking.com" });
+    expect(bookingAction(link, check, health)).toEqual({ kind: "button", href: "https://www.booking.com/", site: "Booking.com", fallback: true });
   });
   it("bookingAction: an allowed fallback is not trusted without an allowed check", () => {
     const link = "https://www.booking.com/hotel/pt/gone.html";
