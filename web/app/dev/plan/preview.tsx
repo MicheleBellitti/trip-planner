@@ -105,7 +105,7 @@ function edgeCase(now: number): { detail: PlanDetail; trip: unknown } {
   if (firstStop) firstStop.url = "javascript:alert(1)";
   // The link check's three dead cases (PlanDetail.link_health): a stop page with a homepage
   // fallback ("Sito di ..."), a price source without one ("pagina non trovata") and a Google
-  // Flights booking link, which never falls back to a button ("Pagina non trovata").
+  // Flights booking link, which never falls back to a button ("Pagina di prenotazione non trovata").
   // An https page (the first stop's unsafe URL above never renders as a link), moved off the
   // site's homepage: in the fixture it is also a price source, whose verdict would win.
   const stopPage = plan.days.flatMap((day) => day.stops).find((stop) => stop.url?.startsWith("https://"));
