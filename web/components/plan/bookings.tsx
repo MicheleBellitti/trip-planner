@@ -20,6 +20,7 @@ import {
   planUrl,
   safeHttpUrl,
   type BookingAction,
+  type PlanUrl,
 } from "./plan-model";
 
 /** A quiet link to another site: ink, underlined, new tab, `rel="noopener noreferrer"`. For
@@ -49,12 +50,29 @@ function sourceName(source: URL, check: LinkCheck | null): string {
   return hostLabel(source);
 }
 
+/** The name the price line shows for a source that is a page or a homepage, else null. */
+function sourceLabel(where: PlanUrl, check: LinkCheck | null): string | null {
+  if (where.kind === "homepage") return where.host;
+  if (where.kind !== "link") return null;
+  const parsed = safeHttpUrl(where.href);
+  return parsed ? sourceName(parsed, check) : where.host;
+}
+
+/** The warning glyph and the title of a state with no button: ink, semibold. */
+function WarningTitle({ children }: { children: string }) {
+  return (
+    <p className="flex items-center gap-1.5 font-semibold text-ink">
+      <Icon name="warning" size={14} />
+      <span>{children}</span>
+    </p>
+  );
+}
+
 /** Price, its status as a word and its provenance: "812,00 € [verificato] Fonte expedia.it,
  * letto il 12 ott 2026, 12:01". */
-function PriceLine({ price, check, health }: { price: Price | null; check: LinkCheck | null; health: LinkHealthMap }) {
+function PriceLine({ price, check, where }: { price: Price | null; check: LinkCheck | null; where: PlanUrl }) {
   if (!price) return <p className="mt-1 text-small text-ink-2">Prezzo non indicato</p>;
   const source = safeHttpUrl(price.source_url);
-  const where = planUrl(price.source_url, health);
   return (
     <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-small text-ink-2">
       <span className="font-semibold text-ink">{formatPrice(price)}</span>
@@ -84,6 +102,7 @@ function ActionSide({
   vendor,
   phone,
   source,
+  sourceName: sourceNameText,
 }: {
   action: BookingAction;
   alternative: boolean;
@@ -91,7 +110,9 @@ function ActionSide({
   phone: string | null;
   /** Where the price was read: the nearest thing to "the supplier's own site" a booking without a
    * link has. Named as text (the price line above links it for information), never a button. */
-  source: URL | null;
+  source: PlanUrl;
+  /** The name the price line shows for a source that is alive (a page or a homepage), else null. */
+  sourceName: string | null;
 }) {
   if (action.kind === "button") {
     return (
@@ -108,11 +129,11 @@ function ActionSide({
   }
   if (action.kind === "missing") {
     return (
-      <div className="min-w-0 text-meta text-ink-2">
-        <p className="font-semibold">Pagina non trovata</p>
-        <p className="[overflow-wrap:anywhere]">
-          {action.host ? `Cerca l'offerta su ${action.host}.` : "Cerca l'offerta sul sito del fornitore."}
-        </p>
+      <div className="min-w-0 text-meta text-ink-2" data-link-text="">
+        <WarningTitle>Pagina non trovata</WarningTitle>
+        <p>La pagina non esiste più, quindi il link resta testo.</p>
+        <p className="mt-1 line-clamp-3 text-micro select-all [overflow-wrap:anywhere]">{action.text}</p>
+        {sourceNameText ? <p className="mt-1">{`Il prezzo è stato letto su ${sourceNameText}: cerca l'offerta lì.`}</p> : null}
         {vendor ? <p>{`Prenota direttamente con ${vendor}.`}</p> : null}
         <PhoneLine phone={phone} />
       </div>
@@ -121,7 +142,7 @@ function ActionSide({
   if (action.kind === "text") {
     return (
       <div className="min-w-0 text-meta text-ink-2" data-link-text="">
-        <p className="font-semibold text-ink">Link non verificato</p>
+        <WarningTitle>Link non verificato</WarningTitle>
         <p>Il sito non è tra quelli controllati, quindi il link resta testo.</p>
         <p className="mt-1 line-clamp-3 text-micro select-all [overflow-wrap:anywhere]">{action.text}</p>
       </div>
@@ -131,10 +152,10 @@ function ActionSide({
     <div className="min-w-0 text-meta text-ink-2">
       <p>
         Nessun link di prenotazione.{" "}
-        {source ? (
+        {source.kind === "link" || source.kind === "homepage" ? (
           <>
             {vendor ? `Prenota sul sito di ${vendor}: ` : "Prenota sul sito: "}
-            <span className="font-semibold text-ink [overflow-wrap:anywhere]">{hostLabel(source)}</span>
+            <span className="font-semibold text-ink [overflow-wrap:anywhere]">{source.host}</span>
           </>
         ) : vendor ? (
           `Prenota direttamente con ${vendor}.`
@@ -190,6 +211,8 @@ interface BookingRowProps {
 export function BookingRow({ booking, check, health = NO_HEALTH, deadline, timeZone, startsAtHome = false, tripLabel = null, alternative = false, id }: BookingRowProps) {
   const line = bookingLine(booking, check);
   const action = bookingAction(booking.link, check, health);
+  // One verdict for the price's source, shared by the price line and the action side.
+  const sourceVerdict = planUrl(booking.price?.source_url, health);
   return (
     <li
       id={id}
@@ -205,7 +228,7 @@ export function BookingRow({ booking, check, health = NO_HEALTH, deadline, timeZ
         <div className="min-w-0">
           <p className="text-meta text-ink-2">{CATEGORY_LABELS[bookingCategory(booking, check)]}</p>
           <h3 className="text-body font-semibold [overflow-wrap:anywhere]">{booking.title}</h3>
-          <PriceLine price={booking.price} check={check} health={health} />
+          <PriceLine price={booking.price} check={check} where={sourceVerdict} />
           {booking.notes ? (
             <p className="mt-1.5 text-meta whitespace-pre-line text-ink-2 [overflow-wrap:anywhere]">{booking.notes}</p>
           ) : null}
@@ -231,7 +254,8 @@ export function BookingRow({ booking, check, health = NO_HEALTH, deadline, timeZ
           alternative={alternative}
           vendor={booking.vendor?.trim() || null}
           phone={booking.phone?.trim() || null}
-          source={safeHttpUrl(booking.price?.source_url)}
+          source={sourceVerdict}
+          sourceName={sourceLabel(sourceVerdict, check)}
         />
       </div>
     </li>

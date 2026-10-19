@@ -47,6 +47,7 @@ import {
   sortByDeadline,
   tripPlaceLabel,
   tripZoneName,
+  bookingAction,
 } from "./plan-model";
 import { PlanSummary } from "./plan-summary";
 
@@ -203,7 +204,9 @@ export function PlanView({
     deadline: deadlines[index] ?? ({ kind: "unknown" } as const),
     check: checks[index] ?? null,
     startsAtHome: bookingStartsAtHome(plan, booking),
+    noLink: bookingAction(booking.link, checks[index] ?? null, detail.link_health).kind === "missing",
   }));
+  const deadLinkTitles = items.filter((item) => item.noLink).map((item) => item.booking.title);
   const byUrgency = sortByDeadline(items);
   const zoneName = tripZoneName(plan, HOME_TIMEZONE);
   // A booking that starts from home (the flight) reads on the clock at home, with the trip's as the
@@ -274,6 +277,7 @@ export function PlanView({
             title={displayTitle(detail.title)}
             budgetEur={requestBudget(detail.request)}
             headingId={ids.summary}
+            deadLinkTitles={deadLinkTitles}
             aside={aside}
           >
             {plan.bookings.length > 0 ? (

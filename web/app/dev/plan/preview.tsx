@@ -94,7 +94,8 @@ function edgeCase(now: number): { detail: PlanDetail; trip: unknown } {
   aerobus.phone = "+351 21 358 2334";
   if (trip.bookings[4]) delete trip.bookings[4].scheduledFor;
   detail.booking_links = [
-    detail.booking_links[0] ?? null,
+    // The flight's link is Google Flights (below); its price source stays Expedia, alive.
+    { allowed: true, provider: "google_flights", label: "Google Voli", host: "www.google.com" },
     detail.booking_links[1] ?? null,
     null,
     { allowed: false, provider: null, label: null, host: "www.parquesdesintra.pt" },
@@ -113,7 +114,7 @@ function edgeCase(now: number): { detail: PlanDetail; trip: unknown } {
   flight.link = flightsLink;
   detail.link_health = {
     ...(stopPage?.url ? { [stopPage.url]: { status: "dead", fallback: new URL(stopPage.url).origin + "/", fallback_allowed: false } } : {}),
-    ...(oceanario.price ? { [oceanario.price.source_url]: { status: "dead", fallback: null, fallback_allowed: false } } : {}),
+    ...(aerobus.price ? { [aerobus.price.source_url]: { status: "dead", fallback: null, fallback_allowed: false } } : {}),
     [flightsLink]: { status: "dead", fallback: "https://www.google.com/", fallback_allowed: false },
   };
   plan.alternatives = [

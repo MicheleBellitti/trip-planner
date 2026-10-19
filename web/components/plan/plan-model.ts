@@ -86,9 +86,8 @@ export type BookingAction =
   /** A link outside the allowlist (or unchecked, or not https): shown as plain text. */
   | { kind: "text"; text: string }
   /** The link check found the page dead and there is no allowed homepage to send the reader to:
-   * no button, no link; the reader looks the offer up on the supplier's site, named by `host`
-   * (the link's host without "www.", null when the link does not parse). */
-  | { kind: "missing"; host: string | null }
+   * no button, no link; the booking's original address stays as `text`, never an anchor. */
+  | { kind: "missing"; text: string }
   /** No link at all. */
   | { kind: "none" };
 
@@ -116,7 +115,7 @@ export function bookingAction(
       const site = check.label?.trim() || check.host?.trim() || hostLabel(fallback);
       return { kind: "button", href: entry.fallback, site };
     }
-    return { kind: "missing", host: url ? hostLabel(url) : null };
+    return { kind: "missing", text };
   }
   if (check?.allowed === true && url?.protocol === "https:") {
     const site = check.label?.trim() || check.host?.trim() || hostLabel(url);
@@ -300,6 +299,8 @@ export interface BookingStripItem {
   check?: LinkCheck | null;
   /** The booking starts from home: its "Quando" leads with the clock at home (DatePair). */
   startsAtHome?: boolean;
+  /** The link check found the booking's link dead and offered no button: the row says "senza link". */
+  noLink?: boolean;
 }
 
 function stripRank(deadline: BookingDeadline): number {

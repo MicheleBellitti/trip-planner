@@ -71,6 +71,7 @@ export function BookingStrip({ items, anchor, headingId, timeZone }: BookingStri
                   <span className="block text-small font-medium underline decoration-rule-strong underline-offset-[0.2em] [overflow-wrap:anywhere] group-hover/row:decoration-ink">
                     {item.booking.title}
                   </span>
+                  {item.noLink ? <span className="block text-micro text-ink-2">senza link</span> : null}
                   <DatePair
                     variant="compact"
                     deadline={item.deadline}

@@ -326,7 +326,7 @@ describe("planUrl and dead links", () => {
   it("bookingAction: a dead Google Flights link is missing, never a button", () => {
     const check: LinkCheck = { allowed: true, provider: "google_flights", label: "Google Voli", host: "www.google.com" };
     const health: LinkHealthMap = { [FLIGHTS]: { status: "dead", fallback: "https://www.google.com/", fallback_allowed: false } };
-    expect(bookingAction(FLIGHTS, check, health)).toEqual({ kind: "missing", host: "google.com" });
+    expect(bookingAction(FLIGHTS, check, health)).toEqual({ kind: "missing", text: FLIGHTS });
   });
   it("bookingAction: a dead Booking.com link with an allowed fallback is a button to it", () => {
     const link = "https://www.booking.com/hotel/pt/gone.html";
@@ -337,12 +337,12 @@ describe("planUrl and dead links", () => {
   it("bookingAction: an allowed fallback is not trusted without an allowed check", () => {
     const link = "https://www.booking.com/hotel/pt/gone.html";
     const health: LinkHealthMap = { [link]: { status: "dead", fallback: "https://www.booking.com/", fallback_allowed: true } };
-    expect(bookingAction(link, REFUSED, health)).toEqual({ kind: "missing", host: "booking.com" });
+    expect(bookingAction(link, REFUSED, health)).toEqual({ kind: "missing", text: link });
   });
-  it("bookingAction: a dead link that does not parse is missing without a host", () => {
+  it("bookingAction: a dead link that does not parse is missing, with its text", () => {
     const link = "expedia senza indirizzo";
     const health: LinkHealthMap = { [link]: { status: "dead", fallback: null, fallback_allowed: false } };
-    expect(bookingAction(link, null, health)).toEqual({ kind: "missing", host: null });
+    expect(bookingAction(link, null, health)).toEqual({ kind: "missing", text: link });
   });
   it("bookingAction: without health, or with a live verdict, is unchanged", () => {
     expect(bookingAction("https://www.expedia.it/x", EXPEDIA)).toEqual({ kind: "button", href: "https://www.expedia.it/x", site: "Expedia" });

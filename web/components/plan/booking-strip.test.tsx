@@ -110,4 +110,19 @@ describe("BookingStrip", () => {
     // A booking without a dueAt is not amber, however urgent its words.
     expect(rowOf("Aerobus").querySelector("[data-due-soon]")).toBeNull();
   });
+
+  it("marks 'senza link' on the booking with a dead link only, never in amber", () => {
+    const bookings = happyBookings();
+    const deadline: BookingDeadline = { kind: "date", at: new Date(NOW + 30 * HOUR).toISOString() };
+    const { container } = strip(
+      bookings.slice(0, 3).map((booking, index) => ({ index, booking, deadline, noLink: index === 1 })),
+    );
+    expect(within(rowOf(bookings[1]!.title)).getByText("senza link")).toBeTruthy();
+    expect(within(rowOf(bookings[0]!.title)).queryByText("senza link")).toBeNull();
+    expect(within(rowOf(bookings[2]!.title)).queryByText("senza link")).toBeNull();
+    const label = screen.getByText("senza link");
+    expect(label.className).not.toMatch(/amber|due-soon|bg-/);
+    expect(label.closest("[data-due-soon]")).toBeNull();
+    expect(container.querySelectorAll("[data-due-soon]").length).toBeGreaterThanOrEqual(0);
+  });
 });
