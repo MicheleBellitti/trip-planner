@@ -25,6 +25,10 @@ function as POST /evals/runs (`evals_store.store_eval_run`), in DATABASE_URL: of
 It prints the run's id and whether it was new (importing it again is harmless). Exit 0 stored,
 2 for an unreadable or invalid file.
 
+Both answer the traveller's questions (`ask_traveller`) as the timeline shows them, so a run
+never waits for the 4-minute deadline: by default the first option (`Scelta automatica: ...`);
+`run --choose` asks at the terminal ("1,3", or an empty line for "Scegli tu").
+
 `run` and `replay` print the timeline as the hub publishes it, one line per UI event
 (`render_event`), and finally the plan's status, cost, and the path of the stored Trip when
 ready. Exit codes: 0 ready, 1 any other final status, 2 usage or configuration errors.
@@ -41,7 +45,7 @@ import signal
 import sys
 import tempfile
 import uuid
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TextIO, cast
 
@@ -51,6 +55,7 @@ from pydantic import ValidationError
 
 from app import clock, evals_store, sessions
 from app.auth import CurrentUser
+from app.choices import ChoiceAnswer
 from app.config import BACKEND_DIR, Settings, add_message_key, add_plan_log_keys, get_settings
 from app.consumer import StatusChange, load_events_after, set_plan_status
 from app.db import PlanRecord, PlanStatus, create_engine, create_session_factory
@@ -88,6 +93,10 @@ LANE_WIDTH = 10
 KIND_WIDTH = 8
 POLL_SECONDS = 0.5
 """How often the timeline re-reads Postgres when the hub is quiet."""
+CHOICE_HINT = "Scrivi i numeri separati da virgola (per esempio 1,3), oppure invio per Scegli tu."
+CHOICE_HINT_SINGLE = "Questa domanda vuole una sola opzione: scrivi un numero, oppure invio."
+CHOICE_CLOSED_LINE = "Tempo scaduto: sceglie Atlas"
+CHOICE_SKIPPED_LINE = "Scegli tu: decide Atlas"
 REPLAY_STALL_SECONDS = 5.0
 """`replay`: once the script has finished, how long the consumer may stay silent before the
 replay gives up (a scenario that needs a test to act at a checkpoint)."""
@@ -137,6 +146,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.add_argument("--no-color", action="store_true", help="plain text, no ANSI colors")
     run.add_argument("--out", type=Path, default=None, help="directory for the Trip JSON")
+    run.add_argument(
+        "--choose",
+        action="store_true",
+        help="answer the traveller's questions at the terminal (default: pick automatically)",
+    )
 
     replay = commands.add_parser(
         "replay", help="offline: play a scripted session through the fake client"
@@ -291,6 +305,7 @@ async def run_command(
     allow_production: bool,
     color: bool,
     out_dir: Path | None = None,
+    choose: bool = False,
 ) -> int:
     """`run`: real session, live timeline, exit code by final status (module docstring).
     Refused under DEMO_MODE, whose planner replays scripted sessions instead of real ones."""
@@ -348,6 +363,7 @@ async def run_command(
                     color=color,
                     out_dir=out_dir or DEFAULT_OUT_DIR,
                     handle_ctrl_c=True,
+                    choose=choose,
                 )
             finally:
                 await sessions.stop_planner(services)
@@ -362,6 +378,7 @@ async def replay_command(
     request_path: Path | None,
     color: bool,
     out_dir: Path | None = None,
+    choose: bool = False,
 ) -> int:
     """`replay`: the fake client fed with `fixture_path`, otherwise identical to `run`.
 
@@ -430,6 +447,7 @@ async def replay_command(
                     color=color,
                     out_dir=out_dir or DEFAULT_OUT_DIR,
                     script_done=lambda: fake.done or bool(fake.mismatches),
+                    choose=choose,
                 )
             finally:
                 await sessions.stop_planner(services)
@@ -460,13 +478,18 @@ async def _drive_plan(
     handle_ctrl_c: bool = False,
     script_done: Callable[[], bool] | None = None,
     out: TextIO | None = None,
+    choose: bool = False,
 ) -> int:
     """Start the plan like POST /plans, print its timeline until the consumer stops, then the
     closing lines. Returns the exit code.
 
     With `script_done` (replay), a plan still `running` when the replay stops is set
     `interrupted` (`REASON_REPLAY_STOPPED`): its fake session doesn't exist on the platform, so
-    it must not be resumed by the next start of the web app."""
+    it must not be resumed by the next start of the web app.
+
+    The traveller's questions (`ask_traveller`) are answered as soon as the timeline shows
+    them, so a run never waits for the deadline: automatically (the first option), or at the
+    terminal with `choose`."""
     stream = out or sys.stdout
     try:
         plan_id = await sessions.start_plan(request, user, services=services)
@@ -531,6 +554,9 @@ async def _drive_plan(
             stop_event=stop_event,
             on_stop=on_stop,
             script_done=script_done,
+            chooser=(_terminal_chooser if choose else _automatic_chooser)(
+                services, plan_id, user, stream
+            ),
         )
     finally:
         if installed:
@@ -573,8 +599,12 @@ async def _follow_timeline(
     stop_event: asyncio.Event,
     on_stop: Callable[[], Any],
     script_done: Callable[[], bool] | None,
+    chooser: Chooser | None = None,
 ) -> None:
     """Print every event of the plan once, in `seq` order, until its consumer stops.
+
+    A stored `choice` event with `detail.phase == "asked"` is handed to `chooser` right after it
+    is printed (this loop sees each stored event exactly once).
 
     Postgres is the source of truth: the hub only wakes the loop up (any message means "read
     again"), so events committed before the subscription, published out of order or dropped
@@ -590,6 +620,8 @@ async def _follow_timeline(
         for event in events:
             print(render_event(event, color=color), file=out, flush=True)
             last_seq = event.seq
+            if chooser is not None and _is_asked_choice(event):
+                await chooser(event)
         return bool(events)
 
     with services.hub.subscribe(plan_id) as subscription:
@@ -628,6 +660,110 @@ async def _follow_timeline(
                 continue
             if isinstance(message, PlanEnded):
                 listening = False
+
+
+Chooser = Callable[[UIEvent], Awaitable[None]]
+"""Answers the question of an asked `choice` event."""
+
+
+def _is_asked_choice(event: UIEvent) -> bool:
+    return (
+        event.kind is EventKind.CHOICE
+        and event.detail is not None
+        and event.detail.get("phase") == "asked"
+        and isinstance(event.detail.get("choice"), dict)
+    )
+
+
+def parse_choice_line(line: str, *, count: int, multiple: bool) -> list[int] | None:
+    """The 1-based numbers typed for a question with `count` options: "2", "1,3". An empty line
+    is `[]` (skip). None when it does not fit: not numbers, out of range, repeated, or more
+    than one on a single choice."""
+    text = line.strip()
+    if not text:
+        return []
+    try:
+        numbers = [int(part) for part in text.split(",")]
+    except ValueError:
+        return None
+    if len(set(numbers)) != len(numbers) or not all(1 <= n <= count for n in numbers):
+        return None
+    if len(numbers) > 1 and not multiple:
+        return None
+    return numbers
+
+
+def _option_titles(event: UIEvent, selected: Sequence[str]) -> str:
+    assert event.detail is not None
+    options = event.detail["choice"]["options"]
+    titles = {option["id"]: option["title"] for option in options}
+    return ", ".join(titles.get(value, value) for value in selected)
+
+
+def _automatic_chooser(
+    services: sessions.PlannerServices, plan_id: uuid.UUID, user: CurrentUser, out: TextIO
+) -> Chooser:
+    """`run` and `replay` by default: `answer_pending_choice` (the first option, the first two
+    when several can be picked)."""
+
+    async def choose(event: UIEvent) -> None:
+        try:
+            answered = await sessions.answer_pending_choice(plan_id, user, services=services)
+        except (
+            sessions.PlanNotFoundError,
+            sessions.PlannerUnavailableError,
+            sessions.InvalidChoiceAnswerError,
+        ) as exc:
+            print(f"Scelta automatica non riuscita: {type(exc).__name__}", file=sys.stderr)
+            return
+        if answered is None:
+            return  # closed by the deadline or the platform first
+        picked = _option_titles(event, answered.selected) or "nessuna, sceglie Atlas"
+        print(f"Scelta automatica: {picked}", file=out, flush=True)
+
+    return choose
+
+
+def _terminal_chooser(
+    services: sessions.PlannerServices, plan_id: uuid.UUID, user: CurrentUser, out: TextIO
+) -> Chooser:
+    """`run --choose`: print the question and the numbered options, read the answer."""
+
+    async def choose(event: UIEvent) -> None:
+        assert event.detail is not None
+        choice = event.detail["choice"]
+        options = choice["options"]
+        multiple = bool(choice["multiple"])
+        print(choice["question"], file=out)
+        for number, option in enumerate(options, start=1):
+            print(f"  {number}. {option['title']}: {option['reason']}", file=out)
+        hint = CHOICE_HINT if multiple else CHOICE_HINT_SINGLE
+        while True:
+            line = await asyncio.to_thread(input, "Scegli: ")
+            numbers = parse_choice_line(line, count=len(options), multiple=multiple)
+            if numbers is not None:
+                break
+            print(hint, file=out, flush=True)
+        answer = (
+            ChoiceAnswer(selected=[options[n - 1]["id"] for n in numbers])
+            if numbers
+            else ChoiceAnswer(skip=True)
+        )
+        try:
+            await sessions.answer_choice(plan_id, choice["id"], answer, user, services=services)
+        except sessions.ChoiceClosedError:
+            print(CHOICE_CLOSED_LINE, file=out, flush=True)
+        except (
+            sessions.PlanNotFoundError,
+            sessions.PlannerUnavailableError,
+            sessions.InvalidChoiceAnswerError,
+        ) as exc:
+            print(f"Risposta non riuscita: {type(exc).__name__}", file=sys.stderr)
+        else:
+            if not numbers:
+                print(CHOICE_SKIPPED_LINE, file=out, flush=True)
+
+    return choose
 
 
 def _write_trip(out_dir: Path, plan_id: uuid.UUID, trip: Mapping[str, Any]) -> Path:
@@ -686,6 +822,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 allow_production=args.allow_production,
                 color=color,
                 out_dir=args.out,
+                choose=args.choose,
             )
         )
     return asyncio.run(
