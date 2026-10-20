@@ -9,6 +9,7 @@
             {
               "maxLength": 60,
               "minLength": 1,
+              "pattern": "^[^\\r\\n]*$",
               "type": "string"
             },
             {
@@ -16,7 +17,7 @@
             }
           ],
           "default": null,
-          "description": "Neighbourhood or area, at most 60 characters, no URL. Omit when unknown."
+          "description": "Neighbourhood or area, one line, at most 60 characters, no URL. Omit when unknown."
         },
         "duration_min": {
           "anyOf": [
@@ -42,6 +43,7 @@
             {
               "maxLength": 120,
               "minLength": 1,
+              "pattern": "^[^\\r\\n]*$",
               "type": "string"
             },
             {
@@ -49,7 +51,7 @@
             }
           ],
           "default": null,
-          "description": "Name and address of the place, at most 120 characters, no URL, used to look up a photo. Omit when the option is not a place."
+          "description": "Name and address of the place, one line, at most 120 characters, no URL, used to look up a photo. Omit when the option is not a place."
         },
         "price": {
           "anyOf": [
@@ -71,9 +73,10 @@
           "type": "string"
         },
         "title": {
-          "description": "Name of the option, Italian, at most 80 characters, no URL.",
+          "description": "Name of the option, Italian, one line, at most 80 characters, no URL.",
           "maxLength": 80,
           "minLength": 1,
+          "pattern": "^[^\\r\\n]*$",
           "type": "string"
         }
       },

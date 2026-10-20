@@ -67,6 +67,7 @@ import yaml  # noqa: E402
 import checks  # noqa: E402
 import judge  # noqa: E402
 from app import clock  # noqa: E402
+from app.events import one_line  # noqa: E402
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -516,8 +517,8 @@ async def answer_choices(planner: PlannerServices, plan_id: uuid.UUID, user: Cur
 
 def pick_line(record: Any, request: Any) -> str:
     """One line for the judge: `<kind> (<answered_by>): <id> <title>; ...`, or the coordinator
-    chose when nothing was picked (skip, timeout, closed)."""
-    titles = {option.id: option.title for option in request.options}
+    chose when nothing was picked (skip, timeout, closed). Titles go through `one_line`."""
+    titles = {option.id: one_line(option.title) for option in request.options}
     picked = [f"{i} {titles.get(i, '')}".strip() for i in (record.answer or [])]
     outcome = "; ".join(picked) if picked else "none, the coordinator chose"
     return f"{record.kind} ({record.answered_by}): {outcome}"
