@@ -212,6 +212,7 @@ describe("RequestForm", () => {
         origin: "Milano",
         destination: "Lisbona",
         suggest_destination: false,
+        journey_mode: "flight",
         dates: { exact_start: "2027-04-14", exact_end: "2027-04-18", month: null, nights: null },
         travelers: [
           { kind: "adult", age: null },
@@ -225,9 +226,6 @@ describe("RequestForm", () => {
       },
       { demoScenario: null },
     );
-    // No journey_mode key while it is null: a backend from before the travel mode answers 422.
-    const [body] = mocks.createPlan.mock.calls[0] ?? [];
-    expect(Object.keys(body as object)).not.toContain("journey_mode");
     expect(mocks.push).toHaveBeenCalledWith(`/plans/${PLAN_ID}`);
     expect(submitButton().textContent).toContain("Avvio il piano…");
     expect(submitButton().disabled).toBe(true);
