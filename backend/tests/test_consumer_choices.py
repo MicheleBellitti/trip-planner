@@ -74,6 +74,7 @@ from app.sessions import (
     interrupt_plan,
 )
 from tests.fakes import INTERRUPTED_TOOL_TEXT, FakeManagedAgentsClient
+from tests.test_choices import ACTIVITIES
 from tests.test_consumer import (
     BRIEF,
     NOW,
@@ -843,8 +844,8 @@ async def test_photos_get_only_the_place_names(env: Env) -> None:
     assert photos.calls == [
         {
             "a1": "Oceanário de Lisboa, Lisboa",
-            "a2": "Parque e Palácio Nacional da Pena, Sintra",
-            "a3": "Belém, Lisboa",
+            "a2": "Palácio da Pena, Sintra",
+            "a3": "Torre de Belém, Lisboa",
         }
     ]
     rows = await choice_rows(h, plan_id)
@@ -1679,8 +1680,6 @@ async def test_continue_nudges_when_the_platform_closed_the_choice_meanwhile(
 
 
 def test_choice_answered_event_is_close_choices_event() -> None:
-    from tests.test_choices import ACTIVITIES
-
     now = dt.datetime(2026, 10, 20, 10, 0, 9, tzinfo=dt.UTC)
     built = choice_answered_event(
         choice_id="c-1",
@@ -1707,8 +1706,6 @@ def test_choice_answered_event_is_close_choices_event() -> None:
 async def test_choice_payload_is_what_insert_choice_stores(
     db_session_factory: async_sessionmaker[AsyncSession], plan_rows: Any
 ) -> None:
-    from tests.test_choices import ACTIVITIES
-
     plan = await plan_rows.add_plan()
     photos = {"a1": cover("Belem")}
     async with db_session_factory() as db, db.begin():

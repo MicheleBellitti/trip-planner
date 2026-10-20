@@ -67,6 +67,8 @@ CHOICE_TIMEOUT = dt.timedelta(
 """The window a question is open: the Settings default."""
 TRAVELLER_THINKS = dt.timedelta(seconds=9)
 """How long after the question's pause the recorded traveller answers."""
+ANSWER_MARGIN = dt.timedelta(milliseconds=200)
+"""How much earlier than the next recorded event the answer lands, at the latest."""
 
 SCENARIOS = {
     "happy-path": "happy_path.jsonl",
@@ -250,10 +252,15 @@ class Timeline:
         self.choices[record.id] = record
         self._store(consumer.choice_asked_event(record, cost_cents=self.state.cost_cents))
 
-    def answer_choice(self, choice_id: str) -> None:
+    def answer_choice(self, choice_id: str, *, before: dt.datetime | None) -> None:
         """The traveller picks the CLI's and the evals' picks: the answered event, then the
-        tool result's echo (`sessions.answer_choice`)."""
+        tool result's echo (`sessions.answer_choice`). The answer lands `TRAVELLER_THINKS` after
+        the pause, but never within `ANSWER_MARGIN` of `before` (the first recorded event after
+        the answer): the real consumer stores the answer before the events it unblocks."""
         assert self.last_ts is not None
+        answered_at = self.last_ts + TRAVELLER_THINKS
+        if before is not None:
+            answered_at = max(self.last_ts, min(answered_at, before - ANSWER_MARGIN))
         request = request_of(self.choices[choice_id])
         selected = auto_pick(request)
         self._store(
@@ -262,7 +269,7 @@ class Timeline:
                 request=request,
                 answered_by="traveller",
                 selected=selected,
-                now=self.last_ts + TRAVELLER_THINKS,
+                now=answered_at,
                 cost_cents=self.state.cost_cents,
             )
         )
@@ -342,6 +349,15 @@ def _plan_warnings(tool_input: Mapping[str, Any]) -> int:
     return len(warnings) if isinstance(warnings, list) else 0
 
 
+def _next_instant(steps: list[dict[str, Any]], index: int) -> dt.datetime | None:
+    """The `processed_at` of the first event emitted after step `index`."""
+    for step in steps[index + 1 :]:
+        stamp = (step.get("event") or {}).get("processed_at") if step["op"] == "emit" else None
+        if isinstance(stamp, str):
+            return _instant(stamp)
+    return None
+
+
 def build_scenario(file_name: str) -> dict[str, Any]:
     steps = list(_steps(MA_FIXTURES / file_name))
     meta = next(step for step in steps if step["op"] == "meta")
@@ -360,7 +376,7 @@ def build_scenario(file_name: str) -> dict[str, Any]:
     )
     timeline.last_ts = first - dt.timedelta(seconds=1)
     submits: dict[str, int] = {}
-    for step in steps:
+    for index, step in enumerate(steps):
         if timeline.over:
             break
         op = step["op"]
@@ -378,7 +394,7 @@ def build_scenario(file_name: str) -> dict[str, Any]:
             elif match.get("type") == "user.custom_tool_result":
                 tool_use_id = match["custom_tool_use_id"]
                 if tool_use_id in timeline.choices:
-                    timeline.answer_choice(tool_use_id)
+                    timeline.answer_choice(tool_use_id, before=_next_instant(steps, index))
                 else:
                     timeline.answer_submit(
                         tool_use_id,
