@@ -118,6 +118,7 @@ html[data-theme-swap] *::after {
   --duration-arrive: 260ms;
   --duration-draw: 320ms;
   --duration-meter: 400ms;
+  --duration-zoom: 700ms;
   --duration-reduced: 120ms;
 }
 

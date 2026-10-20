@@ -2,49 +2,9 @@
 
 import { cx } from "@/components/ui/cx";
 import { Disclosure } from "@/components/ui/disclosure";
-import type { Cover } from "@/lib/schemas/api";
 
-import { coverCreditLine, type CreditPart } from "./cover-sources";
 import { useShownCovers } from "./cover-store";
-
-function CreditPartText({ part }: { part: CreditPart }) {
-  return part.href ? (
-    <a href={part.href} target="_blank" rel="noopener noreferrer" className="underline hover:text-ink">
-      {part.text}
-    </a>
-  ) : (
-    <>{part.text}</>
-  );
-}
-
-/** "Autore (CC BY-SA 2.0), Wikimedia Commons", without "Foto: ": the license and the source are
- * links (new tab, no referrer). Without an author the license stands first: "CC0, Wikimedia
- * Commons". */
-function CreditText({ cover }: { cover: Cover }) {
-  const { author, license, source } = coverCreditLine(cover);
-  return (
-    <>
-      {author ? (
-        <>
-          {author} (<CreditPartText part={license} />)
-        </>
-      ) : (
-        <CreditPartText part={license} />
-      )}
-      , <CreditPartText part={source} />
-    </>
-  );
-}
-
-/** The photo's credit, under it: "Foto: Autore (CC BY-SA 4.0), Wikimedia Commons". This line is
- * what CC BY and CC BY-SA ask for, so it is never cut and never hidden. */
-export function CoverCredit({ cover, className }: { cover: Cover; className?: string }) {
-  return (
-    <p className={cx("text-micro text-ink-2 [overflow-wrap:anywhere]", className)}>
-      Foto: <CreditText cover={cover} />
-    </p>
-  );
-}
+import { CoverCredit, CreditText } from "./credit-line";
 
 /** Up to this many different photos on the home list are credited in plain sight; more are
  * credited in a disclosure, closed, so a long list does not grow a paragraph of names. */
