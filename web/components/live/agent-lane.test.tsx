@@ -36,6 +36,7 @@ function view(extra: Partial<LaneView> = {}): LaneView {
     badge: extra.state ?? "working",
     stations: [station(1)],
     live: null,
+    asking: null,
     notices: [],
     summary: "Ragiona sul prossimo passo.",
     errorTitle: null,
@@ -215,6 +216,28 @@ describe("the desktop heads", () => {
     expect(head.querySelector(".line-clamp-2")).toBeTruthy();
     // The dashed note would push this lane's first station below the others'.
     expect(container.querySelector("[role=group] .border-dashed")).toBeNull();
+  });
+});
+
+describe("the waiting plate", () => {
+  it("has no halo and links to #scelta", () => {
+    const asking = { title: "Tocca a te: scegli cosa vedere", seq: 53, ts: new Date(START + 53_000).toISOString() };
+    const { container } = render(
+      <LaneBody {...props} view={view({ agent: "coordinator", state: "waiting", asking, summary: asking.title })} />,
+    );
+    const link = screen.getByRole("link", { name: "Tocca a te: scegli cosa vedere" });
+    expect(link.getAttribute("href")).toBe("#scelta");
+    const item = link.closest("li") as HTMLElement;
+    expect(item.getAttribute("data-kind")).toBe("current");
+    expect(item.getAttribute("aria-current")).toBe("step");
+    expect(container.innerHTML).not.toContain("animate-halo");
+    expect(container.innerHTML).not.toContain("after:border-2");
+  });
+
+  it("keeps the halo on a running tool's plate", () => {
+    const live = { seq: 2, ts: new Date(START + 2000).toISOString(), title: "Ricerca web", tool: "web_search", server: null, params: null, toolUseId: "t" };
+    const { container } = render(<LaneBody {...props} view={view({ live })} />);
+    expect(container.innerHTML).toContain("animate-halo");
   });
 });
 

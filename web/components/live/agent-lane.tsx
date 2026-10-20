@@ -17,6 +17,7 @@ import {
   TimelineWaiting,
 } from "@/components/ui/timeline";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
+import { CHOICE_PANEL_ID } from "@/lib/choices";
 import { formatElapsed } from "@/lib/format";
 import { AGENT_LABELS } from "@/lib/plan-events/labels";
 import { shouldVirtualize } from "@/lib/plan-events/virtualization";
@@ -139,7 +140,7 @@ interface LaneBodyProps extends LaneProps {
 
 /** The lane's notices and its line of stations, oldest at the top, the live plate at the end. */
 export function LaneBody({ view, startedAt, now, freshAfterSeq, running, stale, fold = false, endRef, noticesInHead = false }: LaneBodyProps) {
-  const { agent, live } = view;
+  const { agent, live, asking } = view;
   const name = AGENT_LABELS[agent];
   const [unfolded, setUnfolded] = useState(false);
   const virtual = shouldVirtualize(view.stations.length);
@@ -151,7 +152,7 @@ export function LaneBody({ view, startedAt, now, freshAfterSeq, running, stale, 
   const stations = foldable && !unfolded ? view.stations.slice(earlier) : view.stations;
 
   const showError = view.state === "error" && agent !== "coordinator" && view.errorTitle !== null && running;
-  const empty = view.stations.length === 0 && !live;
+  const empty = view.stations.length === 0 && !live && !asking;
 
   return (
     <>
@@ -190,12 +191,25 @@ export function LaneBody({ view, startedAt, now, freshAfterSeq, running, stale, 
               virtual={virtual}
             />
           ))}
-          {live ? (
+          {asking ? (
+            // Atlas waits for the traveller: nothing runs, so the node has no halo.
+            <TimelineItem
+              kind="current"
+              halo={false}
+              time={gutter(asking.ts, startedAt)}
+              dateTime={asking.ts}
+              fresh={asking.seq !== null && isFresh(asking.seq)}
+            >
+              <a href={`#${CHOICE_PANEL_ID}`} className="block rounded-sm no-underline">
+                <ToolChip agent={agent} title={asking.title} />
+              </a>
+            </TimelineItem>
+          ) : live ? (
             <TimelineItem kind="current" time={gutter(live.ts, startedAt)} dateTime={live.ts} fresh={isFresh(live.seq)}>
               <ToolChip agent={agent} title={live.title} elapsed={liveElapsed} />
             </TimelineItem>
           ) : null}
-          {running && (live || view.state === "working" || view.state === "waiting") ? <TimelineNext /> : null}
+          {running && (live || asking || view.state === "working" || view.state === "waiting") ? <TimelineNext /> : null}
         </Timeline>
       )}
       {endRef ? <div ref={endRef} data-lane-end="" aria-hidden="true" /> : null}
