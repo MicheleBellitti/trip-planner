@@ -8,7 +8,7 @@ export const AgentNameSchema = z.enum(["coordinator", "flights", "lodging", "act
 export type AgentName = z.output<typeof AgentNameSchema>;
 
 /** What a UI event is about; the timeline draws each kind differently. */
-export const EventKindSchema = z.enum(["status", "tool", "message", "usage", "error", "plan"]);
+export const EventKindSchema = z.enum(["status", "tool", "message", "usage", "error", "plan", "choice"]);
 export type EventKind = z.output<typeof EventKindSchema>;
 
 /** One event of a plan's timeline, as stored in `events` and sent over SSE. */

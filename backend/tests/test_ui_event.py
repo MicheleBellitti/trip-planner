@@ -94,7 +94,15 @@ def test_agent_and_kind_values() -> None:
         "activities",
         "transport",
     ]
-    assert [k.value for k in EventKind] == ["status", "tool", "message", "usage", "error", "plan"]
+    assert [k.value for k in EventKind] == [
+        "status",
+        "tool",
+        "message",
+        "usage",
+        "error",
+        "plan",
+        "choice",
+    ]
 
 
 @pytest.mark.parametrize("agent", [a.value for a in AgentName])

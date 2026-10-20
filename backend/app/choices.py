@@ -9,19 +9,34 @@ itself with an `is_error` result; the backend then closes the row as `closed`.
 This module is the contract: the input model (its JSON Schema, schema/ask_traveller.json, is
 the agent's documentation of the tool, so every field description states its rule), the
 admission limits, the answers sent back to the coordinator (English) and the timeline titles
-(Italian). Storage and queries come later in the module.
+(Italian). Views and queries (the `choices` table) follow.
 """
 
 from __future__ import annotations
 
+import datetime as dt
 import re
-from collections.abc import Collection, Sequence
+import uuid
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal, Self, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 from pydantic_core import PydanticCustomError
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.covers import Cover
+from app.db import ChoiceRecord
 from app.events import SINGLE_LINE_PATTERN, one_line
 from app.plan import MAX_AMOUNT_CENTS, ContractModel, describe_validation_errors
 
@@ -335,3 +350,140 @@ def answered_title(request: ChoiceRequest, answered_by: AnsweredBy, selected: Se
         "timeout": "Tempo scaduto: sceglie Atlas",
         "closed": "Domanda chiusa: piano interrotto",
     }[answered_by]
+
+
+# ============================================================================================
+# Views: what the web shows
+# ============================================================================================
+
+
+class ChoiceOptionView(BaseModel):
+    """An option as the traveller sees it. There is no `place`: it is only the lookup key of
+    the photo."""
+
+    id: str
+    title: str
+    reason: str
+    duration_min: int | None = None
+    price: ChoicePrice | None = None
+    area: str | None = None
+    photo: Cover | None = None
+
+
+class PendingChoice(BaseModel):
+    """A question waiting for the traveller (or just asked): the `choice` event's payload."""
+
+    id: str
+    kind: ChoiceKind
+    question: str
+    multiple: bool
+    options: list[ChoiceOptionView]
+    asked_at: AwareDatetime
+    deadline_at: AwareDatetime
+
+    @classmethod
+    def from_record(cls, record: ChoiceRecord) -> PendingChoice:
+        request = request_of(record)
+        photos: Mapping[str, Any] = record.payload.get("photos") or {}
+        options = [
+            ChoiceOptionView(
+                id=option.id,
+                title=option.title,
+                reason=option.reason,
+                duration_min=option.duration_min,
+                price=option.price,
+                area=option.area,
+                photo=Cover.model_validate(photos[option.id]) if option.id in photos else None,
+            )
+            for option in request.options
+        ]
+        return cls(
+            id=record.id,
+            kind=request.kind,
+            question=request.question,
+            multiple=request.multiple,
+            options=options,
+            asked_at=record.asked_at,
+            deadline_at=record.deadline_at,
+        )
+
+
+def request_of(record: ChoiceRecord) -> ChoiceRequest:
+    """The stored request of a row."""
+    return ChoiceRequest.model_validate(record.payload["request"])
+
+
+# ============================================================================================
+# Queries
+# ============================================================================================
+
+
+async def insert_choice(
+    db: AsyncSession,
+    *,
+    choice_id: str,
+    plan_id: uuid.UUID,
+    request: ChoiceRequest,
+    photos: Mapping[str, Cover],
+    asked_at: dt.datetime,
+    deadline_at: dt.datetime,
+) -> ChoiceRecord:
+    """Store the question; `ON CONFLICT DO NOTHING`, so a replayed call keeps the first row.
+    Returns the stored row (an existing one wins). The caller owns the transaction."""
+    payload = {
+        "request": request.model_dump(mode="json", exclude_none=True),
+        "photos": {key: cover.model_dump(mode="json") for key, cover in photos.items()},
+    }
+    await db.execute(
+        pg_insert(ChoiceRecord)
+        .values(
+            id=choice_id,
+            plan_id=plan_id,
+            kind=request.kind,
+            payload=payload,
+            asked_at=asked_at,
+            deadline_at=deadline_at,
+        )
+        .on_conflict_do_nothing(index_elements=[ChoiceRecord.id])
+    )
+    stored = await db.scalar(
+        select(ChoiceRecord)
+        .where(ChoiceRecord.id == choice_id)
+        .execution_options(populate_existing=True)
+    )
+    if stored is None:  # pragma: no cover - the insert or the conflicting row exists
+        msg = f"choice {choice_id} vanished"
+        raise RuntimeError(msg)
+    return stored
+
+
+async def get_choice(db: AsyncSession, plan_id: uuid.UUID, choice_id: str) -> ChoiceRecord | None:
+    return await db.scalar(
+        select(ChoiceRecord).where(ChoiceRecord.id == choice_id, ChoiceRecord.plan_id == plan_id)
+    )
+
+
+async def asked_kinds(db: AsyncSession, plan_id: uuid.UUID) -> list[str]:
+    """The kinds asked so far in the plan, answered or not."""
+    rows = await db.scalars(select(ChoiceRecord.kind).where(ChoiceRecord.plan_id == plan_id))
+    return list(rows)
+
+
+async def pending_choice(db: AsyncSession, plan_id: uuid.UUID) -> ChoiceRecord | None:
+    """The open question (`answered_by IS NULL`), the latest asked."""
+    return await db.scalar(
+        select(ChoiceRecord)
+        .where(ChoiceRecord.plan_id == plan_id, ChoiceRecord.answered_by.is_(None))
+        .order_by(ChoiceRecord.asked_at.desc())
+        .limit(1)
+    )
+
+
+async def answered_choices(db: AsyncSession, plan_id: uuid.UUID) -> list[ChoiceRecord]:
+    """The closed questions, by `asked_at`."""
+    rows = await db.scalars(
+        select(ChoiceRecord)
+        .where(ChoiceRecord.plan_id == plan_id, ChoiceRecord.answered_by.is_not(None))
+        .order_by(ChoiceRecord.asked_at)
+    )
+    return list(rows)
