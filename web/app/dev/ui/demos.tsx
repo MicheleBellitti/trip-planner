@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/timeline";
 import { toast } from "@/components/ui/toast";
 import type { ChoiceOptionView } from "@/lib/choices";
+import { JOURNEY_MODE_NOTES } from "@/lib/journey-mode";
 
 export function SheetDemo() {
   const [open, setOpen] = useState(false);
@@ -213,7 +214,8 @@ export function FormDemo() {
       </Field>
       <ChoiceChips
         legend="Come viaggi"
-        hint="Per andata e ritorno. L'auto è la tua, anche se serve un traghetto."
+        hint="Vale per andata e ritorno."
+        note={JOURNEY_MODE_NOTES[mode] ?? null}
         name={modeName}
         options={MODES}
         value={mode}

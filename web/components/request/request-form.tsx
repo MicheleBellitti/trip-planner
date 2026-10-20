@@ -328,6 +328,7 @@ export function RequestForm({ today, initialValues, restoreLast = false, demoSce
     <Section title="Quando">
       <SegmentedControl
         legend="Date"
+        legendHidden
         name={dateMode}
         options={[
           { value: "exact", label: "Date fisse" },
@@ -582,16 +583,16 @@ export function RequestForm({ today, initialValues, restoreLast = false, demoSce
       onKeyDown={advanceOnEnter}
       noValidate
       aria-label="Richiesta di viaggio"
-      className="grid max-w-[40rem] gap-8 lg:max-w-none lg:grid-cols-[minmax(0,50rem)_minmax(0,20rem)] lg:items-start lg:gap-x-14"
+      className="grid max-w-[40rem] gap-8 lg:max-w-none lg:grid-cols-[minmax(0,62rem)_minmax(0,20rem)] lg:items-start lg:gap-x-14"
     >
       {/* One markup for every width, so the server's HTML is already the right layout: the four
           sections in the phone's order, stacked. From 1080 px the two wrappers stop being
           transparent (display: contents below) and become two columns that each read top to
           bottom: the trip and its dates on the left, the party and the money on the right. The
-          left one is the taller since the travel mode joined the trip (about 750 px against 510,
-          580 with children): it runs a little past a 900 px screen, while the sticky read-back
-          card keeps the button in view (DESIGN.md, "The request form"). */}
-      <div className="grid gap-8 lg:grid-cols-2 lg:gap-x-12 lg:gap-y-6">
+          left one is the taller since the travel mode joined the trip, so it is the wider
+          (1.25 to 1): at 1440 px the five modes fit one line and the request, as it opens, fits a
+          900 px screen (DESIGN.md, "The request form"). */}
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:gap-x-12 lg:gap-y-6">
         {desktop ? null : summary}
         {desktop ? null : quotaNotice}
         <div className="contents lg:grid lg:content-start lg:gap-6">
@@ -666,7 +667,8 @@ function Section({
   return (
     <section
       className={cx(
-        "grid content-start gap-5 border-t border-rule pt-6 lg:pt-5",
+        // 16 px between fields from 1080 px (20 on the phone): the request then fits 1440 by 900.
+        "grid content-start gap-5 border-t border-rule pt-6 lg:gap-4 lg:pt-5",
         className,
       )}
     >

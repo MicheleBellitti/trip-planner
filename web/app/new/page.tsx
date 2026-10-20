@@ -30,8 +30,7 @@ export default function NewPlanPage({ searchParams }: { searchParams: SearchPara
         </Link>
         <h1 className="mt-2 font-cond text-display font-semibold lg:text-display-lg">Nuovo piano</h1>
         <p className="mt-1.5 max-w-prose text-small text-ink-2">
-          Descrivi il viaggio. Cinque agenti cercano come arrivarci, dove dormire, cosa fare e come muoverti mentre li
-          guardi lavorare, e
+          Descrivi il viaggio. Cinque agenti cercano come arrivarci, dove dormire e cosa fare mentre li guardi lavorare, e
           alla fine trovi ogni prenotazione con la data entro cui farla.
         </p>
         <div className="mt-7">
