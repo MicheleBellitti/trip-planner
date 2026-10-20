@@ -300,16 +300,34 @@ describe("RequestForm", () => {
     expect(mocks.createPlan).not.toHaveBeenCalled();
   });
 
-  it("names a mode other than the plane in the trip's summary", () => {
+  it("names the chosen mode first in the trip's summary, the plane included", () => {
     render(<RequestForm today={TODAY} initialValues={exampleRequestForm(TODAY)} />);
     const summary = screen.getByRole("region", { name: "Il tuo viaggio" });
-    const facts = () => within(summary).getAllByRole("listitem").map((item) => item.textContent ?? "");
-    expect(facts().some((fact) => fact.startsWith("In "))).toBe(false);
+    // The facts under the route line ("Da Milano", "A Lisbona" are its stations).
+    const facts = () => Array.from(summary.querySelectorAll("ul > li"), (item) => item.textContent ?? "");
+    expect(facts()).toEqual(["In aereo", "14–18 aprile 2027, 4 notti", "2 adulti, 2 bambini di 8 e 11 anni", "2.400 € in tutto"]);
 
     fireEvent.click(screen.getByRole("radio", { name: "Traghetto" }));
 
-    expect(facts()[facts().indexOf("In traghetto")]).toBe("In traghetto");
-    expect(facts().indexOf("In traghetto")).toBeLessThan(facts().indexOf("14–18 aprile 2027, 4 notti"));
+    // The same rows: switching mode never moves the button below the card.
+    expect(facts()).toHaveLength(4);
+    expect(facts()[0]).toBe("In traghetto");
+  });
+
+  it("explains on foot or with the car under the chips, only for those two modes", () => {
+    render(<RequestForm today={TODAY} initialValues={exampleRequestForm(TODAY)} />);
+    const group = screen.getByRole("group", { name: "Come viaggi" });
+    const hint = (group.getAttribute("aria-describedby") ?? "").split(" ").map((id) => document.getElementById(id)?.textContent);
+    expect(hint).toEqual(["Vale per andata e ritorno."]);
+    const note = within(group).getByRole("status");
+    expect(note.textContent).toBe("");
+
+    fireEvent.click(screen.getByRole("radio", { name: "Traghetto" }));
+    expect(note.textContent).toBe("A bordo a piedi: se porti l'auto, scegli Auto.");
+    fireEvent.click(screen.getByRole("radio", { name: "Auto" }));
+    expect(note.textContent).toBe("Con la tua auto, anche sui traghetti se servono.");
+    fireEvent.click(screen.getByRole("radio", { name: "Treno" }));
+    expect(note.textContent).toBe("");
   });
 
   it("puts a 422 on the mode under its row", async () => {

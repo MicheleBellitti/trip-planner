@@ -240,8 +240,11 @@ export interface ChoiceChipOption<T extends string> {
 interface ChoiceChipsProps<T extends string> {
   /** The question, as the group's legend ("Come viaggi"). */
   legend: ReactNode;
-  /** Help under the legend, ink-2, read with every option. */
+  /** Help under the legend, ink-2: the group's description, heard once on entering it. */
   hint?: ReactNode;
+  /** A line under the chips about the chosen option ("A bordo a piedi: …"), or nothing. It sits in
+   * a polite live region that is always there, so the line a choice brings is announced. */
+  note?: ReactNode;
   /** What is wrong, under the chips, in error red with a cross (as Field draws it). */
   error?: ReactNode;
   name: string;
@@ -259,6 +262,7 @@ interface ChoiceChipsProps<T extends string> {
 export function ChoiceChips<T extends string>({
   legend,
   hint,
+  note,
   error,
   name,
   options,
@@ -270,16 +274,19 @@ export function ChoiceChips<T extends string>({
   const generated = useId();
   const hintId = `${generated}-hint`;
   const errorId = `${generated}-error`;
-  const describedBy = [hint ? hintId : null, error ? errorId : null].filter(Boolean).join(" ") || undefined;
 
   return (
-    <fieldset className={cx("grid min-w-0 gap-1.5 border-0 p-0", className)}>
+    <fieldset
+      aria-describedby={hint ? hintId : undefined}
+      className={cx("grid min-w-0 gap-1.5 border-0 p-0", className)}
+    >
       <legend className="mb-1.5 p-0 text-meta font-semibold text-ink">{legend}</legend>
       {hint ? (
         <p id={hintId} className="-mt-1 text-meta text-ink-2">
           {hint}
         </p>
       ) : null}
+      <div>
       <div className="flex flex-wrap gap-2">
         {options.map((option) => (
           <label
@@ -302,13 +309,19 @@ export function ChoiceChips<T extends string>({
               checked={option.value === value}
               onChange={() => onValueChange(option.value)}
               // The error is read as each radio's description: aria-invalid is not a radio's attribute.
-              aria-describedby={describedBy}
+              aria-describedby={error ? errorId : undefined}
               className="sr-only"
             />
             <Icon name={option.icon} size={16} />
             {option.label}
           </label>
         ))}
+      </div>
+      {/* Always rendered and never display:none (empty, it takes no room): a live region that
+          appears together with its text is often not announced. */}
+      <p role="status" aria-live="polite" className="text-meta text-ink-2 not-empty:mt-2">
+        {note}
+      </p>
       </div>
       {error ? (
         <p id={errorId} className="flex items-start gap-1.5 text-meta text-error">

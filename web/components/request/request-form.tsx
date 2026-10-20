@@ -24,7 +24,7 @@ import { useIsDesktop } from "@/components/live/hooks";
 import { Notice } from "@/components/ui/notice";
 import { MonthUsage } from "@/components/home/month-usage";
 import { api, RequestValidationError, UnauthorizedError } from "@/lib/api";
-import { JOURNEY_MODE_LABELS } from "@/lib/journey-mode";
+import { JOURNEY_MODE_LABELS, JOURNEY_MODE_NOTES } from "@/lib/journey-mode";
 import { useMe } from "@/lib/me";
 import {
   childAgePath,
@@ -312,7 +312,8 @@ export function RequestForm({ today, initialValues, restoreLast = false, demoSce
       )}
       <ChoiceChips
         legend="Come viaggi"
-        hint="Per andata e ritorno. L'auto è la tua, anche se serve un traghetto."
+        hint="Vale per andata e ritorno."
+        note={JOURNEY_MODE_NOTES[values.journeyMode] ?? null}
         name={journeyMode}
         options={MODE_OPTIONS}
         value={values.journeyMode}
@@ -586,9 +587,10 @@ export function RequestForm({ today, initialValues, restoreLast = false, demoSce
       {/* One markup for every width, so the server's HTML is already the right layout: the four
           sections in the phone's order, stacked. From 1080 px the two wrappers stop being
           transparent (display: contents below) and become two columns that each read top to
-          bottom: the trip and its dates on the left, the party and the money on the right. They
-          balance (about 600 px each, with children too), so the whole request fits a 900 px
-          screen. */}
+          bottom: the trip and its dates on the left, the party and the money on the right. The
+          left one is the taller since the travel mode joined the trip (about 750 px against 510,
+          580 with children): it runs a little past a 900 px screen, while the sticky read-back
+          card keeps the button in view (DESIGN.md, "The request form"). */}
       <div className="grid gap-8 lg:grid-cols-2 lg:gap-x-12 lg:gap-y-6">
         {desktop ? null : summary}
         {desktop ? null : quotaNotice}
