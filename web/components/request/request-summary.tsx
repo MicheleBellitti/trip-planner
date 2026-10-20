@@ -1,7 +1,8 @@
 import { cx } from "@/components/ui/cx";
 import type { RequestFormValues } from "@/lib/request-form";
 
-import { budgetSummary, datesSummary, travelersSummary } from "./summary";
+import { JOURNEY_MODE_ICONS } from "./form-model";
+import { budgetSummary, datesSummary, journeySummary, travelersSummary } from "./summary";
 import { RouteLine, TripFact } from "./trip-outline";
 
 /**
@@ -12,6 +13,7 @@ export function RequestSummary({ values, className }: { values: RequestFormValue
   const origin = values.origin.trim();
   const destination = values.destination.trim();
   const idea = values.destinationIdea.trim();
+  const journey = journeySummary(values);
   const dates = datesSummary(values);
   const budget = budgetSummary(values);
 
@@ -31,6 +33,7 @@ export function RequestSummary({ values, className }: { values: RequestFormValue
         }
       />
       <ul className="grid gap-2 border-t border-rule pt-4 text-small">
+        {journey ? <TripFact icon={JOURNEY_MODE_ICONS[values.journeyMode]}>{journey}</TripFact> : null}
         <TripFact icon="calendar-blank" missing={!dates}>
           {dates ?? "Date da scegliere"}
         </TripFact>

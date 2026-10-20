@@ -7,6 +7,7 @@ import {
   datesSummary,
   formatDayRange,
   formatWholeEuros,
+  journeySummary,
   monthName,
   nightsBetween,
   travelersSummary,
@@ -45,6 +46,16 @@ describe("dates in words", () => {
     expect(datesSummary(values({ dateMode: "flexible", month: "2026-11" }))).toBe("Novembre 2026");
     expect(datesSummary(values({ dateMode: "flexible", nights: "1" }))).toBe("1 notte");
     expect(datesSummary(values({ dateMode: "flexible", month: "2026-13", nights: "x" }))).toBeNull();
+  });
+});
+
+describe("the travel mode in words", () => {
+  it("names the mode only when it is not the plane", () => {
+    expect(journeySummary(values())).toBeNull();
+    expect(journeySummary(values({ journeyMode: "train" }))).toBe("In treno");
+    expect(journeySummary(values({ journeyMode: "ferry" }))).toBe("In traghetto");
+    expect(journeySummary(values({ journeyMode: "car" }))).toBe("In auto");
+    expect(journeySummary(values({ journeyMode: "coach" }))).toBe("In pullman");
   });
 });
 
