@@ -314,3 +314,44 @@ def test_ui_event_kind_includes_choice() -> None:
         }
     )
     assert event.kind is EventKind.CHOICE
+
+
+async def test_refused_guard_rolls_back_its_writes(
+    db_session_factory: Factory, plan_rows: PlanRows
+) -> None:
+    from sqlalchemy import update
+
+    from app.db import PlanRecord
+
+    plan_id, sink = await setup(db_session_factory, plan_rows)
+
+    async def write_then_refuse(db: AsyncSession) -> bool:
+        await db.execute(update(PlanRecord).where(PlanRecord.id == plan_id).values(cost_cents=77))
+        return False
+
+    result = await sink.emit(
+        backend_event(EventKind.CHOICE, "x", ts=NOW),
+        ma_event_id="sevt_rollback",
+        guard=write_then_refuse,
+    )
+    assert result.refused
+    record = await _plan(db_session_factory, plan_id)
+    assert record.cost_cents == 0
+
+
+async def test_close_choice_guard_predicate_alone_refuses_a_closed_row(
+    db_session_factory: Factory, plan_rows: PlanRows
+) -> None:
+    from sqlalchemy import update
+
+    plan_id, sink = await setup(db_session_factory, plan_rows)
+    await add(db_session_factory, plan_id)
+    async with db_session_factory() as db, db.begin():
+        await db.execute(
+            update(ChoiceRecord)
+            .where(ChoiceRecord.id == "sevt_q1")
+            .values(answer=[], answered_by="skip", answered_at=NOW)
+        )
+    result = await close_choice(sink, "sevt_q1", answered_by="traveller", selected=["a1"], now=NOW)
+    assert result is None
+    assert await choice_events(db_session_factory, plan_id) == []

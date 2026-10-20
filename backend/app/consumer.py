@@ -368,7 +368,8 @@ class EmitResult:
     """What `EventSink.emit` did."""
 
     event: UIEvent | None
-    """The stored event; None when `build` returned None or `ma_event_id` was a duplicate."""
+    """The stored event; None when `build` returned None, `ma_event_id` was a duplicate or the
+    `guard` refused."""
     duplicate: bool
     """True when an event with the same `ma_event_id` was already stored: NOTHING was changed,
     `update` included. A caller whose change must happen checks `status_applied`."""
@@ -390,6 +391,10 @@ EventBuilder = Callable[[int], UIEvent | None]
 
 class _DuplicateEventError(Exception):
     """Internal: the insert hit `ma_event_id`'s UNIQUE constraint; roll the transaction back."""
+
+
+class _GuardRefusedError(Exception):
+    """Internal: the guard returned False; roll the transaction back (its writes included)."""
 
 
 class EventSink:
@@ -476,9 +481,7 @@ class EventSink:
                 if all_or_nothing and change is not None and not allowed:
                     return EmitResult(event=None, duplicate=False, status_applied=False)
                 if guard is not None and not await guard(db):
-                    return EmitResult(
-                        event=None, duplicate=False, status_applied=False, refused=True
-                    )
+                    raise _GuardRefusedError
                 next_seq = await db.scalar(
                     select(func.coalesce(func.max(EventRecord.seq), -1) + 1).where(
                         EventRecord.plan_id == self._plan_id
@@ -511,6 +514,8 @@ class EventSink:
                     status_applied = _apply_update(plan, update, allowed=allowed)
         except _DuplicateEventError:
             return EmitResult(event=None, duplicate=True, status_applied=False)
+        except _GuardRefusedError:
+            return EmitResult(event=None, duplicate=False, status_applied=False, refused=True)
         ended = update.status.to if status_applied and update and update.status else None
         self._publish(event, ended)
         return EmitResult(event=event, duplicate=False, status_applied=status_applied)
