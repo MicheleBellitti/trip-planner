@@ -37,7 +37,7 @@ Contents:
 | Module | Responsibility | Spec section | Built by |
 |---|---|---|---|
 | `app/ma_client.py` | `ManagedAgentsClient` Protocol, value types, errors, helpers; `SdkManagedAgentsClient` over `anthropic==1.13.0` (which runs on `httpx2`) | Backend FastAPI; Log e resilienza; Costi | A |
-| `tests/fakes/__init__.py`, `tests/fakes/README.md`, `tests/fixtures/ma/*.jsonl` | `FakeManagedAgentsClient`: scripted JSONL replay, recording, fault injection; 14 scenarios | Test e verifica; CLAUDE.md "Testing offline" | A |
+| `tests/fakes/__init__.py`, `tests/fakes/README.md`, `tests/fixtures/ma/*.jsonl` | `FakeManagedAgentsClient`: scripted JSONL replay, recording, fault injection; 16 scenarios | Test e verifica; CLAUDE.md "Testing offline" | A |
 | `tests/fakes/demo.py` | `DemoManagedAgentsClient`: the DEMO_MODE client, the scenarios replayed at their recorded pace (decision 32) | Interfaccia e design (UI work without cost) | R |
 | `app/consumer.py` | One task per plan: streams to UI events, `submit_plan`, `ask_traveller`, idle handling, resume; `EventSink` persistence; the plan's lease across processes (`PlanLease`, decision 31) | Backend FastAPI, consumer steps 1-6 | B, R |
 | `app/choices.py` | The `ask_traveller` contract (input model, limits, the answers to the coordinator, the Italian titles) and the `choices` table's queries (decision 41) | Piano di creazione UX, §2 | T |
@@ -96,18 +96,20 @@ graph acyclic. The parentheses list what each module actually imports.
     fx (clock, db, plan)
     triptracker_schema (clock, config)
     auth (clock, config, db)
+    covers (clock, db, events)                                  destination and place photos
  7  mapping (fx, links, plan)                                   pure
- 8  consumer (clock, config, db, events, fx, hub, ma_client, mapping, plan, results,
-              triptracker_schema)
- 9  sessions (auth, clock, config, consumer, db, events, fx, hub, lockfile, ma_client, request,
-              triptracker_schema; tests.fakes.demo imported lazily in DEMO_MODE)
-10  routes (auth, config, consumer, db, evals_store, events, hub, links, ma_client, request,
-            sessions, triptracker_schema)
+    choices (covers, db, events, plan)                          the ask_traveller contract and queries
+ 8  consumer (choices, clock, config, covers, db, events, fx, hub, ma_client, mapping, plan,
+              results, triptracker_schema)
+ 9  sessions (auth, choices, clock, config, consumer, covers, db, events, fx, hub, lockfile,
+              ma_client, request, triptracker_schema; tests.fakes.demo imported lazily in DEMO_MODE)
+10  routes (auth, choices, config, consumer, covers, db, evals_store, events, hub, links,
+            ma_client, request, sessions, triptracker_schema)
     jobs (clock, config, consumer, db, ma_client, sessions)
-    cli (auth, clock, config, consumer, db, evals_store, events, hub, ma_client, request,
+    cli (auth, choices, clock, config, consumer, db, evals_store, events, hub, ma_client, request,
          sessions, triptracker_schema; tests.fakes imported lazily inside `replay`)
 11  main (config, db, jobs, routes, sessions)
-    schemas (events, plan, request, results)                    the JSON Schema exporter
+    schemas (choices, events, plan, request, results)                    the JSON Schema exporter
 ```
 
 ```mermaid
@@ -128,6 +130,17 @@ graph BT
   mapping --> consumer
   events --> consumer
   results --> consumer
+  covers --> choices
+  db --> choices
+  events --> choices
+  plan --> choices
+  choices --> consumer
+  covers --> consumer
+  choices --> sessions
+  covers --> sessions
+  choices --> routes
+  covers --> routes
+  choices --> cli
   consumer --> sessions
   lockfile --> sessions
   auth --> sessions
@@ -306,9 +319,9 @@ outside DEMO_MODE).
 | ma_client | `iter_session_history(client, sid, *, since=None)`, `iter_thread_history(client, sid, tid)`, `list_threads(sid) -> list[ThreadInfo]` | backfill, resume, first-message check |
 | ma_client | `archive_thread(sid, tid)` | an idle thread superseded by a newer thread of the same agent |
 | ma_client | `send_user_message(sid, text)` | the first message |
-| ma_client | `send_custom_tool_result(sid, tool_use_id, content, is_error)` | steps 4 and 4b |
-| choices | `parse_choice_request(input) -> ChoiceRequest \| ChoiceRejected`, `admission_refusal(kind, asked, *, accepted)`, `insert_choice(...)`, `get_choice`, `asked_kinds`, `answered_choices`, `answer_text(request, answered_by, selected)`, `auto_pick`, `asked_title`, `answered_title` | step 4b |
-| covers | `ChoicePhotos` Protocol (`PlacePhotos`, `NoPhotos`): the photos of the options that name a place, 3 s in all | step 4b |
+| ma_client | `send_custom_tool_result(sid, tool_use_id, content, is_error)` | steps 4 and 4b (§5, "ask_traveller") |
+| choices | `parse_choice_request(input) -> ChoiceRequest \| ChoiceRejected`, `admission_refusal(kind, asked, *, accepted)`, `insert_choice(...)`, `get_choice`, `asked_kinds`, `answered_choices`, `answer_text(request, answered_by, selected)`, `auto_pick`, `asked_title`, `answered_title` | the consumer's step 4b (§5, "ask_traveller") |
+| covers | `ChoicePhotos` Protocol (`PlacePhotos`, `NoPhotos`): the photos of the options that name a place, 3 s in all | the consumer's step 4b (§5, "ask_traveller") |
 | ma_client | `send_interrupt(sid)` | after the 3rd failed submission, or trip.json unavailable |
 | ma_client | `usage_from_event(raw) -> SessionUsage \| None`; `retrieve_session(sid)` (through `record_session_cost`) | cost; the final cost read (decision 11b) |
 | ma_client | `archive_when_idle(client, sid)` | ready, interrupted |
