@@ -70,6 +70,8 @@ FIXTURES_DIR = FIXTURES_ROOT / "ma"
 """Where scenario scripts live: backend/tests/fixtures/ma/<scenario>.jsonl."""
 
 FAKE_EPOCH = dt.datetime(2026, 10, 12, 10, 0, tzinfo=dt.UTC)
+INTERRUPTED_TOOL_TEXT = "Tool execution was interrupted before completion. Please retry."
+"""What the platform answers a waiting custom tool call with on `user.interrupt` (probe P14)."""
 """`processed_at` of the first auto-stamped event of a session; every later auto-stamped event
 is `AUTO_STAMP_STEP` after the latest `processed_at` the session has seen."""
 
@@ -908,6 +910,8 @@ class FakeManagedAgentsClient:
         payload: dict[str, Any] = {"type": "user.interrupt"}
         if thread_id is not None:
             payload["session_thread_id"] = thread_id
+        if thread_id is None:
+            self._close_pending_custom_tool_calls(session)
         # "Interrupt events may have empty IDs in the current implementation" [SKILL].
         self._accept_send(session, payload, echo_id="")
         self._succeeded("send_interrupt")
@@ -1149,6 +1153,29 @@ class FakeManagedAgentsClient:
         return session
 
     # --- sends ----------------------------------------------------------------------------
+
+    def _close_pending_custom_tool_calls(self, session: _Session) -> None:
+        """Probe P14: a `user.interrupt` (without a thread id) makes the platform answer every
+        custom tool call still waiting for a result with an `agent.tool_result`, before the
+        interrupt's own echo. The call then counts as answered: a later
+        `user.custom_tool_result` is accepted and recorded, never echoed."""
+        pending = [
+            event["id"]
+            for event in session.history
+            if event.get("type") == "agent.custom_tool_use"
+            and event["id"] in session.custom_tool_use_ids - session.answered_tool_use_ids
+        ]
+        for tool_use_id in pending:
+            session.answered_tool_use_ids.add(tool_use_id)
+            self._emit(
+                session,
+                {
+                    "type": "agent.tool_result",
+                    "tool_use_id": tool_use_id,
+                    "is_error": True,
+                    "content": [{"type": "text", "text": INTERRUPTED_TOOL_TEXT}],
+                },
+            )
 
     def _accept_send(
         self, session: _Session, payload: dict[str, Any], *, echo_id: str | None

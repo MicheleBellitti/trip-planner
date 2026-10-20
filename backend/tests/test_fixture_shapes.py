@@ -24,6 +24,7 @@ from anthropic.types.beta.sessions import BetaManagedAgentsSessionEvent
 from jsonschema import Draft202012Validator
 from pydantic import TypeAdapter, ValidationError
 
+from app.choices import ChoiceRequest
 from app.ma_client import PRIMARY_SCOPE
 from app.plan import Plan
 from app.request import PlanRequest
@@ -81,7 +82,11 @@ def submit_expectations(path: Path) -> list[tuple[dict[str, Any], bool, int]]:
     uses: dict[str, tuple[dict[str, Any], int]] = {}
     found: list[tuple[dict[str, Any], bool, int]] = []
     for step, line in zip(steps, lines, strict=True):
-        if step["op"] == "emit" and step["event"]["type"] == "agent.custom_tool_use":
+        if (
+            step["op"] == "emit"
+            and step["event"]["type"] == "agent.custom_tool_use"
+            and step["event"]["name"] != "ask_traveller"
+        ):
             event = step["event"]
             assert event["name"] == "submit_plan", f"{path.name}:{line}"
             uses[event["id"]] = (cast(dict[str, Any], resolve_fixtures(event["input"])), line)
@@ -161,6 +166,27 @@ def test_submit_plan_inputs_match_the_expected_verdict(path: Path) -> None:
             assert booking.book_by is None or booking.book_by > FAKE_EPOCH, where
             assert booking.price is not None, where
             assert booking.scheduled_for is not None, where
+
+
+def ask_traveller_inputs() -> list[tuple[str, dict[str, Any], int]]:
+    return [
+        (path.name, cast(dict[str, Any], event["input"]), line)
+        for path in SCENARIOS
+        for _, event, line in emitted(path)
+        if event["type"] == "agent.custom_tool_use" and event["name"] == "ask_traveller"
+    ]
+
+
+def test_ask_traveller_inputs_validate() -> None:
+    """Every question a scenario asks is a valid `ChoiceRequest`, and the choice scenarios ship
+    at least one."""
+    inputs = ask_traveller_inputs()
+    assert {name for name, _, _ in inputs} >= {"choices.jsonl", "choice_interrupt.jsonl"}
+    for name, tool_input, line in inputs:
+        try:
+            ChoiceRequest.model_validate(tool_input)
+        except ValidationError as exc:  # pragma: no cover - the message is the diagnosis
+            pytest.fail(f"{name}:{line}: {exc.errors()[:3]}")
 
 
 def test_scenarios_cover_accepted_and_rejected_submissions() -> None:

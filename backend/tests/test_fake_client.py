@@ -17,6 +17,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from app.choices import ChoiceRequest, auto_pick
 from app.ma_client import (
     PRIMARY_SCOPE,
     AgentPin,
@@ -321,6 +322,52 @@ async def test_interrupt_echo_has_an_empty_id() -> None:
     echoes = [event for event in fake.history if event["type"] == "user.interrupt"]
     assert [event["id"] for event in echoes] == ["", ""]
     assert all(event["processed_at"] for event in echoes)
+
+
+INTERRUPTED_TEXT = "Tool execution was interrupted before completion. Please retry."
+
+
+async def test_interrupt_closes_a_pending_custom_tool_call() -> None:
+    """Probe P14: on user.interrupt the platform answers the waiting call itself, before the
+    interrupt's echo."""
+    fake = FakeManagedAgentsClient()
+    use = fake.emit({"type": "agent.custom_tool_use", "name": "ask_traveller", "input": {}})
+    await fake.send_interrupt(SID)
+    assert [event["type"] for event in fake.history] == [
+        "agent.custom_tool_use",
+        "agent.tool_result",
+        "user.interrupt",
+    ]
+    closure = fake.history[1]
+    assert closure["tool_use_id"] == use["id"]
+    assert closure["is_error"] is True
+    assert closure["content"] == [{"type": "text", "text": INTERRUPTED_TEXT}]
+    assert closure["id"]
+    assert closure["processed_at"]
+    assert [sent.payload["type"] for sent in fake.sent] == ["user.interrupt"]  # not a send
+
+
+async def test_a_late_result_after_the_closure_is_accepted_without_echo() -> None:
+    fake = FakeManagedAgentsClient()
+    use = fake.emit({"type": "agent.custom_tool_use", "name": "ask_traveller", "input": {}})
+    await fake.send_interrupt(SID)
+    before = len(fake.history)
+    await fake.send_custom_tool_result(SID, use["id"], "Picked: a1", False)  # no error
+    assert len(fake.history) == before  # ignored: no echo
+    assert fake.sent[-1].payload["type"] == "user.custom_tool_result"  # but recorded
+
+
+async def test_interrupt_leaves_answered_calls_alone() -> None:
+    fake = FakeManagedAgentsClient()
+    use = fake.emit({"type": "agent.custom_tool_use", "name": "submit_plan", "input": {}})
+    await fake.send_custom_tool_result(SID, use["id"], "Plan accepted.", False)
+    await fake.send_interrupt(SID)
+    assert "agent.tool_result" not in [event["type"] for event in fake.history]
+    # A thread-scoped interrupt closes nothing either (P14 measured the session one).
+    other = fake.emit({"type": "agent.custom_tool_use", "name": "ask_traveller", "input": {}})
+    fake.emit(created_event())
+    await fake.send_interrupt(SID, THREAD)
+    assert other["id"] not in [e.get("tool_use_id") for e in fake.history]
 
 
 async def test_custom_tool_results_round_trip_and_a_second_result_is_not_echoed() -> None:
@@ -848,6 +895,8 @@ class ReferenceConsumer:
         self.accepted = False
         self.interrupt_requested = False
         self.threads: dict[str, asyncio.Task[None]] = {}
+        self.picks: list[list[str]] = []
+        self.answer_choices = True  # False: leave a question waiting, for the interrupt test
 
     def store(self, scope: str, raw: RawEvent) -> bool:
         key = (scope, raw["id"] or f"noid:{raw['type']}:{raw.get('processed_at')}")
@@ -929,6 +978,8 @@ class ReferenceConsumer:
         return None
 
     async def answer(self, raw: RawEvent) -> str | None:
+        if raw["name"] == "ask_traveller":
+            return await self.answer_choice(raw)
         try:
             Plan.model_validate(raw["input"])
         except ValidationError as error:
@@ -942,6 +993,15 @@ class ReferenceConsumer:
             return None
         self.accepted = True
         await self.fake.send_custom_tool_result(self.sid, raw["id"], "Plan accepted.", False)
+        return None
+
+    async def answer_choice(self, raw: RawEvent) -> str | None:
+        if not self.answer_choices:
+            return None
+        request = ChoiceRequest.model_validate(raw["input"])
+        self.picks.append(auto_pick(request))
+        text = f"The traveller chose: {', '.join(auto_pick(request))}."
+        await self.fake.send_custom_tool_result(self.sid, raw["id"], text, False)
         return None
 
     async def decide(self, stop_reason: dict[str, Any]) -> str | None:
@@ -1082,6 +1142,53 @@ async def test_interrupt_end_to_end() -> None:
     assert fake.archived == [SID]
     echoes = [e for e in consumer.received[PRIMARY_SCOPE] if e["type"] == "user.interrupt"]
     assert [e["id"] for e in echoes] == [""]
+
+
+async def test_choices_scenario() -> None:
+    fake = FakeManagedAgentsClient.from_scenario("choices")
+    status, consumer = await play(fake)
+    await fake.wait_until_done()
+    fake.assert_script_done()
+    assert status == "ready"
+    assert consumer.picks == [["a1", "a2"], ["c1", "c2"]]
+    asked = [e for e in consumer.received[PRIMARY_SCOPE] if e["type"] == "agent.custom_tool_use"]
+    assert [(e["name"], e["input"]["kind"]) for e in asked[:2]] == [
+        ("ask_traveller", "activities"),
+        ("ask_traveller", "food"),
+    ]
+    assert asked[-1]["name"] == "submit_plan"
+    answers = [s.payload for s in fake.sent if s.payload["type"] == "user.custom_tool_result"]
+    assert [a["custom_tool_use_id"] for a in answers] == [e["id"] for e in asked]
+    assert not any(e["type"] == "agent.tool_result" and e.get("is_error") for e in fake.history)
+
+
+async def test_choice_interrupt_scenario() -> None:
+    fake = FakeManagedAgentsClient.from_scenario("choice_interrupt")
+    consumer = ReferenceConsumer(fake)
+    consumer.answer_choices = False
+    task = asyncio.create_task(consumer.run("brief"))
+    async with asyncio.timeout(10):
+        # The question is asked and waits: the session idles on requires_action.
+        while not any(e["type"] == "session.status_idle" for e in fake.history):  # noqa: ASYNC110
+            await asyncio.sleep(0.01)
+    consumer.interrupt_requested = True
+    await fake.send_interrupt(SID)
+    async with asyncio.timeout(10):
+        assert await task == "interrupted"
+    await fake.wait_until_done()
+    fake.assert_script_done()
+    ask = next(e for e in fake.history if e["type"] == "agent.custom_tool_use")
+    sequence = [e["type"] for e in fake.history]
+    closure = next(e for e in fake.history if e["type"] == "agent.tool_result")
+    assert closure["tool_use_id"] == ask["id"]
+    assert closure["is_error"] is True
+    assert sequence.index("agent.tool_result") + 1 == sequence.index("user.interrupt")
+    idles = [e for e in fake.history if e["type"] == "session.status_idle"]
+    assert [e["stop_reason"]["type"] for e in idles] == ["requires_action", "end_turn"]
+    assert sequence.index("session.thread_status_idle") > sequence.index("user.interrupt")
+    assert consumer.picks == []  # the question was never answered
+    thread = next(t for t in fake.threads() if not t.is_primary)
+    assert fake.thread_history(thread.id)[-1]["stop_reason"] == {"type": "end_turn"}
 
 
 async def test_unknown_event_types_end_to_end() -> None:

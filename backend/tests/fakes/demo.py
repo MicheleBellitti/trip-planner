@@ -26,6 +26,9 @@ session with `end_turn`, like the real API, so "Interrompi" works everywhere. St
 for the user get `WAIT_FOR_USER_SECONDS` instead of their scripted timeout.
 
 `restart_resume` is not offered: it needs the process to die halfway through a call.
+`choice_interrupt` is not offered either: it is a test scenario that ends on the interrupt
+the test sends at a waiting question. `choices` is offered (not the default): its two
+questions wait for the traveller's answers.
 """
 
 from __future__ import annotations
@@ -64,7 +67,7 @@ from tests.fakes import (
     load_jsonl,
 )
 
-EXCLUDED_SCENARIOS: frozenset[str] = frozenset({"restart_resume"})
+EXCLUDED_SCENARIOS: frozenset[str] = frozenset({"restart_resume", "choice_interrupt"})
 """Shipped scenarios the demo does not offer (see the module docstring)."""
 
 MAX_GAP_SECONDS = 6.0
