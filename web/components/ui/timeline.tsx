@@ -84,10 +84,13 @@ const DOTS: Record<StationKind, string> = {
   wave: "size-4 rounded-full border-[3.5px] border-ink bg-surface",
   message: "h-3 w-[18px] rounded-[7px] border-[2.5px] border-ink bg-surface",
   error: "grid size-5 place-items-center rounded-full bg-surface text-error",
-  current:
-    "size-[18px] rounded-full border-4 border-line bg-surface after:absolute after:-inset-[9px] after:rounded-full " +
-    "after:border-2 after:border-line after:opacity-0 motion-safe:after:animate-halo",
+  current: "size-[18px] rounded-full border-4 border-line bg-surface",
 };
+
+/** The running node's halo (DESIGN.md gives it to "while running" only). */
+const HALO =
+  "after:absolute after:-inset-[9px] after:rounded-full after:border-2 after:border-line after:opacity-0 " +
+  "motion-safe:after:animate-halo";
 
 interface TimelineItemProps extends Omit<ComponentPropsWithoutRef<"li">, "children"> {
   kind: StationKind;
@@ -98,12 +101,15 @@ interface TimelineItemProps extends Omit<ComponentPropsWithoutRef<"li">, "childr
   /** Just arrived: the line draws down to it (320 ms, expo out), then it fades in. With reduced
    * motion it only fades in (120 ms). Set it for one render, on events that arrive live. */
   fresh?: boolean;
+  /** `current` only: draw the halo around the node. Off for a plate that waits on the traveller,
+   * where nothing runs. */
+  halo?: boolean;
   children: ReactNode;
 }
 
 /** One station: time, the line with its glyph, and the content (TimelineTitle, TimelineMeta, a
  * message Disclosure, a ToolChip plate for `current`). */
-export function TimelineItem({ kind, time, dateTime, fresh = false, className, children, ...props }: TimelineItemProps) {
+export function TimelineItem({ kind, time, dateTime, fresh = false, halo = true, className, children, ...props }: TimelineItemProps) {
   return (
     <li
       data-kind={kind}
@@ -130,6 +136,7 @@ export function TimelineItem({ kind, time, dateTime, fresh = false, className, c
             "absolute left-1/2 -translate-x-1/2 -translate-y-1/2",
             DOT_TOP,
             DOTS[kind],
+            kind === "current" && halo && HALO,
             fresh && "motion-safe:animate-arrive motion-reduce:animate-fade-in",
           )}
         >

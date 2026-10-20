@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import choices from "@/lib/plan-events/__fixtures__/backend/choices.json";
 import budgetReached from "@/lib/plan-events/__fixtures__/backend/budget-reached.json";
 import happyPath from "@/lib/plan-events/__fixtures__/backend/happy-path.json";
 import mcpFailure from "@/lib/plan-events/__fixtures__/backend/mcp-failure.json";
@@ -468,5 +469,72 @@ describe("buildLaneViews, a plan that was stopped", () => {
       ["Consegna l'esito", "failed"],
     ]);
     expect(view.stations[1]?.meta).toBe("Errore: scrittura rifiutata");
+  });
+});
+
+describe("buildLaneViews, the traveller's choices", () => {
+  const all = events(choices);
+  const upTo = (seq: number) => all.filter((event) => event.seq <= seq);
+  const waiting = buildLaneViews(reducePlanEvents(upTo(55)));
+
+  it("while a question waits, the coordinator's line ends at 'Tocca a te: scegli cosa vedere', no tool plate", () => {
+    const { coordinator } = waiting;
+    expect(coordinator.asking).toMatchObject({ title: "Tocca a te: scegli cosa vedere", seq: 53 });
+    expect(coordinator.summary).toBe("Tocca a te: scegli cosa vedere");
+    expect(coordinator.live).toBeNull();
+    expect(titles(coordinator.stations)).not.toContain("Domanda al viaggiatore");
+    expect(titles(coordinator.stations)).not.toContain("Tocca a te: scegli cosa vedere");
+    expect(waiting.flights.asking).toBeNull();
+  });
+
+  it("after the answer, a lozenge 'Hai scelto: …' with the question as its second line; no 'Domanda al viaggiatore'", () => {
+    const views = buildLaneViews(reducePlanEvents(upTo(58)));
+    const answered = views.coordinator.stations.find((station) => station.seq === 56);
+    expect(answered).toMatchObject({
+      key: "56",
+      kind: "message",
+      title: "Hai scelto: Oceanário de Lisboa, Palácio da Pena a Sintra",
+      meta: "Cosa ti va di vedere?",
+    });
+    expect(views.coordinator.asking).toBeNull();
+    expect(titles(views.coordinator.stations)).not.toContain("Domanda al viaggiatore");
+    expect(titles(views.coordinator.stations)).not.toContain("Esito inviato all'agente");
+  });
+
+  it("draws no 'In attesa di una risposta' station for a pause on the traveller", () => {
+    expect(titles(waiting.coordinator.stations)).not.toContain("In attesa di una risposta");
+    const after = buildLaneViews(reducePlanEvents(upTo(58)));
+    expect(titles(after.coordinator.stations)).not.toContain("In attesa di una risposta");
+  });
+
+  it("an interrupt's closed answer leaves no failed-call station", () => {
+    const failedResult: UIEvent = {
+      seq: 56,
+      ts: "2026-10-12T10:00:34+02:00",
+      agent: "coordinator",
+      kind: "tool",
+      title: "Risposta della fonte non riuscita",
+      detail: { event_type: "agent.tool_result", tool_use_id: "sevt_022CZchoiceActivitiesPa1", is_error: true },
+      cost_cents: null,
+    };
+    const run = [...upTo(55), failedResult];
+    const views = buildLaneViews(reducePlanEvents(run, { end: "interrupted" }));
+    expect(views.coordinator.stations.some((station) => station.kind === "failed")).toBe(false);
+    expect(titles(views.coordinator.stations)).not.toContain("Un passaggio sui file non è riuscito");
+    expect(titles(views.coordinator.stations)).not.toContain("Domanda al viaggiatore");
+  });
+
+  it("a question left open on a stopped plan reads 'Senza risposta'", () => {
+    const views = buildLaneViews(reducePlanEvents(upTo(55), { end: "interrupted" }));
+    const left = views.coordinator.stations.find((station) => station.seq === 53);
+    expect(left).toMatchObject({ kind: "status", title: "Tocca a te: scegli cosa vedere", meta: "Senza risposta" });
+    expect(views.coordinator.asking).toBeNull();
+  });
+
+  it("the whole recording ends with both answers and no leftover question", () => {
+    const views = buildLaneViews(reducePlanEvents(all, { end: "ready" }));
+    const coordinator = views.coordinator.stations;
+    expect(coordinator.filter((station) => station.title.startsWith("Hai scelto"))).toHaveLength(2);
+    expect(coordinator.some((station) => station.meta === "Senza risposta")).toBe(false);
   });
 });
