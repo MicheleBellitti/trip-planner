@@ -13,6 +13,7 @@
  *   the same paths with `fieldErrorsFromServer`.
  */
 
+import { DEFAULT_JOURNEY_MODE, type JourneyMode } from "./journey-mode";
 import type { ValidationIssue } from "./schemas/api";
 import {
   PlanRequestSchema,
@@ -134,7 +135,7 @@ export const REQUEST_FIELD_COPY: Readonly<Record<string, { label: string; placeh
   destination: { label: "Dove vuoi andare", placeholder: "Lisbona" },
   suggest_destination: { label: "Suggeriscimi tu", hint: "Il planner propone fino a tre mete, con i motivi." },
   destination_idea: { label: "Che viaggio vorresti", placeholder: "mare a novembre, volo diretto" },
-  journey_mode: { label: "Mezzo di viaggio" },
+  journey_mode: { label: "Come viaggi" },
   dates: { label: "Quando" },
   "dates.exact_start": { label: "Partenza" },
   "dates.exact_end": { label: "Ritorno" },
@@ -149,6 +150,9 @@ export const REQUEST_FIELD_COPY: Readonly<Record<string, { label: string; placeh
 
 /** Italian labels of the traveler kinds (the schema's enum). */
 export const TRAVELER_KIND_LABELS: Readonly<Record<string, string>> = { adult: "Adulto", child: "Bambino" };
+
+/** The travel modes the form offers, in the schema's order (labels in lib/journey-mode.ts). */
+export const JOURNEY_MODES = (fieldConstraints("journey_mode").options ?? []) as readonly JourneyMode[];
 
 /** The trip lasts at most 120 days, 119 nights (backend/app/plan.py MAX_TRIP_DAYS). */
 export const MAX_TRIP_DAYS = 120;
@@ -508,6 +512,10 @@ export function validatePlanRequest(request: unknown, options: ValidationOptions
   // Validated even when dropped (suggest_destination false), like the backend's field checks.
   checkText(issues, "destination_idea", request.destination_idea, { required: false });
   checkText(issues, "preferences", request.preferences, { required: false });
+  const mode = request.journey_mode;
+  if (mode !== undefined && mode !== null && !(typeof mode === "string" && JOURNEY_MODES.includes(mode as JourneyMode))) {
+    issues.push({ path: "journey_mode", code: "literal_error" });
+  }
   checkDates(issues, request.dates, today);
   checkTravelers(issues, request.travelers);
   if (request.budget_eur === undefined) issues.push({ path: "budget_eur", code: "missing" });
@@ -549,6 +557,8 @@ export interface RequestFormValues {
   suggestDestination: boolean;
   destination: string;
   destinationIdea: string;
+  /** How the main journey is made, out and back; the form always sends one. */
+  journeyMode: JourneyMode;
   dateMode: "exact" | "flexible";
   /** YYYY-MM-DD (input type=date), "" when empty. */
   exactStart: string;
@@ -569,6 +579,7 @@ export function emptyRequestForm(): RequestFormValues {
     suggestDestination: Boolean(fieldConstraints("suggest_destination").default),
     destination: "",
     destinationIdea: "",
+    journeyMode: DEFAULT_JOURNEY_MODE,
     dateMode: "exact",
     exactStart: "",
     exactEnd: "",
@@ -630,6 +641,7 @@ export function buildPlanRequest(values: RequestFormValues): Record<string, unkn
   const request: Record<string, unknown> = {
     origin: values.origin.trim(),
     suggest_destination: values.suggestDestination,
+    journey_mode: values.journeyMode,
     dates:
       values.dateMode === "exact"
         ? { exact_start: optional(values.exactStart) ?? null, exact_end: optional(values.exactEnd) ?? null }

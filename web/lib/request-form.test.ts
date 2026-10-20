@@ -8,6 +8,7 @@ import {
   exampleRequestForm,
   fieldConstraints,
   fieldErrorsFromServer,
+  JOURNEY_MODES,
   MAX_NIGHTS,
   MAX_TRIP_DAYS,
   monthLabel,
@@ -21,6 +22,8 @@ import {
   validateRequestForm,
   type RequestFormValues,
 } from "./request-form";
+import { JOURNEY_MODE_LABELS } from "./journey-mode";
+import { applyRemembered } from "./remembered-request";
 
 /** "Today" of the backend's tests: 2026-10-12 in Rome. */
 const TODAY = "2026-10-12";
@@ -58,6 +61,12 @@ describe("metadata from schema/request.json", () => {
   it("has an Italian label for exactly the schema's fields", () => {
     expect(new Set(Object.keys(REQUEST_FIELD_COPY))).toEqual(new Set(REQUEST_FIELDS.keys()));
     for (const copy of Object.values(REQUEST_FIELD_COPY)) expect(copy.label.length).toBeGreaterThan(0);
+  });
+
+  it("labels exactly the schema's travel modes, in its order", () => {
+    expect(JOURNEY_MODES).toEqual(["flight", "train", "ferry", "car", "coach"]);
+    expect(Object.keys(JOURNEY_MODE_LABELS)).toEqual([...JOURNEY_MODES]);
+    expect(REQUEST_FIELD_COPY.journey_mode?.label).toBe("Come viaggi");
   });
 
   it("reads the limits from the schema", () => {
@@ -287,6 +296,7 @@ describe("the form", () => {
       origin: "Milano",
       destination: "Lisbona",
       suggest_destination: false,
+      journey_mode: "flight",
       dates: { exact_start: "2026-11-14", exact_end: "2026-11-17" },
       travelers: [{ kind: "adult" }, { kind: "adult" }, { kind: "child", age: 7 }, { kind: "child" }],
       budget_eur: 1500,
@@ -423,11 +433,8 @@ describe("the form", () => {
   });
 
   it("leaves journey_mode out of the body while it is null, and keeps a chosen mode", () => {
-    // A backend from before the travel mode forbids unknown keys (contract rule 7).
-    const result = validateRequestForm(form(), { today: TODAY });
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(Object.keys(result.request)).not.toContain("journey_mode");
-
+    // A backend from before the travel mode forbids unknown keys (contract rule 7). The form always
+    // chooses a mode now; a null can only come from a request built elsewhere.
     const parsed = PlanRequestSchema.parse(request());
     expect(parsed.journey_mode).toBeNull();
     const dropped = omitNullJourneyMode(parsed);
@@ -439,6 +446,32 @@ describe("the form", () => {
   });
 
   it("starts empty, one adult, destination mode, fixed dates", () => {
-    expect(emptyRequestForm()).toMatchObject({ adults: 1, childAges: [], suggestDestination: false, dateMode: "exact" });
+    expect(emptyRequestForm()).toMatchObject({ adults: 1, childAges: [], suggestDestination: false, dateMode: "exact", journeyMode: "flight" });
+  });
+
+  it("opens on the plane and always sends the chosen mode", () => {
+    expect(emptyRequestForm().journeyMode).toBe("flight");
+    expect(exampleRequestForm(TODAY).journeyMode).toBe("flight");
+    expect(buildPlanRequest(form()).journey_mode).toBe("flight");
+    const result = validateRequestForm(form({ journeyMode: "train" }), { today: TODAY });
+    expect(result.ok && result.request.journey_mode).toBe("train");
+  });
+
+  it("refuses a mode the schema does not know, on its own path", () => {
+    expect(validatePlanRequest(request({ journey_mode: "plane" }), { today: TODAY })).toContainEqual({
+      path: "journey_mode",
+      code: "literal_error",
+    });
+    expect(validatePlanRequest(request({ journey_mode: 3 }), { today: TODAY })).toContainEqual({
+      path: "journey_mode",
+      code: "literal_error",
+    });
+    expect(validatePlanRequest(request({ journey_mode: null }), { today: TODAY })).toEqual([]);
+    expect(validatePlanRequest(request({ journey_mode: "ferry" }), { today: TODAY })).toEqual([]);
+  });
+
+  it("lays a remembered request in without touching the mode", () => {
+    const values = applyRemembered({ ...emptyRequestForm(), journeyMode: "car" }, { origin: "Torino", adults: 2, childAges: [] });
+    expect(values).toMatchObject({ origin: "Torino", adults: 2, journeyMode: "car" });
   });
 });
