@@ -60,7 +60,7 @@ backend/                 FastAPI service (uv, Python 3.12). The package is backe
                            (TRIP_SCHEMA_URL=file:///app/pinned/trip.schema.json, docs/deploy.md)
   tests/                   offline tests; tests/fakes/ holds FakeManagedAgentsClient (README.md)
                            and demo.py (the DEMO_MODE client); tests/fixtures/ma/*.jsonl are the
-                           14 scripted sessions
+                           16 scripted sessions
   Dockerfile, railway.json, railway.cron.json   the image and the two Railway services
   claude-lock.<profile>.json   one lockfile per profile, written by `ant apply` (not committed
                                yet: the first apply is docs/deploy.md step 7)
