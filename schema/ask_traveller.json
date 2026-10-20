@@ -1,0 +1,155 @@
+{
+  "$defs": {
+    "ChoiceOption": {
+      "additionalProperties": false,
+      "description": "One card the traveller can pick.",
+      "properties": {
+        "area": {
+          "anyOf": [
+            {
+              "maxLength": 60,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Neighbourhood or area, at most 60 characters, no URL. Omit when unknown."
+        },
+        "duration_min": {
+          "anyOf": [
+            {
+              "maximum": 1440,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Typical duration in minutes, 1 to 1440. Omit when it does not apply."
+        },
+        "id": {
+          "description": "Short identifier unique among the options: 1 to 32 letters, digits, '_' or '-', e.g. 'a1'. The answer refers to options by this id.",
+          "pattern": "^[A-Za-z0-9_-]{1,32}$",
+          "type": "string"
+        },
+        "place": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Name and address of the place, at most 120 characters, no URL, used to look up a photo. Omit when the option is not a place."
+        },
+        "price": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChoicePrice"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Indicative price for the whole party. Omit when unknown."
+        },
+        "reason": {
+          "description": "Why this option fits this traveller, Italian, one line, at most 140 characters, no URL.",
+          "maxLength": 140,
+          "minLength": 1,
+          "pattern": "^[^\\r\\n]*$",
+          "type": "string"
+        },
+        "title": {
+          "description": "Name of the option, Italian, at most 80 characters, no URL.",
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "reason"
+      ],
+      "title": "ChoiceOption",
+      "type": "object"
+    },
+    "ChoicePrice": {
+      "additionalProperties": false,
+      "description": "What an option costs, for the whole party.",
+      "properties": {
+        "amount_cents": {
+          "description": "Total amount times 100, as an integer, for the whole party: 12.50 EUR is 1250.",
+          "maximum": 100000000000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "currency": {
+          "description": "ISO 4217 currency code in upper case, e.g. EUR, USD, GBP.",
+          "pattern": "^[A-Z]{3}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "amount_cents",
+        "currency"
+      ],
+      "title": "ChoicePrice",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The input of `ask_traveller`: one question with 2 to 6 options.",
+  "properties": {
+    "kind": {
+      "description": "What the question is about: 'destination', 'journey' (the travel mode), 'activities', 'food' or 'other'. Each kind can be asked once per plan; 'destination', 'journey' and 'other' share one slot.",
+      "enum": [
+        "destination",
+        "journey",
+        "activities",
+        "food",
+        "other"
+      ],
+      "type": "string"
+    },
+    "multiple": {
+      "description": "true for 'activities' and 'food' (the traveller may pick several), false otherwise (exactly one).",
+      "type": "boolean"
+    },
+    "options": {
+      "description": "2 to 6 options with unique ids; 'activities' needs at least 3. Offer only options you would put in the plan.",
+      "items": {
+        "$ref": "#/$defs/ChoiceOption"
+      },
+      "maxItems": 6,
+      "minItems": 2,
+      "type": "array"
+    },
+    "question": {
+      "description": "The question, Italian, one line, at most 120 characters, no URL.",
+      "maxLength": 120,
+      "minLength": 1,
+      "pattern": "^[^\\r\\n]*$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "kind",
+    "question",
+    "multiple",
+    "options"
+  ],
+  "title": "ChoiceRequest",
+  "type": "object"
+}
