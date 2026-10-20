@@ -1132,6 +1132,39 @@ async def test_continue_sends_the_message_when_the_session_stays_idle(
     assert planner.services.background_tasks == []  # the nudge forgets itself
 
 
+@pytest.mark.parametrize("answered_by", [None, "timeout"])
+async def test_continue_sends_no_message_while_a_choice_is_pending(
+    planner: Planner, monkeypatch: pytest.MonkeyPatch, answered_by: str | None
+) -> None:
+    """Decision 4: the tool result resumes a coordinator that waits on a question, so "Continua"
+    adds no `CONTINUE_MESSAGE` while one is pending; a closed question changes nothing."""
+    logs = sessions_logs(monkeypatch)
+    monkeypatch.setattr(sessions, "CONTINUE_RESUME_WAIT_SECONDS", 0.0)
+    plan_id = await insert_plan(planner.session_factory, status=PlanStatus.BUDGET_PAUSED)
+    await add_choice(planner, plan_id)
+    if answered_by is not None:
+        sink = EventSink(plan_id, session_factory=planner.session_factory, hub=planner.services.hub)
+        await consumer_module.close_choice(
+            sink, CHOICE_ID, answered_by="timeout", selected=[], now=FROZEN_NOW
+        )
+
+    await continue_plan(plan_id, USER, services=planner.services)
+    await asyncio.gather(*planner.services.background_tasks)
+
+    messages = [sent.payload for sent in planner.fake.sent]
+    skipped = [entry for entry in logs if entry["event"] == "continue_message_skipped"]
+    if answered_by is None:
+        assert messages == []
+        assert [(entry["reason"], entry["plan_id"]) for entry in skipped] == [
+            ("choice_pending", str(plan_id))
+        ]
+    else:
+        assert messages == [
+            {"type": "user.message", "content": [{"type": "text", "text": CONTINUE_MESSAGE}]}
+        ]
+        assert skipped == []
+
+
 async def test_continue_does_not_nudge_a_session_that_resumed(
     planner: Planner, monkeypatch: pytest.MonkeyPatch
 ) -> None:

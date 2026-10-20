@@ -1008,7 +1008,11 @@ async def continue_plan(
        won) raise `PlanStateError`. Then `registry.start(...)` in resume mode (the old
        `budget_reached` idle is already stored, so it is not acted on).
     5. [INFERRED, probe P9] if the session is still idle after `CONTINUE_RESUME_WAIT_SECONDS`,
-       send `CONTINUE_MESSAGE` as a `user.message`.
+       send `CONTINUE_MESSAGE` as a `user.message`; never while a choice is pending
+       (`choices.pending_choice`, logged `continue_message_skipped`): the coordinator waits on
+       `ask_traveller`, and the tool result is what resumes it. The resumed consumer answers
+       the choice or re-arms its deadline (decision 4, [INFERRED]: P14 did not test a budget
+       pause during a wait).
 
     A process that dies between steps 1 and 4 leaves the plan `running` with no consumer: the
     next start resumes it, and the stuck check ends it if the session never moves again.
@@ -1242,13 +1246,19 @@ async def _nudge_if_still_idle(
     *,
     consumed_cents: int,
 ) -> None:
-    """Step 4 of `continue_plan` [INFERRED, P9]: after the wait, a session that is still idle,
+    """Step 5 of `continue_plan` [INFERRED, P9]: after the wait, a session that is still idle,
     whose plan is still `running` and whose cost hasn't moved never resumed by itself: send
-    `CONTINUE_MESSAGE`. Errors are logged."""
+    `CONTINUE_MESSAGE`, unless a choice is pending (the coordinator waits for its tool result,
+    which the resumed consumer sends; logged `continue_message_skipped`). Errors are logged."""
     await asyncio.sleep(CONTINUE_RESUME_WAIT_SECONDS)
     bound = log.bind(plan_id=str(plan_id), session_id=session_id)
     try:
         if await _current_status(services, plan_id) is not PlanStatus.RUNNING:
+            return
+        async with services.session_factory() as db:
+            waiting = await pending_choice(db, plan_id)
+        if waiting is not None:
+            bound.info("continue_message_skipped", reason="choice_pending")
             return
         info = await client.retrieve_session(session_id)
         cost = info.usage.list_cost_cents
