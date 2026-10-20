@@ -46,6 +46,17 @@ from sqlalchemy.exc import IntegrityError
 from app import clock, quota
 from app import consumer as consumer_api
 from app.auth import SessionVerifier, user_is_admin
+from app.choices import (
+    AnsweredBy,
+    ChoiceAnswer,
+    ChoiceRequest,
+    answer_text,
+    auto_pick,
+    get_choice,
+    pending_choice,
+    request_of,
+    selection_problem,
+)
 from app.config import BACKEND_DIR
 from app.consumer import (
     ConsumerDeps,
@@ -56,9 +67,11 @@ from app.consumer import (
     StatusChange,
     backend_event,
     backend_event_id,
+    close_choice,
     record_session_cost,
     set_plan_status,
 )
+from app.covers import NO_PHOTOS, PLACE_KEY_PREFIX, ChoicePhotos, CoverResolver, PlacePhotos
 from app.db import PlanRecord, PlanStatus
 from app.events import AgentName, EventKind
 from app.fx import FxConverter
@@ -130,6 +143,11 @@ BRIEF_TIMEZONE = "Europe/Rome"
 GIT_TIMEOUT_SECONDS = 2.0
 _GIT_SHA = re.compile(r"[0-9a-f]{40}([0-9a-f]{24})?")
 
+PLACE_PHOTO_LOOKUP_SECONDS = 2.5
+"""How long one place's photo lookup may take inside the resolver: below
+`covers.PHOTO_DEADLINE_SECONDS` (3 s for all the cards), so a slow lookup ends inside the
+resolver and caches a transient miss instead of being cancelled, and retried, on every ask."""
+
 
 # --- errors -------------------------------------------------------------------------------------
 
@@ -184,6 +202,39 @@ class PlanStateError(Exception):
         self.plan_id = plan_id
         self.status = status
         self.allowed = allowed
+
+
+class ChoiceNotFoundError(Exception):
+    """The plan has no choice with that id (routes: 404 `choice_not_found`)."""
+
+
+class ChoiceClosedError(Exception):
+    """The choice takes no more answers (routes: 409 `choice_closed`). `answered_by` is who
+    closed it (`traveller`, `skip`, `timeout`, `closed`); None when the plan itself stopped
+    waiting (not `running`, or an interrupt was asked)."""
+
+    def __init__(self, answered_by: str | None) -> None:
+        super().__init__(f"choice closed (answered_by={answered_by})")
+        self.answered_by = answered_by
+
+
+class InvalidChoiceAnswerError(Exception):
+    """The picks do not fit the question (routes: 422 `invalid_choice_answer`). `reason` is
+    `choices.selection_problem`'s: `duplicate`, `unknown_option` or `single_choice`."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"invalid choice answer: {reason}")
+        self.reason = reason
+
+
+@dataclass(frozen=True, slots=True)
+class AnsweredChoice:
+    """What `answer_choice` closed: the choice id, who answered and the picked ids, in the
+    order they were offered (empty for a skip)."""
+
+    id: str
+    answered_by: AnsweredBy
+    selected: list[str]
 
 
 # --- services ---------------------------------------------------------------------------------
@@ -307,6 +358,10 @@ async def start_planner(
     When trip.json could not be loaded (production without TripTracker), a background task
     retries it (`TripSchemaStore.retry_until_loaded`), cancelled by `stop_planner`.
 
+    The choice cards' photos (`ConsumerDeps.photos`) are `covers.PlacePhotos` over a
+    `CoverResolver` keyed by `PLACE_KEY_PREFIX` when CHOICE_PHOTOS_ENABLED, outside DEMO_MODE
+    and `fx_offline`; else `NO_PHOTOS` (no request leaves the backend).
+
     DEMO_MODE (development only): the client is `tests.fakes.demo.DemoManagedAgentsClient`
     (imported lazily, like `app.cli replay` imports the fake; `client`, when given, wins), the
     roster is `demo_roster()` (no lockfile), trip.json is the vendored copy
@@ -357,6 +412,17 @@ async def start_planner(
     link_checker: LinkHealthChecker = NO_LINK_CHECKS
     if settings.link_check_enabled and not demo and not fx_offline:
         link_checker = build_link_checker(settings, now=clock.now)
+    photos: ChoicePhotos = NO_PHOTOS
+    if settings.choice_photos_enabled and not demo and not fx_offline:
+        photos = PlacePhotos(
+            CoverResolver(
+                session_factory=session_factory,
+                http=http,
+                user_agent=settings.wikimedia_user_agent,
+                key_prefix=PLACE_KEY_PREFIX,
+                lookup_deadline_seconds=PLACE_PHOTO_LOOKUP_SECONDS,
+            )
+        )
 
     registry: ConsumerRegistry | None = None
     if client is not None:
@@ -369,6 +435,7 @@ async def start_planner(
             fx=fx,
             now=clock.now,
             link_checker=link_checker,
+            photos=photos,
         )
         registry = ConsumerRegistry(deps)
 
@@ -1191,6 +1258,128 @@ async def _nudge_if_still_idle(
         bound.info("continue_message_sent")
     except Exception as exc:
         bound.warning("continue_message_failed", error=type(exc).__name__)
+
+
+# --- choices ------------------------------------------------------------------------------------
+
+
+async def answer_choice(
+    plan_id: uuid.UUID,
+    choice_id: str,
+    answer: ChoiceAnswer,
+    user: CurrentUser,
+    *,
+    services: PlannerServices,
+) -> AnsweredChoice:
+    """The traveller answers a question (`ask_traveller`): POST /plans/{id}/choices/{choice_id},
+    the CLI and the evals.
+
+    1. `services.require_ready()` (`PlannerUnavailableError`) and the user's plan
+       (`get_user_plan`: `PlanNotFoundError`).
+    2. The plan must be waiting: `running`, with a session and no interrupt asked, else
+       `ChoiceClosedError(None)`.
+    3. The row must exist (`ChoiceNotFoundError`) and be open (`ChoiceClosedError` naming who
+       closed it).
+    4. The picks must fit (`selection_problem`: `InvalidChoiceAnswerError`); they are stored in
+       the order offered. A skip picks nothing.
+    5. `consumer.close_choice` with `traveller` or `skip`: the conditional update decides a race
+       with the deadline or the platform's closure, and a lost race is `ChoiceClosedError`
+       naming the winner.
+    6. Only then the answer (`answer_text`) goes to the session as `user.custom_tool_result`,
+       sent from here, not handed to the consumer: during a redeploy's overlap the request can
+       land on the process that does not follow the plan. A failed send (`ManagedAgentsError`)
+       is logged (`choice_answer_send_failed`) and the answer stands: the row is the truth, and
+       the consumer resends it at the deadline when no result reached the session.
+
+    Logs `choice_answered` (kind, who, options and picks counted, latency since the question):
+    never the question or a title. `plan_id` and `session_id` are bound in
+    `structlog.contextvars` for the lines written on the plan's behalf.
+    """
+    ready = services.require_ready()
+    with structlog.contextvars.bound_contextvars(plan_id=str(plan_id)):
+        async with services.session_factory() as db:
+            plan = await get_user_plan(db, plan_id, user, settings=services.settings)
+            row = await get_choice(db, plan_id, choice_id)
+        session_id = plan.session_id
+        with structlog.contextvars.bound_contextvars(session_id=session_id):
+            waiting = plan.status == PlanStatus.RUNNING and plan.interrupt_requested_at is None
+            if not waiting or session_id is None:
+                raise ChoiceClosedError(None)
+            if row is None:
+                raise ChoiceNotFoundError(f"choice {choice_id} not found in plan {plan_id}")
+            if row.answered_by is not None:
+                raise ChoiceClosedError(row.answered_by)
+            request = request_of(row)
+            answered_by: AnsweredBy = "skip" if answer.skip else "traveller"
+            selected: list[str] = []
+            if answered_by == "traveller":
+                picks = list(answer.selected or [])
+                problem = selection_problem(request, picks)
+                if problem is not None:
+                    raise InvalidChoiceAnswerError(problem)
+                chosen = set(picks)
+                selected = [option.id for option in request.options if option.id in chosen]
+
+            now = _now(services)
+            sink = EventSink(plan_id, session_factory=services.session_factory, hub=services.hub)
+            closed = await close_choice(
+                sink,
+                choice_id,
+                answered_by=answered_by,
+                selected=selected,
+                now=now,
+                cost_cents=plan.cost_cents,
+            )
+            if closed is None:
+                async with services.session_factory() as db:
+                    winner = await get_choice(db, plan_id, choice_id)
+                raise ChoiceClosedError(winner.answered_by if winner is not None else None)
+
+            bound = log.bind(plan_id=str(plan_id), session_id=session_id)
+            text = answer_text(request, answered_by, selected)
+            try:
+                await ready.client.send_custom_tool_result(session_id, choice_id, text, False)
+            except ManagedAgentsError as exc:
+                bound.warning("choice_answer_send_failed", error_type=exc.error_type)
+            latency = int((now - closed.asked_at).total_seconds() * 1000)
+            bound.info(
+                "choice_answered",
+                kind=closed.kind,
+                answered_by=answered_by,
+                options=len(request.options),
+                selected=len(selected),
+                latency_ms=max(latency, 0),
+            )
+            return AnsweredChoice(id=choice_id, answered_by=answered_by, selected=selected)
+
+
+async def answer_pending_choice(
+    plan_id: uuid.UUID,
+    user: CurrentUser,
+    *,
+    services: PlannerServices,
+    pick: Callable[[ChoiceRequest], list[str]] = auto_pick,
+) -> AnsweredChoice | None:
+    """Answer the plan's open choice, if any, with `pick` (default `choices.auto_pick`: the
+    first option, the first two when several can be picked; an empty pick is a skip), through
+    `answer_choice`. The CLI and the evals call it.
+
+    Returns None when no choice is open, or when someone else closed it first (the deadline,
+    the platform on interrupt) or the plan stopped waiting (`ChoiceClosedError`). Raises what
+    `answer_choice` raises otherwise (`PlanNotFoundError`, `PlannerUnavailableError`,
+    `InvalidChoiceAnswerError` for a pick that does not fit)."""
+    services.require_ready()
+    async with services.session_factory() as db:
+        await get_user_plan(db, plan_id, user, settings=services.settings)
+        row = await pending_choice(db, plan_id)
+    if row is None:
+        return None
+    picks = pick(request_of(row))
+    answer = ChoiceAnswer(selected=picks) if picks else ChoiceAnswer(skip=True)
+    try:
+        return await answer_choice(plan_id, row.id, answer, user, services=services)
+    except ChoiceClosedError:
+        return None
 
 
 async def resume_running_plans(services: PlannerServices) -> list[uuid.UUID]:

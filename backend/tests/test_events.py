@@ -23,10 +23,12 @@ from anthropic.types.beta.sessions.beta_managed_agents_stream_session_events imp
 )
 from pydantic import TypeAdapter
 
-from app import consumer
+from app import choices, consumer
 from app.events import (
     ACTION_EVENT_TYPES,
     AGENT_LABELS,
+    ASK_TRAVELLER_TITLE,
+    ASK_TRAVELLER_TOOL,
     KNOWN_EVENT_TYPES,
     MAX_DETAIL_CHARS,
     MAX_TEXT_CHARS,
@@ -929,6 +931,31 @@ def test_submit_plan_input_never_reaches_detail() -> None:
         "tool": "submit_plan",
         "tool_use_id": "sevt_agent_custom_tool_use",
     }
+
+
+def test_ask_traveller_tool_use_event() -> None:
+    """The raw call is a tool event named for what it does; its input (the question and the
+    cards) never goes to `detail`: the backend's own `choice` event shows it."""
+    raw = ev(
+        "agent.custom_tool_use",
+        name="ask_traveller",
+        input={"kind": "food", "question": SECRET, "options": [{"id": "c1", "title": SECRET}]},
+        session_thread_id=None,
+    )
+
+    event = norm(raw)
+
+    assert (event.kind, event.title) == (EventKind.TOOL, "Domanda al viaggiatore")
+    assert event.detail == {
+        "event_type": "agent.custom_tool_use",
+        "tool": "ask_traveller",
+        "tool_use_id": "sevt_agent_custom_tool_use",
+    }
+    assert SECRET not in event.model_dump_json()
+    assert (ASK_TRAVELLER_TOOL, ASK_TRAVELLER_TITLE) == (
+        choices.ASK_TRAVELLER_TOOL,
+        choices.TOOL_USE_TITLE,
+    )
 
 
 def test_other_custom_tool() -> None:
