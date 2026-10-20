@@ -841,7 +841,16 @@
                 "currency": "EUR"
               },
               "area": null,
-              "photo": null
+              "photo": {
+                "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Sintra_-_Palacio_da_Pena_%2820332995770%29.jpg/1920px-Sintra_-_Palacio_da_Pena_%2820332995770%29.jpg",
+                "width": 1920,
+                "height": 1280,
+                "author": "Singa Hitam",
+                "license": "CC BY 2.0",
+                "license_url": "https://creativecommons.org/licenses/by/2.0",
+                "source_page": "https://commons.wikimedia.org/wiki/File:Sintra_-_Palacio_da_Pena_(20332995770).jpg",
+                "title": "Sintra - Palacio da Pena (20332995770)"
+              }
             },
             {
               "id": "a3",
@@ -850,7 +859,16 @@
               "duration_min": 210,
               "price": null,
               "area": null,
-              "photo": null
+              "photo": {
+                "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c9/Torre_de_Bel%C3%A9m._Bel%C3%A9m_Tower._%283809892712%29.jpg/1920px-Torre_de_Bel%C3%A9m._Bel%C3%A9m_Tower._%283809892712%29.jpg",
+                "width": 1920,
+                "height": 1381,
+                "author": "Brian Snelson from Hockley, Essex, England",
+                "license": "CC BY 2.0",
+                "license_url": "https://creativecommons.org/licenses/by/2.0",
+                "source_page": "https://commons.wikimedia.org/wiki/File:Torre_de_Bel%C3%A9m._Bel%C3%A9m_Tower._(3809892712).jpg",
+                "title": "Torre de Belém. Belém Tower. (3809892712)"
+              }
             }
           ],
           "asked_at": "2026-10-12T10:00:27.461000Z",
@@ -895,7 +913,7 @@
     },
     {
       "seq": 56,
-      "ts": "2026-10-12T10:00:36.741000Z",
+      "ts": "2026-10-12T10:00:34.841000Z",
       "agent": "coordinator",
       "kind": "choice",
       "title": "Hai scelto: Oceanário de Lisboa, Palácio da Pena a Sintra",
@@ -909,13 +927,13 @@
           "a1",
           "a2"
         ],
-        "answered_at": "2026-10-12T10:00:36.741000+00:00"
+        "answered_at": "2026-10-12T10:00:34.841000+00:00"
       },
       "cost_cents": 24
     },
     {
       "seq": 57,
-      "ts": "2026-10-12T10:00:36.781000Z",
+      "ts": "2026-10-12T10:00:34.881000Z",
       "agent": "coordinator",
       "kind": "tool",
       "title": "Esito inviato all'agente",
@@ -1282,7 +1300,7 @@
     },
     {
       "seq": 80,
-      "ts": "2026-10-12T10:00:57.690000Z",
+      "ts": "2026-10-12T10:00:55.790000Z",
       "agent": "coordinator",
       "kind": "choice",
       "title": "Hai scelto: Tascas di quartiere, Pesce alla griglia",
@@ -1296,13 +1314,13 @@
           "c1",
           "c2"
         ],
-        "answered_at": "2026-10-12T10:00:57.690000+00:00"
+        "answered_at": "2026-10-12T10:00:55.790000+00:00"
       },
       "cost_cents": 29
     },
     {
       "seq": 81,
-      "ts": "2026-10-12T10:00:57.730000Z",
+      "ts": "2026-10-12T10:00:55.830000Z",
       "agent": "coordinator",
       "kind": "tool",
       "title": "Esito inviato all'agente",

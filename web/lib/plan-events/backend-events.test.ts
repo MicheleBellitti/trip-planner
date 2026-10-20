@@ -234,6 +234,14 @@ describe("choices", () => {
     expect(choices.statuses).toEqual([{ after_seq: run.length - 1, status: "ready" }]);
   });
 
+  it("never goes back in time: ts is non-decreasing in seq order", () => {
+    const times = run.map((event) => Date.parse(event.ts));
+    times.forEach((time, index) => {
+      expect(Number.isNaN(time)).toBe(false);
+      if (index > 0) expect(time).toBeGreaterThanOrEqual(times[index - 1] ?? 0);
+    });
+  });
+
   it("carries the captured photos on the options that have one, and none on the others", () => {
     const photos: Record<string, unknown> = choicePhotos.photos;
     for (const detail of details) {
