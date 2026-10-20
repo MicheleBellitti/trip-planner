@@ -241,6 +241,21 @@ def test_coordinator_prompt_covers_the_pauses() -> None:
         assert phrase in system
 
 
+def test_coordinator_keeps_unpicked_options_out_of_stops_and_bookings() -> None:
+    """An offered option left unpicked is never a stop, booking or alternative, though the
+    summary may name the destination candidates not taken; a refused option never sends a
+    subagent after a cheaper one."""
+    _, system = agent_file("development", "coordinator")
+    for phrase in (
+        "is never a stop, a booking or an alternative",
+        "may still name the destination candidates not taken",
+        "or by you when they let you choose",
+        "never a follow-up",
+    ):
+        assert phrase in system
+    assert "never appear in the plan" not in system
+
+
 def test_coordinator_waits_for_pending_reports_after_an_answer() -> None:
     """Probe P14: a report that arrives during a pause reaches the coordinator only after its
     first turn on the answer has ended, so that turn must not chase a subagent."""
@@ -271,8 +286,11 @@ def test_coordinator_prompt_covers_the_journey_modes() -> None:
         "the party's own car",
         "car ferr",
         "under about five hours",
+        "never reopened",  # step 1 settles the mode; no later fork offers an unresearched one
+        "the last leg's arrival",  # a car ferry's journey arrives with its last drive
     ):
         assert phrase in system
+    assert "compare the two in wave 2" not in system
     # Only the picked destination is researched: constraints.json no longer lists candidates
     # (step 2 still offers "at most three candidates", through `ask_traveller`).
     blocks = re.findall(r"```json\n(.*?)```", system, re.DOTALL)
