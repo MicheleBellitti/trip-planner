@@ -65,8 +65,9 @@ What a consumer does, in order (the six spec steps, corrected by the notes):
    §2e), and if a listing page fails halfway, act on nothing from that pass and mark nothing
    as handled: the next reconnect reconciles again. An `ask_traveller` call that only the
    platform answered closes its row as `closed` (it may have happened while no consumer
-   ran). (The runner itself is not used: the backend needs every event for the UI, not only
-   the tool calls.)
+   ran), right after the history pass and before the threads' backfill wait, so "Continua"'s
+   nudge (`sessions._nudge_if_still_idle`) does not find it still open. (The runner itself
+   is not used: the backend needs every event for the UI, not only the tool calls.)
 7. Threads: a session holds at most 25 concurrent child threads, idle ones included until
    archived (notes §2a). The roster (4 subagents, at most 2 follow-ups each) stays far below it
    even if every delegation opened a new thread, so threads are not archived routinely: only
@@ -1830,6 +1831,15 @@ class PlanConsumer:
             events=len(history),
             pending_tool_uses=sum(1 for raw in tool_uses if raw["id"] not in answered),
         )
+        # Right after the history pass, before the threads and their backfill wait (up to
+        # `RESUME_BACKFILL_WAIT_SECONDS`): "Continua"'s nudge looks for an open choice a few
+        # seconds after the restart, and must not find one the platform already closed.
+        for raw in tool_uses:
+            tool_use_id = cast(str, raw["id"])
+            if tool_use_id in closed_by_platform and raw.get("name") == ASK_TRAVELLER_TOOL:
+                # Closed (an interrupt) while no consumer followed the plan: a no-op when the
+                # row is already closed, or when there is none.
+                await self._close_by_platform(tool_use_id)
 
         try:
             threads = await self._deps.client.list_threads(self.session_id)
@@ -1847,12 +1857,6 @@ class PlanConsumer:
         # the final drain stores only what the inbox holds (bounded: a slow listing is logged).
         await self._wait_for_backfills(RESUME_BACKFILL_WAIT_SECONDS)
 
-        for raw in tool_uses:
-            tool_use_id = cast(str, raw["id"])
-            if tool_use_id in closed_by_platform and raw.get("name") == ASK_TRAVELLER_TOOL:
-                # Closed (an interrupt) while no consumer followed the plan: a no-op when the
-                # row is already closed, or when there is none.
-                await self._close_by_platform(tool_use_id)
         for raw in tool_uses:
             tool_use_id = cast(str, raw["id"])
             if tool_use_id in answered or tool_use_id in state.answered_tool_use_ids:

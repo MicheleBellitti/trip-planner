@@ -489,6 +489,8 @@ open session stream                       # first, always
 for raw in iter_session_history(...):     # read ALL of it before acting (two passes)
     persist unseen; remember custom_tool_use ids and the custom_tool_use_ids already answered
 listing failed halfway? -> act on nothing from this pass, reconcile again on the next reconnect
+close as `closed` every ask_traveller row that only the platform answered (before the threads'
+    backfill wait, so "Continua"'s nudge never finds it open)
 for t in list_threads(sid) if not primary:
     archived -> backfill its history only (it gets no new events)
     else     -> open thread stream, then backfill its history
