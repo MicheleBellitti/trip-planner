@@ -3,19 +3,27 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 
 import happyDetailJson from "@/components/plan/__fixtures__/happy-path.detail.json";
 import { ApiError, MonthlyLimitError, UnauthorizedError, type ApiClient } from "@/lib/api";
+import { BRAND_NAME } from "@/lib/brand";
+import { CHOICE_PANEL_ID } from "@/lib/choices";
 import budgetReached from "@/lib/plan-events/__fixtures__/backend/budget-reached.json";
+import choicesRun from "@/lib/plan-events/__fixtures__/backend/choices.json";
 import happyPath from "@/lib/plan-events/__fixtures__/backend/happy-path.json";
 import mcpFailure from "@/lib/plan-events/__fixtures__/backend/mcp-failure.json";
 import { PlanDetailSchema, type PlanDetail, type PlanStatus } from "@/lib/schemas/api";
 import { UIEventSchema, type UIEvent } from "@/lib/schemas/generated/ui-event";
 
 import { SETTLE_MS } from "./hooks";
+import { PLAN_STATE_ID } from "./live-header";
 import { PlanScreen } from "./plan-screen";
 
-// The finished plan and the state panels are lazy chunks (real I/O under the fake timers): load
-// them before the tests.
+// The finished plan, the state panels and the choice panel are lazy chunks (real I/O under the
+// fake timers): load them before the tests.
 beforeAll(async () => {
-  await Promise.all([import("@/components/plan/PlanView"), import("@/components/states/panels")]);
+  await Promise.all([
+    import("@/components/plan/PlanView"),
+    import("@/components/states/panels"),
+    import("@/components/choice/choice-panel"),
+  ]);
 });
 
 /** Just enough EventSource for the page: open, messages, errors, `end`. */
@@ -69,6 +77,8 @@ const parse = (fixture: { events: unknown[] }) => fixture.events.map((event) => 
 const HAPPY = parse(happyPath);
 const BUDGET = parse(budgetReached);
 const KIWI = parse(mcpFailure);
+/** The recorded run that asks twice: seq 53 asks what to see (seq 56 answers), seq 77 what to eat. */
+const CHOICES = parse(choicesRun);
 const PLAN_ID = happyPath.plan_id;
 
 function detail(status: PlanStatus, extra: Record<string, unknown> = {}): PlanDetail {
@@ -597,5 +607,189 @@ describe("PlanScreen, other states", () => {
     const flights = document.querySelector('section[data-agent="flights"]') as HTMLElement;
     expect(flights.dataset.state).toBe("stopped");
     expect(within(flights).getByText("Aspettava il permesso per usare lastminute.com.")).toBeTruthy();
+  });
+});
+
+describe("PlanScreen, the traveller's choice", () => {
+  const ASKED = CHOICES.find((event) => event.seq === 53);
+  if (!ASKED || ASKED.detail?.phase !== "asked") throw new Error("choices.json lost its first question");
+  /** The backend's PendingChoice, as GET /plans/{id} carries it while the question waits. */
+  const PENDING = ASKED.detail.choice as { id: string; asked_at: string; deadline_at: string };
+  const CHOICE_ID = PENDING.id;
+  const ASKED_AT = Date.parse(PENDING.asked_at);
+  const QUESTION = "Cosa ti va di vedere?";
+  const TITLE = "Lisbona, 14–18 apr";
+
+  const upTo = (seq: number) => CHOICES.filter((event) => event.seq <= seq);
+  const between = (from: number, to: number) => CHOICES.filter((event) => event.seq >= from && event.seq <= to);
+  const panel = () => screen.queryByRole("region", { name: QUESTION });
+  const heading = () => screen.getByRole("heading", { level: 2, name: QUESTION });
+  const box = (name: string) => screen.getByRole("checkbox", { name });
+  const coordinator = () => document.querySelector('section[data-agent="coordinator"]') as HTMLElement;
+
+  /** The run's own plan: it starts with the recording, and the question may be waiting. */
+  function running(extra: Record<string, unknown> = {}): PlanDetail {
+    return detail("running", { created_at: CHOICES[0]?.ts, updated_at: CHOICES[0]?.ts, ...extra });
+  }
+
+  // Ten seconds into the first question's four minutes.
+  beforeEach(() => {
+    vi.setSystemTime(ASKED_AT + 10_000);
+  });
+
+  it("shows the cards when the question arrives, focuses the heading, and prefixes the tab title 'Tocca a te ·'", async () => {
+    const client = fakeClient({ getPlan: vi.fn(async () => running()) });
+    render(<PlanScreen planId={PLAN_ID} client={client} />);
+    await flush();
+    const source = await replay(upTo(52));
+    expect(panel()).toBeNull();
+    expect(document.title).toBe(`${TITLE} · ${BRAND_NAME}`);
+
+    act(() => {
+      for (const event of between(53, 55)) source.send(event);
+    });
+    await flush(100);
+    expect(panel()?.id).toBe(CHOICE_PANEL_ID);
+    expect(document.activeElement).toBe(heading());
+    // The eyebrow names the request's destination.
+    expect(screen.getByText("Attività ha trovato 3 idee per Lisbona")).toBeTruthy();
+    expect(screen.getByText("Scegli quelle che ti piacciono, anche più di una. Se non scegli entro 4 minuti, scelgo io.")).toBeTruthy();
+    expect(document.title).toBe(`Tocca a te · ${TITLE} · ${BRAND_NAME}`);
+  });
+
+  it("sends the picks and hides the cards at once; the answered event then draws the station", async () => {
+    const answerChoice = vi.fn().mockResolvedValue({ id: CHOICE_ID, answered_by: "traveller", selected: ["a1", "a2"] });
+    const client = fakeClient({ getPlan: vi.fn(async () => running()), answerChoice });
+    render(<PlanScreen planId={PLAN_ID} client={client} />);
+    await flush();
+    const source = await replay(upTo(55));
+    expect(panel()).not.toBeNull();
+
+    fireEvent.click(box("Oceanário de Lisboa"));
+    fireEvent.click(box("Palácio da Pena a Sintra"));
+    fireEvent.click(screen.getByRole("button", { name: "Continua con queste" }));
+    await flush(50);
+    expect(answerChoice).toHaveBeenCalledTimes(1);
+    expect(answerChoice).toHaveBeenCalledWith(PLAN_ID, CHOICE_ID, { selected: ["a1", "a2"] });
+    // Gone before the stream confirms it; the focus lands on the plan's state, not on the body.
+    expect(panel()).toBeNull();
+    expect(document.activeElement?.id).toBe(PLAN_STATE_ID);
+    expect(document.title).toBe(`${TITLE} · ${BRAND_NAME}`);
+
+    act(() => {
+      for (const event of between(56, 58)) source.send(event);
+    });
+    await flush(100);
+    expect(within(coordinator()).getByText("Hai scelto: Oceanário de Lisboa, Palácio da Pena a Sintra")).toBeTruthy();
+    expect(panel()).toBeNull();
+  });
+
+  it("shows the cards from GET /plans/{id} before the stream opens", async () => {
+    // Every read is the same stale snapshot: the question still pending.
+    const getPlan = vi.fn(async () => running({ pending_choice: PENDING }));
+    const client = fakeClient({ getPlan });
+    render(<PlanScreen planId={PLAN_ID} client={client} />);
+    await flush();
+    expect(stream().readyState).toBe(0);
+    expect(panel()?.id).toBe(CHOICE_PANEL_ID);
+    expect(document.activeElement).toBe(heading());
+    expect(document.title).toBe(`Tocca a te · ${TITLE} · ${BRAND_NAME}`);
+
+    // The replay brings the answer: the cards go, and the snapshot read again never brings them back.
+    await replay(upTo(60));
+    await flush(1000);
+    expect(getPlan.mock.calls.length).toBeGreaterThan(1);
+    expect(panel()).toBeNull();
+    expect(document.title).toBe(`${TITLE} · ${BRAND_NAME}`);
+  });
+
+  it("a 409 choice_closed closes the panel with the backend's words", async () => {
+    const getPlan = vi.fn(async () => running());
+    const answerChoice = vi.fn().mockRejectedValue(
+      new ApiError({
+        kind: "conflict",
+        status: 409,
+        code: "choice_closed",
+        message: "Questa scelta è già chiusa: il piano va avanti.",
+        data: { answered_by: "timeout" },
+      }),
+    );
+    const client = fakeClient({ getPlan, answerChoice });
+    render(<PlanScreen planId={PLAN_ID} client={client} />);
+    await flush();
+    await replay(upTo(55));
+    await flush(1000);
+    const reads = getPlan.mock.calls.length;
+
+    fireEvent.click(box("Oceanário de Lisboa"));
+    fireEvent.click(screen.getByRole("button", { name: "Continua con questa" }));
+    await flush(50);
+    const region = panel();
+    expect(region).not.toBeNull();
+    expect(within(region!).getByText("Questa scelta è già chiusa: il piano va avanti.")).toBeTruthy();
+    // No buttons to press again, and never a generic error.
+    expect(screen.queryByRole("button", { name: "Scegli tu" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Continua con quest[ae]$/ })).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+    // The page catches up with the plan.
+    expect(getPlan.mock.calls.length).toBe(reads + 1);
+  });
+
+  it("hides the cards while interrupting and on budget_paused, and shows them again after Continua", async () => {
+    const pausedAt = new Date(ASKED_AT + 2_000).toISOString();
+    const resumedAt = new Date(ASKED_AT + 5_000).toISOString();
+    let phase: "running" | "paused" | "resumed" = "running";
+    const client = fakeClient({
+      getPlan: vi.fn(async () => {
+        if (phase === "paused") return detail("budget_paused", { created_at: CHOICES[0]?.ts, cost_cents: 61, updated_at: pausedAt });
+        if (phase === "resumed") return running({ budget_cents: 261, cost_cents: 61, updated_at: resumedAt, pending_choice: PENDING });
+        return running({ pending_choice: PENDING });
+      }),
+      continuePlan: vi.fn(async () => {
+        phase = "resumed";
+        return { id: PLAN_ID, status: "running", budget_cents: 261 };
+      }),
+      interruptPlan: vi.fn().mockResolvedValue({ id: PLAN_ID, status: "running" }),
+    });
+    render(<PlanScreen planId={PLAN_ID} client={client} />);
+    await flush();
+    const source = await replay(upTo(55));
+    expect(panel()).not.toBeNull();
+
+    // The session stops at its cost cap: the cards go with the run.
+    phase = "paused";
+    act(() => {
+      source.send({
+        seq: 56,
+        ts: pausedAt,
+        agent: "coordinator",
+        kind: "status",
+        title: "Fermo: budget della sessione raggiunto",
+        detail: { event_type: "session.status_idle", stop_reason: "budget_reached", lane_state: "waiting" },
+        cost_cents: 61,
+      });
+    });
+    await flush(1000);
+    expect(screen.getByRole("heading", { name: "Budget della sessione raggiunto" })).toBeTruthy();
+    expect(panel()).toBeNull();
+    expect(document.title).toBe(`${TITLE} · ${BRAND_NAME}`);
+
+    // "Continua": the same question is back, with its own deadline.
+    fireEvent.click(screen.getByRole("button", { name: "Continua con 2 $ in più" }));
+    await flush(100);
+    expect(panel()).not.toBeNull();
+    expect(screen.getByText("Scegli quelle che ti piacciono, anche più di una. Se non scegli entro 4 minuti, scelgo io.")).toBeTruthy();
+    expect(screen.getByText("Tempo per scegliere:", { exact: false }).parentElement?.textContent).toMatch(
+      /^Tempo per scegliere: 3:4\d$/,
+    );
+    expect(document.title).toBe(`Tocca a te · ${TITLE} · ${BRAND_NAME}`);
+
+    // "Interrompi il piano": the cards go as soon as it is confirmed, before the plan stops.
+    fireEvent.click(screen.getByRole("button", { name: "Interrompi" }));
+    fireEvent.click(screen.getByRole("button", { name: "Interrompi il piano" }));
+    await flush(50);
+    expect(screen.getByText("In interruzione")).toBeTruthy();
+    expect(panel()).toBeNull();
+    expect(document.title).toBe(`${TITLE} · ${BRAND_NAME}`);
   });
 });

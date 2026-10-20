@@ -2,26 +2,33 @@
 
 /**
  * The plan screen as a view (spec, "Demo": the seam): the live header, the lanes, the plan
- * states and the finished plan, from a reducer state and a detail it is given. Two data sources
- * render it: PlanScreen (the live plan, GET /plans/{id} and the SSE stream) and DemoPlanScreen
- * (a recorded run replayed in the browser). This module never imports an API client, so the demo
- * never evaluates one: what needs the backend arrives as props.
+ * states, the traveller's choice and the finished plan, from a reducer state and a detail it is
+ * given. Two data sources render it: PlanScreen (the live plan, GET /plans/{id} and the SSE
+ * stream) and DemoPlanScreen (a recorded run replayed in the browser). This module never imports
+ * an API client, so the demo never evaluates one: what needs the backend arrives as props (the
+ * choice's `answer` among them).
+ *
+ * The choice (the coordinator's `ask_traveller` pause, components/choice/choice-panel.tsx) shows
+ * while the plan runs and the data source gives its controls: first under the live header on the
+ * phone, under the lanes from 1080 px. The page's one live region says once that a minute is left.
  */
 
 import { lazy, Suspense, useMemo, useState, type ReactNode } from "react";
 
+import type { ChoiceControls } from "@/components/choice/choice-panel";
 import type { CoverLoader } from "@/components/plan/cover/cover-store";
 import type { PlanHandoff, TripLoader } from "@/components/plan/PlanView";
 import { daysCount, titleStatesDates, tripLength } from "@/components/plan/trip-dates";
 import { isEndedStatus } from "@/components/states/ended-status";
 import { InlineStatus } from "@/components/ui/notice";
+import { choiceWindowMs, type ChoiceView } from "@/lib/choices";
 import { displayTitle, formatElapsed } from "@/lib/format";
 import { AGENTS, PLAN_STATUS_LABELS, type ConnectionStatus } from "@/lib/plan-events/labels";
-import { elapsedMs, type PlanLiveState } from "@/lib/plan-events/reducer";
+import { elapsedMs, type OpenChoice, type PlanLiveState } from "@/lib/plan-events/reducer";
 import type { PlanDetail } from "@/lib/schemas/api";
 
 import { AgentLanes, type LaneFollow } from "./agent-lanes";
-import { useLiveBaseline } from "./hooks";
+import { useLaneLayout, useLiveBaseline } from "./hooks";
 import { LiveHeader } from "./live-header";
 import { requestSummary } from "./request-summary";
 import { RunSection } from "./run-section";
@@ -39,6 +46,33 @@ const PlanView = lazy(() => loadPlanView().then((module) => ({ default: module.P
 export const loadPanels = () => import("@/components/states/panels");
 const BudgetPausedPanel = lazy(() => loadPanels().then((module) => ({ default: module.BudgetPausedPanel })));
 const PlanEndedPanel = lazy(() => loadPanels().then((module) => ({ default: module.PlanEndedPanel })));
+
+/** The traveller's choice: its own chunk too, warmed with the others (most runs never ask). */
+export const loadChoicePanel = () => import("@/components/choice/choice-panel");
+const ChoicePanel = lazy(loadChoicePanel);
+
+/** The question on screen: the open one while the plan runs, unless the viewer is interrupting
+ * or already answered it from this page (it stays hidden until its answered event arrives). */
+export function shownChoice(
+  state: PlanLiveState,
+  closedChoices: ReadonlySet<string> | undefined,
+  interrupting: boolean,
+): OpenChoice | null {
+  const open = state.openChoice;
+  if (!open || state.status !== "running" || interrupting || closedChoices?.has(open.choice.id)) return null;
+  return open;
+}
+
+const MINUTE_MS = 60_000;
+
+/** The last minute of a question whose window is longer than one (never the demo's 15 s). The
+ * deadline and the window are the panel's own: the controls' when they set them. */
+function inLastMinute(choice: ChoiceView, controls: ChoiceControls, clock: number): boolean {
+  const deadlineAt = controls.deadlineAt === undefined ? Date.parse(choice.deadlineAt) : controls.deadlineAt;
+  if (deadlineAt === null) return false;
+  const left = deadlineAt - clock;
+  return (controls.windowMs ?? choiceWindowMs(choice)) > MINUTE_MS && left > 0 && left <= MINUTE_MS;
+}
 
 /** What the finished plan takes from the data source besides the detail (the demo's cover,
  * handoff and notice). */
@@ -77,6 +111,10 @@ export interface PlanScreenViewProps {
   streamLine?: ReactNode;
   /** The viewer asked to interrupt and the plan has not stopped yet. */
   interrupting?: boolean;
+  /** How the traveller answers the coordinator's question; without it no question shows. */
+  choice?: ChoiceControls;
+  /** Questions this page already answered: hidden until their answered event arrives. */
+  closedChoices?: ReadonlySet<string>;
   /** "Continua" on a plan paused at its cost cap. */
   onContinue?: () => Promise<void>;
   loadTrip?: TripLoader;
@@ -100,6 +138,8 @@ export function PlanScreenView({
   followLanes,
   streamLine,
   interrupting = false,
+  choice,
+  closedChoices,
   onContinue,
   loadTrip,
   trip,
@@ -155,6 +195,28 @@ export function PlanScreenView({
   const blocker = status === "blocked" ? findBlocker(state) : null;
   const stationCount = AGENTS.reduce((sum, agent) => sum + views[agent].stations.length, 0);
 
+  // The traveller's choice, and the one time the page says a minute is left (its id).
+  const layout = useLaneLayout();
+  const asked = choice ? shownChoice(state, closedChoices, interrupting) : null;
+  const [minuteSaid, setMinuteSaid] = useState<string | null>(null);
+  if (asked && choice && clock !== null && minuteSaid !== asked.choice.id && inLastMinute(asked.choice, choice, clock)) {
+    setMinuteSaid(asked.choice.id);
+  }
+  const place = detail?.request.destination;
+  const choicePanel =
+    asked && choice ? (
+      <Suspense fallback={null}>
+        <div className={layout === "stack" ? "mb-6" : "mt-8"}>
+          <ChoicePanel
+            choice={asked.choice}
+            controls={choice}
+            now={clock}
+            destination={typeof place === "string" && place.trim() !== "" ? place : null}
+          />
+        </div>
+      </Suspense>
+    ) : null;
+
   const lanes = (
     <AgentLanes
       state={state}
@@ -186,6 +248,8 @@ export function PlanScreenView({
       />
       {streamLine}
       <main className="mx-auto max-w-page px-4 pt-3 lg:px-7 lg:pt-5">
+        {/* On the phone the question comes first, under the live header. */}
+        {layout === "stack" ? choicePanel : null}
         {status === "budget_paused" && onContinue ? (
           <Suspense fallback={null}>
             <BudgetPausedPanel
@@ -230,11 +294,17 @@ export function PlanScreenView({
         ) : (
           <div className={status === "running" || status === null ? undefined : "mt-6 lg:mt-8"}>{lanes}</div>
         )}
+        {/* From 1080 px it sits under the lanes. */}
+        {layout === "stack" ? null : choicePanel}
       </main>
-      {/* The page's one live region: lane state changes and the plan's own state, never tool calls. */}
+      {/* The page's one live region: lane state changes, the plan's own state and the choice's last
+          minute, never tool calls. */}
       <div aria-live="polite" aria-atomic="true" className="sr-only">
         {announcement ? <span key={announcement.id}>{announcement.text}</span> : null}
         {planNote ? <span key={`plan-${planNote.id}`}>{planNote.text}</span> : null}
+        {asked && minuteSaid === asked.choice.id ? (
+          <span key={`minute-${asked.choice.id}`}>Manca un minuto per scegliere.</span>
+        ) : null}
       </div>
     </div>
   );

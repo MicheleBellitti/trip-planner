@@ -5,13 +5,19 @@
  * finished plan with the run's timeline closed under it (spec, "La timeline in diretta" and
  * "Tutti gli stati sono disegnati"; DESIGN.md, direction "Linee").
  *
- * Data: GET /plans/{id} (status, cost, budget, the plan) and the SSE stream through
- * usePlanEvents, re-reading the plan whenever an event may change its status. Everything is
- * fetched in the browser, which carries the session cookie to the backend.
+ * Data: GET /plans/{id} (status, cost, budget, the plan, the question waiting) and the SSE stream
+ * through usePlanEvents, re-reading the plan whenever an event may change its status. Everything
+ * is fetched in the browser, which carries the session cookie to the backend.
+ *
+ * The traveller's choice: the answer goes through POST /plans/{id}/choices/{choice_id}. Once it
+ * went, the question is hidden at once (until its answered event arrives) and the focus moves to
+ * the plan's state; a 409 `choice_closed` leaves the backend's sentence on the panel and re-reads
+ * the plan. While a question waits, the tab title starts with "Tocca a te ·".
  */
 
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import type { ChoiceControls } from "@/components/choice/choice-panel";
 import type { CoverLoader } from "@/components/plan/cover/cover-store";
 import type { TripLoader } from "@/components/plan/PlanView";
 import { SessionExpiredPanel } from "@/components/states/session-expired";
@@ -29,7 +35,7 @@ import { useOnline } from "./hooks";
 import { InterruptControl } from "./interrupt-control";
 import { liveApi } from "./live-api";
 import { PLAN_STATE_ID } from "./live-header";
-import { loadPanels, loadPlanView, PlanScreenView } from "./plan-screen-view";
+import { loadChoicePanel, loadPanels, loadPlanView, PlanScreenView, shownChoice } from "./plan-screen-view";
 import { StreamStatus } from "./stream-status";
 
 /** The panel of a plan that cannot be loaded: the panels' on-demand chunk (plan-screen-view). */
@@ -66,6 +72,8 @@ export function PlanScreen({ planId, client = liveApi }: { planId: string; clien
   const [loadError, setLoadError] = useState<ApiError | null>(null);
   const [loginUrl, setLoginUrl] = useState<string | null>(null);
   const [interrupting, setInterrupting] = useState(false);
+  /** Questions answered from this page: hidden at once, without waiting for their answered event. */
+  const [closedChoices, setClosedChoices] = useState<ReadonlySet<string>>(() => new Set());
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /** Applies a GET /plans/{id} outcome; false when the stream should not reconnect (signed
@@ -123,11 +131,13 @@ export function PlanScreen({ planId, client = liveApi }: { planId: string; clien
     onEnd: () => scheduleRefresh(0),
   });
 
-  // Warm the finished plan's chunk once the page is up, off the critical path.
+  // Warm the finished plan's, the panels' and the choice's chunks once the page is up, off the
+  // critical path.
   useEffect(() => {
     const warm = () => {
       void loadPlanView();
       void loadPanels();
+      void loadChoicePanel();
     };
     if (typeof window.requestIdleCallback === "function") {
       const id = window.requestIdleCallback(warm, { timeout: 4000 });
@@ -142,10 +152,36 @@ export function PlanScreen({ planId, client = liveApi }: { planId: string; clien
   const loadTrip = useCallback<TripLoader>((id, signal) => client.getTrip(id, { signal }), [client]);
   const loadCover = useCallback<CoverLoader>((id) => client.getCover(id), [client]);
 
+  const answer = useCallback<ChoiceControls["answer"]>(
+    async (choiceId, input) => {
+      try {
+        await client.answerChoice(planId, choiceId, input);
+        // The stream's answered event confirms it; until then the question stays hidden.
+        setClosedChoices((current) => new Set(current).add(choiceId));
+        requestAnimationFrame(() => document.getElementById(PLAN_STATE_ID)?.focus());
+        return null;
+      } catch (error) {
+        if (error instanceof UnauthorizedError) {
+          setLoginUrl(error.loginUrl);
+          return null;
+        }
+        if (error instanceof ApiError && error.kind === "conflict") {
+          // Closed already (the deadline, an interrupt): the backend's sentence, and the real status.
+          scheduleRefresh(0);
+          return { closed: error.message };
+        }
+        return error instanceof ApiError ? error.message : API_ERROR_MESSAGES.unknown;
+      }
+    },
+    [client, planId, scheduleRefresh],
+  );
+  const choiceControls = useMemo<ChoiceControls>(() => ({ answer }), [answer]);
+
   const title = displayTitle(detail?.title ?? "Piano");
+  const asking = shownChoice(state, closedChoices, interrupting) !== null;
   useEffect(() => {
-    document.title = `${title} · ${BRAND_NAME}`;
-  }, [title]);
+    document.title = asking ? `Tocca a te · ${title} · ${BRAND_NAME}` : `${title} · ${BRAND_NAME}`;
+  }, [asking, title]);
 
   async function interrupt(): Promise<string | null> {
     try {
@@ -235,6 +271,8 @@ export function PlanScreen({ planId, client = liveApi }: { planId: string; clien
       connection={connection}
       header={<AppHeaderBar current="plans" compact />}
       interrupting={interrupting}
+      choice={choiceControls}
+      closedChoices={closedChoices}
       action={
         canInterrupt ? (
           <InterruptControl
