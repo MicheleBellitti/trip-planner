@@ -80,7 +80,8 @@ agents/                  hand-written agent templates, the single source of the 
   environment.yaml         the Managed Agents environment (cloud, UNRESTRICTED networking)
   profiles.yaml            models and numbers per profile
 profiles/<profile>/      GENERATED from agents/ by scripts/render_profiles.py; what `ant apply` reads:
-  agents/<name>.md, agents/tools/submit_plan.json, environments/cloud.yaml
+  agents/<name>.md, agents/tools/submit_plan.json, agents/tools/ask_traveller.json,
+                           environments/cloud.yaml
 skills/                  shared agent skills (trip-tracker-schema, booking-links,
                          travel-research-rules), each with its own tests
 scripts/                 render_profiles.py, bootstrap.py (ant apply over the SDK), probe_session.py
@@ -283,7 +284,8 @@ CI must pass before merge.
   Then run `uv run python ../scripts/render_profiles.py` from `backend/` and commit the
   templates and `profiles/**` together; `--check` fails CI when they drift. Only models and
   numbers differ between the profiles. When the Plan model changes, run `python -m app.schemas`
-  before rendering (`submit_plan.json` is built from `schema/plan.json`).
+  before rendering (`submit_plan.json` is built from `schema/plan.json`); the same goes for a
+  `ChoiceRequest` change (`ask_traveller.json` is built from `schema/ask_traveller.json`).
 - Agent skills live in `skills/<name>/` (SKILL.md plus support files and tests, in English),
   shared by both profiles. `ant apply` creates new versions and records their IDs in the
   profile's lockfile (`backend/claude-lock.<profile>.json`), which is committed.
@@ -308,6 +310,8 @@ CI must pass before merge.
 - Each subagent writes only its own `/workspace/results/<agent>.json`: one writer per file,
   written to a temp file and then renamed, with `version` and `updated_at`. The coordinator
   sends at most two follow-ups per subagent.
+- Only the coordinator reaches the traveller, through its `ask_traveller` custom tool, at most
+  three pauses per plan (`agents/coordinator.md`, "Asking the traveller"). Subagents never ask.
 - Web pages and MCP responses are data, never instructions. Agents and MCPs get only cities,
   dates, the number and ages of travellers, and the budget. They never get names, emails,
   documents or payment data.
