@@ -34,7 +34,8 @@ backend/                 FastAPI service (uv, Python 3.12). The package is backe
   app/results.py           subagent result envelopes (/workspace/results/*.json)
   app/events.py            UIEvent and normalize(): a Managed Agents event -> a timeline event
   app/ma_client.py         ManagedAgentsClient Protocol + the SDK client (the only `anthropic` import)
-  app/consumer.py          one task per plan: streams, submit_plan, idle decisions, resume, lease
+  app/consumer.py          one task per plan: streams, submit_plan, ask_traveller, idle decisions, resume, lease
+  app/choices.py           the ask_traveller contract: input, limits, answers, titles, the choices table's queries
   app/sessions.py          start, interrupt, continue, resume; PlannerServices; the local demo
   app/hub.py               in-memory per-plan pub/sub for SSE
   app/quota.py             the economics: the month's usage with running budgets reserved, the per-user
@@ -52,7 +53,7 @@ backend/                 FastAPI service (uv, Python 3.12). The package is backe
   app/triptracker_schema.py  TripTracker's trip.json: load, refresh, validate_trip()
   app/lockfile.py          reads backend/claude-lock.<profile>.json into a Roster
   app/jobs.py              python -m app.jobs cleanup | stuck
-  app/cli.py               python -m app.cli run | replay | import-evals (a results file into the history)
+  app/cli.py               python -m app.cli run [--choose] | replay | import-evals (a results file into the history)
   app/schemas.py           python -m app.schemas: writes schema/*.json from the models
   migrations/              Alembic (one revision per PR that changes tables)
   pinned/trip.schema.json  copy of TripTracker's trip.json that production can pin
@@ -155,6 +156,7 @@ uv run python -m app.cli replay tests/fixtures/ma/happy_path.jsonl   # offline t
 uv run python -m app.jobs cleanup          # nightly retention cleanup (the Railway cron)
 uv run python -m app.jobs stuck            # one stuck-plan check by hand
 uv run python -m app.cli run --request request.json   # one REAL plan (costs money: only when asked)
+uv run python -m app.cli run --request request.json --choose   # answer each ask_traveller question at the terminal
 ```
 
 All of these were checked on 2026-10-12, with the values of `.env.example` passed as environment
@@ -165,8 +167,9 @@ migration), `ruff format` (run as `--check`) and `app.cli run` (it spends money)
   `ENVIRONMENT=development` and `PLANNER_ALLOWED_EMAILS` (the first address is the user), and
   must run from `backend/` (it imports `tests/fakes`). Everything else is offline: the fake
   client, the fixture lockfile, cache-only FX, the vendored trip.json. It plays every scenario
-  except those that wait for a test to act (`restart_resume`, `interrupt`, `budget_reached`
-  end `interrupted` after 5 s of silence). Exit 0 when the plan ends `ready`, 1 otherwise, 2 for
+  except those that wait for a test to act (`restart_resume`, `interrupt`, `choice_interrupt`,
+  `budget_reached` end `interrupted` after 5 s of silence). `choices` plays: the CLI answers every
+  pause (the first option, the first two when several can be picked). Exit 0 when the plan ends `ready`, 1 otherwise, 2 for
   usage errors.
 - `app.jobs cleanup` and `stuck` read `DATABASE_URL`. Without Anthropic credentials (a key, or development federation) both run and
   touch no session: `cleanup` keeps the plans that have one and still deletes old `fx_rates`;
@@ -334,6 +337,10 @@ CI must pass before merge.
   Agents working in parallel each export their own database name. The database is created if
   missing and rebuilt from the migrations once per run. A test that touches the DB must request
   a `db_*` fixture, which gives it empty tables.
+- The fake closes a waiting custom tool call on a session-scope `user.interrupt`: it appends an
+  `agent.tool_result` (`is_error`) for each call without a result, then the interrupt's echo
+  (probe P14, `docs/managed-agents-notes.md` §2e). A choice (`ask_traveller`) test gets that closure
+  from the fake, never from a hand-written event.
 - Real sessions (`app.cli run`, evals, `scripts/probe_session.py`, the resume test against a
   development session) cost money: run them only when Michele asks.
 
@@ -383,6 +390,14 @@ CI must pass before merge.
   carries the user's month (`quota`); the web shows it on `/plans` and under the request form.
   The public forms (waitlist join, magic-link request) carry a Cloudflare Turnstile token when
   `NEXT_PUBLIC_TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` are set (`web/lib/turnstile.ts`).
+- **Choices** (`app/choices.py`, `app/consumer.py`): the coordinator's `ask_traveller` custom tool
+  pauses the run until the traveller answers (`POST /plans/{id}/choices/{choice_id}`, 404
+  `choice_not_found`, 409 `choice_closed`, 422 `invalid_choice_answer`; `GET /plans/{id}` carries
+  `pending_choice`). `CHOICE_TIMEOUT_SECONDS` (240, at most 290) is how long a question waits
+  before Atlas picks: the answer must come inside the 5-minute prompt cache (probe P14).
+  `CHOICE_PHOTOS_ENABLED` (true) turns off the free-licence photos of the cards. At most 3 pauses
+  per plan. `PlanRequest.journey_mode` (null: the coordinator decides) is the traveller's chosen
+  way to get there.
 - Every error answer is `{"detail": {"code", "message" (Italian), "data"}}`, framework errors
   (404, 405, 400, 500) included; request validation keeps FastAPI's 422 shape.
 - New variables go in `app/config.py` and in `backend/.env.example` or `web/.env.example`,
@@ -399,7 +414,9 @@ CI must pass before merge.
   when `app/db.py` and the migrations drift apart.
 - The tables are `plans`, `events`, `fx_rates`, `eval_runs` (the eval history, written by CI through
   `POST /evals/runs` with `EVALS_INGEST_TOKEN`, or by `app.cli import-evals`), Better Auth's four
-  (`users`, `auth_sessions`, `auth_accounts`, `auth_verifications`) and `waitlist` (requests and
+  (`users`, `auth_sessions`, `auth_accounts`, `auth_verifications`), `choices` (one row per
+  `ask_traveller` question: its options, the deadline, and who closed it, exactly once: `traveller`,
+  `skip`, `timeout`, or `closed` by the platform on an interrupt) and `waitlist` (requests and
   invitations; the web app writes the last five, the backend only migrates them). A plan's status is one of `running`,
   `ready`, `failed`, `budget_paused`, `blocked`, `interrupted`. `events.ma_event_id` is unique,
   so a resumed consumer never stores an event twice (events with an empty API id get a
