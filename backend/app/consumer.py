@@ -1079,56 +1079,49 @@ def translate_submission(
 async def evaluate_submission(
     tool_input: Mapping[str, Any], *, deps: ConsumerDeps
 ) -> SubmitOutcome:
-    """The I/O wrapper: `parse_submission`, then the FX prefetch, `deps.trip_schema.require()`
-    and the link check (`_check_links`) together, then `translate_submission(...,
-    now=deps.now(), ids=deps.ids(), health=...)`. `TripSchemaUnavailableError` propagates (the
-    plan fails with a backend reason; it does not count as the agent's attempt). A link never
-    rejects the plan, and neither does a failing link check. The check runs before translation,
-    beside the FX prefetch and the trip.json load, so it adds no wait to an accepted plan; a
-    submission that translation then rejects may spend up to the checker's deadline on it (a
-    spec divergence, docs/backend-interfaces.md decision 40)."""
+    """The I/O wrapper: `parse_submission`; the link check (`_check_links`) starts as a task
+    while the FX prefetch and `deps.trip_schema.require()` run; `translate_submission(...,
+    now=deps.now(), ids=deps.ids())` without verdicts; a Rejected is answered at once and
+    cancels the check; an accepted plan waits for the check (at most its deadline) and is
+    translated again with `health=`. `TripSchemaUnavailableError` propagates (the plan fails
+    with a backend reason; it does not count as the agent's attempt) and cancels the check too.
+    A link never rejects the plan, and neither does a failing link check: verdicts only replace
+    a URL by its homepage or drop it, and if the second translation still refused the plan the
+    first one, without verdicts, is kept (docs/backend-interfaces.md decision 40)."""
     parsed = parse_submission(tool_input)
     if isinstance(parsed, Rejected):
         return parsed
-    rates, schema, health = await _gather_all(
-        deps.fx.prefetch(fx_keys(parsed)),
-        deps.trip_schema.require(),
-        _check_links(deps.link_checker, parsed),
+    check = asyncio.ensure_future(_check_links(deps.link_checker, parsed))
+    try:
+        rates = await deps.fx.prefetch(fx_keys(parsed))
+        schema = await deps.trip_schema.require()
+        now = deps.now()
+        plain = translate_submission(parsed, schema=schema, fx=rates, now=now, ids=deps.ids())
+        if isinstance(plain, Rejected):
+            return plain
+        health = await check
+    finally:
+        check.cancel()  # a no-op once the check has finished
+        await asyncio.wait([check])
+    outcome = translate_submission(
+        parsed, schema=schema, fx=rates, now=now, ids=deps.ids(), health=health
     )
-    return translate_submission(
-        parsed, schema=schema, fx=rates, now=deps.now(), ids=deps.ids(), health=health
-    )
+    if isinstance(outcome, Rejected):
+        log.warning("link_health_trip_rejected", stage=outcome.stage)
+        return plain
+    return outcome
 
 
 async def _check_links(checker: LinkHealthChecker, plan: Plan) -> LinkHealthMap:
     """`checker.check_plan(plan)`, which never fails because of a URL. An unexpected failure (a
     bug) is logged once, by its class only (the message could carry a URL), and gives no
-    verdicts, so it never cancels the FX prefetch or the trip.json load beside it.
-    Cancellation propagates."""
+    verdicts, so the task never ends with an exception nobody retrieves. Cancellation
+    propagates."""
     try:
         return await checker.check_plan(plan)
     except Exception as exc:
         log.warning("link_check_failed", error=type(exc).__name__)
         return LinkHealthMap.empty()
-
-
-async def _gather_all[A, B, C](
-    first: Awaitable[A], second: Awaitable[B], third: Awaitable[C]
-) -> tuple[A, B, C]:
-    """`asyncio.gather` of three awaitables that cancels and drains the others when one raises,
-    so no task outlives the call or leaves an exception nobody retrieved."""
-    task_a = asyncio.ensure_future(first)
-    task_b = asyncio.ensure_future(second)
-    task_c = asyncio.ensure_future(third)
-    tasks: tuple[asyncio.Future[Any], ...] = (task_a, task_b, task_c)
-    try:
-        await asyncio.gather(*tasks)
-    except BaseException:
-        for task in tasks:
-            task.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
-        raise
-    return task_a.result(), task_b.result(), task_c.result()
 
 
 def check_result_writes(writes: Mapping[str, str]) -> dict[str, list[str]]:

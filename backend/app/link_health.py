@@ -12,19 +12,22 @@ Verdict rules: `ok`, `dead` or `unknown`. A URL is `dead` only on a final 404 or
 that does not exist, or a soft 404 (an HTML page whose title says "not found"). 401, 403, 405,
 429, 5xx, timeouts, TLS and network errors are `unknown`: the link is kept. The fallback of a
 dead URL is its own origin (`{scheme}://{host}/`), computed here by `homepage_of`, never
-written by an agent; a booking link may use it only when the caller found it allowed by the
-booking-link allowlist (`LinkHealth.fallback_allowed`).
+written by an agent; a booking link may use it only when the link and the homepage both pass
+the booking-link allowlist (`LinkHealth.fallback_allowed`).
 
-Safety rules for the checker: http and https only, port absent, 80 or 443, no userinfo; every
-resolved address must be public (`is_public_address`), on every redirect hop; connections go
-only to vetted addresses; no cookies, no credentials, no proxy from the environment. A link
-never rejects a plan. Logs carry the host and the reason, never a full URL or page content.
+Safety rules for the checker: http and https only, port absent, 80 or 443, no userinfo, no `\\`
+or `%` in the host (browsers read those differently, as links.py says); every resolved address
+must be public (`is_public_address`), on every redirect hop; connections go only to vetted
+addresses; no cookies, no credentials, no proxy from the environment. A link never rejects a
+plan. Logs carry the host and the reason, never a full URL or page content.
 
 Limits: GET only, at most 5 redirects, 5 s per request (httpcore's timeouts; an asyncio guard
-0.5 s later also bounds the resolution and the whole body read), 8 URLs at a time, 10 s for the
-whole plan, exact (a URL not checked by then is `unknown`, reason `deadline`; a URL already
-found dead keeps that verdict, with its unchecked homepage as fallback), at most 65,536 body
-bytes read, and a title of at most 1024 bytes.
+0.5 s later also bounds the wait for the resolution and the whole body read; lookups run on
+threads of their own, `_DNS_POOL`, because a running getaddrinfo cannot be cancelled), 8 URLs
+at a time, each distinct page fetched once per plan, 10 s for the whole plan, exact (a URL not
+checked by then is `unknown`, reason `deadline`; a URL already found dead keeps that verdict,
+with its unchecked homepage as fallback), at most 65,536 body bytes read (reading stops once
+the first title has closed), and a title of at most 1024 bytes.
 """
 
 from __future__ import annotations
@@ -38,8 +41,11 @@ import socket
 import ssl
 import time
 from collections.abc import AsyncGenerator, Awaitable, Callable, Iterable, Iterator, Mapping
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
+from functools import partial
 from ipaddress import IPv4Address, IPv6Address, IPv6Network, ip_address
+from itertools import zip_longest
 from typing import TYPE_CHECKING, Any, Final, Literal, Protocol, cast
 from urllib.parse import urljoin, urlsplit
 
@@ -65,7 +71,12 @@ NOT_FOUND_PHRASES: Final[tuple[str, ...]] = (
     "page introuvable",
     "seite nicht gefunden",
 )
-"""Casefolded phrases that make an HTML title a soft 404."""
+"""Casefolded phrases that make an HTML title a soft 404 when a part of the title is, starts with
+or ends with one, as whole words (`_says_not_found`)."""
+
+_TITLE_SEPARATORS: Final[re.Pattern[str]] = re.compile(r"\s+[-–—|·•]\s+|[|·•:]")
+"""What splits a title into parts: "Pagina non trovata - Carris" has two."""
+_EDGE_PUNCTUATION: Final[str] = " .,;!?¡¿()[]\"'«»…"
 
 _TITLE_OPEN: Final[re.Pattern[bytes]] = re.compile(rb"<title\b[^>]{0,256}>", re.IGNORECASE)
 """A `<title>` tag (not `<titles>`), its attributes bounded."""
@@ -286,8 +297,18 @@ def looks_not_found(content_type: str | None, body: bytes) -> bool:
     if raw is None:
         return False
     title = " ".join(html.unescape(raw.decode("utf-8", errors="ignore")).split())
-    folded = title.casefold()
-    return any(phrase in folded for phrase in NOT_FOUND_PHRASES)
+    return any(_says_not_found(part) for part in _TITLE_SEPARATORS.split(title.casefold()))
+
+
+def _says_not_found(part: str) -> bool:
+    """A casefolded title part that is, starts with or ends with a not-found phrase, as whole
+    words: "404 not found" and "oops! page not found." say it; "pinot found wine bar" and
+    "10 tascas not found in any guidebook" do not."""
+    words = part.strip(_EDGE_PUNCTUATION)
+    return any(
+        words == phrase or words.startswith(f"{phrase} ") or words.endswith(f" {phrase}")
+        for phrase in NOT_FOUND_PHRASES
+    )
 
 
 def _first_title(body: bytes) -> bytes | None:
@@ -404,24 +425,43 @@ class HttpLinkChecker:
         a URL still being checked then is cancelled and `unknown` (`deadline`), unless it was
         already found dead and only its homepage check was cut off (it stays dead, with the
         homepage as fallback). Never raises because of a URL: a failed check is `unknown`
-        (`error`)."""
+        (`error`), unless the URL was already found dead. Each distinct page is fetched once
+        (`_fetch_key`): a homepage that is also a plan URL, or shared by several dead pages, and
+        a URL the plan spells two ways (a raw link and the same page as a normalised price
+        source) share one fetch and one verdict."""
         started = time.monotonic()
         urls = collect_plan_urls(plan)
         semaphore = asyncio.Semaphore(self._concurrency)
         settled: dict[str, LinkHealth] = {}
+        fetches: dict[str, asyncio.Task[LinkHealth]] = {}
+
+        def fetch(url: str) -> Awaitable[LinkHealth]:
+            key = _fetch_key(url)
+            task = fetches.get(key)
+            if task is None:
+                task = fetches[key] = asyncio.create_task(self._follow(url))
+            return asyncio.shield(task)
 
         async def check(url: str) -> LinkHealth:
             try:
                 async with semaphore:
-                    return await self._check(url, settled)
+                    return await self._check(url, settled, fetch)
             except Exception as exc:  # a link never fails the plan
                 log.warning("link_check_failed", host=_host_of(url), error=type(exc).__name__)
-                return LinkHealth(status="unknown", reason="error", checked_at=self._now())
+                failed = settled.get(url, LinkHealth(status="unknown", reason="error"))
+                return replace(failed, checked_at=self._now())
 
         tasks: list[asyncio.Task[LinkHealth]] = []
-        with contextlib.suppress(TimeoutError):
-            async with asyncio.timeout(self._total_deadline), asyncio.TaskGroup() as group:
-                tasks.extend(group.create_task(check(url)) for url in urls)
+        try:
+            with contextlib.suppress(TimeoutError):
+                async with asyncio.timeout(self._total_deadline), asyncio.TaskGroup() as group:
+                    tasks.extend(group.create_task(check(url)) for url in urls)
+        finally:
+            # The fetches are shielded from the checks: those the deadline left running stop here.
+            for task in fetches.values():
+                task.cancel()
+            if fetches:
+                await asyncio.gather(*fetches.values(), return_exceptions=True)
         entries = {
             url: (
                 replace(settled.get(url, _CUT_OFF), checked_at=self._now())
@@ -447,27 +487,35 @@ class HttpLinkChecker:
 
     async def check_url(self, url: str) -> LinkHealth:
         """The verdict on `url`, within `total_deadline`. A dead URL gets its homepage as
-        `fallback` when the homepage is not dead too, with `fallback_allowed` from the
-        booking-link allowlist; not when the URL's own host does not exist (`nxdomain`; a
-        missing host further down a redirect chain is `redirect_nxdomain`). A homepage check
-        cut off by the deadline leaves the homepage unchecked (`unknown`, which counts as
-        alive): the URL stays dead with the homepage as fallback."""
-        return await self._check(url, {})
+        `fallback` when the homepage is not dead too, with `fallback_allowed` when the URL and
+        its homepage both pass the booking-link allowlist; not when the URL's own host does not
+        exist (`nxdomain`; a missing host further down a redirect chain is `redirect_nxdomain`).
+        A homepage check cut off by the deadline leaves the homepage unchecked (`unknown`, which
+        counts as alive): the URL stays dead with the homepage as fallback."""
+        return await self._check(url, {}, self._follow)
 
-    async def _check(self, url: str, settled: dict[str, LinkHealth]) -> LinkHealth:
-        """`check_url`'s work. A dead verdict goes into `settled`, with its homepage as the
-        fallback, before the homepage is checked: a deadline that cuts the homepage check off,
-        this one or the caller's (`check_plan`), keeps it."""
+    async def _check(
+        self,
+        url: str,
+        settled: dict[str, LinkHealth],
+        fetch: Callable[[str], Awaitable[LinkHealth]],
+    ) -> LinkHealth:
+        """`check_url`'s work, with `fetch` for `_follow` (`check_plan` shares one fetch per
+        page). A dead verdict goes into `settled`, with its homepage as the fallback, before the
+        homepage is checked: a deadline that cuts the homepage check off, this one or the
+        caller's (`check_plan`), keeps it."""
         try:
             async with asyncio.timeout(self._total_deadline):
-                health = await self._follow(url)
+                health = await fetch(url)
                 home = homepage_of(url)
                 if health.status == "dead" and health.reason != "nxdomain" and home is not None:
                     health = replace(
-                        health, fallback=home, fallback_allowed=check_link(home).allowed
+                        health,
+                        fallback=home,
+                        fallback_allowed=check_link(url).allowed and check_link(home).allowed,
                     )
                     settled[url] = health
-                    if (await self._follow(home)).status == "dead":
+                    if (await fetch(home)).status == "dead":
                         health = replace(health, fallback=None, fallback_allowed=False)
         except TimeoutError:
             health = settled.get(url, _CUT_OFF)
@@ -523,7 +571,10 @@ class HttpLinkChecker:
         response = await self._transport.handle_async_request(request)
         try:
             code = response.status_code
-            location = response.headers.get("Location")
+            # A repeated Location comes joined with ", " from .get(): follow it only when every
+            # copy agrees, as browsers do.
+            locations = response.headers.get_list("Location")
+            location = locations[0] if len(set(locations)) == 1 else None
             if code in _REDIRECT_CODES and location:
                 return location
             if code in _DEAD_CODES:
@@ -540,7 +591,8 @@ class HttpLinkChecker:
             await response.aclose()
 
     async def _head_of(self, response: httpx.Response) -> bytes:
-        """At most `max_body` bytes of the body, as received."""
+        """At most `max_body` bytes of the body, as received, and no more once the first
+        `<title>` has closed: the soft 404 test reads nothing else."""
         stream = response.stream
         if not isinstance(stream, httpx.AsyncByteStream):
             return b""
@@ -549,7 +601,7 @@ class HttpLinkChecker:
         try:
             async for chunk in chunks:
                 head += chunk
-                if len(head) >= self._max_body:
+                if len(head) >= self._max_body or _first_title(bytes(head)) is not None:
                     break
         finally:
             if isinstance(chunks, AsyncGenerator):
@@ -559,8 +611,10 @@ class HttpLinkChecker:
 
 def _safe_target(url: str) -> tuple[httpx.URL, str] | None:
     """The URL as httpx sends it, and its host; None when the safety rules refuse it (http or
-    https only, port absent, 80 or 443, no userinfo). httpx parses it because httpx also builds
-    the request from it: the host vetted is the host connected to."""
+    https only, port absent, 80 or 443, no userinfo, no `\\` or `%` in the host). httpx parses
+    it because httpx also builds the request from it: the host vetted is the host connected to.
+    A browser reads `\\` as `/` and decodes `%xx` in a host, httpx keeps both: such a URL would
+    get a verdict on a host the reader never opens (links.py refuses them the same way)."""
     try:
         target = httpx.URL(url)
         host = target.raw_host.decode("ascii")
@@ -569,11 +623,23 @@ def _safe_target(url: str) -> tuple[httpx.URL, str] | None:
     if (
         target.scheme not in ("http", "https")
         or not host
+        or "\\" in host
+        or "%" in host
         or target.userinfo
         or target.port not in _ALLOWED_PORTS
     ):
         return None
     return target, host
+
+
+def _fetch_key(url: str) -> str:
+    """The page a URL asks for, as httpx sends it (lower-case host, no default port, escapes,
+    `/` for an empty path): two spellings of one page share one fetch in `check_plan`."""
+    try:
+        target = httpx.URL(url)
+        return f"{target.scheme}://{target.netloc.decode('ascii')}{target.raw_path.decode('ascii')}"
+    except (httpx.InvalidURL, UnicodeDecodeError):
+        return url
 
 
 async def _resolve(resolver: Resolver, host: str) -> list[IPv4Address | IPv6Address]:
@@ -617,9 +683,12 @@ class PinnedNetworkBackend(httpcore.AsyncNetworkBackend):
     """An httpcore network backend that connects only to public addresses.
 
     httpcore hands `connect_tcp` the URL's host name: this resolves it through `resolver` and
-    opens the socket to a public address of the answer (the first that accepts, in order: a
-    refused or timed-out address passes to the next), else raises the last address's error
-    (httpcore.ConnectError or ConnectTimeout). A DNS answer that changed since the checker
+    opens the socket to a public address of the answer (the first that accepts, alternating
+    address families from the first answer's, RFC 8305: a refused or timed-out address passes to
+    the next, and when there is a next one each attempt gets half the connect timeout, so a
+    family whose path drops packets leaves time for the other inside the checker's guard), else
+    raises the last address's error (httpcore.ConnectError or ConnectTimeout). A DNS answer that
+    changed since the checker
     vetted the host (rebinding) cannot point the connection at a private address. TLS keeps the
     URL's host name for SNI and certificate verification: httpcore passes the origin's host to
     `start_tls`, not the address connected to.
@@ -655,11 +724,13 @@ class PinnedNetworkBackend(httpcore.AsyncNetworkBackend):
         public = [address for address in addresses if is_public_address(address)]
         if not public:
             raise httpcore.ConnectError(f"no public address for {host}")
+        attempts = _alternate_families(public)
+        per_attempt = timeout if timeout is None or len(attempts) == 1 else timeout / 2
         errors: list[httpcore.ConnectError | httpcore.ConnectTimeout] = []
-        for address in public:
+        for address in attempts:
             try:
                 return await self._inner.connect_tcp(
-                    str(address), port, timeout, local_address, socket_options
+                    str(address), port, per_attempt, local_address, socket_options
                 )
             except (httpcore.ConnectError, httpcore.ConnectTimeout) as exc:
                 errors.append(exc)
@@ -669,23 +740,45 @@ class PinnedNetworkBackend(httpcore.AsyncNetworkBackend):
         await self._inner.sleep(seconds)
 
 
+def _alternate_families(
+    addresses: list[IPv4Address | IPv6Address],
+) -> list[IPv4Address | IPv6Address]:
+    """The addresses in their order, alternating families from the first one's (RFC 8305)."""
+    first = [address for address in addresses if address.version == addresses[0].version]
+    other = [address for address in addresses if address.version != addresses[0].version]
+    pairs = zip_longest(first, other)
+    return [address for pair in pairs for address in pair if address is not None]
+
+
 _NAME_NOT_FOUND: Final[frozenset[int]] = frozenset(
     code for code in (socket.EAI_NONAME, getattr(socket, "EAI_NODATA", None)) if code is not None
 )
 
+_DNS_POOL: Final[ThreadPoolExecutor] = ThreadPoolExecutor(
+    max_workers=4, thread_name_prefix="link-check-dns"
+)
+"""The link check's own resolver threads. A running getaddrinfo cannot be cancelled, and the
+event loop's resolver serves the whole process (under uvloop, two lookups at a time): a name that
+resolves slowly ties up only these threads, and a lookup still queued when its check gives up is
+dropped."""
+
 
 async def system_resolver(host: str) -> list[IPv4Address | IPv6Address]:
-    """The host's addresses from getaddrinfo, in its order, without duplicates.
+    """The host's addresses from getaddrinfo (on `_DNS_POOL`), in its order, without duplicates.
 
-    HostNotFoundError when the name does not exist (EAI_NONAME, EAI_NODATA); any other failure
-    is the socket.gaierror (an OSError)."""
+    HostNotFoundError when the name does not exist (EAI_NONAME, EAI_NODATA) or cannot exist (an
+    empty label or one over 63 characters, which the idna codec refuses with a UnicodeError);
+    any other failure is the socket.gaierror (an OSError)."""
     loop = asyncio.get_running_loop()
+    lookup = partial(socket.getaddrinfo, host, None, type=socket.SOCK_STREAM)
     try:
-        answers = await loop.getaddrinfo(host, None, type=socket.SOCK_STREAM)
+        answers = await loop.run_in_executor(_DNS_POOL, lookup)
     except socket.gaierror as exc:
         if exc.errno in _NAME_NOT_FOUND:
             raise HostNotFoundError(host) from exc
         raise
+    except UnicodeError as exc:
+        raise HostNotFoundError(host) from exc
     addresses: list[IPv4Address | IPv6Address] = []
     for family, _type, _proto, _name, sockaddr in answers:
         if family in (socket.AF_INET, socket.AF_INET6):

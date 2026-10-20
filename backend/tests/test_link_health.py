@@ -10,8 +10,9 @@ import ipaddress
 import logging
 import socket
 import ssl
+import threading
 import time
-from collections.abc import AsyncIterator, Callable, Iterable
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from pathlib import Path
 from typing import Any
 
@@ -153,6 +154,11 @@ def test_is_public_address(address: str, public: bool) -> None:
         ("Errore 404 - pagina non trovata", True),
         ("Linea 404 · Carris", False),
         ("Tarifas | Carris", False),
+        ("Oops! Page not found.", True),
+        ("Hotel not found | Booking.com", True),
+        ("Menu | Pinot Found Wine Bar", False),
+        ("The Knot Foundation", False),
+        ("Lisbona: 10 tascas not found in any guidebook", False),
     ],
 )
 def test_looks_not_found_reads_the_title(title: str, dead: bool) -> None:
@@ -386,6 +392,9 @@ async def test_redirect_to_a_private_address_is_unknown_and_not_fetched(
         "javascript:alert(1)",
         "https:///no-host",
         "not a url",
+        # Browsers read these hosts differently from httpx (\ is /, %xx is decoded).
+        "https://www.museu.pt\\visita",
+        "https://%62ooking.com/x",
     ],
 )
 async def test_unsafe_urls_are_never_fetched(router: respx.MockRouter, url: str) -> None:
@@ -459,6 +468,36 @@ async def test_soft_404_is_dead(router: respx.MockRouter) -> None:
     assert verdict(health) == ("dead", "soft_404")
     assert health.http_status == 200
     assert health.fallback == HOME
+
+
+async def test_reading_stops_once_the_title_has_closed(router: respx.MockRouter) -> None:
+    """A page that sends its head at once and the rest slowly gets its verdict from the head."""
+    pulled: list[int] = []
+
+    async def body() -> AsyncIterator[bytes]:
+        for index in range(5):
+            pulled.append(index)
+            if index:
+                await asyncio.sleep(1)
+            yield b"<html><head><title>Pagina non trovata</title>" if index == 0 else b"x" * 4096
+
+    router.get(PAGE).mock(
+        return_value=httpx.Response(200, headers={"Content-Type": "text/html"}, content=body())
+    )
+    router.get(HOME).respond(200)
+    health = await make_checker(router, request_timeout=0.5).check_url(PAGE)
+    assert verdict(health) == ("dead", "soft_404")
+    assert pulled == [0]
+
+
+async def test_a_repeated_location_is_followed_only_when_every_copy_agrees(
+    router: respx.MockRouter,
+) -> None:
+    router.get(PAGE).respond(301, headers=[("Location", "/new"), ("Location", "/new")])
+    router.get("https://a.example/new").respond(200)
+    assert verdict(await make_checker(router).check_url(PAGE)) == ("ok", "ok")
+    router.get(PAGE).respond(301, headers=[("Location", "/a"), ("Location", "/b")])
+    assert verdict(await make_checker(router).check_url(PAGE)) == ("unknown", "http_301")
 
 
 async def test_only_the_first_max_body_bytes_are_read(router: respx.MockRouter) -> None:
@@ -543,13 +582,15 @@ async def test_a_dead_homepage_has_no_fallback_of_its_own(router: respx.MockRout
             True,
         ),
         ("https://www.google.com/travel/flights?q=x", "https://www.google.com/", False),
+        # The homepage passes, the link itself does not (check_link refuses the backslash).
+        ("https://www.booking.com/hotel\\it/x.html", "https://www.booking.com/", False),
     ],
 )
 async def test_dead_booking_link_fallback_allowed_follows_the_allowlist(
     router: respx.MockRouter, url: str, home: str, allowed: bool
 ) -> None:
-    router.get(url).respond(404)
     router.get(home).respond(200)
+    router.route(host=httpx.URL(url).host).respond(404)
     health = await make_checker(router).check_url(url)
     assert (health.fallback, health.fallback_allowed) == (home, allowed)
 
@@ -644,7 +685,12 @@ async def test_check_plan_enforces_its_own_deadline(router: respx.MockRouter) ->
     plan's."""
 
     class HangingChecker(HttpLinkChecker):
-        async def _check(self, url: str, settled: dict[str, LinkHealth]) -> LinkHealth:
+        async def _check(
+            self,
+            url: str,
+            settled: dict[str, LinkHealth],
+            fetch: Callable[[str], Awaitable[LinkHealth]],
+        ) -> LinkHealth:
             await asyncio.sleep(3)
             raise AssertionError("the plan deadline should have cancelled this check")
 
@@ -739,6 +785,55 @@ async def test_check_plan_checks_each_distinct_url_once(router: respx.MockRouter
     health = await make_checker(router).check_plan(plan)
     assert list(health) == [PAGE, other]
     assert sorted(str(call.request.url) for call in router.calls) == [PAGE, other]
+
+
+async def test_check_plan_fetches_a_shared_homepage_once(router: respx.MockRouter) -> None:
+    pages = [f"https://a.example/p{index}" for index in range(3)]
+    for page in pages:
+        router.get(page).respond(404)
+    home = router.get(HOME).respond(200)
+    health = await make_checker(router).check_plan(plan_with_urls(*pages))
+    assert [entry_of(health, page).fallback for page in pages] == [HOME, HOME, HOME]
+    assert home.call_count == 1
+
+
+async def test_a_homepage_the_plan_found_dead_is_never_a_fallback(
+    router: respx.MockRouter,
+) -> None:
+    """The homepage is itself a plan URL: its own 404 decides, even if a second request would
+    have been refused (429)."""
+    router.get(PAGE).respond(404)
+    router.get(HOME).mock(side_effect=[httpx.Response(404), httpx.Response(429)])
+    health = await make_checker(router).check_plan(plan_with_urls(HOME, PAGE))
+    assert verdict(entry_of(health, HOME)) == ("dead", "http_404")
+    assert verdict(entry_of(health, PAGE)) == ("dead", "http_404")
+    assert entry_of(health, PAGE).fallback is None
+
+
+async def test_two_spellings_of_one_page_share_one_fetch_and_verdict(
+    router: respx.MockRouter,
+) -> None:
+    """A raw booking link and the same page as a normalised price source."""
+    page = router.get(PAGE).respond(404)
+    router.get(HOME).respond(200)
+    raw = "https://A.example/x"
+    plan = make_plan(bookings=[booking(link=raw, price=price(PAGE))])
+    health = await make_checker(router).check_plan(plan)
+    assert list(health) == [raw, PAGE]
+    assert verdict(entry_of(health, raw)) == verdict(entry_of(health, PAGE)) == ("dead", "http_404")
+    assert entry_of(health, raw).fallback == entry_of(health, PAGE).fallback == HOME
+    assert page.call_count == 1
+
+
+async def test_a_failed_homepage_check_keeps_the_dead_verdict(router: respx.MockRouter) -> None:
+    """A bug while checking the homepage (here a resolver crash after a redirect) never loses a
+    verdict already found: the page stays dead, with its unchecked homepage as fallback."""
+    router.get(PAGE).respond(404)
+    router.get(HOME).respond(301, headers={"Location": "https://b.example/"})
+    resolver = FakeResolver({"b.example": RuntimeError("bug")})
+    health = await make_checker(router, resolver).check_plan(plan_with_urls(PAGE))
+    assert verdict(entry_of(health, PAGE)) == ("dead", "http_404")
+    assert entry_of(health, PAGE).fallback == HOME
 
 
 async def test_check_plan_runs_at_most_concurrency_requests_at_once(
@@ -861,6 +956,7 @@ class RecordingBackend(httpcore.AsyncNetworkBackend):
 
     def __init__(self, refused: tuple[str, ...] = (), timed_out: tuple[str, ...] = ()) -> None:
         self.calls: list[tuple[str, int]] = []
+        self.timeouts: list[float | None] = []
         self.refused = refused
         self.timed_out = timed_out
 
@@ -873,6 +969,7 @@ class RecordingBackend(httpcore.AsyncNetworkBackend):
         socket_options: Iterable[Any] | None = None,
     ) -> httpcore.AsyncNetworkStream:
         self.calls.append((host, port))
+        self.timeouts.append(timeout)
         if host in self.refused:
             raise httpcore.ConnectError(f"refused by {host}")
         if host in self.timed_out:
@@ -906,6 +1003,18 @@ async def test_pinned_backend_connects_to_the_vetted_address() -> None:
     stream = await backend.connect_tcp("a.example", 443, timeout=5.0)
     assert isinstance(stream, httpcore.AsyncMockStream)
     assert inner.calls == [(PUBLIC_ADDRESS, 443)]
+    assert inner.timeouts == [5.0]
+
+
+async def test_pinned_backend_alternates_families_with_half_the_timeout_each() -> None:
+    """A family whose path drops packets costs one attempt, and half the connect timeout, so the
+    other family still fits inside the checker's 5.5 s guard (RFC 8305)."""
+    inner = RecordingBackend(timed_out=("2606:4700::1111",))
+    resolver = FakeResolver({"a.example": ["2606:4700::1111", "2606:4700::1001", PUBLIC_ADDRESS]})
+    backend = PinnedNetworkBackend(resolver, inner=inner)
+    await backend.connect_tcp("a.example", 443, timeout=5.0)
+    assert inner.calls == [("2606:4700::1111", 443), (PUBLIC_ADDRESS, 443)]
+    assert inner.timeouts == [2.5, 2.5]
 
 
 async def test_pinned_backend_skips_private_answers_and_falls_over() -> None:
@@ -983,18 +1092,49 @@ async def test_system_resolver_resolves_localhost() -> None:
 async def test_system_resolver_maps_a_missing_name(
     monkeypatch: pytest.MonkeyPatch, errno: int
 ) -> None:
-    async def missing(*args: Any, **kwargs: Any) -> Any:
+    def missing(*args: Any, **kwargs: Any) -> Any:
         raise socket.gaierror(errno, "not known")
 
-    monkeypatch.setattr(asyncio.get_running_loop(), "getaddrinfo", missing)
+    monkeypatch.setattr(socket, "getaddrinfo", missing)
     with pytest.raises(HostNotFoundError):
         await system_resolver("gone.example")
 
 
+async def test_system_resolver_maps_a_name_that_cannot_exist(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An empty label or one over 63 characters: the idna codec refuses it before any query."""
+
+    def refused(*args: Any, **kwargs: Any) -> Any:
+        raise UnicodeError("label empty or too long")
+
+    monkeypatch.setattr(socket, "getaddrinfo", refused)
+    with pytest.raises(HostNotFoundError):
+        await system_resolver("www..museu.pt")
+
+
 async def test_system_resolver_keeps_other_failures(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def again(*args: Any, **kwargs: Any) -> Any:
+    def again(*args: Any, **kwargs: Any) -> Any:
         raise socket.gaierror(socket.EAI_AGAIN, "try again")
 
-    monkeypatch.setattr(asyncio.get_running_loop(), "getaddrinfo", again)
+    monkeypatch.setattr(socket, "getaddrinfo", again)
     with pytest.raises(socket.gaierror):
         await system_resolver("a.example")
+
+
+async def test_system_resolver_runs_on_its_own_threads(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Not on the event loop's resolver, which the whole process shares and cannot cancel."""
+    threads: list[str] = []
+
+    def lookup(*args: Any, **kwargs: Any) -> Any:
+        threads.append(threading.current_thread().name)
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (PUBLIC_ADDRESS, 0))]
+
+    async def loop_resolver(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("the event loop's getaddrinfo must not be used")
+
+    monkeypatch.setattr(socket, "getaddrinfo", lookup)
+    monkeypatch.setattr(asyncio.get_running_loop(), "getaddrinfo", loop_resolver)
+    assert await system_resolver("a.example") == [ipaddress.ip_address(PUBLIC_ADDRESS)]
+    assert len(threads) == 1
+    assert threads[0].startswith("link-check-dns")

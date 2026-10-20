@@ -679,6 +679,42 @@ async def test_link_check_runs_with_fx_and_schema_concurrently(
     assert checker.calls == 1
 
 
+class HangingLinkChecker:
+    """A link checker that never ends, and records whether it was cancelled."""
+
+    def __init__(self) -> None:
+        self.cancelled = False
+
+    async def check_plan(self, plan: Plan) -> LinkHealthMap:
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            self.cancelled = True
+            raise
+        raise AssertionError("unreachable")
+
+    async def aclose(self) -> None:
+        return None
+
+
+async def test_a_rejected_submission_does_not_wait_for_the_link_check(
+    harness: HarnessFactory,
+) -> None:
+    """Translation runs first: a past book_by is answered at once and its check cancelled."""
+    data = valid_plan_input()
+    data["bookings"][1]["book_by"] = "2026-10-01T20:00:00+02:00"
+    checker = HangingLinkChecker()
+    outcome = await asyncio.wait_for(
+        evaluate_submission(
+            data, deps=harness(FakeManagedAgentsClient(), link_checker=checker).deps
+        ),
+        timeout=2,
+    )
+    assert isinstance(outcome, Rejected)
+    assert outcome.stage == "plan"
+    assert checker.cancelled
+
+
 async def test_schema_unavailable_still_propagates_with_a_link_checker(
     harness: HarnessFactory,
 ) -> None:

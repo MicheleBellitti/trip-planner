@@ -1096,13 +1096,13 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
     has no part in it.
 
 40. The link check (`app/link_health.py`; spec
-    `docs/superpowers/specs/2026-10-18-plan-creation-ux-design.md` section 3). **(diverges**
-    from the spec's "a Plan that validates and translates": the check runs for every
-    `submit_plan` whose input parses as a Plan, before translation, so also for one that
-    translation then rejects (a past `book_by`, a Trip that fails trip.json).
-    `consumer.evaluate_submission` runs it concurrently with the FX prefetch and the trip.json
-    load, so it adds no wait to an accepted plan; a rejected one may spend up to 10 s on it.)
-    Every distinct URL of the plan is fetched once (GET only); only an accepted plan's verdicts
+    `docs/superpowers/specs/2026-10-18-plan-creation-ux-design.md` section 3).
+    `consumer.evaluate_submission` starts the check as a task for every `submit_plan` whose
+    input parses as a Plan, beside the FX prefetch and the trip.json load, then translates
+    without verdicts: a submission that translation rejects is answered at once and its check
+    cancelled, so only a Plan that validates and translates is checked to the end (up to 10 s
+    before "Plan accepted.") and translated again with the verdicts. Every distinct page of
+    the plan is fetched once (GET only, homepages included); only an accepted plan's verdicts
     are stored, in `plans.link_health` (`{}` when nothing ran, NULL for a plan stored before
     the check). Limits: at most 5 redirects with every hop vetted, 5 s per request, 8 requests
     in parallel, 10 s for the whole plan (unchecked URLs become `unknown`; a URL already found

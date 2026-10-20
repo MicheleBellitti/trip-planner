@@ -611,6 +611,8 @@ def _link_checks(plan: Mapping[str, Any] | None, field: str) -> list[LinkCheck |
 
 
 def _link_health(record: PlanRecord) -> dict[str, LinkHealthOut]:
+    """The stored verdicts; `fallback_allowed` also asks the allowlist as it is now, for the URL
+    and for its fallback, as `booking_links` does on every GET (never more than was stored)."""
     health = LinkHealthMap.from_json(record.link_health)
     out: dict[str, LinkHealthOut] = {}
     for url in health:
@@ -619,7 +621,10 @@ def _link_health(record: PlanRecord) -> dict[str, LinkHealthOut]:
             out[url] = LinkHealthOut(
                 status=entry.status,
                 fallback=entry.fallback,
-                fallback_allowed=entry.fallback_allowed,
+                fallback_allowed=entry.fallback_allowed
+                and entry.fallback is not None
+                and check_link(url).allowed
+                and check_link(entry.fallback).allowed,
             )
     return out
 
