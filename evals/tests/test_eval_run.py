@@ -295,7 +295,14 @@ def context(
         return list(calls.get("picks", []))
 
     monkeypatch.setattr(run, "answer_choices", fake_answer)
+
+    async def fake_kinds(planner: Any, pid: uuid.UUID) -> list[str]:
+        if "kinds_error" in calls:
+            raise RuntimeError(calls["kinds_error"])
+        return list(calls.get("kinds", ["food", "activities"]))
+
     monkeypatch.setattr(run, "collect_picks", fake_picks)
+    monkeypatch.setattr(run, "collect_choice_kinds", fake_kinds)
     ma_client = FakeMaClient()
     planner = SimpleNamespace(
         settings=SimpleNamespace(local_user_email=None),
@@ -386,6 +393,26 @@ def test_run_case_gives_the_judge_the_picks(monkeypatch: pytest.MonkeyPatch) -> 
     content = params["messages"][0]["content"]
     assert "<picks>" in content
     assert "activities (traveller): a1 Torre di Belém; a3 Alfama" in content
+
+
+def test_run_case_records_the_choice_kinds(monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx, calls = context(monkeypatch, [plan_row("ready")])
+    calls["kinds"] = ["activities", "food"]
+    entry = asyncio.run(run.run_case(LISBON, request_for(LISBON), ctx))
+    assert entry["choice_kinds"] == ["activities", "food"]
+    check = next(c for c in entry["checks"] if c["name"] == "choices_asked")
+    assert check["status"] == "pass"
+    assert "choice_kinds_error" not in entry
+
+
+def test_run_case_records_a_choice_kinds_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx, calls = context(monkeypatch, [plan_row("ready")])
+    calls["kinds_error"] = "db gone"
+    entry = asyncio.run(run.run_case(LISBON, request_for(LISBON), ctx))
+    assert entry["choice_kinds"] is None
+    assert entry["choice_kinds_error"] == "RuntimeError: db gone"
+    check = next(c for c in entry["checks"] if c["name"] == "choices_asked")
+    assert check["status"] == "skip"
 
 
 def test_pick_lines() -> None:
