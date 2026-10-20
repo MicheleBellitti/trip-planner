@@ -16,6 +16,7 @@ Spec: "Backend FastAPI" -> "Endpoint" table, "SSE verso il browser", "Autenticaz
 | GET /plans/{id}/cover        | user                     | the destination's Wikimedia photo      |
 | POST /plans/{id}/interrupt   | user + Origin            | send user.interrupt                    |
 | POST /plans/{id}/continue    | user + Origin            | raise the budget by $2 and resume      |
+| POST /plans/{id}/choices/{cid}| user + Origin           | answer an ask_traveller question       |
 | POST /evals/runs             | Bearer EVALS_INGEST_TOKEN| CI uploads an eval run (no Origin/CORS)|
 | GET /evals/runs              | admin                    | the eval history, newest first         |
 | GET /evals/runs/{id}         | admin                    | one run with its results and comparison|
@@ -80,9 +81,10 @@ from app.auth import (
     auth_messages,
     user_is_admin,
 )
+from app.choices import ChoiceAnswer, PendingChoice, pending_choice
 from app.config import AgentProfile, Settings
 from app.covers import Cover, CoverErrorCode, CoverResolver
-from app.db import DbSession, PlanRecord, PlanStatus
+from app.db import ChoiceRecord, DbSession, PlanRecord, PlanStatus
 from app.events import UIEvent, one_line
 from app.hub import PlanEnded, SubscriptionLaggedError
 from app.link_health import LinkHealthMap
@@ -142,6 +144,9 @@ class PlanErrorCode(StrEnum):
     TOO_MANY_REQUESTS = "too_many_requests"  # 429: data {retry_after_seconds}; Retry-After
     PLANNER_BUSY = "planner_busy"  # 503: data {running, limit, retry_after_seconds}; Retry-After
     CONTINUE_LIMIT_REACHED = "continue_limit_reached"  # 409: data {continues, limit}
+    CHOICE_NOT_FOUND = "choice_not_found"  # 404: POST /plans/{id}/choices/{choice_id}
+    CHOICE_CLOSED = "choice_closed"  # 409: data {answered_by}; already answered, timed out, closed
+    INVALID_CHOICE_ANSWER = "invalid_choice_answer"  # 422: data {reason}
     PLANNER_UNAVAILABLE = "planner_unavailable"  # 503: no key, lockfile or trip.json
     AGENTS_UNAVAILABLE = "agents_unavailable"  # 502: the Managed Agents API failed
     REQUEST_TOO_LARGE = "request_too_large"  # 413: body over MAX_REQUEST_BODY_BYTES
@@ -162,6 +167,9 @@ PLAN_ERROR_STATUS: dict[PlanErrorCode, int] = {
     PlanErrorCode.TOO_MANY_REQUESTS: 429,
     PlanErrorCode.PLANNER_BUSY: 503,
     PlanErrorCode.CONTINUE_LIMIT_REACHED: 409,
+    PlanErrorCode.CHOICE_NOT_FOUND: 404,
+    PlanErrorCode.CHOICE_CLOSED: 409,
+    PlanErrorCode.INVALID_CHOICE_ANSWER: 422,
     PlanErrorCode.PLANNER_UNAVAILABLE: 503,
     PlanErrorCode.AGENTS_UNAVAILABLE: 502,
     PlanErrorCode.REQUEST_TOO_LARGE: 413,
@@ -199,6 +207,11 @@ PLAN_ERROR_MESSAGES: dict[PlanErrorCode, str] = {
         "Questo piano ha già avuto tutti gli aumenti di budget previsti ({continues} su "
         "{limit}): il budget non si può aumentare ancora. Puoi interromperlo, o creare un "
         "nuovo piano."
+    ),
+    PlanErrorCode.CHOICE_NOT_FOUND: "Questa domanda non c'è.",
+    PlanErrorCode.CHOICE_CLOSED: "Questa scelta è già chiusa: il piano va avanti.",
+    PlanErrorCode.INVALID_CHOICE_ANSWER: (
+        "La risposta non corrisponde alle opzioni proposte: ricarica la pagina e riprova."
     ),
     PlanErrorCode.PLANNER_UNAVAILABLE: (
         "Il planner non è pronto in questo momento: nessun costo è stato addebitato. Riprova "
@@ -433,6 +446,13 @@ class PlanDetail(BaseModel):
     import_url: str | None = Field(
         default=None, description="TripTracker's /import?plan=<id>, only when ready."
     )
+    pending_choice: PendingChoice | None = Field(
+        default=None,
+        description=(
+            "The open question for the traveller (ask_traveller), so a reloaded page shows it "
+            "at once. Only while the plan is `running` with no interrupt requested; else null."
+        ),
+    )
 
 
 class StatusResponse(BaseModel):
@@ -442,6 +462,14 @@ class StatusResponse(BaseModel):
     status: PlanStatus = Field(
         description="`running` while the interrupt is on its way, `interrupted` when immediate."
     )
+
+
+class ChoiceAnswerResponse(BaseModel):
+    """Answer of POST /plans/{id}/choices/{choice_id}."""
+
+    id: str
+    answered_by: str = Field(description="`traveller` or `skip`.")
+    selected: list[str] = Field(description="The picked option ids, in the order offered.")
 
 
 class ContinueResponse(BaseModel):
@@ -629,9 +657,12 @@ def _link_health(record: PlanRecord) -> dict[str, LinkHealthOut]:
     return out
 
 
-def plan_detail(record: PlanRecord, *, settings: Settings) -> PlanDetail:
+def plan_detail(
+    record: PlanRecord, *, settings: Settings, pending_choice: ChoiceRecord | None = None
+) -> PlanDetail:
     """Build the GET /plans/{id} answer: link checks from `links.check_link` for every booking
-    and alternative of the stored plan, `import_url` only when `ready`. Pure."""
+    and alternative of the stored plan, `import_url` only when `ready`, `pending_choice` as
+    given (the caller decides whether the plan is waiting). Pure."""
     return PlanDetail(
         id=record.id,
         status=PlanStatus(record.status),
@@ -651,6 +682,9 @@ def plan_detail(record: PlanRecord, *, settings: Settings) -> PlanDetail:
         alternative_links=_link_checks(record.plan, "alternatives"),
         link_health=_link_health(record),
         import_url=import_url(record, settings=settings),
+        pending_choice=(
+            PendingChoice.from_record(pending_choice) if pending_choice is not None else None
+        ),
     )
 
 
@@ -1090,10 +1124,13 @@ async def list_plans(
 async def get_plan(
     plan_id: uuid.UUID, user: CurrentUserDep, db: DbSession, settings: SettingsDep
 ) -> PlanDetail:
-    """`plan_detail()` of the user's plan (`budget_cents` from `plans.budget_cents`); 404
-    `plan_not_found` otherwise."""
+    """`plan_detail()` of the user's plan (`budget_cents` from `plans.budget_cents`, the open
+    choice while the plan is running and no interrupt was asked); 404 `plan_not_found`
+    otherwise."""
     record = await _user_plan(db, plan_id, user, settings)
-    return plan_detail(record, settings=settings)
+    waiting = record.status == PlanStatus.RUNNING.value and record.interrupt_requested_at is None
+    open_choice = await pending_choice(db, plan_id) if waiting else None
+    return plan_detail(record, settings=settings, pending_choice=open_choice)
 
 
 @router.get("/{plan_id}/events", response_class=EventSourceResponse, responses=_ERRORS)
@@ -1267,6 +1304,47 @@ async def continue_plan(
         log.error("continue_failed", plan_id=str(plan_id), error=type(exc).__name__)
         raise plan_error(PlanErrorCode.AGENTS_UNAVAILABLE) from None
     return ContinueResponse(id=plan_id, status=PlanStatus.RUNNING, budget_cents=budget_cents)
+
+
+@router.post(
+    "/{plan_id}/choices/{choice_id}",
+    dependencies=[RequireOrigin],
+    responses={
+        **_ERRORS,
+        409: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+        503: {"model": ErrorResponse},
+    },
+)
+async def answer_choice(
+    plan_id: uuid.UUID,
+    choice_id: str,
+    body: ChoiceAnswer,
+    user: CurrentUserDep,
+    planner: PlannerDep,
+) -> ChoiceAnswerResponse:
+    """The traveller's answer to an `ask_traveller` question (`sessions.answer_choice`): a
+    missing or foreign plan -> 404 `plan_not_found`, an unknown choice -> 404 `choice_not_found`,
+    a choice that takes no more answers -> 409 `choice_closed` (data `answered_by`), picks that
+    do not fit -> 422 `invalid_choice_answer` (data `reason`). A malformed body is FastAPI's 422."""
+    try:
+        answered = await sessions.answer_choice(plan_id, choice_id, body, user, services=planner)
+    except consumer.PlanNotFoundError:
+        raise plan_error(PlanErrorCode.PLAN_NOT_FOUND) from None
+    except sessions.ChoiceNotFoundError:
+        raise plan_error(PlanErrorCode.CHOICE_NOT_FOUND) from None
+    except sessions.ChoiceClosedError as exc:
+        raise plan_error(
+            PlanErrorCode.CHOICE_CLOSED, data={"answered_by": exc.answered_by}
+        ) from None
+    except sessions.InvalidChoiceAnswerError as exc:
+        raise plan_error(PlanErrorCode.INVALID_CHOICE_ANSWER, data={"reason": exc.reason}) from None
+    except sessions.PlannerUnavailableError as exc:
+        log.error("answer_choice_planner_unavailable", plan_id=str(plan_id), reasons=exc.reasons)
+        raise plan_error(PlanErrorCode.PLANNER_UNAVAILABLE) from None
+    return ChoiceAnswerResponse(
+        id=answered.id, answered_by=answered.answered_by, selected=answered.selected
+    )
 
 
 # --- eval history -------------------------------------------------------------------------------
