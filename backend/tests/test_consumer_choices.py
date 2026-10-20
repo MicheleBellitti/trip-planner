@@ -71,7 +71,7 @@ from app.sessions import (
     continue_plan,
     interrupt_plan,
 )
-from tests.fakes import FakeManagedAgentsClient
+from tests.fakes import INTERRUPTED_TOOL_TEXT, FakeManagedAgentsClient
 from tests.test_consumer import (
     BRIEF,
     NOW,
@@ -1570,3 +1570,104 @@ async def test_budget_reached_during_a_pause_then_continue(
         "options you offered."
     )
     assert results_by_id(fake)["sevt_q1"] == [(text, False)]
+
+
+class HeldThreads:
+    """The resumed consumer's client: the fake, but `list_threads` waits for `gate` (the
+    history pass is done, the subagent threads are still being listed)."""
+
+    def __init__(self, fake: FakeManagedAgentsClient) -> None:
+        self._fake = fake
+        self.entered = asyncio.Event()
+        self.gate = asyncio.Event()
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._fake, name)
+
+    async def list_threads(self, session_id: str) -> Any:
+        self.entered.set()
+        await self.gate.wait()
+        return await self._fake.list_threads(session_id)
+
+
+async def test_continue_nudges_when_the_platform_closed_the_choice_meanwhile(
+    env: Env, choice_logs: list[EventDict], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(sessions, "CONTINUE_RESUME_WAIT_SECONDS", 0.0)
+    asked, waiting, _, _ = pause("sevt_q1", request("activities"))
+    budget_reached = {
+        "op": "emit",
+        "event": {
+            "type": "session.status_idle",
+            "id": "sevt_budget",
+            "stop_reason": {"type": "budget_reached"},
+        },
+    }
+    # The platform closes the waiting call after the paused consumer stopped.
+    platform_closed = {
+        "op": "emit",
+        "event": {
+            "type": "agent.tool_result",
+            "id": "sevt_q1_closed",
+            "tool_use_id": "sevt_q1",
+            "is_error": True,
+            "content": [{"type": "text", "text": INTERRUPTED_TOOL_TEXT}],
+        },
+    }
+    fake = script(
+        [
+            asked,
+            waiting,
+            {"op": "usage", "list_cost_cents": 61},
+            budget_reached,
+            {"op": "checkpoint", "name": "paused"},
+            platform_closed,
+            {"op": "await_call", "method": "update_budget"},
+            {"op": "await", "match": {"type": "user.message"}},  # CONTINUE_MESSAGE
+        ]
+    )
+    h = env.harness(fake)
+    held = HeldThreads(fake)
+    planner = env.planner(at(h, NOW, client=cast(ManagedAgentsClient, held)))
+    registry = planner.registry
+    assert registry is not None
+    plan_id = await h.create_plan()
+    # The nudge looks once the resumed consumer has read the history and is listing threads,
+    # well within the reconcile's backfill wait (up to 30 s).
+    real_pending_choice = sessions.pending_choice
+
+    async def after_the_history_pass(db: AsyncSession, plan: uuid.UUID) -> ChoiceRecord | None:
+        await held.entered.wait()
+        return await real_pending_choice(db, plan)
+
+    monkeypatch.setattr(sessions, "pending_choice", after_the_history_pass)
+
+    try:
+        first = registry.start(plan_id, SID, first_message=BRIEF)
+        await until(lambda: first.done)
+        assert (await h.plan(plan_id)).status == PlanStatus.BUDGET_PAUSED
+        await fake.reached("paused")
+        fake.release("paused")
+        await until(lambda: any(e["type"] == "agent.tool_result" for e in fake.history))
+        assert not await closed_row(h, plan_id, "sevt_q1")  # no consumer followed the plan
+
+        await continue_plan(plan_id, USER, services=planner)
+        nudges = list(planner.background_tasks)
+        resumed = registry.get(plan_id)
+        assert resumed is not None
+        await asyncio.gather(*nudges)
+        messages = [sent.payload for sent in fake.sent if sent.payload["type"] == "user.message"]
+        assert CONTINUE_MESSAGE in repr(messages)  # nothing else would resume the session
+        held.gate.set()
+        await until(lambda: resumed.done)
+    finally:
+        held.gate.set()
+        await registry.aclose()
+        await fake.shutdown()
+    fake.assert_script_done()
+
+    assert (await h.plan(plan_id)).status == PlanStatus.READY
+    assert (await choice_row(h, plan_id, "sevt_q1")).answered_by == "closed"
+    assert "sevt_q1" not in results_by_id(fake)  # the platform answered it, never the backend
+    assert logged(choice_logs, "continue_message_skipped", "reason") == []
+    assert len(logged(choice_logs, "continue_message_sent")) == 1
