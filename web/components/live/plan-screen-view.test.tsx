@@ -1,8 +1,11 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { ChoiceControls } from "@/components/choice/choice-panel";
 import detailJson from "@/components/plan/__fixtures__/happy-path.detail.json";
 import tripJson from "@/components/plan/__fixtures__/happy-path.trip.json";
+import { readAskedChoice } from "@/lib/choices";
+import choicesRun from "@/lib/plan-events/__fixtures__/backend/choices.json";
 import backend from "@/lib/plan-events/__fixtures__/backend/happy-path.json";
 import { reducePlanEvents } from "@/lib/plan-events/reducer";
 import { PlanDetailSchema } from "@/lib/schemas/api";
@@ -68,5 +71,116 @@ describe("PlanScreenView", () => {
     );
     expect((await screen.findAllByText(/Cinque giorni a Lisbona/)).length).toBeGreaterThan(0);
     expect(loadCover).toHaveBeenCalled();
+  });
+});
+
+describe("PlanScreenView, a question for the traveller", () => {
+  /** The recorded run that asks twice: seq 53 what to see, seq 77 what to eat. */
+  const run = choicesRun.events as unknown as UIEvent[];
+  const askedAt = (seq: number) => {
+    const choice = readAskedChoice(run.find((event) => event.seq === seq)?.detail ?? null);
+    if (!choice) throw new Error(`choices.json lost its question at seq ${seq}`);
+    return choice;
+  };
+  const activities = askedAt(53);
+  const food = askedAt(77);
+  const DEADLINE = Date.parse(activities.deadlineAt);
+  const FOOD_DEADLINE = Date.parse(food.deadlineAt);
+  const MINUTE = "Manca un minuto per scegliere.";
+
+  /** The run up to `seq`, with the plan running (the request's destination is Lisbona). */
+  const stateAt = (seq: number) =>
+    reducePlanEvents(
+      run.filter((event) => event.seq <= seq),
+      { detail: { ...snapshot, created_at: run[0]!.ts, updated_at: run[0]!.ts } },
+    );
+  const detail = PlanDetailSchema.parse({ ...detailJson, status: "running", plan: null });
+  const controls = (extra: Partial<ChoiceControls> = {}): ChoiceControls => ({ answer: vi.fn(async () => null), ...extra });
+
+  function view(seq: number, clock: number | null, choice: ChoiceControls = controls()) {
+    return (
+      <PlanScreenView
+        state={stateAt(seq)}
+        detail={detail}
+        clock={clock}
+        stale={false}
+        connection="open"
+        header={<div />}
+        choice={choice}
+      />
+    );
+  }
+
+  const liveRegion = () => {
+    const regions = document.querySelectorAll("[aria-live]");
+    expect(regions).toHaveLength(1);
+    return regions[0] as HTMLElement;
+  };
+
+  it("on the phone the panel comes before the lanes, from 1080 px after them", async () => {
+    render(view(55, DEADLINE - 200_000));
+    const phone = await screen.findByRole("region", { name: "Cosa ti va di vedere?" });
+    const main = screen.getByRole("main");
+    expect(main.firstElementChild?.contains(phone)).toBe(true);
+    const lanes = () => document.getElementById("lanes-heading")?.closest("section") as HTMLElement;
+    expect(main.contains(lanes())).toBe(true);
+    expect(phone.compareDocumentPosition(lanes()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText("Attività ha trovato 3 idee per Lisbona")).toBeTruthy();
+    cleanup();
+
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query === "(min-width: 67.5rem)",
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+    render(view(55, DEADLINE - 200_000));
+    const desktop = await screen.findByRole("region", { name: "Cosa ti va di vedere?" });
+    expect(desktop.compareDocumentPosition(lanes()) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+    expect(screen.getByRole("main").contains(desktop)).toBe(true);
+  });
+
+  it("announces once when a minute is left", async () => {
+    const { rerender } = render(view(55, null));
+    await screen.findByRole("region", { name: "Cosa ti va di vedere?" });
+    expect(liveRegion().textContent).toBe("");
+    rerender(view(55, DEADLINE - 61_000));
+    expect(liveRegion().textContent).toBe("");
+
+    rerender(view(55, DEADLINE - 60_000));
+    expect(liveRegion().textContent).toBe(MINUTE);
+    const said = liveRegion().querySelector("span");
+    rerender(view(55, DEADLINE - 59_000));
+    rerender(view(55, DEADLINE - 10_000));
+    // The same words, never added again: a screen reader hears them once.
+    expect(liveRegion().textContent).toBe(MINUTE);
+    expect(liveRegion().querySelector("span")).toBe(said);
+
+    // Answered: the words leave with the cards. The next question has its own minute.
+    rerender(view(60, DEADLINE - 5_000));
+    expect(screen.queryByRole("region", { name: "Cosa ti va di vedere?" })).toBeNull();
+    expect(liveRegion().textContent).toBe("");
+    rerender(view(79, FOOD_DEADLINE - 120_000));
+    await screen.findByRole("region", { name: "Che cucina cerchi?" });
+    expect(liveRegion().textContent).toBe("");
+    rerender(view(79, FOOD_DEADLINE - 30_000));
+    expect(liveRegion().textContent).toBe(MINUTE);
+    cleanup();
+
+    // A window of a minute or less (the demo's 15 s) is never announced.
+    const asked = Date.parse(activities.askedAt);
+    render(view(55, asked + 5_000, controls({ deadlineAt: asked + 15_000, windowMs: 15_000 })));
+    await screen.findByRole("region", { name: "Cosa ti va di vedere?" });
+    expect(liveRegion().textContent).toBe("");
+  });
+
+  it("shows no cards without the controls, or once the page has answered", async () => {
+    const props = { state: stateAt(55), detail, clock: DEADLINE - 200_000, stale: false, connection: "open" as const, header: <div /> };
+    const { rerender } = render(<PlanScreenView {...props} choice={controls()} />);
+    await screen.findByRole("region", { name: "Cosa ti va di vedere?" });
+    rerender(<PlanScreenView {...props} />);
+    expect(screen.queryByRole("region", { name: "Cosa ti va di vedere?" })).toBeNull();
+    rerender(<PlanScreenView {...props} choice={controls()} closedChoices={new Set([activities.id])} />);
+    expect(screen.queryByRole("region", { name: "Cosa ti va di vedere?" })).toBeNull();
   });
 });
