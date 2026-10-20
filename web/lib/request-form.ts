@@ -131,10 +131,10 @@ export function fieldConstraints(path: string): FieldConstraints {
 
 /** Italian copy of each request field. Keys must match REQUEST_FIELDS exactly (tested). */
 export const REQUEST_FIELD_COPY: Readonly<Record<string, { label: string; placeholder?: string; hint?: string }>> = {
-  origin: { label: "Da dove parti", placeholder: "Milano, oppure MXP" },
+  origin: { label: "Da dove parti", placeholder: "Per esempio Milano" },
   destination: { label: "Dove vuoi andare", placeholder: "Lisbona" },
   suggest_destination: { label: "Suggeriscimi tu", hint: "Il planner propone fino a tre mete, con i motivi." },
-  destination_idea: { label: "Che viaggio vorresti", placeholder: "mare a novembre, volo diretto" },
+  destination_idea: { label: "Che viaggio vorresti", placeholder: "mare a novembre, poche ore di viaggio" },
   journey_mode: { label: "Come viaggi" },
   dates: { label: "Quando" },
   "dates.exact_start": { label: "Partenza" },
@@ -145,7 +145,7 @@ export const REQUEST_FIELD_COPY: Readonly<Record<string, { label: string; placeh
   "travelers.kind": { label: "Adulto o bambino" },
   "travelers.age": { label: "Età" },
   budget_eur: { label: "Budget totale in euro", hint: "Per tutto il gruppo: viaggio, alloggio, attività." },
-  preferences: { label: "Preferenze", placeholder: "niente voli prima delle 8, cucina locale" },
+  preferences: { label: "Preferenze", placeholder: "partenza non prima delle 8, cucina locale" },
 };
 
 /** Italian labels of the traveler kinds (the schema's enum). */
