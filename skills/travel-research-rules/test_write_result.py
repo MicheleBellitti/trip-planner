@@ -208,6 +208,15 @@ def test_valid_result_is_written_and_accepted_by_the_backend(agent: str, tmp_pat
     RESULTS.parse_result(agent, target.read_text(encoding="utf-8"))  # the backend agrees
 
 
+def test_transport_draft_with_own_car_and_distance(tmp_path: Path) -> None:
+    data = copy.deepcopy(SAMPLES["transport"])
+    data["options"][1] = {**data["options"][1], "mode": "car", "distance_km": 160}
+    _, result, problems = write("transport", data, tmp_path)
+    assert problems == []
+    assert result["version"] == 1
+    assert result["options"][1]["distance_km"] == 160
+
+
 def test_version_grows_at_every_rewrite(tmp_path: Path) -> None:
     for expected in (1, 2, 3):
         _, result, problems = write("flights", SAMPLES["flights"], tmp_path)
@@ -330,6 +339,7 @@ INVALID: list[tuple[str, Mutation, str]] = [
         "must be after depart_at",
     ),
     ("transport", _set("options.0.mode", "teleport"), "must be one of"),
+    ("transport", _set("options.0.distance_km", 0), "distance_km"),
     ("transport", _set("options.0.from", _DELETE), "options[0].from: is required"),
     ("transport", _set("options", {"t1": {}}), "options: must be array"),
     ("transport", _set("warnings", "nessuno"), "warnings: must be array"),

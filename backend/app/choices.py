@@ -138,8 +138,9 @@ class ChoiceOption(ContractModel):
         max_length=MAX_PLACE,
         pattern=SINGLE_LINE_PATTERN,
         description=(
-            "Name and address of the place, one line, at most 120 characters, no URL, used to "
-            "look up a photo. Omit when the option is not a place."
+            "The place's name and its city (\"Torre de Belém, Lisboa\"), a destination's city "
+            'and country, or a food style\'s best-known dish ("Bacalhau à Brás"); one line, at '
+            "most 120 characters, no URL; used only to look up a photo. Omit it otherwise."
         ),
     )
 

@@ -80,10 +80,13 @@ TransferMode = Literal[
     "taxi",
     "rideshare",
     "shuttle",
+    "car",
     "car_rental",
     "flight",
     "other",
 ]
+
+MAX_DISTANCE_KM = 20_000
 
 _LINK_DESCRIPTION = (
     "Booking URL exactly as the MCP returned it, or as printed by build_link.py; never written "
@@ -441,7 +444,12 @@ class TransferOption(ResultOption):
     to: str = Field(
         min_length=1, max_length=MAX_NAME, description="Destination, e.g. 'Hotel Lisboa Plaza'."
     )
-    mode: TransferMode = Field(description="Means of transport.")
+    mode: TransferMode = Field(
+        description=(
+            "Means of transport. `car` is the travellers' own car, `car_rental` a rented one; "
+            "a long-distance coach is `bus`."
+        )
+    )
     depart_at: AwareDatetime | None = Field(
         default=None,
         description="Scheduled departure with UTC offset; null for on-demand modes (walk, taxi).",
@@ -451,6 +459,14 @@ class TransferOption(ResultOption):
     )
     duration_min: PositiveInt = Field(
         le=MAX_DURATION_MIN, description="Door-to-door duration in minutes."
+    )
+    distance_km: int | None = Field(
+        default=None,
+        ge=1,
+        le=MAX_DISTANCE_KM,
+        description=(
+            "Road distance in km for a drive (`car`, `car_rental`); null for every other mode."
+        ),
     )
     price: Price | None = Field(
         default=None, description="Total for the whole party; null if free."

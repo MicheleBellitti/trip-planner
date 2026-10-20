@@ -106,6 +106,20 @@
           "default": null,
           "description": "Scheduled departure with UTC offset; null for on-demand modes (walk, taxi)."
         },
+        "distance_km": {
+          "anyOf": [
+            {
+              "maximum": 20000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Road distance in km for a drive (`car`, `car_rental`); null for every other mode."
+        },
         "duration_min": {
           "description": "Door-to-door duration in minutes.",
           "exclusiveMinimum": 0,
@@ -138,7 +152,7 @@
           "description": "Booking URL exactly as the MCP returned it, or as printed by build_link.py; never written by hand. Null if there is none."
         },
         "mode": {
-          "description": "Means of transport.",
+          "description": "Means of transport. `car` is the travellers' own car, `car_rental` a rented one; a long-distance coach is `bus`.",
           "enum": [
             "walk",
             "metro",
@@ -149,6 +163,7 @@
             "taxi",
             "rideshare",
             "shuttle",
+            "car",
             "car_rental",
             "flight",
             "other"
