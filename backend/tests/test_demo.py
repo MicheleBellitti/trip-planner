@@ -384,6 +384,51 @@ async def test_every_automatic_scenario_reaches_its_state(
         assert fake.mismatches == []
 
 
+async def test_demo_choices_waits_for_the_answer(demo_app: DemoApp) -> None:
+    """The PR's end-to-end test of the answer endpoint: the scripted session pauses twice, the
+    traveller answers through POST /plans/{id}/choices/{choice_id} (a pick, then a skip)."""
+    async with demo_app() as browser:
+        plan_id = await create_plan(browser, "choices")
+
+        async def open_choice(kind: str) -> dict[str, Any]:
+            async with asyncio.timeout(10):
+                while True:
+                    pending = (await browser.detail(plan_id))["pending_choice"]
+                    if pending is not None and pending["kind"] == kind:
+                        return pending
+                    await asyncio.sleep(0.02)
+
+        activities = await open_choice("activities")
+        await asyncio.sleep(0.2)  # the script waits for the traveller, however long it takes
+        assert (await browser.detail(plan_id))["pending_choice"]["id"] == activities["id"]
+        picked = await browser.http.post(
+            f"/plans/{plan_id}/choices/{activities['id']}",
+            json={"selected": [activities["options"][1]["id"]]},
+            headers=browser.frontend,
+        )
+        assert picked.status_code == 200, picked.text
+
+        food = await open_choice("food")
+        assert food["id"] != activities["id"]
+        skipped = await browser.http.post(
+            f"/plans/{plan_id}/choices/{food['id']}", json={"skip": True}, headers=browser.frontend
+        )
+        assert skipped.status_code == 200, skipped.text
+
+        assert await run_to_end(browser, plan_id) == "ready"
+        detail = await browser.detail(plan_id)
+        [fake] = demo_client(browser).sessions.values()
+
+    assert detail["pending_choice"] is None
+    assert fake.mismatches == []
+
+
+def test_demo_offers_choices_but_not_choice_interrupt() -> None:
+    assert "choices" in demo_scenarios()
+    assert "choice_interrupt" not in demo_scenarios()
+    assert sessions.DEFAULT_DEMO_SCENARIO == "happy_path"
+
+
 async def test_budget_reached_waits_for_continue_on_the_real_endpoint(
     demo_app: DemoApp, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -434,3 +434,92 @@ async def test_import_evals_usage_errors(
 @pytest.mark.usefixtures("uncached_structlog")
 def test_main_import_evals_usage_error(settings: Settings, tmp_path: Path) -> None:
     assert cli.main(["import-evals", str(tmp_path / "nope.json")]) == cli.EXIT_USAGE
+
+
+# --- choices -------------------------------------------------------------------------------------
+
+
+async def test_replay_choices_answers_each_pause_and_ends_ready(
+    make_settings: Callable[..., Settings],
+    db_session_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    code = await cli.replay_command(
+        MA_FIXTURES / "choices.jsonl",
+        settings=make_settings(),
+        request_path=None,
+        color=False,
+        out_dir=tmp_path,
+    )
+    captured = capsys.readouterr()
+    assert code == cli.EXIT_READY, captured.err
+    lines = captured.out.splitlines()
+    assert any("Tocca a te: scegli cosa vedere" in line for line in lines)
+    assert any("Tocca a te: scegli cosa mangiare" in line for line in lines)
+    assert sum("Hai scelto: " in line for line in lines) == 2
+    automatic = [line for line in lines if line.startswith("Scelta automatica: ")]
+    assert len(automatic) == 2
+    assert "Oceanário de Lisboa" in automatic[0]
+    assert "Tascas di quartiere" in automatic[1]
+    async with db_session_factory() as db:
+        [plan] = list(await db.scalars(select(PlanRecord)))
+    assert plan.status == PlanStatus.READY.value
+
+
+async def test_run_choose_reads_the_terminal(
+    make_settings: Callable[..., Settings],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`--choose`: the options are printed numbered; "2" picks the second, an empty line skips,
+    and bad input is explained and asked again."""
+    typed = iter(["x", "1,9", "2", "", ""])
+    prompts: list[str] = []
+
+    def fake_input(prompt: str = "") -> str:
+        prompts.append(prompt)
+        return next(typed)
+
+    monkeypatch.setattr("builtins.input", fake_input)
+    code = await cli.replay_command(
+        MA_FIXTURES / "choices.jsonl",
+        settings=make_settings(),
+        request_path=None,
+        color=False,
+        out_dir=tmp_path,
+        choose=True,
+    )
+    out = capsys.readouterr().out
+    assert code == cli.EXIT_READY
+    assert "  1. Oceanário de Lisboa" in out
+    assert "  2. " in out
+    assert out.count(cli.CHOICE_HINT) == 2  # "x" and "1,9"
+    assert len(prompts) == 4  # two bad lines, "2", then the food pause's empty line
+    assert "Scelta automatica" not in out
+    assert cli.CHOICE_SKIPPED_LINE in out
+    lines = out.splitlines()
+    [chosen] = [line for line in lines if "Hai scelto: " in line]
+    assert "Palácio da Pena" in chosen  # option 2
+    assert "Oceanário" not in chosen
+    assert any("Hai lasciato scegliere ad Atlas" in line for line in lines)  # the empty line
+
+
+def test_parse_choice_line() -> None:
+    assert cli.parse_choice_line("2", count=3, multiple=False) == [2]
+    assert cli.parse_choice_line(" 1, 3 ", count=3, multiple=True) == [1, 3]
+    assert cli.parse_choice_line("", count=3, multiple=True) == []
+    assert cli.parse_choice_line("1,3", count=3, multiple=False) is None
+    assert cli.parse_choice_line("4", count=3, multiple=True) is None
+    assert cli.parse_choice_line("0", count=3, multiple=True) is None
+    assert cli.parse_choice_line("a", count=3, multiple=True) is None
+    assert cli.parse_choice_line("1,1", count=3, multiple=True) is None
+
+
+def test_run_has_a_choose_flag_and_replay_does_not() -> None:
+    parser = cli.build_parser()
+    assert parser.parse_args(["run", "--request", "r.json", "--choose"]).choose is True
+    assert parser.parse_args(["run", "--request", "r.json"]).choose is False
+    with pytest.raises(SystemExit):
+        parser.parse_args(["replay", "s.jsonl", "--choose"])
