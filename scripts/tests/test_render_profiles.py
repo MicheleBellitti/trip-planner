@@ -328,6 +328,42 @@ def test_no_prompt_or_skill_tells_an_agent_to_fetch_a_url_it_builds() -> None:
     assert "photon.komoot.io" not in skill
 
 
+@pytest.mark.parametrize("agent", ["transport", "activities"])
+@pytest.mark.parametrize("profile", rp.PROFILE_NAMES)
+def test_research_prompts_cite_only_pages_they_saw(agent: str, profile: str) -> None:
+    """Spec §3, the root cause of dead links: a source URL is a page the agent opened or a
+    search result it saw, never one it composed from a site's structure."""
+    _, system = agent_file(profile, agent)
+    assert "you opened with `web_fetch` or a URL you saw as a search result" in system
+    assert "never one composed from a site's structure" in system
+    assert "cites that result's URL" in system
+
+
+def test_transport_prompt_covers_every_main_journey() -> None:
+    """Spec §1, delegation by mode: transport researches every main journey but a flight."""
+    fields, system = agent_file("development", "transport")
+    assert "the main journey when it is not a flight" in fields["description"]
+    for phrase in (
+        "train or coach",
+        "mode `bus`",  # a coach is `bus` (plan decision 4)
+        "foot passengers",
+        "the party's own car",
+        "`distance_km`",
+        "`car_rental` is a rented one",
+        "car ferry",
+        "parking",  # an `other` option near the lodging (plan decision 3)
+        "out <id> <mode>",  # the main-journey reply line
+    ):
+        assert phrase in system
+
+
+def test_activities_prompt_builds_the_days_around_the_picks() -> None:
+    """The coordinator's wave-2 task names the picks and the food styles (step 7)."""
+    _, system = agent_file("development", "activities")
+    assert "the traveller picked" in system
+    assert "food styles" in system
+
+
 @pytest.mark.parametrize("agent", rp.SUBAGENTS)
 def test_subagent_prompts_cover_the_protocol(agent: str) -> None:
     _, system = agent_file("production", agent)
