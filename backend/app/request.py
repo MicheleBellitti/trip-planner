@@ -105,6 +105,9 @@ REQUEST_ERRORS: dict[RequestErrorCode, str] = {
 
 MAX_NIGHTS = MAX_TRIP_DAYS - 1
 
+JourneyMode = Literal["flight", "train", "ferry", "car", "coach"]
+JOURNEY_MODES: tuple[JourneyMode, ...] = ("flight", "train", "ferry", "car", "coach")
+
 BUDGET_EUR_MAX = 50_000
 """The most a request may budget, whole euro: above it the number is a mistake (or a probe), and
 the agents' per-session budget would not research a trip of that size anyway."""
@@ -315,6 +318,14 @@ class PlanRequest(ContractModel):
             "Only with suggest_destination: what the trip should be like, e.g. "
             "'mare a novembre, volo diretto'. Ignored (dropped) when suggest_destination is "
             "false."
+        ),
+    )
+    journey_mode: JourneyMode | None = Field(
+        default=None,
+        description=(
+            "The main journey's mode, out and back: car is the travellers' own car, car ferries "
+            "included; coach is a long-distance bus; ferry is for foot passengers. Null lets the "
+            "coordinator decide."
         ),
     )
     dates: DateWindow = Field(description="Fixed dates, or a month and a number of nights.")

@@ -669,6 +669,14 @@ def test_brief_keeps_unicode_and_drops_nulls() -> None:
     assert '"suggest_destination": true' in brief
 
 
+def test_brief_omits_a_null_mode_and_carries_a_set_one() -> None:
+    without_mode = PlanRequest.model_validate(REQUEST_JSON)
+    with_mode = PlanRequest.model_validate({**REQUEST_JSON, "journey_mode": "train"})
+
+    assert '"journey_mode"' not in build_brief(without_mode, today=dt.date(2026, 10, 12))
+    assert '"journey_mode": "train"' in build_brief(with_mode, today=dt.date(2026, 10, 12))
+
+
 def test_session_metadata_has_no_personal_data() -> None:
     plan_id = uuid.uuid4()
     metadata = session_metadata(plan_id, "production")

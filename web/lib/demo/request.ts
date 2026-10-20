@@ -11,6 +11,7 @@ export const DEMO_REQUEST = {
   origin: "Milano",
   destination: "Lisbona",
   destination_idea: null,
+  journey_mode: null,
   suggest_destination: false,
   dates: { exact_start: "2027-04-14", exact_end: "2027-04-18", month: null, nights: null },
   travelers: [
