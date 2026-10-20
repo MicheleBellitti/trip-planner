@@ -369,6 +369,7 @@ def test_apply_creates_everything_and_writes_the_lockfile(
         for k in ("../skills/trip-tracker-schema", "../skills/travel-research-rules")
     ]
     assert coordinator["tools"][1]["name"] == "submit_plan"
+    assert coordinator["tools"][2]["name"] == "ask_traveller"
     uploads = fake_api.skill_uploads[resources["../skills/booking-links"]["id"]]
     assert uploads == ["booking-links/SKILL.md", "booking-links/build_link.py"]
 

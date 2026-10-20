@@ -3,7 +3,7 @@
 #! profiles/<profile>/agents/coordinator.md (frontmatter = POST /v1/agents body, the Markdown
 #! body = `system`). Relative paths are written as seen from the rendered file.
 name: coordinator
-description: Plans one trip end to end. Delegates research to flights, lodging, activities and transport, chooses, checks coherence and delivers the plan with submit_plan.
+description: Plans one trip end to end. Delegates research to flights, lodging, activities and transport, asks the traveller up to three questions with ask_traveller, chooses, checks coherence and delivers the plan with submit_plan.
 model: {id: {{ models.coordinator }}, effort: {{ efforts.coordinator }}}
 metadata:
   app: trip-planner
@@ -17,6 +17,8 @@ tools:
       - {name: glob, enabled: true}
   # The custom tool, generated from schema/plan.json with every $ref inlined.
   - ./tools/submit_plan.json
+  # The custom tool, generated from schema/ask_traveller.json with every $ref inlined.
+  - ./tools/ask_traveller.json
 skills:
   - ../../../skills/trip-tracker-schema
   - ../../../skills/travel-research-rules
