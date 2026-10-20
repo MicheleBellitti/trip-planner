@@ -53,7 +53,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from html.parser import HTMLParser
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, Protocol
 from urllib.parse import urlsplit
 
 import httpx
@@ -64,6 +64,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app import clock
 from app.db import DestinationCoverRecord
+from app.events import strip_nul
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -82,6 +83,12 @@ COVER_WIDTH: Final = 1920
 HTTP_TIMEOUT_SECONDS: Final = 6.0
 LOOKUP_DEADLINE_SECONDS: Final = 15.0
 MAX_COMMONS_LOOKUPS: Final = 4
+
+PLACE_KEY_PREFIX: Final = "place:"
+"""Prefix of the cache key of a place photo (choice cards): the same table as destination
+covers, a different key space ("lisbona" vs "place:lisbona")."""
+PHOTO_DEADLINE_SECONDS: Final = 3.0
+"""All the photo lookups of one set of choice cards must be over by then."""
 
 COVER_TTL: Final = dt.timedelta(days=30)
 MISS_TTL: Final = dt.timedelta(hours=6)
@@ -138,6 +145,12 @@ class Cover(BaseModel):
     )
     source_page: str = Field(description="The file's page on commons.wikimedia.org.")
     title: str = Field(description="The file's title, without 'File:' and the extension.")
+
+    @field_validator("author", "title", "license", mode="before")
+    @classmethod
+    def _no_nul(cls, value: object) -> object:
+        # Wikimedia text is third-party and ends up in jsonb, which rejects U+0000.
+        return strip_nul(value)
 
     @field_validator("url")
     @classmethod
@@ -405,7 +418,11 @@ class CoverResolver:
         session_factory: async_sessionmaker[AsyncSession],
         http: httpx.AsyncClient,
         user_agent: str,
+        key_prefix: str = "",
+        lookup_deadline_seconds: float = LOOKUP_DEADLINE_SECONDS,
     ) -> None:
+        self._key_prefix = key_prefix
+        self._lookup_deadline = lookup_deadline_seconds
         self._session_factory = session_factory
         self._http = http
         self._headers = {"User-Agent": user_agent, "Accept": "application/json"}
@@ -415,9 +432,10 @@ class CoverResolver:
     async def get(self, destination: str) -> Cover | None:
         """The cover for `destination`, or None (no usable free photo, or Wikimedia is
         unreachable). Never raises."""
-        key = cache_key(destination)
-        if key is None:
+        base = cache_key(destination)
+        if base is None:
             return None
+        key = f"{self._key_prefix}{base}"
         try:
             return await self._get(key, destination)
         except Exception:  # a cover is decoration: nothing here may reach the caller
@@ -439,7 +457,7 @@ class CoverResolver:
                     self._remember(key, stored)
                     return stored.cover
                 try:
-                    async with asyncio.timeout(LOOKUP_DEADLINE_SECONDS):
+                    async with asyncio.timeout(self._lookup_deadline):
                         cover = await self._lookup(destination)
                 except (WikimediaUnavailableError, TimeoutError) as exc:
                     log.warning("cover_wikimedia_unavailable", reason=type(exc).__name__)
@@ -560,6 +578,67 @@ class CoverResolver:
         if body is None or "error" in body:
             raise WikimediaUnavailableError("API error")
         return body
+
+
+class ChoicePhotos(Protocol):
+    """Photos for the places of a set of choice cards."""
+
+    async def photos_for(self, places: Mapping[str, str]) -> dict[str, Cover]:
+        """Option id -> `Cover`, for the places whose free photo was found in time. Never
+        raises, except on cancellation."""
+        ...
+
+
+class NoPhotos:
+    """No lookup: the cards go out without photos."""
+
+    async def photos_for(self, places: Mapping[str, str]) -> dict[str, Cover]:
+        return {}
+
+
+NO_PHOTOS: Final = NoPhotos()
+
+
+class PlacePhotos:
+    """Looks up the photos of many places in parallel under one deadline. `resolver` should be
+    built with `key_prefix=PLACE_KEY_PREFIX`."""
+
+    def __init__(
+        self, resolver: CoverResolver, *, deadline_seconds: float = PHOTO_DEADLINE_SECONDS
+    ) -> None:
+        self._resolver = resolver
+        self._deadline = deadline_seconds
+
+    async def photos_for(self, places: Mapping[str, str]) -> dict[str, Cover]:
+        if not places:
+            return {}
+        # One lookup per distinct place (by cache key): options sharing a place share it.
+        tasks: dict[str, asyncio.Task[Cover | None]] = {}
+        option_key: dict[str, str] = {}
+        for option_id, place in places.items():
+            key = cache_key(place) or ""
+            option_key[option_id] = key
+            if key and key not in tasks:
+                tasks[key] = asyncio.create_task(self._resolver.get(place))
+        found: dict[str, Cover] = {}
+        timed_out = 0
+        try:
+            if tasks:
+                await asyncio.wait(tasks.values(), timeout=self._deadline)
+        finally:
+            pending = [task for task in tasks.values() if not task.done()]
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
+        for key, task in tasks.items():
+            if task.cancelled() or task.exception() is not None:
+                timed_out += task.cancelled()
+                continue
+            cover = task.result()
+            if cover is not None:
+                found.update({o: cover for o, k in option_key.items() if k == key})
+        log.info("choice_photos", requested=len(places), found=len(found), timed_out=timed_out)
+        return found
 
 
 def wikipedia_params(language: str, titles: list[str]) -> dict[str, str]:

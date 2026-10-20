@@ -515,3 +515,8 @@ def test_link_check_settings(make_settings: MakeSettings) -> None:
     assert make_settings(link_check_enabled="true").link_check_enabled is True
     settings = make_settings(frontend_origin="https://atlas.example/")
     assert settings.link_check_user_agent == "AtlasLinkCheck/1.0 (+https://atlas.example)"
+
+
+def test_choice_photos_setting(make_settings: MakeSettings) -> None:
+    assert Settings.model_fields["choice_photos_enabled"].default is True
+    assert make_settings(choice_photos_enabled="false").choice_photos_enabled is False
