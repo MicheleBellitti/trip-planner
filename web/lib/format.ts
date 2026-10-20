@@ -26,6 +26,23 @@ export function formatEur(cents: number): string {
   return `${formatCents(cents)} €`;
 }
 
+/** An amount in minutes as Italian copy: 45 -> "45 min", 180 -> "3 h", 150 -> "2 h 30 min". */
+export function formatMinutes(minutes: number): string {
+  const total = Math.max(0, Math.round(minutes));
+  if (total < 60) return `${total} min`;
+  const hours = Math.floor(total / 60);
+  const rest = total % 60;
+  return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
+}
+
+/** An amount of an option's currency, in cents: EUR and USD as the screen writes them, any other
+ * code after the figure ("12,50 GBP"). */
+export function formatMoney(cents: number, currency: string): string {
+  if (currency === "EUR") return formatEur(cents);
+  if (currency === "USD") return formatUsd(cents);
+  return `${formatCents(cents)} ${currency}`;
+}
+
 /** Elapsed time for the live header: 65_000 -> "1:05", 3_725_000 -> "1:02:05". Negative values
  * (clock skew between the browser and the backend) count as zero. */
 export function formatElapsed(ms: number): string {

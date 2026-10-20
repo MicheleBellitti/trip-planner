@@ -28,7 +28,9 @@ import { getAuthMode, getConfig, stripTrailingSlash, type AuthMode } from "./con
 import { formatUsd } from "./format";
 import { markSignedIn, markSignedOut } from "./returning";
 import { ROUTES } from "./routes";
+import type { ChoiceAnswerInput } from "./choices";
 import {
+  ChoiceAnswerResponseSchema,
   ContinueResponseSchema,
   COVER_UNAVAILABLE_CODE,
   CoverSchema,
@@ -44,6 +46,7 @@ import {
   QuotaSchema,
   StatusResponseSchema,
   ValidationErrorResponseSchema,
+  type ChoiceAnswerResponse,
   type ContinueResponse,
   type Cover,
   type CreatePlanResponse,
@@ -288,6 +291,15 @@ export interface ApiClient {
   interruptPlan(planId: string, options?: RequestOptions): Promise<StatusResponse>;
   /** POST /plans/{id}/continue ("Continua con 2 $ in più"). */
   continuePlan(planId: string, options?: RequestOptions): Promise<ContinueResponse>;
+  /** POST /plans/{id}/choices/{choiceId}: the traveller's picks, or `{skip: true}` ("Scegli tu").
+   * 409 `choice_closed` (data `answered_by`) when the question took its answer already, 422
+   * `invalid_choice_answer` when the picks do not fit the options. */
+  answerChoice(
+    planId: string,
+    choiceId: string,
+    answer: ChoiceAnswerInput,
+    options?: RequestOptions,
+  ): Promise<ChoiceAnswerResponse>;
   /** GET /evals/runs: a page of the eval history, newest first (at most `limit`, default 50, after
    * the newest `offset`), and how many runs there are. */
   listEvalRuns(options?: RequestOptions & { limit?: number; offset?: number }): Promise<EvalRunListResponse>;
@@ -361,6 +373,12 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
 
   function errorFromResponse(status: number, payload: unknown, retryAfterHeader: string | null = null): ApiError {
     if (status === 422) {
+      // The planner's own 422 (`invalid_choice_answer`) uses the envelope; FastAPI's has issues.
+      const envelope = ErrorResponseSchema.safeParse(payload);
+      if (envelope.success) {
+        const { code, message, data } = envelope.data.detail;
+        return new ApiError({ kind: "validation", status, code, message, data });
+      }
       const validation = ValidationErrorResponseSchema.safeParse(payload);
       return new RequestValidationError(status, validation.success ? validation.data.detail : []);
     }
@@ -441,6 +459,11 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
       send("POST", `${planPath(planId)}/interrupt`, StatusResponseSchema, { signal: opts?.signal }),
     continuePlan: (planId, opts) =>
       send("POST", `${planPath(planId)}/continue`, ContinueResponseSchema, { signal: opts?.signal }),
+    answerChoice: (planId, choiceId, answer, opts) =>
+      send("POST", `${planPath(planId)}/choices/${encodeURIComponent(choiceId)}`, ChoiceAnswerResponseSchema, {
+        body: "skip" in answer ? { skip: true } : { selected: [...answer.selected] },
+        signal: opts?.signal,
+      }),
     listEvalRuns: async (opts) => {
       const query = new URLSearchParams();
       if (opts?.limit !== undefined) query.set("limit", `${Math.max(1, Math.floor(opts.limit))}`);

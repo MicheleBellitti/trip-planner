@@ -124,6 +124,10 @@ export const PlanDetailSchema = z.object({
   link_health: z._default(z.record(z.string(), LinkHealthSchema), () => ({})),
   /** TripTracker's /import?plan=<id>, only when ready. */
   import_url: z._default(z.nullable(z.string()), null),
+  /** The question the coordinator is waiting on (backend `PendingChoice`), only while the plan is
+   * running and no interrupt was asked; null otherwise and from a backend that predates it. Kept
+   * loose on purpose: `readChoice` (lib/choices.ts) is the tolerant reader. */
+  pending_choice: z._default(z.nullable(z.record(z.string(), z.unknown())), null),
 });
 export type PlanDetail = z.output<typeof PlanDetailSchema>;
 
@@ -168,6 +172,16 @@ export const ContinueResponseSchema = z.object({
   budget_cents: z.int().check(z.gte(0)),
 });
 export type ContinueResponse = z.output<typeof ContinueResponseSchema>;
+
+/** Answer of POST /plans/{id}/choices/{choice_id} (routes.ChoiceAnswerResponse). */
+export const ChoiceAnswerResponseSchema = z.object({
+  id: z.string(),
+  /** `traveller` or `skip`. */
+  answered_by: z.string(),
+  /** The picked option ids, in the order offered. */
+  selected: z.array(z.string()),
+});
+export type ChoiceAnswerResponse = z.output<typeof ChoiceAnswerResponseSchema>;
 
 /** GET /health (no authentication). */
 export const HealthResponseSchema = z.object({ status: z.literal("ok") });
@@ -450,6 +464,9 @@ export const PLAN_ERROR_CODES = [
   "too_many_requests",
   "planner_busy",
   "continue_limit_reached",
+  "choice_not_found",
+  "choice_closed",
+  "invalid_choice_answer",
   "planner_unavailable",
   "agents_unavailable",
   "request_too_large",

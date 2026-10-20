@@ -341,6 +341,7 @@ describe("usePlanEvents", () => {
       plan: null,
       continues: 0,
       continues_limit: 2,
+      pending_choice: null,
     };
     const { result } = render({ detail });
 

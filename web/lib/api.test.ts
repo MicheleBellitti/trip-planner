@@ -575,3 +575,56 @@ describe("the returning-visitor mark", () => {
     expect(localStorage.getItem(SIGNED_IN_KEY)).toBeNull();
   });
 });
+
+describe("answerChoice", () => {
+  const CHOICE_ID = "sevt_022CZchoiceActivitiesPa1";
+  const URL = `https://atlas.api.test/plans/${PLAN_ID}/choices/${CHOICE_ID}`;
+
+  it("answerChoice posts the picks, or the skip, to the choice's path and parses the answer", async () => {
+    const picked = client(json(200, { id: CHOICE_ID, answered_by: "traveller", selected: ["a1", "a2"] }));
+    await expect(picked.api.answerChoice(PLAN_ID, CHOICE_ID, { selected: ["a1", "a2"] })).resolves.toEqual({
+      id: CHOICE_ID,
+      answered_by: "traveller",
+      selected: ["a1", "a2"],
+    });
+    const [url, init] = picked.fetchMock.mock.calls[0]!;
+    expect(url).toBe(URL);
+    expect(init?.method).toBe("POST");
+    expect(init?.credentials).toBe("include");
+    expect(JSON.parse(init?.body as string)).toEqual({ selected: ["a1", "a2"] });
+
+    const skipped = client(json(200, { id: CHOICE_ID, answered_by: "skip", selected: [] }));
+    await skipped.api.answerChoice(PLAN_ID, CHOICE_ID, { skip: true });
+    expect(JSON.parse(skipped.fetchMock.mock.calls[0]![1]?.body as string)).toEqual({ skip: true });
+
+    const odd = client(json(200, { id: "a/b", answered_by: "skip", selected: [] }));
+    await odd.api.answerChoice(PLAN_ID, "a/b", { skip: true });
+    expect(odd.fetchMock.mock.calls[0]![0]).toBe(`https://atlas.api.test/plans/${PLAN_ID}/choices/a%2Fb`);
+  });
+
+  it("a 409 choice_closed is a conflict carrying the backend's message and answered_by", async () => {
+    const message = "Questa scelta è già chiusa: il piano va avanti.";
+    const { api } = client(json(409, envelope("choice_closed", message, { answered_by: "timeout" })));
+
+    const error = await failure(api.answerChoice(PLAN_ID, CHOICE_ID, { skip: true }));
+
+    expect(error).toMatchObject({ kind: "conflict", status: 409, code: "choice_closed", message });
+    expect(error.data).toEqual({ answered_by: "timeout" });
+  });
+
+  it("a 422 invalid_choice_answer keeps its code and message; FastAPI's 422 stays a RequestValidationError", async () => {
+    const message = "La risposta non corrisponde alle opzioni proposte: ricarica la pagina e riprova.";
+    const invalid = client(json(422, envelope("invalid_choice_answer", message, { reason: "unknown_option" })));
+    const error = await failure(invalid.api.answerChoice(PLAN_ID, CHOICE_ID, { selected: ["zz"] }));
+    expect(error).not.toBeInstanceOf(RequestValidationError);
+    expect(error).toMatchObject({ kind: "validation", status: 422, code: "invalid_choice_answer", message });
+    expect(error.data).toEqual({ reason: "unknown_option" });
+
+    const fastapi = client(
+      json(422, { detail: [{ loc: ["body", "selected"], msg: "Field required", type: "missing" }] }),
+    );
+    expect(await failure(fastapi.api.answerChoice(PLAN_ID, CHOICE_ID, { selected: [] }))).toBeInstanceOf(
+      RequestValidationError,
+    );
+  });
+});
