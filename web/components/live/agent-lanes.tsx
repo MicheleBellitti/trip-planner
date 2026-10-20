@@ -27,6 +27,9 @@ interface AgentLanesProps {
   /** How the phone's open card follows the work: `reader` (live) never swaps a card on screen;
    * `show` (the demo) follows the work until the viewer takes over. */
   follow?: LaneFollow;
+  /** A question for the traveller is on screen: the `show` camera holds still, and what the
+   * visitor does there is not taking the page over. No effect on `reader`. */
+  cameraHeld?: boolean;
 }
 
 export type LaneFollow = "reader" | "show";
@@ -87,6 +90,7 @@ export function AgentLanes({
   stale,
   heading = "Corsie degli agenti",
   follow = "reader",
+  cameraHeld = false,
 }: AgentLanesProps) {
   const layout = useLaneLayout();
   const coordinatorEnd = useRef<HTMLDivElement>(null);
@@ -128,8 +132,12 @@ export function AgentLanes({
 
   // The demo's camera (`show`): while the visitor only watches, the work stays on screen. On the
   // phone the open card's newest station stays in view as the work moves and grows; on wider
-  // layouts the coordinator's newest station does. "nearest" moves the page only when the thing is out of view; a scroll, a key or
-  // a toggle (`touched`) hands the page back to the visitor.
+  // layouts the coordinator's newest station does. "nearest" moves the page only when the thing
+  // is out of view; a scroll, a key or a toggle (`touched`) hands the page back to the visitor.
+  // A question (`cameraHeld`) holds the camera still: the page goes to the cards, and the keys,
+  // scrolls and touches there are the question's, not the visitor taking the page over. Released,
+  // the camera aims once at the work and carries on, unless the visitor had taken over before.
+  const held = follow === "show" && cameraHeld;
   // What the camera keeps in view: the open card's end, where its newest station is (the card
   // itself before it opens), or the coordinator's newest station on wider layouts.
   const cameraTarget = useCallback((): HTMLElement | null => {
@@ -146,14 +154,14 @@ export function AgentLanes({
   const followedStations = views[followed].stations.length;
   const coordinatorStations = views.coordinator.stations.length;
   useEffect(() => {
-    if (follow !== "show" || touched) return;
+    if (follow !== "show" || touched || held) return;
     cameraUntil.current = Date.now() + 1_000;
     cameraTarget()?.scrollIntoView?.({ block: "nearest", behavior: cameraMotion() });
-  }, [follow, touched, cameraTarget, followedStations, coordinatorStations]);
+  }, [follow, touched, held, cameraTarget, followedStations, coordinatorStations]);
   // Any other scroll that takes the work out of view is the visitor's (the scrollbar, a screen
   // reader, a magnifier, an anchor: none of them sends a wheel or a key), and hands the page back.
   useEffect(() => {
-    if (follow !== "show" || touched) return;
+    if (follow !== "show" || touched || held) return;
     const onScroll = () => {
       if (Date.now() < cameraUntil.current) return;
       const box = cameraTarget()?.getBoundingClientRect();
@@ -161,9 +169,10 @@ export function AgentLanes({
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, [follow, touched, cameraTarget]);
+  }, [follow, touched, held, cameraTarget]);
 
   useEffect(() => {
+    if (held) return;
     const mark = () => setTouched(true);
     window.addEventListener("wheel", mark, { passive: true });
     window.addEventListener("touchmove", mark, { passive: true });
@@ -173,7 +182,7 @@ export function AgentLanes({
       window.removeEventListener("touchmove", mark);
       window.removeEventListener("keydown", mark);
     };
-  }, []);
+  }, [held]);
 
   useEffect(() => {
     if (layout !== "stack" || typeof IntersectionObserver === "undefined") return;
