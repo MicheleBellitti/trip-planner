@@ -210,14 +210,76 @@ def test_coordinator_prompt_honours_the_brief_contract() -> None:
 
 
 @pytest.mark.parametrize("profile", rp.PROFILE_NAMES)
-def test_coordinator_never_waits_for_the_user(profile: str) -> None:
-    """Nobody answers during a run, and an end_turn without an accepted plan fails the plan
-    (docs/backend-interfaces.md, decide_idle): the prompt must say both."""
+def test_coordinator_reaches_the_traveller_only_through_ask_traveller(profile: str) -> None:
+    """The traveller answers only `ask_traveller`; messages reach nobody, and an end_turn without
+    an accepted plan fails the plan (docs/backend-interfaces.md, decide_idle)."""
     _, system = agent_file(profile, "coordinator")
-    assert "Nobody reads or answers your messages during the run" in system
-    assert "Never ask the user a question" in system
-    assert "state the assumption in `warnings`" in system
-    assert "the whole plan fails" in system
+    for phrase in (
+        "only through `ask_traveller`",
+        "at most three times per plan",
+        "Never ask what the request already says",
+        "never ask a question in a message",
+        "Nobody reads or answers your messages during the run",
+        "state the assumption in `warnings`",
+        "the whole plan fails",
+    ):
+        assert phrase in system
+
+
+def test_coordinator_prompt_covers_the_pauses() -> None:
+    _, system = agent_file("development", "coordinator")
+    for kind in ("destination", "journey", "activities", "food", "other"):
+        assert f"`{kind}`" in system
+    for phrase in (
+        "the result file's ids",
+        "skip this pause",
+        "never in the same turn as a delegation",
+        "Bacalhau à Brás",
+        "Torre de Belém, Lisboa",
+        "leave out a2, a5",
+    ):
+        assert phrase in system
+
+
+def test_coordinator_waits_for_pending_reports_after_an_answer() -> None:
+    """Probe P14: a report that arrives during a pause reaches the coordinator only after its
+    first turn on the answer has ended, so that turn must not chase a subagent."""
+    _, system = agent_file("development", "coordinator")
+    assert "end your turn without a message and wait for its report" in system
+    assert "because it seems slow" in system
+
+
+def test_coordinator_prompt_handles_every_refusal() -> None:
+    """The prompt quotes the refusals `ask_traveller` answers with (backend/app/choices.py)."""
+    _, system = agent_file("development", "coordinator")
+    for phrase in (
+        "ask_traveller rejected",
+        "No more questions: choose yourself.",
+        "One question at a time",
+    ):
+        assert phrase in system
+
+
+def test_coordinator_prompt_covers_the_journey_modes() -> None:
+    _, system = agent_file("development", "coordinator")
+    for phrase in (
+        "`journey_mode`",
+        "feasibility first, before any delegation",
+        "Circa 3 h 30 con scalo",
+        "the easier mode",
+        "foot passengers",
+        "the party's own car",
+        "car ferr",
+        "under about five hours",
+    ):
+        assert phrase in system
+    # Only the picked destination is researched: constraints.json no longer lists candidates
+    # (step 2 still offers "at most three candidates", through `ask_traveller`).
+    blocks = re.findall(r"```json\n(.*?)```", system, re.DOTALL)
+    examples = [block for block in blocks if '"journey"' in block]
+    assert len(examples) == 1
+    assert "candidates" not in examples[0]
+    assert json.loads(examples[0])["journey"]["mode"] == "flight"
 
 
 # A `web_fetch` URL the agent would have to build: a URL with a <placeholder> in it.
