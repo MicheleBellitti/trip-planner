@@ -133,6 +133,25 @@
       "default": null,
       "description": "Only with suggest_destination: what the trip should be like, e.g. 'mare a novembre, volo diretto'. Ignored (dropped) when suggest_destination is false."
     },
+    "journey_mode": {
+      "anyOf": [
+        {
+          "enum": [
+            "flight",
+            "train",
+            "ferry",
+            "car",
+            "coach"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The main journey's mode, out and back: car is the travellers' own car, car ferries included; coach is a long-distance bus; ferry is for foot passengers. Null lets the coordinator decide."
+    },
     "origin": {
       "description": "Where the trip starts: a city or an IATA airport code, e.g. 'Milano', 'MXP'.",
       "maxLength": 200,

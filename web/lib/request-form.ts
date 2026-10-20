@@ -134,6 +134,7 @@ export const REQUEST_FIELD_COPY: Readonly<Record<string, { label: string; placeh
   destination: { label: "Dove vuoi andare", placeholder: "Lisbona" },
   suggest_destination: { label: "Suggeriscimi tu", hint: "Il planner propone fino a tre mete, con i motivi." },
   destination_idea: { label: "Che viaggio vorresti", placeholder: "mare a novembre, volo diretto" },
+  journey_mode: { label: "Mezzo di viaggio" },
   dates: { label: "Quando" },
   "dates.exact_start": { label: "Partenza" },
   "dates.exact_end": { label: "Ritorno" },

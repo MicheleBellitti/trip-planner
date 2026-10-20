@@ -37,6 +37,8 @@ export const PlanRequestSchema = z.strictObject({
   destination: z._default(z.nullable(z.string().check(z.maxLength(200))), null),
   /** Only with suggest_destination: what the trip should be like, e.g. 'mare a novembre, volo diretto'. Ignored (dropped) when suggest_destination is false. */
   destination_idea: z._default(z.nullable(z.string().check(z.maxLength(500))), null),
+  /** The main journey's mode, out and back: car is the travellers' own car, car ferries included; coach is a long-distance bus; ferry is for foot passengers. Null lets the coordinator decide. */
+  journey_mode: z._default(z.nullable(z.enum(["flight", "train", "ferry", "car", "coach"])), null),
   /** Where the trip starts: a city or an IATA airport code, e.g. 'Milano', 'MXP'. */
   origin: z.string().check(z.minLength(1), z.maxLength(200)),
   /** Free-text preferences, e.g. 'niente voli prima delle 8, cucina locale'. */
@@ -206,6 +208,25 @@ export const planRequestJsonSchema = {
       ],
       "default": null,
       "description": "Only with suggest_destination: what the trip should be like, e.g. 'mare a novembre, volo diretto'. Ignored (dropped) when suggest_destination is false."
+    },
+    "journey_mode": {
+      "anyOf": [
+        {
+          "enum": [
+            "flight",
+            "train",
+            "ferry",
+            "car",
+            "coach"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The main journey's mode, out and back: car is the travellers' own car, car ferries included; coach is a long-distance bus; ferry is for foot passengers. Null lets the coordinator decide."
     },
     "origin": {
       "description": "Where the trip starts: a city or an IATA airport code, e.g. 'Milano', 'MXP'.",

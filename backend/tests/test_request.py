@@ -535,3 +535,28 @@ def test_every_field_has_a_description() -> None:
     for model in (PlanRequest, DateWindow, Traveler):
         for name, field in model.model_fields.items():
             assert field.description, f"{model.__name__}.{name} has no description"
+
+
+# --- journey mode --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("mode", ["flight", "train", "ferry", "car", "coach"])
+def test_journey_mode_accepts_each_mode(mode: str) -> None:
+    assert PlanRequest.model_validate(make_request(journey_mode=mode)).journey_mode == mode
+
+
+def test_journey_mode_defaults_to_none() -> None:
+    assert PlanRequest.model_validate(make_request()).journey_mode is None
+
+
+def test_journey_mode_rejects_an_unknown_mode() -> None:
+    errors = errors_of(make_request(journey_mode="plane"))
+
+    assert [tuple(error["loc"]) for error in errors] == [("journey_mode",)]
+
+
+def test_from_stored_reads_a_request_stored_before_the_mode() -> None:
+    stored = make_request(dates={"exact_start": "2026-03-01", "exact_end": "2026-03-05"})
+    assert "journey_mode" not in stored
+
+    assert PlanRequest.from_stored(stored).journey_mode is None

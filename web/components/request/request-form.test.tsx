@@ -222,6 +222,7 @@ describe("RequestForm", () => {
         budget_eur: 2400,
         preferences: "Quartieri tranquilli, cucina locale.",
         destination_idea: null,
+        journey_mode: null,
       },
       { demoScenario: null },
     );
