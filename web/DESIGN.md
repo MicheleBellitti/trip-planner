@@ -1007,8 +1007,9 @@ Its only client JavaScript is the theme toggle and `next/link`. Components live 
 
 ## Demo
 
-`/demo` is public and prerendered: the recorded `happy-path` run replayed in the browser through
-the live screen's own view (`PlanScreenView`), then the real finished plan. Decided with Michele
+`/demo` is public and prerendered: the recorded `choices` run (the happy path, with two questions
+for the traveller) replayed in the browser through the live screen's own view (`PlanScreenView`),
+then the real finished plan. Decided with Michele
 from a mockup on a real demo run, 2026-10-17. Components live in `web/components/demo/`, the
 replay in `web/lib/demo/`.
 
@@ -1021,11 +1022,20 @@ replay in `web/lib/demo/`.
   the events re-stamped on the replay's clock, which is also the elapsed time and the lanes' clock.
   It starts by itself after the live baseline settles, pauses while the page is hidden and never
   leaps more than a second; 2× rescales what is left.
+- **The questions** (plan decision 3): the replay holds on each one for 15 s of visible time (never
+  faster at 2×, stopped while the page is hidden), with the choice panel's countdown and the rule
+  "Se non scegli entro 15 secondi, la corsa prosegue con le scelte registrate.". Untouched, the
+  recording's picks show for 0.9 s and its answer lands; a visitor who picks takes over (no
+  countdown, the replay waits for "Continua" or "Scegli tu") and their answer becomes the
+  coordinator's station. The finished plan is the recording's either way. While a question waits
+  the tab title starts with "Tocca a te ·".
 - **The camera** (`AgentLanes follow="show"`): while the visitor only watches, the work stays on
   screen. On the phone the open card follows the agent at work, even on screen, and comes into
   view when the work moves to it; on wider layouts the coordinator's newest station stays in view.
   `block: "nearest"` moves the page only when something is out of view, smoothly unless reduced
-  motion is asked; the first scroll, key or toggle hands the page back. Live, `follow="reader"`
+  motion is asked; the first scroll, key or toggle hands the page back. A question holds the
+  camera (`cameraHeld`): the page goes to the cards, what the visitor does there does not count
+  as taking over, and once answered the camera aims at the work again. Live, `follow="reader"`
   never moves anything under a reader.
 - **Demo bar** (`DemoBar`), a row of its own in the live header's state group, in place of
   "Interrompi". While it plays: "Corsa dimostrativa: dati di esempio, gratis per te", "Ricomincia"
@@ -1036,9 +1046,10 @@ replay in `web/lib/demo/`.
   otherwise, since the form would only send a visitor to the login after it was filled in.
 - **The story agrees.** The detail carries the request the run was given (`lib/demo/request.ts`:
   children of 9 and 6, 2.800 €; the landing's samples say the same), and the finished line gives
-  the recorded run's own figures, "Corsa registrata: durata 1:17 · costo 0,41 $", not the replay's
+  the recorded run's own figures, "Corsa registrata: durata 1:33 · costo 0,41 $", not the replay's
   45 s. The plan's relative dates read on the recording's day (PlanView `now`, `PlanNowContext`),
-  so the showcase never turns amber or past. A notice says the prices are an example, the
+  so the showcase never turns amber or past. A notice says the prices are an example and the
+  choices do not change the plan, the
   hand-off below the plan matches the bar's ask in place of "Apri in TripTracker", and the
   booking links stay the real, allowlisted ones.
 

@@ -1,9 +1,9 @@
 /**
  * The request the recorded demo run was given (its first user message, in
- * lib/plan-events/__fixtures__/backend/happy-path.json): the demo's header, the coordinator's
- * first message and the plan's "sotto il budget" must tell the same story. The fixture plan's own
- * request (8 and 11 years, 2.400 €) came from another run; components/demo/demo-plan-screen.test
- * keeps this one equal to the recording.
+ * lib/plan-events/__fixtures__/backend/choices.json, the same as happy-path.json's): the demo's
+ * header, the coordinator's first message and the plan's "sotto il budget" must tell the same
+ * story. The fixture plan's own request (8 and 11 years, 2.400 €) came from another run;
+ * components/demo/demo-plan-screen.test keeps this one equal to the recording.
  */
 import type { PlanRequest } from "@/lib/schemas/generated/request";
 

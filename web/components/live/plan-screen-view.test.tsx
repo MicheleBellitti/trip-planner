@@ -174,6 +174,49 @@ describe("PlanScreenView, a question for the traveller", () => {
     expect(liveRegion().textContent).toBe("");
   });
 
+  it("holds the demo's camera while its question shows, and lets it aim again once answered", async () => {
+    const aimed = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = aimed;
+    try {
+      // The question waiting (up to 55), then alloggio's next stations (59, 60) with the question
+      // still open, then the answer (56) too.
+      const waiting = run.filter((event) => event.seq <= 55);
+      const working = [...waiting, ...run.filter((event) => event.seq === 59 || event.seq === 60)];
+      const answered = run.filter((event) => event.seq <= 60);
+      const shown = (events: UIEvent[], choice?: ChoiceControls) => (
+        <PlanScreenView
+          state={reducePlanEvents(events, { detail: { ...snapshot, created_at: run[0]!.ts, updated_at: run[0]!.ts } })}
+          detail={detail}
+          clock={Date.parse(events.at(-1)!.ts)}
+          stale={false}
+          connection="open"
+          header={<div />}
+          followLanes="show"
+          choice={choice}
+        />
+      );
+      // Without the cards on screen the camera follows alloggio's new stations...
+      const first = render(shown(waiting));
+      aimed.mockClear();
+      first.rerender(shown(working));
+      expect(aimed).toHaveBeenCalled();
+      cleanup();
+
+      // ...with them it holds still, and aims again once the answer lands and they go.
+      const { rerender } = render(shown(waiting, controls()));
+      await screen.findByRole("region", { name: "Cosa ti va di vedere?" });
+      aimed.mockClear();
+      rerender(shown(working, controls()));
+      expect(aimed).not.toHaveBeenCalled();
+      rerender(shown(answered, controls()));
+      expect(screen.queryByRole("region", { name: "Cosa ti va di vedere?" })).toBeNull();
+      expect(aimed).toHaveBeenCalled();
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
   it("shows no cards without the controls, or once the page has answered", async () => {
     const props = { state: stateAt(55), detail, clock: DEADLINE - 200_000, stale: false, connection: "open" as const, header: <div /> };
     const { rerender } = render(<PlanScreenView {...props} choice={controls()} />);

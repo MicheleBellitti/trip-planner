@@ -3,12 +3,13 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 
 import { BRAND_NAME } from "@/lib/brand";
 import { DEMO_REQUEST } from "@/lib/demo/request";
-import { REPLAY_TARGET_MS } from "@/lib/demo/schedule";
-import { REPLAY_SETTLE_MS } from "@/lib/demo/use-replay-events";
-import backend from "@/lib/plan-events/__fixtures__/backend/happy-path.json";
+import { REPLAY_TARGET_MS, replaySchedule } from "@/lib/demo/schedule";
+import { AUTO_PICK_SHOW_MS, DEMO_CHOICE_WINDOW_MS, REPLAY_SETTLE_MS } from "@/lib/demo/use-replay-events";
+import backend from "@/lib/plan-events/__fixtures__/backend/choices.json";
 import { SETTLE_MS } from "@/components/live/hooks";
 import { PLAN_STATE_ID } from "@/components/live/live-header";
 import { ROUTES, WAITLIST_HREF } from "@/lib/routes";
+import type { UIEvent } from "@/lib/schemas/generated/ui-event";
 
 import { DemoPlanScreen } from "./demo-plan-screen";
 
@@ -23,8 +24,8 @@ vi.mock("@/components/live/live-api", () => {
 const network = { fetch: vi.fn(), EventSource: vi.fn() };
 
 beforeAll(async () => {
-  // The finished plan's lazy chunk, loaded once outside the fake clock.
-  await import("@/components/plan/PlanView");
+  // The finished plan's and the choice's lazy chunks, loaded once outside the fake clock.
+  await Promise.all([import("@/components/plan/PlanView"), import("@/components/choice/choice-panel")]);
 });
 
 beforeEach(() => {
@@ -53,18 +54,109 @@ async function advance(ms: number) {
   });
 }
 
-const WHOLE_RUN = REPLAY_SETTLE_MS + REPLAY_TARGET_MS + 2_000;
+/** The recording replayed: the compressed schedule, and each of its two questions held for its
+ * window and the recorded picks. */
+const EVENTS = backend.events as unknown as UIEvent[];
+const OFFSETS = replaySchedule(EVENTS);
+const at = (seq: number) => OFFSETS[EVENTS.findIndex((event) => event.seq === seq)]!;
+const HOLD = DEMO_CHOICE_WINDOW_MS + AUTO_PICK_SHOW_MS;
+const WHOLE_RUN = REPLAY_SETTLE_MS + REPLAY_TARGET_MS + 2 * HOLD + 2_000;
 const finishedPlan = () => screen.queryAllByText(/Cinque giorni a Lisbona/);
+const SEE = "Cosa ti va di vedere?";
+const EAT = "Che cucina cerchi?";
+const question = (name: string) => screen.queryByRole("region", { name });
+const coordinator = () => document.querySelector('section[data-agent="coordinator"]') as HTMLElement;
+const DEMO_RULE = "Se non scegli entro 15 secondi, la corsa prosegue con le scelte registrate.";
+const PAGE_TITLE = `Corsa dimostrativa · ${BRAND_NAME}`;
 
 describe("DemoPlanScreen", () => {
-  it("plays the recorded run by itself to the finished plan, never reaching the backend", async () => {
+  it("plays the whole recording by itself, pausing on both questions, to the finished plan, never reaching the backend", async () => {
+    document.title = PAGE_TITLE;
     render(<DemoPlanScreen />);
     expect(screen.getByText("Corsa dimostrativa: dati di esempio, gratis per te")).toBeTruthy();
     expect(finishedPlan()).toHaveLength(0);
+
+    // The first question: the cards, and the tab says it is the visitor's turn.
+    await advance(REPLAY_SETTLE_MS + at(53) + 100);
+    expect(question(SEE)).not.toBeNull();
+    expect(document.title).toBe(`Tocca a te · ${PAGE_TITLE}`);
+    // It waits for the visitor (the coordinator's waiting idle lands, the answer does not)...
+    await advance(DEMO_CHOICE_WINDOW_MS - 1_000);
+    expect(question(SEE)).not.toBeNull();
+    expect(coordinator().textContent).not.toContain("Hai scelto");
+    // ...then the recording picks, and its answer becomes the coordinator's station.
+    await advance(AUTO_PICK_SHOW_MS + 1_000);
+    expect(question(SEE)).toBeNull();
+    expect(coordinator().textContent).toContain("Hai scelto: Oceanário de Lisboa, Palácio da Pena a Sintra");
+    expect(document.title).toBe(PAGE_TITLE);
+
+    // The second question, the same way.
+    await advance(at(77) - at(56));
+    expect(question(EAT)).not.toBeNull();
+    expect(document.title).toBe(`Tocca a te · ${PAGE_TITLE}`);
+    await advance(HOLD + 100);
+    expect(question(EAT)).toBeNull();
+    expect(coordinator().textContent).toContain("Hai scelto: Tascas di quartiere, Pesce alla griglia");
+    expect(document.title).toBe(PAGE_TITLE);
+
     await advance(WHOLE_RUN);
     expect(finishedPlan().length).toBeGreaterThan(0);
     expect(network.fetch).not.toHaveBeenCalled();
     expect(network.EventSource).not.toHaveBeenCalled();
+  });
+
+  it("a visitor's picks become the coordinator's station, and the notice says the plan does not change", async () => {
+    render(<DemoPlanScreen />);
+    await advance(REPLAY_SETTLE_MS + at(53) + 100);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Torre di Belém e Mosteiro dos Jerónimos" }));
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    fireEvent.click(screen.getByRole("button", { name: "Continua con questa" }));
+    await advance(50);
+    expect(question(SEE)).toBeNull();
+    expect(coordinator().textContent).toContain("Hai scelto: Torre di Belém e Mosteiro dos Jerónimos");
+    expect(document.activeElement?.id).toBe(PLAN_STATE_ID);
+    // The state is in the sticky header: the focus must not scroll the page away from the work.
+    const toState = focus.mock.contexts.findIndex((element) => (element as HTMLElement).id === PLAN_STATE_ID);
+    expect(focus.mock.calls[toState]).toEqual([{ preventScroll: true }]);
+    focus.mockRestore();
+
+    await advance(WHOLE_RUN);
+    expect(finishedPlan().length).toBeGreaterThan(0);
+    expect(document.body.textContent).toContain(
+      "Una corsa registrata: prezzi e disponibilità sono un esempio, e le scelte non cambiano il piano. I link portano ai siti veri.",
+    );
+  });
+
+  it("the countdown shows 0:15 and the demo's rule, and both go once a card is picked", async () => {
+    render(<DemoPlanScreen />);
+    await advance(REPLAY_SETTLE_MS + at(53));
+    const panel = question(SEE)!;
+    expect(panel.textContent).toContain("Tempo per scegliere: 0:15");
+    expect(within(panel).getByText(`Scegli quelle che ti piacciono, anche più di una. ${DEMO_RULE}`)).toBeTruthy();
+    // At 2× too, it counts down in real seconds (the clock ticks every 250 ms: a little past 5 s).
+    fireEvent.click(screen.getByRole("button", { name: "2×, velocità doppia" }));
+    await advance(5_250);
+    expect(panel.textContent).toContain("Tempo per scegliere: 0:10");
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Oceanário de Lisboa" }));
+    expect(panel.textContent).not.toContain("Tempo per scegliere");
+    expect(within(panel).getByText("Scegli quelle che ti piacciono, anche più di una.")).toBeTruthy();
+    // The replay now waits for the visitor, however long they take.
+    await advance(60_000);
+    expect(question(SEE)).not.toBeNull();
+    expect(coordinator().textContent).not.toContain("Hai scelto");
+  });
+
+  it("lands the recorded answers on 'Salta al piano' during a question, and gives the tab its title back", async () => {
+    document.title = PAGE_TITLE;
+    render(<DemoPlanScreen />);
+    await advance(REPLAY_SETTLE_MS + at(53) + 2_000);
+    expect(document.title).toBe(`Tocca a te · ${PAGE_TITLE}`);
+    fireEvent.click(screen.getByRole("button", { name: "Salta al piano" }));
+    await advance(50);
+    expect(finishedPlan().length).toBeGreaterThan(0);
+    expect(question(SEE)).toBeNull();
+    expect(document.title).toBe(PAGE_TITLE);
   });
 
   it("draws in the very first replayed station: it lands after the live baseline settles", async () => {
@@ -205,7 +297,7 @@ describe("DemoPlanScreen", () => {
     render(<DemoPlanScreen />);
     await advance(WHOLE_RUN);
     expect(screen.getByRole("group", { name: "Stato del piano" }).textContent).toMatch(
-      /Corsa registrata: durata 1:17 · costo 0,41\s\$/,
+      /Corsa registrata: durata 1:33 · costo 0,41\s\$/,
     );
   });
 

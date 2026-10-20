@@ -11,6 +11,7 @@
  * The choice (the coordinator's `ask_traveller` pause, components/choice/choice-panel.tsx) shows
  * while the plan runs and the data source gives its controls: first under the live header on the
  * phone, under the lanes from 1080 px. The page's one live region says once that a minute is left.
+ * While it shows, the demo's camera holds still (AgentLanes `cameraHeld`).
  */
 
 import { lazy, Suspense, useMemo, useState, type ReactNode } from "react";
@@ -225,6 +226,7 @@ export function PlanScreenView({
       freshAfterSeq={baseline.freshAfterSeq}
       stale={stale}
       follow={followLanes}
+      cameraHeld={choicePanel !== null}
     />
   );
 
