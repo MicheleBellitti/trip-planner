@@ -111,7 +111,7 @@ export function placeErrors(errors: FieldErrors, targets: readonly ErrorTarget[]
 /** The request's generic "Campo obbligatorio.", said for the field it is about. */
 const REQUIRED = requestErrorMessage("missing");
 const REQUIRED_MESSAGES: Readonly<Record<string, string>> = {
-  origin: "Indica da dove parti: una città o un aeroporto.",
+  origin: "Indica da dove parti: una città, una stazione o un aeroporto.",
   budget_eur: "Indica il budget totale, in euro.",
 };
 

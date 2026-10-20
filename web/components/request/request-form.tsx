@@ -243,13 +243,13 @@ export function RequestForm({ today, initialValues, restoreLast = false, demoSce
 
   const tripSection = (
     <Section title="Il viaggio" className={desktop || !summary ? "max-lg:border-t-0 max-lg:pt-0" : undefined}>
-      <Field id={fieldId("origin")} label="Da dove parti" hint="Una città o un aeroporto" error={errors.origin}>
+      <Field id={fieldId("origin")} label="Da dove parti" hint="Una città, una stazione o un aeroporto" error={errors.origin}>
         {(control) => (
           <TextInput
             {...control}
             value={values.origin}
             maxLength={maxLength("origin")}
-            placeholder="Milano, oppure MXP"
+            placeholder="Per esempio Milano"
             autoComplete="off"
             enterKeyHint="next"
             onChange={(event) => change({ origin: event.target.value }, is("origin"))}
@@ -285,7 +285,7 @@ export function RequestForm({ today, initialValues, restoreLast = false, demoSce
               rows={2}
               value={values.destinationIdea}
               maxLength={maxLength("destination_idea")}
-              placeholder="Mare a novembre, volo diretto"
+              placeholder="Mare a novembre, poche ore di viaggio"
               onChange={(event) => change({ destinationIdea: event.target.value }, is("destination_idea"))}
             />
           )}
@@ -499,7 +499,7 @@ export function RequestForm({ today, initialValues, restoreLast = false, demoSce
       <Field
         id={fieldId("budget_eur")}
         label="Budget totale"
-        hint="Per tutto il gruppo: voli, alloggio, attività e spostamenti."
+        hint="Per tutto il gruppo: viaggio, alloggio, attività e spostamenti."
         error={errors.budget_eur}
       >
         {(control) => (
@@ -537,7 +537,7 @@ export function RequestForm({ today, initialValues, restoreLast = false, demoSce
             {...control}
             value={values.preferences}
             maxLength={maxLength("preferences")}
-            placeholder="Niente voli prima delle 8, quartiere tranquillo, cucina locale"
+            placeholder="Partenza non prima delle 8, quartiere tranquillo, cucina locale"
             className="lg:min-h-20"
             onChange={(event) => change({ preferences: event.target.value }, is("preferences"))}
           />

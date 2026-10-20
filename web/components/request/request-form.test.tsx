@@ -73,7 +73,7 @@ describe("RequestForm", () => {
     expect(origin.getAttribute("aria-invalid")).toBe("true");
     const described = (origin.getAttribute("aria-describedby") ?? "").split(" ");
     expect(described.map((id) => document.getElementById(id)?.textContent)).toContain(
-      "Indica da dove parti: una città o un aeroporto.",
+      "Indica da dove parti: una città, una stazione o un aeroporto.",
     );
     expect(screen.getByLabelText("Partenza").getAttribute("aria-invalid")).toBe("true");
     // Five problems: the summary takes the focus, counts them, and links to the fields by name only.
@@ -312,6 +312,17 @@ describe("RequestForm", () => {
     // The same rows: switching mode never moves the button below the card.
     expect(facts()).toHaveLength(4);
     expect(facts()[0]).toBe("In traghetto");
+  });
+
+  it("assumes no mode of travel in its hints and examples, the mode being a choice now", () => {
+    render(<RequestForm today={TODAY} initialValues={emptyRequestForm()} />);
+    const form = screen.getByRole("form", { name: "Richiesta di viaggio" });
+    const placeholders = Array.from(form.querySelectorAll("[placeholder]"), (field) => field.getAttribute("placeholder") ?? "");
+    for (const text of [form.textContent ?? "", ...placeholders]) expect(text).not.toMatch(/\bvol[oi]\b|\bMXP\b/i);
+    // Where from: a station is as good as an airport.
+    const origin = screen.getByLabelText("Da dove parti");
+    const described = (origin.getAttribute("aria-describedby") ?? "").split(" ").map((id) => document.getElementById(id)?.textContent);
+    expect(described).toContain("Una città, una stazione o un aeroporto");
   });
 
   it("explains on foot or with the car under the chips, only for those two modes", () => {

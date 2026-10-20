@@ -167,7 +167,7 @@ describe("withFieldWording", () => {
     expect(
       withFieldWording({ origin: "Campo obbligatorio.", budget_eur: "Campo obbligatorio.", destination: "Campo obbligatorio." }),
     ).toEqual({
-      origin: "Indica da dove parti: una città o un aeroporto.",
+      origin: "Indica da dove parti: una città, una stazione o un aeroporto.",
       budget_eur: "Indica il budget totale, in euro.",
       destination: "Campo obbligatorio.",
     });
