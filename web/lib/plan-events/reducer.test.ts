@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
+import { readAskedChoice } from "../choices";
 import { PlanDetailSchema } from "../schemas/api";
 import { UIEventSchema, type UIEvent } from "../schemas/generated/ui-event";
 import budgetPaused from "./__fixtures__/budget-paused.json";
+import choicesFixture from "./__fixtures__/backend/choices.json";
 import happyPath from "./__fixtures__/happy-path.json";
 import { AGENTS, LANE_STATE_LABELS } from "./labels";
 import {
@@ -323,5 +325,85 @@ describe("virtualization", () => {
       totalHeight: 0,
     });
     expect(virtualWindow({ count: 10, rowHeight: 40, scrollTop: 99_999, viewportHeight: 400, overscan: 2 }).end).toBe(10);
+  });
+});
+
+describe("the open choice", () => {
+  const choiceEvents: UIEvent[] = choicesFixture.events.map((event) => UIEventSchema.parse(event));
+  const upToChoice = (seq: number) => choiceEvents.filter((event) => event.seq <= seq);
+  const between = (from: number, to: number) => choiceEvents.filter((event) => event.seq > from && event.seq <= to);
+  const askedActivities = choiceEvents.find((event) => event.seq === 53);
+  if (!askedActivities) throw new Error("choices.json lost its choice events");
+  const activitiesChoice = readAskedChoice(askedActivities.detail);
+  if (!activitiesChoice) throw new Error("seq 53 is not an asked choice");
+  const running = { ...happyDetail, status: "running" as const, pending_choice: null };
+  const withPending = { ...running, pending_choice: (askedActivities.detail as { choice: unknown }).choice };
+
+  it("opens the choice when its asked event lands and closes it when its answered event lands", () => {
+    expect(feed(upToChoice(52)).openChoice).toBeNull();
+
+    const open = feed(upToChoice(53)).openChoice;
+    expect(open?.choice.id).toBe(activitiesChoice.id);
+    expect(open?.seq).toBe(53);
+    expect(open?.ts).toBe(askedActivities.ts);
+    expect(open?.title).toBe("Tocca a te: scegli cosa vedere");
+
+    expect(feed(upToChoice(55)).openChoice?.choice.id).toBe(activitiesChoice.id);
+    expect(feed(upToChoice(56)).openChoice).toBeNull();
+  });
+
+  it("the second question opens after the first is answered (one at a time)", () => {
+    const open = feed(upToChoice(77)).openChoice;
+    expect(open?.seq).toBe(77);
+    expect(open?.title).toBe("Tocca a te: scegli cosa mangiare");
+    expect(open?.choice.id).not.toBe(activitiesChoice.id);
+    expect(feed(upToChoice(80)).openChoice).toBeNull();
+  });
+
+  it("an answered event that arrives out of order still closes its choice", () => {
+    const state = feed([...upToChoice(55), ...between(56, 60), ...between(55, 56)]);
+    expect(state.openChoice).toBeNull();
+  });
+
+  it("the snapshot's open choice shows until its answered event arrives", () => {
+    let state = planEventsReducer(initialPlanLiveState(), { type: "detail", detail: withPending });
+    expect(state.openChoice?.choice.id).toBe(activitiesChoice.id);
+    expect(state.openChoice?.seq).toBeNull();
+    expect(state.openChoice?.ts).toBe(activitiesChoice.askedAt);
+    expect(state.openChoice?.title).toBe(askedActivities.title);
+
+    // The replay starts at the top: the snapshot's choice stays until the stream says more.
+    state = feed(upToChoice(52), state);
+    expect(state.openChoice?.seq).toBeNull();
+    state = feed(between(52, 53), state);
+    expect(state.openChoice?.seq).toBe(53);
+
+    // The answer lands: the panel goes, and the stale snapshot never brings it back.
+    state = feed(between(53, 56), state);
+    expect(state.openChoice).toBeNull();
+    state = planEventsReducer(state, { type: "detail", detail: withPending });
+    expect(state.openChoice).toBeNull();
+  });
+
+  it("no open choice unless running: budget_paused, interrupted, ready", () => {
+    const asked = feed(upToChoice(53));
+    expect(asked.openChoice).not.toBeNull();
+    for (const status of ["budget_paused", "interrupted", "ready", "failed", "blocked"] as const) {
+      expect(planEventsReducer(asked, { type: "end", status }).openChoice, status).toBeNull();
+      const snapshot = planEventsReducer(initialPlanLiveState(), { type: "detail", detail: { ...withPending, status } });
+      expect(snapshot.openChoice, status).toBeNull();
+    }
+  });
+
+  it("a choice asked again after Continua is open again, with its original deadline", () => {
+    let state = planEventsReducer(feed(upToChoice(53)), {
+      type: "detail",
+      detail: { ...running, status: "budget_paused" },
+    });
+    expect(state.openChoice).toBeNull();
+    state = planEventsReducer(state, { type: "detail", detail: withPending });
+    expect(state.openChoice?.choice.id).toBe(activitiesChoice.id);
+    expect(state.openChoice?.choice.deadlineAt).toBe(activitiesChoice.deadlineAt);
+    expect(state.openChoice?.seq).toBe(53);
   });
 });

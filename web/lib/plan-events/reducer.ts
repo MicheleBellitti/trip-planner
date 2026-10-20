@@ -32,8 +32,16 @@
  * - the plan's status is laid over the lanes: `ready` finishes the coordinator and every working
  *   lane; `budget_paused`, `interrupted`, `failed` and `blocked` stop working lanes (`stopped`),
  *   and `failed`/`blocked` mark the coordinator in error.
+ *
+ * The open choice (`openChoice`, lib/choices.ts): a `choice` event "asked" opens a question, the
+ * "answered" event with the same id closes it. The fold keeps the asked ones and the answered ids,
+ * so an out-of-order arrival refolds like anything else. The open one is the latest asked
+ * question without an answer; failing that, the snapshot's `pending_choice` (a reload during the
+ * pause shows the cards before the stream replays), unless an answered event for it was folded.
+ * It exists only while the plan is `running` (or its status is still unknown).
  */
 
+import { askedTitle, readAskedChoice, readChoice, readChoiceAnswer, type ChoiceView } from "../choices";
 import type { PlanDetail, PlanStatus } from "../schemas/api";
 import type { AgentName, UIEvent } from "../schemas/generated/ui-event";
 import {
@@ -112,6 +120,16 @@ export interface Announcement {
   text: string;
 }
 
+/** A question the coordinator put to the traveller, as the page shows it. */
+export interface OpenChoice {
+  choice: ChoiceView;
+  /** The asked event; null when the choice comes from the snapshot. */
+  seq: number | null;
+  ts: string;
+  /** The event's own title, or `askedTitle(kind)` from the snapshot. */
+  title: string;
+}
+
 interface StatusMark {
   status: PlanStatus;
   /** When it took effect: the event's `ts`, or the snapshot's `updated_at`. */
@@ -126,6 +144,7 @@ interface DetailSnapshot {
   updatedAt: string;
   failureReason: string | null;
   submitAttempts: number;
+  pendingChoice: ChoiceView | null;
 }
 
 /** What the ordered events say; rebuilt by folding them in seq order. */
@@ -140,6 +159,10 @@ interface EventFold {
   submissions: number;
   rejections: number;
   planAccepted: boolean;
+  /** Asked choices, ascending by seq. */
+  askedChoices: readonly OpenChoice[];
+  /** Ids of the choices an answered event closed. */
+  answeredChoiceIds: ReadonlySet<string>;
 }
 
 export interface PlanLiveState {
@@ -172,6 +195,8 @@ export interface PlanLiveState {
   planAccepted: boolean;
   /** The plan is `ready`: fetch GET /plans/{id} for the finished plan. */
   planReady: boolean;
+  /** The question waiting for the traveller: only while the plan is `running` (or unknown). */
+  openChoice: OpenChoice | null;
   failureReason: string | null;
   /** For the aria-live="polite" region: lane state changes only, never tool calls. */
   announcement: Announcement | null;
@@ -185,7 +210,11 @@ export type PlanEventsAction =
   | { type: "reset" }
   | { type: "events"; events: readonly UIEvent[] }
   | { type: "end"; status: PlanStatus }
-  | { type: "detail"; detail: Pick<PlanDetail, "status" | "cost_cents" | "budget_cents" | "created_at" | "updated_at" | "failure_reason" | "submit_attempts"> };
+  | { type: "detail"; detail: Pick<PlanDetail, "status" | "cost_cents" | "budget_cents" | "created_at" | "updated_at" | "failure_reason" | "submit_attempts"> & {
+      /** A GET /plans/{id} `pending_choice`; optional, read tolerantly. */
+      pending_choice?: unknown;
+    };
+  };
 
 // --- helpers --------------------------------------------------------------------------------
 
@@ -238,6 +267,8 @@ function emptyFold(): EventFold {
     submissions: 0,
     rejections: 0,
     planAccepted: false,
+    askedChoices: [],
+    answeredChoiceIds: new Set(),
   };
 }
 
@@ -310,7 +341,7 @@ function applyEvent(fold: EventFold, event: UIEvent): EventFold {
     events: [...previous.events, event],
     lastActivityAt: event.ts,
   };
-  let { messages, submissions, rejections, planAccepted } = fold;
+  let { messages, submissions, rejections, planAccepted, askedChoices, answeredChoiceIds } = fold;
 
   switch (event.kind) {
     case "status": {
@@ -386,6 +417,21 @@ function applyEvent(fold: EventFold, event: UIEvent): EventFold {
       if (lane.activity !== "error") lane.activity = "working";
       break;
     }
+    case "choice": {
+      // The coordinator waits for the traveller: its activity stays as it was.
+      const asked = readAskedChoice(detail);
+      if (asked) {
+        askedChoices = [
+          ...askedChoices.filter((open) => open.choice.id !== asked.id),
+          { choice: asked, seq: event.seq, ts: event.ts, title: event.title },
+        ];
+      }
+      const answer = readChoiceAnswer(detail);
+      if (answer && !answeredChoiceIds.has(answer.choiceId)) {
+        answeredChoiceIds = new Set(answeredChoiceIds).add(answer.choiceId);
+      }
+      break;
+    }
     case "usage":
       break;
   }
@@ -402,6 +448,8 @@ function applyEvent(fold: EventFold, event: UIEvent): EventFold {
     submissions,
     rejections,
     planAccepted,
+    askedChoices,
+    answeredChoiceIds,
   };
 }
 
@@ -455,6 +503,16 @@ function effectiveStatus(
   return fromEvents ? { status: fromEvents.status, at: fromEvents.at } : { status: null, at: null };
 }
 
+function openChoiceOf(fold: EventFold, snapshot: DetailSnapshot | null, status: PlanStatus | null): OpenChoice | null {
+  if (status !== null && status !== "running") return null;
+  const asked = fold.askedChoices.filter((open) => !fold.answeredChoiceIds.has(open.choice.id));
+  const latest = asked[asked.length - 1];
+  if (latest) return latest;
+  const pending = snapshot?.pendingChoice;
+  if (!pending || fold.answeredChoiceIds.has(pending.id)) return null;
+  return { choice: pending, seq: null, ts: pending.askedAt, title: askedTitle(pending.kind) };
+}
+
 function derive(
   previous: PlanLiveState | null,
   events: UIEvent[],
@@ -490,6 +548,7 @@ function derive(
     rejections: fold.rejections,
     planAccepted: fold.planAccepted || status === "ready",
     planReady: status === "ready",
+    openChoice: openChoiceOf(fold, snapshot, status),
     failureReason: snapshot?.failureReason ?? null,
     announcement: changed.length > 0 ? { id: lastId + 1, text: changed.join("; ") } : (previous?.announcement ?? null),
     fold,
@@ -552,6 +611,7 @@ export function planEventsReducer(state: PlanLiveState, action: PlanEventsAction
         updatedAt: detail.updated_at,
         failureReason: detail.failure_reason,
         submitAttempts: detail.submit_attempts,
+        pendingChoice: readChoice(detail.pending_choice),
       };
       return derive(state, state.events, state.fold, snapshot, state.endStatus);
     }
