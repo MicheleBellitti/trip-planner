@@ -24,9 +24,9 @@ import { cx } from "@/components/ui/cx";
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
 
-import { CoverCredit } from "./cover-credit";
 import { coverSources } from "./cover-sources";
 import { useCover, type CoverLoader } from "./cover-store";
+import { CoverCredit } from "./credit-line";
 
 /** The frame: also the loading block, so the photo's arrival moves nothing. 8 rem on the phone, so
  * "Da prenotare" stays in the first screen; 18 rem from 1080 px. */

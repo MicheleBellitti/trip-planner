@@ -686,6 +686,7 @@ sheet, a toast) or marks the present (the live plate). Cards, notices, chips and
 | Lozenge | an interchange (message between agents) | 18 × 12 px, 2.5 px ink edge, 7 px radius |
 | Red cross, line broken above | the lane stopped on an error | `x-circle` 20 px on a surface disc |
 | Thick ring and halo | the live station | 18 px, 4 px line-colour ring, halo while running |
+| Thick ring, no halo | the line waits for the traveller | 18 px, 4 px line-colour ring, no halo |
 | Dashed stub | the next stop | 3 px dashed line at 70 % |
 | Dashed line with an empty ring | a lane still waiting | as above, with a hollow ring on top |
 | Dashed ring (a badge glyph) | a lane that never started on a plan that is over ("Non partita") | 15 px box, eight dashes, 2.5 px stroke in ink-2 |
@@ -712,7 +713,9 @@ or shape (there is no class merging, on purpose: see JavaScript weight below).
 | `Notice`, `InlineStatus` | `notice.tsx` | Framed note; the discreet one-line status | info, warning (the MCP-source style), error with title and action; turning, static |
 | `DatePair`, `formatBookingInstant` | `date-pair.tsx` | "Prenota entro" and "Quando" | due soon (amber), not due, past, book now, none, pending, unknown, `now` null; `fields`, `compact` |
 | `isDueSoon`, `dueDistance`, `DUE_SOON_HOURS` | `due-soon.ts` | The 72-hour rule and "tra 2 giorni" | |
-| `Timeline`, `TimelineItem`, `TimelineTitle`, `TimelineMeta`, `TimelineNext`, `TimelineWaiting`, `TimelineEarlier` | `timeline.tsx` | A lane's line of stations | the nine glyphs above; `fresh`; `TimelineEarlier`: the folded start of a long line |
+| `Timeline`, `TimelineItem`, `TimelineTitle`, `TimelineMeta`, `TimelineNext`, `TimelineWaiting`, `TimelineEarlier` | `timeline.tsx` | A lane's line of stations | the ten glyphs above; `fresh`; `halo` (off while the line waits for the traveller); `TimelineEarlier`: the folded start of a long line |
+| `ChoiceCard` | `choice-card.tsx` | One option of the traveller's choice: a native checkbox or radio drawn as a card, photo on top (Choice cards, below) | photo, tile, no photo area (`media` 4:3, 16:10, `none`); picked, not; checkbox, radio; disabled; chips or none; credit open, closed |
+| `Countdown` | `countdown.tsx` | The time left to choose: "4:12" beside a thin ink bar, clamped to the window and to zero | running (`now` null shows the whole window), expired ("Tempo scaduto: scelgo io.") |
 | `Sheet` | `sheet.tsx` | Modal on native `<dialog>`: bottom sheet on the phone, centred dialog from 768 px | open, closing; Esc, scrim tap, close button |
 | `Toaster`, `toast`, `dismissToast` | `toast.tsx` | One message confirming the user's own action | neutral (5 s), error (stays) |
 | `Skeleton` | `skeleton.tsx` | Placeholder in the final shape | line, block, round |
@@ -759,6 +762,48 @@ or shape (there is no class merging, on purpose: see JavaScript weight below).
   full, a burst of requests, is the same: nothing failed, so it is never red); error on `error-wash`
   with a soft error edge and the red cross, a semibold title saying what happened, the body saying
   what was saved and what to do, an optional quiet action.
+
+### Choice cards
+
+When the coordinator asks the traveller ("Tocca a te: scegli cosa vedere"), each option is a
+`ChoiceCard` and the time left is a `Countdown` (spec `2026-10-18-plan-creation-ux-design.md` §2,
+the mockup in Atlas's tokens).
+
+- **Anatomy:** a `rounded-md` `surface` card with a 1 px `rule` edge, flat. On top the photo, 4:3
+  (16:10 for food), empty alt (the title names the place), lazy, from Wikimedia's thumbnails like
+  the covers (a third of the page from 1080 px, half below). When some options of a question have
+  a photo, the others show the cover tile (`notice-wash`, the title's initial in `ink-2`) at the
+  same ratio, so a row stays level; when none has one, there is no photo area at all (a tile is
+  not a photo). Then the title (condensed 600, title size), the reason (`small`, `ink-2`) and, at
+  the card's foot, quiet chips with their glyph: duration, price for the party (the option's
+  currency, Italian format), area; screen readers hear "Durata: ", "Prezzo per il gruppo: ",
+  "Zona: " before each value. An unknown value has no chip, and a missing price is never
+  "gratis".
+- **The control is native:** a visually hidden checkbox (several picks) or radio (one, grouped
+  by `name`) whose label stretches over the whole card, so a tap anywhere picks it; the reason and
+  the chips describe it. Keyboard focus draws the focus ring around the card.
+- **Picked:** a 2 px ink inset ring, drawn over the photo so nothing moves, and the tick roundel
+  at the top right fills. The roundel is 24 px, hollow on `surface` with a `rule-strong` edge (ink
+  on hover), ink with a `check` in `on-action` when picked, on a `surface` disc so it reads on any
+  photo.
+- **Disabled** (the answer is on its way, or the time is up): the input rests, the cursor says
+  not-allowed and the photo stops zooming. The card keeps its full opacity, so its words read
+  (55 % is for buttons).
+- **The credit** is a legal requirement, reachable on every card without crowding it: a round
+  `info` button on the photo's bottom right ("Crediti della foto", `aria-expanded`, on a `surface`
+  disc, 44 px under a finger) shows a solid `surface` strip across the photo's foot with the
+  covers' wording, "Foto: Jose Manuel (CC BY 2.5), Wikimedia Commons", the license and the source
+  as new-tab links. The button and its links sit above the label, so they never pick the card. A
+  photo that does not load leaves the tile, and takes its credit with it.
+- **The countdown:** "4:12" with a clock glyph, beside a thin bar: an ink fill on a `rule` track,
+  scaled from the left by the time left over the question's window. A second that has begun
+  counts ("4:00" when the question opens, "0:01" in its last one), and the time is clamped to the
+  window and to zero, so a browser clock minutes off never shows more or less. At zero: "Tempo
+  scaduto: scelgo io." and an empty bar. **Never amber** (it belongs to booking deadlines) and
+  never red (running out is the rule at work, not a failure). It is not a live region: the page says
+  "Manca un minuto per scegliere." once, through its own.
+- **Motion:** the photo's slow zoom on hover (Motion), and nothing else. Cards do not animate in
+  or when picked, and the countdown's bar does not ease: it reports the time.
 
 ### Inputs / Fields
 
@@ -839,6 +884,7 @@ space:
 | A lane opens on the phone | its body expands (grid rows 0fr to 1fr, the layout exception above), 240 ms expo | jumps |
 | "Vai all'ultimo" appears | fades in and rises 8 px, 200 ms expo (the toast's animation) | fades in, 120 ms |
 | A cover photo arrives | fades in over its tile, 260 ms expo | fades in, 120 ms |
+| A choice card is hovered | its photo zooms slowly to 1.04, 700 ms ease-out (`--duration-zoom`); not on a disabled card | still |
 | Sheet | phone: rises from the bottom edge, desktop: rises 8 px; 240 ms expo; scrim fades | fades only, 120 ms |
 | Toast | fades in and rises 8 px, 200 ms expo | fades in, 120 ms |
 | Skeleton | breathes between 100 % and 55 % opacity, 1.6 s | still |
@@ -900,9 +946,9 @@ copied, by hand, with a provenance comment. What was decided:
 
 `/plans/[id]` has a 180 KB gzip first-load target. The design system adds no runtime dependency:
 no animation library (all motion is CSS), no icon package (a sprite in HTML), no `clsx`,
-`tailwind-merge` or `class-variance-authority`. Only `Sheet`, `Toaster` and `ThemeToggle` are
-Client Components; everything else renders on the server or inside the screen's own client tree
-without hooks.
+`tailwind-merge` or `class-variance-authority`. Only `Sheet`, `Toaster`, `ThemeToggle` and
+`ChoiceCard` (its credit opens on demand) are Client Components; everything else renders on the
+server or inside the screen's own client tree without hooks.
 
 The one exception is the itinerary map's `maplibre-gl` (about 250 KB gzip with its worker), which
 lives in a lazy chunk loaded only when the map is near the viewport (Map, above), so it is not part of

@@ -6,6 +6,7 @@ import { AgentRoundel } from "@/components/ui/agent";
 import { Button, LinkButton } from "@/components/ui/button";
 import { Chip, ToolChip } from "@/components/ui/chip";
 import { CostMeter } from "@/components/ui/cost-meter";
+import { Countdown } from "@/components/ui/countdown";
 import { DatePair } from "@/components/ui/date-pair";
 import { Disclosure } from "@/components/ui/disclosure";
 import { Icon } from "@/components/ui/icon";
@@ -28,12 +29,24 @@ import { Toaster } from "@/components/ui/toast";
 import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { Wordmark } from "@/components/ui/wordmark";
 import { BRAND_TAGLINE } from "@/lib/brand";
+import { readAskedChoice, type ChoiceOptionView } from "@/lib/choices";
+import choicesFixture from "@/lib/plan-events/__fixtures__/backend/choices.json";
 import { AGENTS, AGENT_LABELS } from "@/lib/plan-events/labels";
 import type { LaneBadgeState } from "@/lib/plan-events/labels";
 import type { PlanStatus } from "@/lib/schemas/api";
+import type { UIEvent } from "@/lib/schemas/generated/ui-event";
 import { ROUTES } from "@/lib/routes";
 
-import { FoldedLineDemo, FormDemo, FreshStationDemo, MeterDemo, SheetDemo, ToastDemo } from "./demos";
+import {
+  ChoiceCardStill,
+  ChoiceGroupDemo,
+  FoldedLineDemo,
+  FormDemo,
+  FreshStationDemo,
+  MeterDemo,
+  SheetDemo,
+  ToastDemo,
+} from "./demos";
 
 export const metadata: Metadata = {
   title: "Componenti",
@@ -561,6 +574,10 @@ export default function ComponentGalleryPage() {
           </ThemePair>
         </Section>
 
+        <Section title="Scelte">
+          <ChoiceStates />
+        </Section>
+
         <Section title="Sheet e messaggi">
           <ThemePair>
             <div className="grid gap-4">
@@ -659,6 +676,74 @@ function Row({ label, stack = false, children }: { label: string; stack?: boolea
       <p className="text-micro text-ink-2">{label}</p>
       <div className={stack ? "grid gap-2" : "flex flex-wrap items-center gap-2"}>{children}</div>
     </div>
+  );
+}
+
+/** An option of the recorded run's questions (lib/plan-events/__fixtures__/backend/choices.json:
+ * seq 53 asks for activities, with photos; seq 77 for food, without). */
+function recordedOption(seq: number, id: string): ChoiceOptionView {
+  const event = (choicesFixture.events as unknown as UIEvent[]).find((candidate) => candidate.seq === seq);
+  const option = (event ? readAskedChoice(event.detail) : null)?.options.find((candidate) => candidate.id === id);
+  if (!option) throw new Error(`choices.json has no option ${id} at seq ${seq}`);
+  return option;
+}
+
+/** Two columns as on the phone, three as from 1080 px. */
+const CARD_GRID = "grid grid-cols-2 gap-2.5 sm:grid-cols-3";
+
+/** The choice cards in each state, two groups to try, and the countdown. */
+function ChoiceStates() {
+  const oceanario = recordedOption(53, "a1");
+  const pena = recordedOption(53, "a2");
+  const belem = recordedOption(53, "a3");
+  const food = ["c1", "c2", "c3"].map((id) => recordedOption(77, id));
+  return (
+    <ThemePair>
+      <div className="grid gap-6">
+        <Row label="Più scelte, con foto 4:3: scelta con ogni chip; non scelta; titolo lungo senza prezzo" stack>
+          <div className={CARD_GRID}>
+            <ChoiceCardStill
+              option={{ ...oceanario, area: "Parque das Nações" }}
+              control="checkbox"
+              checked
+              media="4/3"
+            />
+            <ChoiceCardStill option={pena} control="checkbox" checked={false} media="4/3" />
+            <ChoiceCardStill option={belem} control="checkbox" checked={false} media="4/3" />
+          </div>
+        </Row>
+        <Row label="Una foto manca: il riquadro con l'iniziale alla stessa misura (16:10, come per il cibo)" stack>
+          <div className={CARD_GRID}>
+            <ChoiceCardStill option={pena} control="checkbox" checked={false} media="16/10" />
+            <ChoiceCardStill option={{ ...belem, photo: null }} control="checkbox" checked media="16/10" />
+          </div>
+        </Row>
+        <Row label="Nessuna foto nella domanda: nessuna area foto; nessuna chip" stack>
+          <div className={CARD_GRID}>
+            {food.map((option, index) => (
+              <ChoiceCardStill key={option.id} option={option} control="checkbox" checked={index === 0} media="none" />
+            ))}
+          </div>
+        </Row>
+        <Row label="Una sola scelta, a riposo (invio in corso o tempo scaduto)" stack>
+          <div className={CARD_GRID}>
+            <ChoiceCardStill option={oceanario} control="radio" checked disabled media="4/3" />
+            <ChoiceCardStill option={pena} control="radio" checked={false} disabled media="4/3" />
+          </div>
+        </Row>
+        <Row label="Prova: più scelte" stack>
+          <ChoiceGroupDemo label="Cosa ti va di vedere? (prova)" options={[oceanario, pena, belem]} multiple media="4/3" />
+        </Row>
+        <Row label="Prova: una sola scelta" stack>
+          <ChoiceGroupDemo label="Che cucina cerchi? (prova)" options={food} multiple={false} media="none" />
+        </Row>
+        <Row label="Tempo per scegliere: 4:12 su 5 minuti, 0:45 su 4 minuti, scaduto" stack>
+          <Countdown deadlineAt={DEMO_NOW + 252_000} windowMs={300_000} now={DEMO_NOW} />
+          <Countdown deadlineAt={DEMO_NOW + 45_000} windowMs={240_000} now={DEMO_NOW} />
+          <Countdown deadlineAt={DEMO_NOW - 1_000} windowMs={240_000} now={DEMO_NOW} />
+        </Row>
+      </div>
+    </ThemePair>
   );
 }
 

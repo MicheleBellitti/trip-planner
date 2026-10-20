@@ -2,10 +2,11 @@
 
 /** Interactive pieces of the /dev/ui gallery (development only). */
 
-import { useId, useState } from "react";
+import { useId, useState, type ComponentProps } from "react";
 
 import { Button } from "@/components/ui/button";
 import { ToolChip } from "@/components/ui/chip";
+import { ChoiceCard, type ChoiceCardMedia } from "@/components/ui/choice-card";
 import { CostMeter } from "@/components/ui/cost-meter";
 import { Field, NumberStepper, SegmentedControl, Select, TextArea, TextInput } from "@/components/ui/field";
 import { Sheet } from "@/components/ui/sheet";
@@ -18,6 +19,7 @@ import {
   TimelineTitle,
 } from "@/components/ui/timeline";
 import { toast } from "@/components/ui/toast";
+import type { ChoiceOptionView } from "@/lib/choices";
 
 export function SheetDemo() {
   const [open, setOpen] = useState(false);
@@ -231,6 +233,50 @@ export function FormDemo() {
       <Field label="Budget totale in euro">
         {(control) => <TextInput {...control} inputMode="numeric" defaultValue="2400" disabled />}
       </Field>
+    </div>
+  );
+}
+
+/** A choice card held in one state, for the gallery's still rows (the page is a Server Component
+ * and cannot hand it a handler). Each has its own name, so the light and dark copies of a radio
+ * never share a group. */
+export function ChoiceCardStill(props: Omit<ComponentProps<typeof ChoiceCard>, "name" | "onChange">) {
+  const name = useId();
+  return <ChoiceCard {...props} name={name} onChange={() => undefined} />;
+}
+
+/** A question's cards to try: several picks (checkboxes) or one (radios). */
+export function ChoiceGroupDemo({
+  label,
+  options,
+  multiple,
+  media,
+}: {
+  label: string;
+  options: readonly ChoiceOptionView[];
+  multiple: boolean;
+  media: ChoiceCardMedia;
+}) {
+  const name = useId();
+  const [picked, setPicked] = useState<readonly string[]>([]);
+  const toggle = (id: string, checked: boolean) =>
+    setPicked((current) => {
+      if (!multiple) return [id];
+      return checked ? [...current, id] : current.filter((value) => value !== id);
+    });
+  return (
+    <div role={multiple ? "group" : "radiogroup"} aria-label={label} className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+      {options.map((option) => (
+        <ChoiceCard
+          key={option.id}
+          option={option}
+          control={multiple ? "checkbox" : "radio"}
+          name={name}
+          checked={picked.includes(option.id)}
+          onChange={(checked) => toggle(option.id, checked)}
+          media={media}
+        />
+      ))}
     </div>
   );
 }
