@@ -5,6 +5,8 @@
  * an open object, and an old or odd row must never break the page.
  */
 
+import { journeyModePhrase } from "@/lib/journey-mode";
+
 function count(value: number, one: string, many: string): string {
   return `${value} ${value === 1 ? one : many}`;
 }
@@ -59,7 +61,10 @@ export function requestSummary(
   if (!request) return null;
   const parts: string[] = [];
   const origin = typeof request.origin === "string" ? request.origin.trim() : "";
-  if (origin) parts.push(`Da ${origin}`);
+  // How they get there, unless by plane (the default): "Da Milano in treno".
+  const journey = journeyModePhrase(request.journey_mode);
+  if (origin) parts.push(journey ? `Da ${origin} ${journey}` : `Da ${origin}`);
+  else if (journey) parts.push(journey.charAt(0).toLocaleUpperCase("it") + journey.slice(1));
   const travelers = travelersText(request.travelers);
   if (travelers) parts.push(travelers);
   const dates = request.dates;

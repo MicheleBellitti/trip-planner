@@ -300,6 +300,18 @@ describe("RequestForm", () => {
     expect(mocks.createPlan).not.toHaveBeenCalled();
   });
 
+  it("names a mode other than the plane in the trip's summary", () => {
+    render(<RequestForm today={TODAY} initialValues={exampleRequestForm(TODAY)} />);
+    const summary = screen.getByRole("region", { name: "Il tuo viaggio" });
+    const facts = () => within(summary).getAllByRole("listitem").map((item) => item.textContent ?? "");
+    expect(facts().some((fact) => fact.startsWith("In "))).toBe(false);
+
+    fireEvent.click(screen.getByRole("radio", { name: "Traghetto" }));
+
+    expect(facts()[facts().indexOf("In traghetto")]).toBe("In traghetto");
+    expect(facts().indexOf("In traghetto")).toBeLessThan(facts().indexOf("14–18 aprile 2027, 4 notti"));
+  });
+
   it("puts a 422 on the mode under its row", async () => {
     mocks.createPlan.mockRejectedValue(
       new RequestValidationError(422, [

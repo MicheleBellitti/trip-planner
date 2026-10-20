@@ -2,7 +2,30 @@ import { describe, expect, it } from "vitest";
 
 import { requestSummary, travelersText } from "./request-summary";
 
+const LISBONA = {
+  origin: "Milano",
+  destination: "Lisbona",
+  dates: { exact_start: "2027-04-14", exact_end: "2027-04-18", month: null, nights: null },
+  travelers: [{ kind: "adult" }, { kind: "adult" }, { kind: "child", age: 8 }, { kind: "child", age: 11 }],
+  budget_eur: 2400,
+};
+const LISBONA_LINE = "Da Milano, 2 adulti e 2 bambini (8 e 11 anni), budget 2.400 €";
+
 describe("requestSummary", () => {
+  it("says how they travel right after where from, unless by plane", () => {
+    expect(requestSummary({ ...LISBONA, journey_mode: "train" })).toBe(
+      "Da Milano in treno, 2 adulti e 2 bambini (8 e 11 anni), budget 2.400 €",
+    );
+    expect(requestSummary({ ...LISBONA, journey_mode: "flight" })).toBe(LISBONA_LINE);
+    expect(requestSummary({ travelers: [{ kind: "adult" }], journey_mode: "car" })).toBe("In auto, 1 adulto");
+  });
+
+  it("ignores a mode it does not know", () => {
+    for (const odd of [null, "plane", 3, { mode: "train" }, "__proto__"]) {
+      expect(requestSummary({ ...LISBONA, journey_mode: odd })).toBe(LISBONA_LINE);
+    }
+  });
+
   it("says from where, who and how much in one line", () => {
     expect(
       requestSummary({
