@@ -124,12 +124,13 @@ describe("BookingStrip", () => {
     const line = within(dead).getByText(/In scadenza · tra un giorno/);
     expect(line.textContent?.trim()).toBe(`In scadenza · tra un giorno, ${LABEL}`);
     expect(line.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
-    // Alone when there are no deadline words.
-    const alone = within(rowOf(bookings[2]!.title)).getByText(LABEL);
-    expect(alone.textContent?.trim()).toBe(LABEL);
+    // Alone when there are no deadline words, in sentence case.
+    const ALONE = "Pagina di prenotazione non trovata";
+    const alone = within(rowOf(bookings[2]!.title)).getByText(ALONE);
+    expect(alone.textContent?.trim()).toBe(ALONE);
     expect(alone.querySelector("svg")).toBeTruthy();
     // Nothing on a booking without a dead link.
-    expect(within(rowOf(bookings[0]!.title)).queryByText(new RegExp(LABEL))).toBeNull();
+    expect(within(rowOf(bookings[0]!.title)).queryByText(new RegExp(LABEL, "i"))).toBeNull();
     for (const label of [line, alone]) {
       expect(label.closest(".text-ink-2")).toBeTruthy();
       expect(label.className).not.toMatch(/amber|due-soon|bg-/);

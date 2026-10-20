@@ -517,14 +517,12 @@ describe("PlanView reading the Trip", () => {
       expect(title.parentElement?.className).toMatch(/text-ink\b/);
       expect(title.parentElement?.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
       const box = blockOf(row);
-      const source = within(box).getByRole("link", { name: /^Cerca l'offerta su Expedia/ });
-      // The same address as the price line's.
-      expect(source.getAttribute("href")).toBe(booking.price!.source_url);
-      expect(source.getAttribute("target")).toBe("_blank");
-      expect(source.getAttribute("rel")).toBe("noopener noreferrer");
+      // Named, never linked: the source has not passed the booking allowlist.
+      const source = within(box).getByText("Cerca l'offerta su Expedia");
+      expect(source.closest("a")).toBeNull();
       const phone = within(box).getByRole("link", { name: "+351 21 000 0000" });
       expect(phone.getAttribute("href")).toBe("tel:+351210000000");
-      expect([...box.querySelectorAll("a")]).toEqual([source, phone]);
+      expect([...box.querySelectorAll("a")]).toEqual([phone]);
       const lines = [...box.querySelectorAll("p")].map((p) => p.textContent?.replace(/\s*\(si apre in una nuova scheda\)/, "").trim());
       expect(lines).toEqual([
         DEAD_TITLE,
@@ -544,17 +542,29 @@ describe("PlanView reading the Trip", () => {
       expect(row.textContent).not.toMatch(/non esiste più|Il prezzo è stato letto/);
     });
 
-    it("a dead booking link whose price source is a homepage links to it as 'Cerca l'offerta sul sito di {host}'", () => {
+    it("a dead booking link whose price source is a homepage names it as text: 'Cerca l'offerta sul sito di {host}'", () => {
       const detail = happyDetail();
       const booking = detail.plan!.bookings[0]!;
+      // A price source of its own (in the fixture it is the booking link itself).
+      booking.price!.source_url = "https://www.aerobus.es/tarifas";
       detail.link_health = {
         ...deadHome(booking.link!, null),
         ...deadHome(booking.price!.source_url, "https://www.aerobus.es/"),
       };
       render(<PlanView detail={detail} trip={happyTrip()} loadTrip={unused} />);
-      const link = within(blockOf(deadRow())).getByRole("link", { name: /^Cerca l'offerta sul sito di aerobus\.es/ });
-      expect(link.getAttribute("href")).toBe("https://www.aerobus.es/");
-      expect(link.getAttribute("target")).toBe("_blank");
+      const box = blockOf(deadRow());
+      expect(within(box).getByText("Cerca l'offerta sul sito di aerobus.es").closest("a")).toBeNull();
+      expect(box.querySelector('a[href="https://www.aerobus.es/"]')).toBeNull();
+    });
+
+    it("a dead booking link that is its own price source never links the homepage the backend refused", () => {
+      const detail = happyDetail();
+      const booking = detail.plan!.bookings[0]!;
+      expect(booking.price!.source_url).toBe(booking.link);
+      detail.link_health = deadHome(booking.link!, "https://www.google.com/");
+      render(<PlanView detail={detail} trip={happyTrip()} loadTrip={unused} />);
+      expect(screen.queryAllByRole("link", { name: /^Prenota su / })).toHaveLength(1);
+      expect(blockOf(deadRow()).querySelector('a[href="https://www.google.com/"]')).toBeNull();
     });
 
     it("a dead booking link with nothing else to go on says to look on the supplier's site", () => {

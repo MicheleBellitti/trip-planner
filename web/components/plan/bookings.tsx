@@ -137,19 +137,20 @@ function ActionSide({
   }
   if (action.kind === "missing") {
     const hasWay = source.kind === "link" || source.kind === "homepage" || Boolean(vendor) || Boolean(phone);
+    // The source is named, never linked, here: it has not passed the booking allowlist, and when it
+    // is the dead link itself its homepage is the one the backend refused (the price line above
+    // links it for information).
+    const sourceText =
+      source.kind === "link"
+        ? `Cerca l'offerta su ${sourceNameText ?? source.host}`
+        : source.kind === "homepage"
+          ? `Cerca l'offerta sul sito di ${source.host}`
+          : null;
     return (
       <div className="min-w-0 text-meta text-ink-2" data-link-text="">
         <WarningTitle>Pagina di prenotazione non trovata</WarningTitle>
         <p>Il link del piano non apre nessuna pagina.</p>
-        {source.kind === "link" && sourceNameText ? (
-          <p className="mt-1">
-            <QuietExternalLink href={source.href}>{`Cerca l'offerta su ${sourceNameText}`}</QuietExternalLink>
-          </p>
-        ) : source.kind === "homepage" ? (
-          <p className="mt-1">
-            <QuietExternalLink href={source.href}>{`Cerca l'offerta sul sito di ${source.host}`}</QuietExternalLink>
-          </p>
-        ) : null}
+        {sourceText ? <p className="mt-1 [overflow-wrap:anywhere]">{sourceText}</p> : null}
         {vendor ? <p>{`Prenota direttamente con ${vendor}.`}</p> : null}
         <PhoneLine phone={phone} />
         {hasWay ? null : <p className="mt-1">Cerca il servizio sul sito del fornitore.</p>}

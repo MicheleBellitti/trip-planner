@@ -89,7 +89,8 @@ export function BookingStrip({ items, anchor, headingId, timeZone }: BookingStri
                       {item.noLink ? (
                         <span className="inline-flex items-center gap-1 align-middle">
                           <Icon name="warning" size={13} />
-                          pagina di prenotazione non trovata
+                          {/* Lower case only after the deadline words and their ", ". */}
+                          {distance ? "pagina di prenotazione non trovata" : "Pagina di prenotazione non trovata"}
                         </span>
                       ) : null}
                     </span>
