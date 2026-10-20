@@ -38,7 +38,17 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from app import consumer, sessions  # noqa: E402
-from app.db import PlanStatus  # noqa: E402
+from app.choices import (  # noqa: E402
+    ASK_TRAVELLER_TOOL,
+    ChoiceRequest,
+    answer_text,
+    auto_pick,
+    choice_payload,
+    request_of,
+)
+from app.config import Settings  # noqa: E402
+from app.covers import Cover  # noqa: E402
+from app.db import ChoiceRecord, PlanStatus  # noqa: E402
 from app.events import AgentName, EventKind, UIEvent, normalize  # noqa: E402
 from app.ma_client import PRIMARY_SCOPE, usage_from_event  # noqa: E402
 from app.request import PlanRequest  # noqa: E402
@@ -49,10 +59,20 @@ TODAY = dt.date(2026, 10, 12)
 SESSION_BUDGET_CENTS = 60
 """The development profile's session budget: what the fake session starts with."""
 
+CHOICE_PHOTOS = WEB_DIR / "lib" / "demo" / "choice-photos.json"
+"""The photos of the `choices` recording's options (capture-choice-photos.py); missing: none."""
+CHOICE_TIMEOUT = dt.timedelta(
+    seconds=Settings.model_fields["choice_timeout_seconds"].get_default(call_default_factory=True)
+)
+"""The window a question is open: the Settings default."""
+TRAVELLER_THINKS = dt.timedelta(seconds=9)
+"""How long after the question's pause the recorded traveller answers."""
+
 SCENARIOS = {
     "happy-path": "happy_path.jsonl",
     "budget-reached": "budget_reached.jsonl",
     "mcp-failure": "mcp_failure.jsonl",
+    "choices": "choices.jsonl",
 }
 
 IDLE_TARGETS = {
@@ -76,6 +96,13 @@ def _api_time(value: dt.datetime) -> str:
     )
 
 
+def _choice_photos() -> dict[str, Cover]:
+    if not CHOICE_PHOTOS.exists():
+        return {}
+    data = json.loads(CHOICE_PHOTOS.read_text(encoding="utf-8"))
+    return {key: Cover.model_validate(value) for key, value in data["photos"].items()}
+
+
 def _steps(path: Path) -> Iterator[dict[str, Any]]:
     for line in path.read_text(encoding="utf-8").splitlines():
         if line.strip() and not line.lstrip().startswith("#"):
@@ -96,6 +123,8 @@ class Timeline:
         self.tool_started: dict[str, dt.datetime] = {}
         self.last_ts: dt.datetime | None = None
         self.echoes = 0
+        self.photos = _choice_photos()
+        self.choices: dict[str, ChoiceRecord] = {}
 
     @property
     def over(self) -> bool:
@@ -149,7 +178,9 @@ class Timeline:
         if event is None:
             return
         event_type = raw.get("type")
-        if event_type == "session.status_idle":
+        if event_type == "agent.custom_tool_use" and raw.get("name") == ASK_TRAVELLER_TOOL:
+            self.ask(raw, event)
+        elif event_type == "session.status_idle":
             target = IDLE_TARGETS.get(consumer.decide_idle(raw, self.state).decision)
             if target is not None:
                 self._set_status(target)
@@ -201,6 +232,48 @@ class Timeline:
     def brief(self) -> None:
         text = sessions.build_brief(self.request, today=TODAY)
         self.echo({"type": "user.message", "content": [{"type": "text", "text": text}]})
+
+    def ask(self, raw: Mapping[str, Any], tool_event: UIEvent) -> None:
+        """`PlanConsumer._ask_traveller`: the question's row and its `asked` event, right after
+        the raw tool use. The row is only built, never stored."""
+        request = ChoiceRequest.model_validate(raw["input"])
+        asked_at = tool_event.ts + dt.timedelta(milliseconds=20)
+        photos = {o.id: self.photos[o.id] for o in request.options if o.id in self.photos}
+        record = ChoiceRecord(
+            id=raw["id"],
+            plan_id=PLAN_ID,
+            kind=request.kind,
+            payload=choice_payload(request, photos),
+            asked_at=asked_at,
+            deadline_at=asked_at + CHOICE_TIMEOUT,
+        )
+        self.choices[record.id] = record
+        self._store(consumer.choice_asked_event(record, cost_cents=self.state.cost_cents))
+
+    def answer_choice(self, choice_id: str) -> None:
+        """The traveller picks the CLI's and the evals' picks: the answered event, then the
+        tool result's echo (`sessions.answer_choice`)."""
+        assert self.last_ts is not None
+        request = request_of(self.choices[choice_id])
+        selected = auto_pick(request)
+        self._store(
+            consumer.choice_answered_event(
+                choice_id=choice_id,
+                request=request,
+                answered_by="traveller",
+                selected=selected,
+                now=self.last_ts + TRAVELLER_THINKS,
+                cost_cents=self.state.cost_cents,
+            )
+        )
+        self.echo(
+            {
+                "type": "user.custom_tool_result",
+                "custom_tool_use_id": choice_id,
+                "is_error": False,
+                "content": [{"type": "text", "text": answer_text(request, "traveller", selected)}],
+            }
+        )
 
     def answer_submit(self, tool_use_id: str, *, accepted: bool, warnings: int) -> None:
         """`PlanConsumer._answer_tool_use`: the outcome event, then the tool result's echo."""
@@ -304,9 +377,14 @@ def build_scenario(file_name: str) -> dict[str, Any]:
                 timeline.brief()
             elif match.get("type") == "user.custom_tool_result":
                 tool_use_id = match["custom_tool_use_id"]
-                timeline.answer_submit(
-                    tool_use_id, accepted=not match.get("is_error"), warnings=submits[tool_use_id]
-                )
+                if tool_use_id in timeline.choices:
+                    timeline.answer_choice(tool_use_id)
+                else:
+                    timeline.answer_submit(
+                        tool_use_id,
+                        accepted=not match.get("is_error"),
+                        warnings=submits[tool_use_id],
+                    )
         elif op == "await_call" and step.get("method") == "update_budget":
             timeline.continue_plan()
     return {

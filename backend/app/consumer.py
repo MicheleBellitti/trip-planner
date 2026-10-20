@@ -163,6 +163,7 @@ from app.choices import (
     ONE_QUESTION_AT_A_TIME_TEXT,
     AnsweredBy,
     ChoiceRejected,
+    ChoiceRequest,
     PendingChoice,
     admission_refusal,
     answer_text,
@@ -757,6 +758,34 @@ def choice_asked_event(record: ChoiceRecord, *, cost_cents: int | None) -> Event
     )
 
 
+def choice_answered_event(
+    *,
+    choice_id: str,
+    request: ChoiceRequest,
+    answered_by: AnsweredBy,
+    selected: Sequence[str],
+    now: dt.datetime,
+    cost_cents: int | None,
+) -> EventBuilder:
+    """The timeline event of a closed question. Emit it with
+    `backend_event_id(plan_id, "choice", f"{choice_id}:closed")` as its key."""
+    return backend_event(
+        EventKind.CHOICE,
+        answered_title(request, answered_by, selected),
+        ts=now,
+        detail={
+            "event_type": "backend.choice",
+            "phase": "answered",
+            "choice_id": choice_id,
+            "kind": request.kind,
+            "answered_by": answered_by,
+            "selected": list(selected),
+            "answered_at": now.isoformat(),
+        },
+        cost_cents=cost_cents,
+    )
+
+
 async def close_choice(
     sink: EventSink,
     choice_id: str,
@@ -792,21 +821,12 @@ async def close_choice(
         return True
 
     def build(seq: int) -> UIEvent | None:
-        row = closed[0]
-        request = request_of(row)
-        return backend_event(
-            EventKind.CHOICE,
-            answered_title(request, answered_by, selected),
-            ts=now,
-            detail={
-                "event_type": "backend.choice",
-                "phase": "answered",
-                "choice_id": choice_id,
-                "kind": row.kind,
-                "answered_by": answered_by,
-                "selected": list(selected),
-                "answered_at": now.isoformat(),
-            },
+        return choice_answered_event(
+            choice_id=choice_id,
+            request=request_of(closed[0]),
+            answered_by=answered_by,
+            selected=selected,
+            now=now,
             cost_cents=cost_cents,
         )(seq)
 
