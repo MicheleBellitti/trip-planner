@@ -181,6 +181,9 @@ interface SegmentedOption<T extends string> {
 interface SegmentedControlProps<T extends string> {
   /** The question, as the group's legend ("Dove vai"). */
   legend: ReactNode;
+  /** Keep the legend for screen readers only, when a heading right above already says it
+   * ("Quando" over "Date fisse" / "Mese e notti"). */
+  legendHidden?: boolean;
   name: string;
   options: readonly SegmentedOption<T>[];
   value: T;
@@ -192,6 +195,7 @@ interface SegmentedControlProps<T extends string> {
  * "Un mese"): native radios in a fieldset, drawn as one pill track. The chosen segment is ink. */
 export function SegmentedControl<T extends string>({
   legend,
+  legendHidden = false,
   name,
   options,
   value,
@@ -200,7 +204,7 @@ export function SegmentedControl<T extends string>({
 }: SegmentedControlProps<T>) {
   return (
     <fieldset className={cx("grid min-w-0 gap-1.5 border-0 p-0", className)}>
-      <legend className="mb-1.5 p-0 text-meta font-semibold text-ink">{legend}</legend>
+      <legend className={legendHidden ? "sr-only" : "mb-1.5 p-0 text-meta font-semibold text-ink"}>{legend}</legend>
       <div className="flex rounded-full border-[1.5px] border-rule-strong bg-surface p-[3px]">
         {options.map((option) => (
           <label

@@ -593,9 +593,15 @@ layout, not a stretched phone.
   opened does neither. The one live region stays for lane states only.
 - **The request form**: one markup for every width (the server's HTML is already the right
   layout, so nothing reflows after hydration): on the phone one column; from 1080 px two balanced
-  columns of sections in the phone's order ("Il viaggio" over "Quando" on the left, "Chi viaggia" over "Budget e
-  preferenze" on the right, about 600 px each), so a request fits at 1440 by 900 with children
-  too, and the read-back card beside it. The form remembers the origin, the adults and the number
+  columns of sections in the phone's order ("Il viaggio", with "Come viaggi", over "Quando" on the
+  left; "Chi viaggia" over "Budget e preferenze" on the right), the left one wider (1.25 to 1,
+  within 62 rem) because it is the taller, 16 px between fields, and the read-back card beside
+  them. At 1440 by 900 the request fits as it opens (fixed dates, a destination, the five modes on
+  one line), with children too; "Suggeriscimi tu", month and nights or a mode's note take it a few
+  lines below the fold, and the sticky card keeps the button in view. From 1080 to about 1420 px
+  the modes break three and two. The "Date" legend is for screen readers only: "Quando" says it.
+  The read-back card names the travel mode first, the plane included ("In aereo"); the plan
+  page's header names it only when it is not the plane ("Da Milano in treno"). The form remembers the origin, the adults and the number
   of children, never the children's ages (they go stale and set the price): each age is a tap on
   "Scegli". Enter in a single-line field
   moves to the next field; only the budget, the last one, sends the form. The error summary
@@ -846,7 +852,10 @@ the mockup in Atlas's tokens).
   chips** (native radios drawn as separate pills with a 16 px icon before the label, 1.5 px
   `rule-strong` edge, the chosen one ink; 40 px on the phone with 3 px of tap area around each,
   36 px from 640 px; they wrap onto a second row on the phone) for four or more exclusive choices
-  (the travel mode), **native select** for months.
+  (the travel mode): the hint describes the group, so it is heard once; an optional note under the
+  chips about the chosen option sits in a polite live region ("A bordo a piedi: se porti l'auto,
+  scegli Auto."); an error is each option's description. A segmented control's legend can be for
+  screen readers only when a heading right above already says it. **Native select** for months.
 
 ### Navigation
 

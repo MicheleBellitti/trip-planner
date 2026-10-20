@@ -9,7 +9,7 @@ import { Button, LinkButton } from "./button";
 import { ChoiceCard } from "./choice-card";
 import { CostMeter, costValueText } from "./cost-meter";
 import { Countdown } from "./countdown";
-import { ChoiceChips, Field, TextInput, type ChoiceChipOption } from "./field";
+import { ChoiceChips, Field, SegmentedControl, TextInput, type ChoiceChipOption } from "./field";
 import { PlanStatusBadge, StatusBadge } from "./status-badge";
 import { Timeline, TimelineItem, TimelineTitle } from "./timeline";
 import { dismissToast, toast, Toaster } from "./toast";
@@ -405,6 +405,26 @@ describe("Field", () => {
     const describedBy = input.getAttribute("aria-describedby")?.split(" ") ?? [];
     expect(describedBy.map((id) => document.getElementById(id)?.textContent)).toEqual(["Una città", "Scrivi una città."]);
     expect(input.hasAttribute("required")).toBe(true);
+  });
+});
+
+describe("SegmentedControl", () => {
+  it("can keep its legend for screen readers only, when a heading above already says it", () => {
+    render(
+      <SegmentedControl
+        legend="Date"
+        legendHidden
+        name="dates"
+        options={[
+          { value: "exact", label: "Date fisse" },
+          { value: "flexible", label: "Mese e notti" },
+        ]}
+        value="exact"
+        onValueChange={() => {}}
+      />,
+    );
+    const group = screen.getByRole("group", { name: "Date" });
+    expect(group.querySelector("legend")?.className).toContain("sr-only");
   });
 });
 
