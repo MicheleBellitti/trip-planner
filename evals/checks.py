@@ -68,6 +68,7 @@ SUBMIT_ATTEMPTS = "submit_plan_attempts"
 COST_VS_ESTIMATE = "cost_and_searches_vs_estimate"
 MATCHES_REQUEST = "matches_request"
 DEAD_LINKS = "dead_links"
+CHOICES_ASKED = "choices_asked"
 
 CHECK_NAMES: tuple[str, ...] = (
     SCHEMA_VALID,
@@ -80,6 +81,7 @@ CHECK_NAMES: tuple[str, ...] = (
     COST_VS_ESTIMATE,
     MATCHES_REQUEST,
     DEAD_LINKS,
+    CHOICES_ASKED,
 )
 
 MAX_SUBMIT_ATTEMPTS = 2
@@ -159,6 +161,9 @@ class RunMetadata:
     link_health: Mapping[str, Any] | None = None
     """`plans.link_health` (URL to verdict); None (a plan stored before the check) or `{}`
     (the checks did not run) when the links were not checked."""
+    choice_kinds: tuple[str, ...] | None = None
+    """The kinds of the questions the plan asked the traveller (`choices.kind`); None when
+    they were not collected."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -777,6 +782,45 @@ def check_dead_links(
     )
 
 
+CHOICE_KIND_ORDER: tuple[str, ...] = ("destination", "journey", "activities", "food", "other")
+"""`app.choices.ChoiceKind`, in the order the kinds are printed."""
+
+
+def _kinds_in_order(kinds: Iterable[str]) -> list[str]:
+    known = set(kinds)
+    ordered = [kind for kind in CHOICE_KIND_ORDER if kind in known]
+    return ordered + sorted(known - set(CHOICE_KIND_ORDER))
+
+
+def check_choices_asked(
+    request: PlanRequest,
+    plan: Mapping[str, Any] | None,
+    trip: Mapping[str, Any] | None,
+    metadata: RunMetadata,
+) -> CheckResult:
+    """The coordinator pauses with `ask_traveller` about the activities and the food, and about
+    the destination when the request says "Suggeriscimi tu". The kinds are a set (the order
+    they were asked in is not recorded). Never blocks: a missing pause is a warning."""
+    if plan is None:
+        return replace(_no_plan(CHOICES_ASKED, metadata), blocking=False)
+    if metadata.choice_kinds is None:
+        return _result(CHOICES_ASKED, "skip", "choices were not collected", blocking=False)
+    expected = {"activities", "food"}
+    if request.suggest_destination:
+        expected.add("destination")
+    asked = _kinds_in_order(metadata.choice_kinds)
+    missing = _kinds_in_order(expected - set(asked))
+    if missing:
+        return _result(
+            CHOICES_ASKED,
+            "warn",
+            f"missing: {', '.join(missing)}",
+            [f"asked: {', '.join(asked) or 'none'}"],
+            blocking=False,
+        )
+    return _result(CHOICES_ASKED, "pass", f"asked: {', '.join(asked)}", blocking=False)
+
+
 # --- running them all ---------------------------------------------------------------------------
 
 
@@ -793,6 +837,7 @@ CHECKS: Mapping[str, Check] = {
     COST_VS_ESTIMATE: check_cost_vs_estimate,
     MATCHES_REQUEST: check_matches_request,
     DEAD_LINKS: check_dead_links,
+    CHOICES_ASKED: check_choices_asked,
 }
 
 
@@ -824,7 +869,7 @@ def run_checks(
                     name,
                     "error",
                     f"check crashed: {type(error).__name__}: {error}",
-                    blocking=name not in (COST_VS_ESTIMATE, DEAD_LINKS),
+                    blocking=name not in (COST_VS_ESTIMATE, DEAD_LINKS, CHOICES_ASKED),
                 )
             )
     return results

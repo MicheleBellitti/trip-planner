@@ -533,6 +533,14 @@ async def collect_picks(planner: PlannerServices, plan_id: uuid.UUID) -> list[st
     return [pick_line(row, choices.request_of(row)) for row in rows]
 
 
+async def collect_choice_kinds(planner: PlannerServices, plan_id: uuid.UUID) -> list[str]:
+    """The kinds of the questions the plan asked, answered or not."""
+    from app import choices
+
+    async with planner.session_factory() as db:
+        return await choices.asked_kinds(db, plan_id)
+
+
 def usage_json(usage: Any) -> dict[str, Any] | None:
     if usage is None:
         return None
@@ -573,6 +581,7 @@ def build_entry(
     extra: Mapping[str, Any],
     link_checker: checks.LinkChecker | None = None,
     trip_schema: Mapping[str, Any] | None = None,
+    choice_kinds: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     """One request's results entry: run data, checks and judge. `record` holds the `plans`
     row fields this needs (status, plan, trip, cost_cents, submit_attempts, ...)."""
@@ -592,6 +601,7 @@ def build_entry(
         cost_cents=cost,
         web_search_requests=searches,
         link_health=row.get("link_health"),
+        choice_kinds=tuple(choice_kinds) if choice_kinds is not None else None,
     )
     results = checks.run_checks(
         request,
@@ -624,6 +634,7 @@ def build_entry(
         "warnings_count": len(warnings) if isinstance(warnings, list) else None,
         "judge": judge_result.to_json(),
         "agent_versions": row.get("agent_versions"),
+        "choice_kinds": list(choice_kinds) if choice_kinds is not None else None,
         "plan": plan,
         "trip": trip,
         **extra,
@@ -710,6 +721,12 @@ async def run_case(case: EvalCase, request: PlanRequest, ctx: RunContext) -> dic
             picks = await collect_picks(planner, plan_id)
         except Exception as error:  # the picks only inform the judge
             extra["picks_error"] = f"{type(error).__name__}: {error}"
+    choice_kinds: list[str] | None = None
+    if plan_id is not None:
+        try:
+            choice_kinds = await collect_choice_kinds(planner, plan_id)
+        except Exception as error:  # the check then skips
+            extra["choice_kinds_error"] = f"{type(error).__name__}: {error}"
     judge_result = await judge_entry(fields, request, ctx, picks)
     extra["duration_seconds"] = round(time.monotonic() - started, 1)
     entry = build_entry(
@@ -720,6 +737,7 @@ async def run_case(case: EvalCase, request: PlanRequest, ctx: RunContext) -> dic
         profile=ctx.profile,
         judge_result=judge_result,
         extra=extra,
+        choice_kinds=choice_kinds,
     )
     print(
         f"[{case.id}] {entry['status']}: checks {'ok' if entry['checks_passed'] else 'FAILED'}, "

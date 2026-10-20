@@ -4,6 +4,7 @@ weekend of evals/requests.yaml) and, for every rule, a copy that violates it."""
 from __future__ import annotations
 
 import copy
+import dataclasses
 import datetime as dt
 import json
 from collections.abc import Callable
@@ -100,6 +101,7 @@ OK_METADATA = checks.RunMetadata(
     cost_cents=41,
     web_search_requests=12,
     link_health=HEALTHY_LINKS,
+    choice_kinds=("activities", "food"),
 )
 
 
@@ -294,6 +296,12 @@ VIOLATIONS: dict[str, Violation] = {
         checks.RunMetadata(status="ready", submit_attempts=1),
         expected_status="warn",
     ),
+    "missing_pause": Violation(
+        checks.CHOICES_ASKED,
+        _nothing,
+        dataclasses.replace(OK_METADATA, choice_kinds=("activities",)),
+        expected_status="warn",
+    ),
     "dead_link": Violation(
         checks.DEAD_LINKS,
         _nothing,
@@ -349,7 +357,11 @@ def test_violating_fixture_fails_every_blocking_rule() -> None:
     metadata = checks.RunMetadata(status="ready", submit_attempts=3, cost_cents=90)
     results = run_all(plan, trip, metadata)
     failing = {name for name, r in results.items() if r.blocks}
-    assert failing == set(checks.CHECK_NAMES) - {checks.COST_VS_ESTIMATE, checks.DEAD_LINKS}
+    assert failing == set(checks.CHECK_NAMES) - {
+        checks.COST_VS_ESTIMATE,
+        checks.DEAD_LINKS,
+        checks.CHOICES_ASKED,
+    }
     assert results[checks.COST_VS_ESTIMATE].status == "warn"
     assert not results[checks.COST_VS_ESTIMATE].blocks
 
@@ -413,6 +425,7 @@ def test_no_plan_fails_schema_and_attempts_and_skips_content_checks() -> None:
         checks.NO_EMPTY_DAYS,
         checks.MATCHES_REQUEST,
         checks.DEAD_LINKS,
+        checks.CHOICES_ASKED,
     ):
         assert results[name].status == "skip", name
 
@@ -513,6 +526,56 @@ def test_details_are_capped() -> None:
     result = run_all(plan, ok_trip())[checks.LINKS_ALLOWED]
     assert len(result.details) == checks.MAX_DETAILS + 1
     assert result.details[-1] == "... and 10 more"
+
+
+# --- choices_asked ------------------------------------------------------------------------------
+
+
+def with_kinds(kinds: tuple[str, ...] | None) -> checks.RunMetadata:
+    return dataclasses.replace(OK_METADATA, choice_kinds=kinds)
+
+
+def suggest_request() -> PlanRequest:
+    data = dict(lisbon_case().request)
+    data.pop("destination", None)
+    data["suggest_destination"] = True
+    return PlanRequest.from_stored(data)
+
+
+def test_choices_asked_passes_with_activities_and_food() -> None:
+    result = run_all(ok_plan(), ok_trip(), with_kinds(("food", "activities")))[checks.CHOICES_ASKED]
+    assert result.status == "pass"
+    assert result.message == "asked: activities, food"
+    assert not result.blocking
+
+
+def test_choices_asked_expects_the_destination_with_suggest() -> None:
+    request = suggest_request()
+    result = checks.check_choices_asked(
+        request, ok_plan(), ok_trip(), with_kinds(("food", "activities"))
+    )
+    assert result.status == "warn"
+    assert result.message == "missing: destination"
+    assert not result.blocks
+    result = checks.check_choices_asked(
+        request, ok_plan(), ok_trip(), with_kinds(("food", "destination", "activities"))
+    )
+    assert result.status == "pass"
+    assert result.message == "asked: destination, activities, food"
+
+
+def test_choices_asked_warns_when_a_pause_is_missing() -> None:
+    result = run_all(ok_plan(), ok_trip(), with_kinds(("activities",)))[checks.CHOICES_ASKED]
+    assert result.status == "warn"
+    assert result.message == "missing: food"
+    assert result.details == ["asked: activities"]
+    assert not result.blocks
+
+
+def test_choices_asked_skips_when_not_collected() -> None:
+    result = run_all(ok_plan(), ok_trip(), with_kinds(None))[checks.CHOICES_ASKED]
+    assert result.status == "skip"
+    assert result.message == "choices were not collected"
 
 
 # --- dead_links ---------------------------------------------------------------------------------
