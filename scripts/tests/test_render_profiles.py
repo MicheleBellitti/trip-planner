@@ -237,6 +237,8 @@ def test_coordinator_prompt_covers_the_pauses() -> None:
         "Bacalhau à Brás",
         "Torre de Belém, Lisboa",
         "leave out a2, a5",
+        "even when the preferences touch them",  # "Cucina locale" still gets the food pause
+        "with `multiple` true (false for the others)",
     ):
         assert phrase in system
 
@@ -251,6 +253,7 @@ def test_coordinator_keeps_unpicked_options_out_of_stops_and_bookings() -> None:
         "may still name the destination candidates not taken",
         "or by you when they let you choose",
         "never a follow-up",
+        "asking for a cheaper one, unless the traveller turned a cheaper one down",  # step 5
     ):
         assert phrase in system
     assert "never appear in the plan" not in system
@@ -265,14 +268,20 @@ def test_coordinator_waits_for_pending_reports_after_an_answer() -> None:
 
 
 def test_coordinator_prompt_handles_every_refusal() -> None:
-    """The prompt quotes the refusals `ask_traveller` answers with (backend/app/choices.py)."""
+    """The prompt quotes the refusals `ask_traveller` answers with (backend/app/choices.py).
+    "One question at a time" comes only for two calls in one request, whose results arrive
+    together: ending the turn on it would leave nothing pending, an end_turn that fails the
+    plan (decide_idle)."""
     _, system = agent_file("development", "coordinator")
     for phrase in (
         "ask_traveller rejected",
+        "after two rejections of the same question skip that pause",
         "No more questions: choose yourself.",
         "One question at a time",
+        "you made two calls at once; act on the other call's answer",
     ):
         assert phrase in system
+    assert "wait for the open answer" not in system
 
 
 def test_coordinator_prompt_covers_the_journey_modes() -> None:
@@ -286,11 +295,16 @@ def test_coordinator_prompt_covers_the_journey_modes() -> None:
         "the party's own car",
         "car ferr",
         "under about five hours",
-        "never reopened",  # step 1 settles the mode; no later fork offers an unresearched one
+        # step 1 settles the mode; no later fork offers an unresearched one
+        "never reopened by a pause",
+        "wave 1 finds no service at all for it",  # the one switch, for a mode the agent chose
+        "If only one mode works",  # the journey pause needs two options
+        "the main journey uses the mode settled in step 1",
         "the last leg's arrival",  # a car ferry's journey arrives with its last drive
     ):
         assert phrase in system
     assert "compare the two in wave 2" not in system
+    assert "or the mode the traveller picked" not in system
     # Only the picked destination is researched: constraints.json no longer lists candidates
     # (step 2 still offers "at most three candidates", through `ask_traveller`).
     blocks = re.findall(r"```json\n(.*?)```", system, re.DOTALL)
@@ -298,6 +312,25 @@ def test_coordinator_prompt_covers_the_journey_modes() -> None:
     assert len(examples) == 1
     assert "candidates" not in examples[0]
     assert json.loads(examples[0])["journey"]["mode"] == "flight"
+
+
+def test_coordinator_counts_and_paces_the_drives() -> None:
+    """A drive is not a booking, but its fuel and tolls count against the budget; a drive that
+    transport split takes two days, with the night between them unbooked; a far stop's null
+    drive price is not free."""
+    _, system = agent_file("development", "coordinator")
+    for phrase in (
+        "Compare `budget_eur` with that total plus the drives' estimated fuel and tolls",
+        "the budget check counts it",
+        "total plus the drives' fuel and tolls within `budget_eur`",
+        "A drive transport split in two takes consecutive days",
+        "the night there is not booked (no lodging research for it)",
+        "task lodging from the day after the start date to the day before the end date",
+        "a split drive's night aside",
+        "a far stop's null `price` is not free",
+    ):
+        assert phrase in system
+    assert "the summary names it apart from the total" not in system
 
 
 # A `web_fetch` URL the agent would have to build: a URL with a <placeholder> in it.
@@ -332,9 +365,11 @@ def test_no_prompt_or_skill_tells_an_agent_to_fetch_a_url_it_builds() -> None:
 @pytest.mark.parametrize("profile", rp.PROFILE_NAMES)
 def test_research_prompts_cite_only_pages_they_saw(agent: str, profile: str) -> None:
     """Spec §3, the root cause of dead links: a source URL is a page the agent opened or a
-    search result it saw, never one it composed from a site's structure."""
+    search result it saw, never one it composed from a site's structure. A fetch that failed
+    returned no page, so it does not count."""
     _, system = agent_file(profile, agent)
-    assert "you opened with `web_fetch` or a URL you saw as a search result" in system
+    assert "a page `web_fetch` returned or a URL you saw as a search result" in system
+    assert "you opened with `web_fetch`" not in system
     assert "never one composed from a site's structure" in system
     assert "cites that result's URL" in system
 
@@ -353,13 +388,18 @@ def test_transport_prompt_covers_every_main_journey() -> None:
         "car ferry",
         "parking",  # an `other` option near the lodging (plan decision 3)
         "out <id> <mode>",  # the main-journey reply line
+        "the party is not travelling in its own car",  # a car rental is not for a car trip
+        # a day's driving is capped: the coordinator puts the two legs on consecutive days
+        "A drive over about 9 hours is split at a town roughly halfway",
+        "about 15 minutes per 2 hours of driving",  # route planners leave the stops out
     ):
         assert phrase in system
 
 
 def test_transport_prompt_states_its_estimates() -> None:
     """A ferry fare cites the page it was read on; a drive's fuel and a far-stop drive come from
-    stated assumptions, never from memory."""
+    stated assumptions, never from memory; a distance comes only from a route planner; a null
+    price is free or not priced."""
     _, system = agent_file("development", "transport")
     for phrase in (
         "the page where you read the fare (the operator's, when you can)",
@@ -367,6 +407,8 @@ def test_transport_prompt_states_its_estimates() -> None:
         "a fuel price shown by a fetched page or a search result",
         "Never a figure from memory",
         "about 60 km/h outside cities",
+        "never from memory; null when no route planner gave it",
+        "null when free or not priced (a far-stop drive: fuel in the warning line)",
     ):
         assert phrase in system
     assert "the operator's page is the price's `source_url`" not in system
@@ -384,6 +426,7 @@ def test_activities_prompt_builds_the_days_around_the_picks() -> None:
         "if a pick cannot fit, say so in `warnings`",
         "food styles",
         "add new ones only where a day is empty or for the task's food styles",
+        "names the style and the area, never a venue from memory",  # no search left
     ):
         assert phrase in system
 
@@ -657,3 +700,5 @@ def test_coordinator_prompt_forbids_re_delegation(profile: str) -> None:
     _, system = agent_file(profile, "coordinator")
     assert "No re-delegation" in system
     assert "read each file once" in system
+    # step 5 reads only the files step 4 has not (activities.json is read for its pause)
+    assert "read each result file you have not read yet" in system
