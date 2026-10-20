@@ -9,7 +9,7 @@ import { Button, LinkButton } from "./button";
 import { ChoiceCard } from "./choice-card";
 import { CostMeter, costValueText } from "./cost-meter";
 import { Countdown } from "./countdown";
-import { Field, TextInput } from "./field";
+import { ChoiceChips, Field, TextInput, type ChoiceChipOption } from "./field";
 import { PlanStatusBadge, StatusBadge } from "./status-badge";
 import { Timeline, TimelineItem, TimelineTitle } from "./timeline";
 import { dismissToast, toast, Toaster } from "./toast";
@@ -405,6 +405,66 @@ describe("Field", () => {
     const describedBy = input.getAttribute("aria-describedby")?.split(" ") ?? [];
     expect(describedBy.map((id) => document.getElementById(id)?.textContent)).toEqual(["Una città", "Scrivi una città."]);
     expect(input.hasAttribute("required")).toBe(true);
+  });
+});
+
+describe("ChoiceChips", () => {
+  const MODES: readonly ChoiceChipOption<"flight" | "train" | "ferry">[] = [
+    { value: "flight", label: "Aereo", icon: "airplane-tilt" },
+    { value: "train", label: "Treno", icon: "train" },
+    { value: "ferry", label: "Traghetto", icon: "boat" },
+  ];
+
+  it("is one named group of radios, the chosen one checked", () => {
+    const onValueChange = vi.fn();
+    render(
+      <ChoiceChips legend="Come viaggi" name="mode" options={MODES} value="train" onValueChange={onValueChange} id="field-mode" />,
+    );
+    const group = screen.getByRole("group", { name: "Come viaggi" });
+    const radios = screen.getAllByRole("radio") as HTMLInputElement[];
+    expect(radios.map((radio) => radio.closest("fieldset"))).toEqual([group, group, group]);
+    expect(radios.map((radio) => radio.name)).toEqual(["mode", "mode", "mode"]);
+    expect(radios.map((radio) => radio.checked)).toEqual([false, true, false]);
+    // The id is where a form sends the focus for an error: the chosen radio, and only it.
+    expect(document.getElementById("field-mode")).toBe(screen.getByRole("radio", { name: "Treno" }));
+    expect(radios.filter((radio) => radio.id === "field-mode")).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("radio", { name: "Traghetto" }));
+    expect(onValueChange).toHaveBeenCalledWith("ferry");
+  });
+
+  it("draws each option's icon beside its label", () => {
+    render(<ChoiceChips legend="Come viaggi" name="mode" options={MODES} value="flight" onValueChange={() => {}} />);
+    const label = screen.getByRole("radio", { name: "Traghetto" }).closest("label") as HTMLElement;
+    expect(label.querySelector("svg use")?.getAttribute("href")).toBe("#icon-boat");
+    expect(label.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+    expect(label.textContent).toBe("Traghetto");
+  });
+
+  // aria-invalid is not a radio's attribute (ARIA 1.2): the error reaches each radio as its description.
+  it("wires the hint and the error to every radio", () => {
+    const { rerender } = render(
+      <ChoiceChips
+        legend="Come viaggi"
+        hint="Per andata e ritorno."
+        error="Scelta non valida."
+        name="mode"
+        options={MODES}
+        value="flight"
+        onValueChange={() => {}}
+      />,
+    );
+    for (const radio of screen.getAllByRole("radio")) {
+      expect(radio.hasAttribute("aria-invalid")).toBe(false);
+      const describedBy = radio.getAttribute("aria-describedby")?.split(" ") ?? [];
+      expect(describedBy.map((id) => document.getElementById(id)?.textContent)).toEqual(["Per andata e ritorno.", "Scelta non valida."]);
+    }
+
+    rerender(<ChoiceChips legend="Come viaggi" hint="Per andata e ritorno." name="mode" options={MODES} value="flight" onValueChange={() => {}} />);
+    for (const radio of screen.getAllByRole("radio")) {
+      const describedBy = radio.getAttribute("aria-describedby")?.split(" ") ?? [];
+      expect(describedBy.map((id) => document.getElementById(id)?.textContent)).toEqual(["Per andata e ritorno."]);
+    }
   });
 });
 

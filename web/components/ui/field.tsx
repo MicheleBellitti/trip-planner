@@ -1,7 +1,7 @@
 import { useId, type ComponentProps, type ComponentPropsWithoutRef, type ReactNode } from "react";
 
 import { cx } from "./cx";
-import { Icon } from "./icon";
+import { Icon, type IconName } from "./icon";
 
 /** What a Field hands to its control: wire them onto the input as they are. */
 export interface FieldControlProps {
@@ -227,6 +227,95 @@ export function SegmentedControl<T extends string>({
           </label>
         ))}
       </div>
+    </fieldset>
+  );
+}
+
+export interface ChoiceChipOption<T extends string> {
+  value: T;
+  label: string;
+  icon: IconName;
+}
+
+interface ChoiceChipsProps<T extends string> {
+  /** The question, as the group's legend ("Come viaggi"). */
+  legend: ReactNode;
+  /** Help under the legend, ink-2, read with every option. */
+  hint?: ReactNode;
+  /** What is wrong, under the chips, in error red with a cross (as Field draws it). */
+  error?: ReactNode;
+  name: string;
+  options: readonly ChoiceChipOption<T>[];
+  value: T;
+  onValueChange: (value: T) => void;
+  /** Set on the chosen radio: where a form moves the focus for this field's error. */
+  id?: string;
+  className?: string;
+}
+
+/** Four or more mutually exclusive choices, each with an icon (the travel mode): native radios in
+ * a fieldset, drawn as pills that wrap onto a second row on the phone. The chosen pill is ink, as
+ * the chosen segment of a SegmentedControl; arrow keys move the choice, as in any radio group. */
+export function ChoiceChips<T extends string>({
+  legend,
+  hint,
+  error,
+  name,
+  options,
+  value,
+  onValueChange,
+  id,
+  className,
+}: ChoiceChipsProps<T>) {
+  const generated = useId();
+  const hintId = `${generated}-hint`;
+  const errorId = `${generated}-error`;
+  const describedBy = [hint ? hintId : null, error ? errorId : null].filter(Boolean).join(" ") || undefined;
+
+  return (
+    <fieldset className={cx("grid min-w-0 gap-1.5 border-0 p-0", className)}>
+      <legend className="mb-1.5 p-0 text-meta font-semibold text-ink">{legend}</legend>
+      {hint ? (
+        <p id={hintId} className="-mt-1 text-meta text-ink-2">
+          {hint}
+        </p>
+      ) : null}
+      <div className="flex flex-wrap gap-2">
+        {options.map((option) => (
+          <label
+            key={option.value}
+            className={cx(
+              // 40 px pills on the phone with 3 px of tap area around them (46 px; the gaps stay
+              // 2 px apart); 36 px from 640 px.
+              "relative inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-full border-[1.5px] border-rule-strong bg-surface px-3.5 text-small font-semibold text-ink sm:min-h-9",
+              "before:absolute before:-inset-[3px] before:rounded-full",
+              "transition-[background-color,border-color,color] duration-(--duration-hover) ease-out hover:bg-notice-wash",
+              "has-checked:border-action has-checked:bg-action has-checked:text-on-action has-checked:hover:bg-action",
+              "has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus",
+            )}
+          >
+            <input
+              type="radio"
+              name={name}
+              value={option.value}
+              id={option.value === value ? id : undefined}
+              checked={option.value === value}
+              onChange={() => onValueChange(option.value)}
+              // The error is read as each radio's description: aria-invalid is not a radio's attribute.
+              aria-describedby={describedBy}
+              className="sr-only"
+            />
+            <Icon name={option.icon} size={16} />
+            {option.label}
+          </label>
+        ))}
+      </div>
+      {error ? (
+        <p id={errorId} className="flex items-start gap-1.5 text-meta text-error">
+          <Icon name="x-circle" size={15} className="mt-0.5" />
+          <span>{error}</span>
+        </p>
+      ) : null}
     </fieldset>
   );
 }
