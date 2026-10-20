@@ -156,9 +156,11 @@ export function PlanScreen({ planId, client = liveApi }: { planId: string; clien
     async (choiceId, input) => {
       try {
         await client.answerChoice(planId, choiceId, input);
-        // The stream's answered event confirms it; until then the question stays hidden.
+        // The stream's answered event confirms it; until then the question stays hidden. The focus
+        // goes to the plan's state, in the sticky header and on screen: without preventScroll,
+        // Chrome would scroll the page to the header's place in the flow, its top.
         setClosedChoices((current) => new Set(current).add(choiceId));
-        requestAnimationFrame(() => document.getElementById(PLAN_STATE_ID)?.focus());
+        requestAnimationFrame(() => document.getElementById(PLAN_STATE_ID)?.focus({ preventScroll: true }));
         return null;
       } catch (error) {
         if (error instanceof UnauthorizedError) {

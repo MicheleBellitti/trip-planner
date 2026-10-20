@@ -684,6 +684,27 @@ describe("PlanScreen, the traveller's choice", () => {
     expect(panel()).toBeNull();
   });
 
+  it("moves the focus to the plan's state without scrolling the page once the answer went", async () => {
+    // The state sits in the sticky header, on screen while the plan runs: a plain focus() would
+    // throw the page to its top (Chrome scrolls to a sticky element's place in the flow).
+    const answerChoice = vi.fn().mockResolvedValue({ id: CHOICE_ID, answered_by: "skip", selected: [] });
+    const client = fakeClient({ getPlan: vi.fn(async () => running()), answerChoice });
+    render(<PlanScreen planId={PLAN_ID} client={client} />);
+    await flush();
+    await replay(upTo(55));
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    try {
+      fireEvent.click(screen.getByRole("button", { name: "Scegli tu" }));
+      await flush(50);
+      expect(answerChoice).toHaveBeenCalledWith(PLAN_ID, CHOICE_ID, { skip: true });
+      expect(document.activeElement?.id).toBe(PLAN_STATE_ID);
+      const toState = focus.mock.contexts.findIndex((element) => (element as HTMLElement).id === PLAN_STATE_ID);
+      expect(focus.mock.calls[toState]).toEqual([{ preventScroll: true }]);
+    } finally {
+      focus.mockRestore();
+    }
+  });
+
   it("shows the cards from GET /plans/{id} before the stream opens", async () => {
     // Every read is the same stale snapshot: the question still pending.
     const getPlan = vi.fn(async () => running({ pending_choice: PENDING }));
