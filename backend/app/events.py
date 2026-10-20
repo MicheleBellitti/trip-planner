@@ -69,6 +69,7 @@ class EventKind(StrEnum):
     USAGE = "usage"  # token usage and cost update
     ERROR = "error"  # an agent or a source failed
     PLAN = "plan"  # submit_plan: plan accepted or rejected (with the validation errors)
+    CHOICE = "choice"  # ask_traveller: a question put to the traveller, then its answer
 
 
 class UIEvent(BaseModel):

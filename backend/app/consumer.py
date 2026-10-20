@@ -111,20 +111,21 @@ import hashlib
 import random
 import re
 import uuid
-from collections.abc import Awaitable, Callable, Collection, Mapping
+from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import structlog
 from pydantic import ValidationError
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app import clock
-from app.db import EventRecord, PlanRecord, PlanStatus
+from app.choices import AnsweredBy, PendingChoice, answered_title, asked_title, request_of
+from app.db import ChoiceRecord, EventRecord, PlanRecord, PlanStatus
 from app.events import NOISE_EVENT_TYPES, AgentName, EventKind, UIEvent, normalize, one_line
 from app.fx import fx_keys
 from app.link_health import NO_LINK_CHECKS, LinkHealthChecker, LinkHealthMap
@@ -374,7 +375,14 @@ class EmitResult:
     status_applied: bool
     """True when `update.status` was applied (False when absent, when its precondition failed,
     or when the event was a duplicate)."""
+    refused: bool = False
+    """True when the `guard` returned False: NOTHING was stored or changed."""
 
+
+Guard = Callable[["AsyncSession"], Awaitable[bool]]
+"""Runs inside `emit`'s transaction, after the plan-row lock and the duplicate check; False
+refuses the whole emit (nothing is stored). It may write on the session (its writes commit with
+the event and roll back with a refusal)."""
 
 EventBuilder = Callable[[int], UIEvent | None]
 """Builds the UIEvent for a given `seq` (e.g. `lambda seq: normalize(raw, seq=seq, ...)`)."""
@@ -408,6 +416,7 @@ class EventSink:
         *,
         ma_event_id: str,
         update: PlanUpdate | None = None,
+        guard: Guard | None = None,
     ) -> EmitResult:
         """In one transaction: lock the `plans` row (`SELECT ... FOR UPDATE`), skip if
         `ma_event_id` is already stored, allocate `seq = max(seq) + 1` (0 for the first event),
@@ -424,8 +433,15 @@ class EventSink:
         `title` and `detail`), and every other JSON this writes (`plan`, `trip`) comes from
         contract models that reject control characters, so Postgres `jsonb` never refuses a
         write here.
+
+        `guard`, when given, runs after the lock and the duplicate check, before `seq` is
+        allocated: when it returns False nothing is stored or changed and the result says
+        `refused`. Two emits of one plan serialize on the row lock, so a guard that does a
+        conditional UPDATE decides a race between them.
         """
-        return await self._emit(build, ma_event_id=ma_event_id, update=update, all_or_nothing=False)
+        return await self._emit(
+            build, ma_event_id=ma_event_id, update=update, all_or_nothing=False, guard=guard
+        )
 
     async def _emit(
         self,
@@ -434,6 +450,7 @@ class EventSink:
         ma_event_id: str,
         update: PlanUpdate | None,
         all_or_nothing: bool,
+        guard: Guard | None = None,
     ) -> EmitResult:
         """`emit`; with `all_or_nothing`, a status change whose precondition fails stores
         nothing at all (no event, no other change): `set_plan_status` semantics."""
@@ -458,6 +475,10 @@ class EventSink:
                 allowed = change is not None and _status_allowed(plan.status, change)
                 if all_or_nothing and change is not None and not allowed:
                     return EmitResult(event=None, duplicate=False, status_applied=False)
+                if guard is not None and not await guard(db):
+                    return EmitResult(
+                        event=None, duplicate=False, status_applied=False, refused=True
+                    )
                 next_seq = await db.scalar(
                     select(func.coalesce(func.max(EventRecord.seq), -1) + 1).where(
                         EventRecord.plan_id == self._plan_id
@@ -652,6 +673,87 @@ def backend_event(
         )
 
     return build
+
+
+# --- ask_traveller ---------------------------------------------------------------------------
+
+
+def choice_asked_event(record: ChoiceRecord, *, cost_cents: int | None) -> EventBuilder:
+    """The timeline event of a question put to the traveller. Emit it with
+    `backend_event_id(plan_id, "choice", f"{record.id}:asked")` as its key."""
+    view = PendingChoice.from_record(record)
+    return backend_event(
+        EventKind.CHOICE,
+        asked_title(view.kind),
+        ts=record.asked_at,
+        detail={
+            "event_type": "backend.choice",
+            "phase": "asked",
+            "choice": view.model_dump(mode="json"),
+        },
+        cost_cents=cost_cents,
+    )
+
+
+async def close_choice(
+    sink: EventSink,
+    choice_id: str,
+    *,
+    answered_by: AnsweredBy,
+    selected: Sequence[str],
+    now: dt.datetime,
+    cost_cents: int | None = None,
+) -> ChoiceRecord | None:
+    """Close a choice exactly once, whoever answers first (the traveller, the deadline, the
+    platform on interrupt). Returns the closed row only when THIS call closed it; None when it
+    was already closed or does not exist (nothing is stored then).
+
+    The conditional UPDATE runs as the `emit` guard, under the plan row's lock, so two closes of
+    one plan's choices serialize and exactly one wins; the answered event is stored with it."""
+    closed: list[ChoiceRecord] = []
+
+    async def guard(db: AsyncSession) -> bool:
+        row = await db.scalar(
+            update(ChoiceRecord)
+            .where(
+                ChoiceRecord.id == choice_id,
+                ChoiceRecord.plan_id == sink.plan_id,
+                ChoiceRecord.answered_by.is_(None),
+            )
+            .values(answer=list(selected), answered_by=answered_by, answered_at=now)
+            .returning(ChoiceRecord)
+            .execution_options(populate_existing=True)
+        )
+        if row is None:
+            return False
+        closed.append(row)
+        return True
+
+    def build(seq: int) -> UIEvent | None:
+        row = closed[0]
+        request = request_of(row)
+        return backend_event(
+            EventKind.CHOICE,
+            answered_title(request, answered_by, selected),
+            ts=now,
+            detail={
+                "event_type": "backend.choice",
+                "phase": "answered",
+                "choice_id": choice_id,
+                "kind": row.kind,
+                "answered_by": answered_by,
+                "selected": list(selected),
+                "answered_at": now.isoformat(),
+            },
+            cost_cents=cost_cents,
+        )(seq)
+
+    result = await sink.emit(
+        build,
+        ma_event_id=backend_event_id(sink.plan_id, "choice", f"{choice_id}:closed"),
+        guard=guard,
+    )
+    return closed[0] if result.event is not None and closed else None
 
 
 async def load_events_after(

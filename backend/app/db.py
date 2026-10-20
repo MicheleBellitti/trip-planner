@@ -189,6 +189,41 @@ class EventRecord(Base):
     ma_event_id: Mapped[str | None] = mapped_column(Text, unique=True)
 
 
+_ANSWERED_BY_VALUES = "'traveller', 'skip', 'timeout', 'closed'"
+_CHOICE_KIND_VALUES = "'destination', 'journey', 'activities', 'food', 'other'"
+
+
+class ChoiceRecord(Base):
+    """A question the coordinator put to the traveller (`ask_traveller`), and its answer.
+
+    `id` is the `agent.custom_tool_use` event id. `payload` is `{"request": <ChoiceRequest
+    JSON>, "photos": {<option id>: <Cover JSON>}}`. A row is closed once: `answered_by` goes from
+    NULL to its value in a conditional UPDATE (`consumer.close_choice`). Deleting a plan deletes
+    its choices (ON DELETE CASCADE).
+    """
+
+    __tablename__ = "choices"
+    __table_args__ = (
+        CheckConstraint(f"kind IN ({_CHOICE_KIND_VALUES})", name="kind"),
+        CheckConstraint(
+            f"answered_by IS NULL OR answered_by IN ({_ANSWERED_BY_VALUES})", name="answered_by"
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    plan_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("plans.id", ondelete="CASCADE"), index=True
+    )
+    kind: Mapped[str] = mapped_column(Text)
+    payload: Mapped[JsonObject]
+    asked_at: Mapped[dt.datetime]
+    deadline_at: Mapped[dt.datetime]
+    # The picked option ids (a JSON list); NULL while open.
+    answer: Mapped[list[str] | None] = mapped_column(JSONB(none_as_null=True))
+    answered_by: Mapped[str | None] = mapped_column(Text)
+    answered_at: Mapped[dt.datetime | None]
+
+
 class AuthSessionRecord(Base):
     """A Better Auth session of the web app's own accounts (its core `session` model).
 

@@ -20,7 +20,8 @@
         "message",
         "usage",
         "error",
-        "plan"
+        "plan",
+        "choice"
       ],
       "title": "EventKind",
       "type": "string"
