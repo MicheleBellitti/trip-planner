@@ -754,7 +754,10 @@ def check_dead_links(
     for url, verdict in metadata.link_health.items():
         if not isinstance(verdict, Mapping) or verdict.get("status") != "dead":
             continue
-        host = (urlsplit(url).hostname or "?").lower().removeprefix("www.")
+        try:
+            host = (urlsplit(url).hostname or "?").lower().removeprefix("www.")
+        except ValueError:  # e.g. https://ex[ample.com/x, which httpx accepted
+            host = "?"
         fallback = verdict.get("fallback")
         homepage = "yes" if isinstance(fallback, str) and fallback else "no"
         lines.append(f"{host} {verdict.get('reason') or 'dead'} (homepage: {homepage})")

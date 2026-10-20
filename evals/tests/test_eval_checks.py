@@ -558,6 +558,26 @@ def test_dead_links_warns_with_hosts_and_reasons(
     assert result.details == [f"a.example http_404 (homepage: {homepage})"]
 
 
+def test_dead_links_reports_a_url_that_urlsplit_refuses() -> None:
+    """httpx accepts "https://ex[ample.com/x" (a booking link has no URL validation), urlsplit
+    does not: the other dead links are still reported."""
+    metadata = checks.RunMetadata(
+        status="ready",
+        submit_attempts=1,
+        cost_cents=41,
+        web_search_requests=12,
+        link_health={
+            "https://ex[ample.com/x": _verdict("dead", "nxdomain"),
+            "https://www.expedia.it/x": _verdict(
+                "dead", "http_404", fallback="https://www.expedia.it/"
+            ),
+        },
+    )
+    result = run_all(ok_plan(), ok_trip(), metadata)[checks.DEAD_LINKS]
+    assert result.status == "warn"
+    assert result.details == ["? nxdomain (homepage: no)", "expedia.it http_404 (homepage: yes)"]
+
+
 def test_dead_links_skips_without_a_plan_or_without_verdicts() -> None:
     no_plan = run_all(None, None)[checks.DEAD_LINKS]
     assert no_plan.status == "skip"
