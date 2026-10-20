@@ -157,6 +157,9 @@ def test_plan_errors_carry_status_code_and_italian_message() -> None:
         PlanErrorCode.TOO_MANY_REQUESTS: 429,
         PlanErrorCode.PLANNER_BUSY: 503,
         PlanErrorCode.CONTINUE_LIMIT_REACHED: 409,
+        PlanErrorCode.CHOICE_NOT_FOUND: 404,
+        PlanErrorCode.CHOICE_CLOSED: 409,
+        PlanErrorCode.INVALID_CHOICE_ANSWER: 422,
         PlanErrorCode.PLANNER_UNAVAILABLE: 503,
         PlanErrorCode.AGENTS_UNAVAILABLE: 502,
         PlanErrorCode.REQUEST_TOO_LARGE: 413,
@@ -1406,6 +1409,7 @@ async def test_development_documents_every_route(api: Api) -> None:
         "/plans/{plan_id}/cover",
         "/plans/{plan_id}/interrupt",
         "/plans/{plan_id}/continue",
+        "/plans/{plan_id}/choices/{choice_id}",
         "/evals/runs",
         "/evals/runs/{run_id}",
     }
@@ -1440,3 +1444,230 @@ def test_routes_module_exposes_the_stream_settings() -> None:
     expected = {PlanStatus.READY, PlanStatus.FAILED, PlanStatus.BLOCKED, PlanStatus.INTERRUPTED}
     assert expected == routes.TERMINAL_STATUSES
     assert PlanStatus.BUDGET_PAUSED not in routes.TERMINAL_STATUSES
+
+
+# --- POST /plans/{id}/choices/{choice_id} and GET /plans/{id}'s pending_choice -------------------
+
+CHOICE_OPTIONS: dict[str, Any] = {
+    "kind": "journey",
+    "question": "Come preferisci arrivare?",
+    "multiple": False,
+    "options": [
+        {"id": "c1", "title": "Volo", "reason": "Il più veloce."},
+        {"id": "c2", "title": "Treno", "reason": "Dal centro al centro."},
+    ],
+}
+CHOICE_ASKED = dt.datetime(2026, 10, 20, 10, 0, tzinfo=dt.UTC)
+
+
+def patch_answer_choice(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    result: sessions.AnsweredChoice | None = None,
+    error: BaseException | None = None,
+) -> list[tuple[uuid.UUID, str, Any, CurrentUser]]:
+    calls: list[tuple[uuid.UUID, str, Any, CurrentUser]] = []
+
+    async def fake(
+        plan_id: uuid.UUID,
+        choice_id: str,
+        answer: Any,
+        user: CurrentUser,
+        *,
+        services: PlannerServices,
+    ) -> sessions.AnsweredChoice:
+        calls.append((plan_id, choice_id, answer, user))
+        if error is not None:
+            raise error
+        assert result is not None
+        return result
+
+    monkeypatch.setattr(sessions, "answer_choice", fake)
+    return calls
+
+
+async def add_choice_row(
+    api: Api,
+    plan_id: uuid.UUID,
+    *,
+    choice_id: str | None = None,
+    answered_by: str | None = None,
+) -> None:
+    from app.choices import ChoiceRequest, insert_choice
+    from app.db import ChoiceRecord
+
+    choice_id = choice_id or f"sevt_{plan_id.hex[:8]}"
+    async with api.planner.session_factory() as db, db.begin():
+        await insert_choice(
+            db,
+            choice_id=choice_id,
+            plan_id=plan_id,
+            request=ChoiceRequest.model_validate(CHOICE_OPTIONS),
+            photos={},
+            asked_at=CHOICE_ASKED,
+            deadline_at=CHOICE_ASKED + dt.timedelta(seconds=240),
+        )
+        if answered_by is not None:
+            row = await db.get(ChoiceRecord, choice_id)
+            assert row is not None
+            row.answered_by = answered_by
+            row.answered_at = CHOICE_ASKED + dt.timedelta(seconds=5)
+
+
+async def test_answer_choice_route_selected(api: Api, monkeypatch: pytest.MonkeyPatch) -> None:
+    plan_id = uuid.uuid4()
+    calls = patch_answer_choice(
+        monkeypatch,
+        result=sessions.AnsweredChoice(id="sevt_q1", answered_by="traveller", selected=["c1"]),
+    )
+
+    response = await api.client.post(
+        f"/plans/{plan_id}/choices/sevt_q1", json={"selected": ["c1"]}, headers=POST_HEADERS
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"id": "sevt_q1", "answered_by": "traveller", "selected": ["c1"]}
+    [(called_plan, called_choice, answer, user)] = calls
+    assert (called_plan, called_choice, user) == (plan_id, "sevt_q1", CurrentUser(USER))
+    assert answer.selected == ["c1"]
+    assert answer.skip is False
+
+
+async def test_answer_choice_route_skip(api: Api, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = patch_answer_choice(
+        monkeypatch,
+        result=sessions.AnsweredChoice(id="sevt_q1", answered_by="skip", selected=[]),
+    )
+
+    response = await api.client.post(
+        f"/plans/{uuid.uuid4()}/choices/sevt_q1", json={"skip": True}, headers=POST_HEADERS
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"id": "sevt_q1", "answered_by": "skip", "selected": []}
+    assert calls[0][2].skip is True
+
+
+async def test_answer_choice_needs_the_origin(api: Api, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = patch_answer_choice(monkeypatch, error=AssertionError("must not be reached"))
+    url = f"/plans/{uuid.uuid4()}/choices/sevt_q1"
+
+    missing = await api.client.post(url, json={"skip": True})
+    wrong = await api.client.post(
+        url, json={"skip": True}, headers={"Origin": "https://evil.example"}
+    )
+
+    for response in (missing, wrong):
+        assert response.status_code == 403
+        assert detail(response)["code"] == "bad_origin"
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    "body",
+    [{}, {"selected": ["c1"], "skip": True}, {"selected": []}, {"selected": ["c1"], "extra": 1}],
+)
+async def test_answer_choice_body_needs_selected_or_skip(
+    api: Api, monkeypatch: pytest.MonkeyPatch, body: dict[str, Any]
+) -> None:
+    calls = patch_answer_choice(monkeypatch, error=AssertionError("must not be reached"))
+
+    response = await api.client.post(
+        f"/plans/{uuid.uuid4()}/choices/sevt_q1", json=body, headers=POST_HEADERS
+    )
+
+    assert response.status_code == 422
+    assert isinstance(response.json()["detail"], list)  # FastAPI's own 422 shape
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    ("error", "status", "code", "data", "message"),
+    [
+        (
+            sessions.ChoiceClosedError("timeout"),
+            409,
+            "choice_closed",
+            {"answered_by": "timeout"},
+            "Questa scelta è già chiusa: il piano va avanti.",
+        ),
+        (
+            sessions.ChoiceClosedError(None),
+            409,
+            "choice_closed",
+            {"answered_by": None},
+            "Questa scelta è già chiusa: il piano va avanti.",
+        ),
+        (
+            sessions.InvalidChoiceAnswerError("unknown_option"),
+            422,
+            "invalid_choice_answer",
+            {"reason": "unknown_option"},
+            "La risposta non corrisponde alle opzioni proposte: ricarica la pagina e riprova.",
+        ),
+        (
+            sessions.ChoiceNotFoundError("x"),
+            404,
+            "choice_not_found",
+            None,
+            "Questa domanda non c'è.",
+        ),
+        (PlanNotFoundError(), 404, "plan_not_found", None, "Questo piano non c'è."),
+        (sessions.PlannerUnavailableError(["no key"]), 503, "planner_unavailable", None, None),
+    ],
+)
+async def test_answer_choice_errors_use_the_envelope(
+    api: Api,
+    monkeypatch: pytest.MonkeyPatch,
+    error: BaseException,
+    status: int,
+    code: str,
+    data: dict[str, Any] | None,
+    message: str | None,
+) -> None:
+    patch_answer_choice(monkeypatch, error=error)
+
+    response = await api.client.post(
+        f"/plans/{uuid.uuid4()}/choices/sevt_q1", json={"selected": ["c1"]}, headers=POST_HEADERS
+    )
+
+    assert response.status_code == status
+    body = detail(response)
+    assert body["code"] == code
+    assert body["data"] == data
+    if message is not None:
+        assert body["message"] == message
+
+
+async def test_plan_detail_pending_choice(api: Api, plan_rows: PlanRows) -> None:
+    open_plan = await plan_rows.add_plan()
+    await add_choice_row(api, open_plan.id)
+    answered = await plan_rows.add_plan()
+    await add_choice_row(api, answered.id, answered_by="traveller")
+    interrupted = await plan_rows.add_plan()
+    await add_choice_row(api, interrupted.id)
+    async with api.planner.session_factory() as db:
+        record = await db.get(routes.PlanRecord, interrupted.id)
+        assert record is not None
+        record.interrupt_requested_at = CHOICE_ASKED
+        await db.commit()
+    paused = await plan_rows.add_plan(status=PlanStatus.BUDGET_PAUSED)
+    await add_choice_row(api, paused.id)
+    without = await plan_rows.add_plan()
+
+    async def pending(plan_id: uuid.UUID) -> Any:
+        response = await api.client.get(f"/plans/{plan_id}")
+        assert response.status_code == 200
+        return response.json()["pending_choice"]
+
+    choice = await pending(open_plan.id)
+    assert choice["id"] == f"sevt_{open_plan.id.hex[:8]}"
+    assert choice["kind"] == "journey"
+    assert choice["multiple"] is False
+    assert [option["id"] for option in choice["options"]] == ["c1", "c2"]
+    assert choice["options"][0]["photo"] is None
+    assert choice["deadline_at"] == "2026-10-20T10:04:00Z"
+    assert await pending(answered.id) is None
+    assert await pending(interrupted.id) is None
+    assert await pending(paused.id) is None
+    assert await pending(without.id) is None
