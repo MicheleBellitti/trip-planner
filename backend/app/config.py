@@ -261,6 +261,10 @@ class Settings(BaseSettings):
     # FRONTEND_ORIGIN, which is a page of this deployment.
     wikimedia_contact_url: str = ""
 
+    # Check every URL of a delivered plan (app/link_health.py): dead pages are replaced by their
+    # site's homepage or shown as text. False skips the check (no request leaves the backend).
+    link_check_enabled: bool = True
+
     # Local demo for UI work (development only): POST /plans replays a scripted session from
     # backend/tests/fixtures/ma through the fake Managed Agents client, offline and free.
     demo_mode: bool = False
@@ -458,6 +462,11 @@ class Settings(BaseSettings):
         with a way to reach the operator)."""
         contact = self.wikimedia_contact_url or self.frontend_origin
         return f"AtlasTripPlanner/1.0 ({contact}; personal trip planner)"
+
+    @property
+    def link_check_user_agent(self) -> str:
+        """The User-Agent of the link check's requests: an honest one, naming Atlas's site."""
+        return f"AtlasLinkCheck/1.0 (+{self.frontend_origin})"
 
     @property
     def local_user_email(self) -> str | None:

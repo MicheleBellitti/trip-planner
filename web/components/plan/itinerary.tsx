@@ -1,6 +1,7 @@
 import { cx } from "@/components/ui/cx";
 import { HOME_TIMEZONE } from "@/lib/format";
 import { homeClockFor } from "@/lib/zone-time";
+import type { LinkHealthMap } from "@/lib/schemas/api";
 import type { PlanBooking, PlanDay, PlanStop } from "@/lib/schemas/generated/plan";
 import type { CSSProperties } from "react";
 
@@ -11,9 +12,8 @@ import {
   formatDuration,
   formatPlanDay,
   HOME_CLOCK_LABEL,
-  hostLabel,
   leavesHome,
-  safeHttpUrl,
+  planUrl,
   STOP_KIND_LABELS,
   stopPlace,
   tripDayNumber,
@@ -53,6 +53,8 @@ function DayDisc({ number, className }: { number: number | null; className?: str
   );
 }
 
+const NO_HEALTH: LinkHealthMap = {};
+
 interface ItineraryProps {
   days: readonly PlanDay[];
   startDate: string;
@@ -61,6 +63,8 @@ interface ItineraryProps {
   bookings: readonly PlanBooking[];
   /** The anchor id of the booking at a position in plan.bookings. */
   bookingAnchor: (index: number) => string;
+  /** The link check's verdicts by URL (PlanDetail.link_health). */
+  health?: LinkHealthMap;
 }
 
 /**
@@ -70,7 +74,7 @@ interface ItineraryProps {
  * gutter. From 1280 px each day becomes a row of a timetable: the day on the left, its own line
  * of stops on the right.
  */
-export function Itinerary({ days, startDate, timeZone, bookings, bookingAnchor }: ItineraryProps) {
+export function Itinerary({ days, startDate, timeZone, bookings, bookingAnchor, health = NO_HEALTH }: ItineraryProps) {
   const byStop = bookingsByStop(bookings);
   return (
     <ol className="m-0 list-none p-0">
@@ -109,6 +113,7 @@ export function Itinerary({ days, startDate, timeZone, bookings, bookingAnchor }
                   <StopRow
                     key={`${stop.ref}-${stopIndex}`}
                     stop={stop}
+                    health={health}
                     number={stopIndex + 1}
                     first={stopIndex === 0}
                     last={stopIndex === day.stops.length - 1}
@@ -159,10 +164,11 @@ interface StopRowProps {
   homeClock: string | null;
   /** The plan's bookings that belong to this stop, as links to their rows. */
   bookings: { title: string; href: string }[];
+  health: LinkHealthMap;
 }
 
-function StopRow({ stop, number, first, last, lastDay, homeClock, bookings }: StopRowProps) {
-  const url = safeHttpUrl(stop.url);
+function StopRow({ stop, number, first, last, lastDay, homeClock, bookings, health }: StopRowProps) {
+  const url = planUrl(stop.url, health);
   const place = stopPlace(stop);
   const meta = [STOP_KIND_LABELS[stop.kind], stop.duration_min ? formatDuration(stop.duration_min) : null]
     .filter(Boolean)
@@ -207,7 +213,7 @@ function StopRow({ stop, number, first, last, lastDay, homeClock, bookings }: St
           {stop.notes ? (
             <p className="mt-1 text-meta whitespace-pre-line text-ink-2 [overflow-wrap:anywhere]">{stop.notes}</p>
           ) : null}
-          {url || bookings.length > 0 ? (
+          {url.kind !== "none" || bookings.length > 0 ? (
             <div className="mt-1 flex flex-col gap-0.5 text-meta">
               {bookings.map((booking) => (
                 <p key={booking.href} className="text-ink-2">
@@ -220,12 +226,20 @@ function StopRow({ stop, number, first, last, lastDay, homeClock, bookings }: St
                   </a>
                 </p>
               ))}
-              {url && stop.url ? (
+              {url.kind === "link" ? (
                 <p>
-                  <QuietExternalLink href={stop.url} className="py-1">
-                    {hostLabel(url)}
+                  <QuietExternalLink href={url.href} className="py-1">
+                    {url.host}
                   </QuietExternalLink>
                 </p>
+              ) : url.kind === "homepage" ? (
+                <p>
+                  <QuietExternalLink href={url.href} className="py-1">
+                    {`Sito di ${url.host}`}
+                  </QuietExternalLink>
+                </p>
+              ) : url.kind === "missing" ? (
+                <p className="text-ink-2">{`${url.host ?? ""} (pagina non trovata)`.trim()}</p>
               ) : null}
             </div>
           ) : null}

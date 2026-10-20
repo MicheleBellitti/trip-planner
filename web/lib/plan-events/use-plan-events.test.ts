@@ -337,6 +337,7 @@ describe("usePlanEvents", () => {
       agent_profile: "development" as const,
       booking_links: [],
       alternative_links: [],
+      link_health: {},
       plan: null,
       continues: 0,
       continues_limit: 2,

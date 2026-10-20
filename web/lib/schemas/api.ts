@@ -2,10 +2,11 @@
  * Response shapes of the planner API that the backend does not export as JSON Schema.
  *
  * Hand-written from the Pydantic models in backend/app/routes.py (PlanSummary,
- * PlanListResponse, LinkCheck, PlanDetail, CreatePlanResponse, StatusResponse,
- * ContinueResponse, MeResponse, ErrorBody), backend/app/db.py (PlanStatus), backend/app/config.py
- * (AgentProfile) and backend/app/auth.py (AuthErrorCode). Keep them in step with those models;
- * the generated contract schemas (request, UI event, plan) live in ./generated.
+ * PlanListResponse, LinkCheck, LinkHealthOut, PlanDetail, CreatePlanResponse, StatusResponse,
+ * ContinueResponse, MeResponse, ErrorBody), backend/app/db.py (PlanStatus),
+ * backend/app/config.py (AgentProfile) and backend/app/auth.py (AuthErrorCode). Keep them in
+ * step with those models; the generated contract schemas (request, UI event, plan) live in
+ * ./generated.
  *
  * Objects strip unknown keys (`z.object`): the backend ships first when the contract changes
  * (CLAUDE.md, contract rule 7), so an added field must not break the deployed web app.
@@ -78,6 +79,18 @@ export const LinkCheckSchema = z.object({
 });
 export type LinkCheck = z.output<typeof LinkCheckSchema>;
 
+/** The link check's verdict on one URL (backend `LinkHealthOut`). `status` is `ok`, `dead` or
+ * `unknown` today; it stays a plain string so a new value never rejects the whole detail. */
+export const LinkHealthSchema = z.object({
+  status: z.string(),
+  /** The URL's own origin, set only for a dead link. */
+  fallback: z._default(z.nullable(z.string()), null),
+  /** True when a booking link may be replaced by `fallback`. */
+  fallback_allowed: z._default(z.boolean(), false),
+});
+export type LinkHealthEntry = z.output<typeof LinkHealthSchema>;
+export type LinkHealthMap = Record<string, LinkHealthEntry>;
+
 /** GET /plans/{id}: everything the plan page needs besides the event stream. */
 export const PlanDetailSchema = z.object({
   id: PlanIdSchema,
@@ -107,6 +120,8 @@ export const PlanDetailSchema = z.object({
   booking_links: z._default(z.array(z.nullable(LinkCheckSchema)), () => []),
   /** Aligned with plan.alternatives. */
   alternative_links: z._default(z.array(z.nullable(LinkCheckSchema)), () => []),
+  /** The link check's verdict per URL of the plan; empty for plans that predate the check. */
+  link_health: z._default(z.record(z.string(), LinkHealthSchema), () => ({})),
   /** TripTracker's /import?plan=<id>, only when ready. */
   import_url: z._default(z.nullable(z.string()), null),
 });

@@ -212,6 +212,7 @@ def plan_row(status: str, **overrides: Any) -> SimpleNamespace:
         "failure_reason": None,
         "submit_attempts": 1,
         "cost_cents": 38,
+        "link_health": {} if status == "ready" else None,
         "plan": fixture("plan_lisbon_ok.json") if status == "ready" else None,
         "trip": fixture("trip_lisbon_ok.json") if status == "ready" else None,
         "agent_versions": {
@@ -371,6 +372,33 @@ def test_cost_falls_back_to_the_plan_row_when_usage_has_no_list_cost() -> None:
     assert entry["cost_source"] == "plans.cost_cents"
     statuses = {check["name"]: check["status"] for check in entry["checks"]}
     assert statuses["cost_and_searches_vs_estimate"] == "warn"  # searches unknown
+
+
+def test_build_entry_passes_the_rows_link_health_to_dead_links() -> None:
+    dead = {
+        "status": "dead",
+        "reason": "http_404",
+        "http_status": 404,
+        "fallback": "https://www.carris.pt/",
+        "fallback_allowed": False,
+        "checked_at": "2026-10-18T10:00:00+00:00",
+    }
+    link_health = {"https://www.carris.pt/tarifas/aeroporto": dead}
+    row = run.record_fields(plan_row("ready", link_health=link_health))  # pyright: ignore[reportArgumentType]
+    usage = SimpleNamespace(list_cost_cents=41, web_search_requests=12)
+    entry = run.build_entry(
+        LISBON,
+        request_for(LISBON),
+        record=row,
+        usage=usage,
+        profile="development",
+        judge_result=judge.JudgeResult(status="skipped"),
+        extra={},
+    )
+    dead_links = next(check for check in entry["checks"] if check["name"] == "dead_links")
+    assert dead_links["status"] == "warn"
+    assert dead_links["details"] == ["carris.pt http_404 (homepage: yes)"]
+    assert "dead_links" not in entry["blocking_failures"]
 
 
 # --- the results document -----------------------------------------------------------------------

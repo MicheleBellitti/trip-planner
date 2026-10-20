@@ -446,4 +446,277 @@ describe("PlanView reading the Trip", () => {
       }
     });
   });
+
+  describe("dead links", () => {
+    const OCEANARIO = "https://www.oceanario.pt/";
+    const PENA = "https://www.parquesdesintra.pt/";
+    const deadHome = (url: string, fallback: string | null) => ({
+      [url]: { status: "dead", fallback, fallback_allowed: false },
+    });
+
+    it("shows 'Sito di a.example' for a dead stop page with a fallback", () => {
+      const detail = happyDetail();
+      detail.link_health = deadHome(OCEANARIO, "https://www.oceanario.pt/home/");
+      render(<PlanView detail={detail} trip={happyTrip()} loadTrip={unused} />);
+      const link = screen.getAllByRole("link").find((a) => a.textContent?.startsWith("Sito di oceanario.pt"));
+      expect(link?.getAttribute("href")).toBe("https://www.oceanario.pt/home/");
+      expect(link?.getAttribute("target")).toBe("_blank");
+      expect(link?.getAttribute("rel")).toBe("noopener noreferrer");
+    });
+
+    it("shows '{host} (pagina non trovata)' and no link for a dead stop page without one", () => {
+      const detail = happyDetail();
+      detail.link_health = deadHome(PENA, null);
+      render(<PlanView detail={detail} trip={happyTrip()} loadTrip={unused} />);
+      const missing = screen.getAllByText("parquesdesintra.pt (pagina non trovata)");
+      expect(missing.length).toBeGreaterThan(0);
+      missing.forEach((node) => {
+        expect(node.closest("a")).toBeNull();
+      });
+      // The stop's own line is ink-2 (the price line's source text is quiet too).
+      expect(missing.some((node) => node.tagName === "P" && /text-ink-2/.test(node.className))).toBe(true);
+      expect(screen.queryByText("Pagina non trovata")).toBeNull();
+      expect(document.querySelector(`a[href="${PENA}"]`)).toBeNull();
+    });
+
+    it("one verdict drives the stop link and the price source of the same URL", () => {
+      const detail = happyDetail();
+      detail.link_health = deadHome(OCEANARIO, "https://www.oceanario.pt/");
+      render(<PlanView detail={detail} trip={happyTrip()} loadTrip={unused} />);
+      const sites = screen.getAllByRole("link").filter((a) => /^sito di oceanario\.pt/i.test(a.textContent ?? ""));
+      expect(sites.map((a) => a.textContent?.slice(0, 20))).toEqual(["Sito di oceanario.pt", "sito di oceanario.pt"]);
+    });
+
+    it("a dead price source without a fallback reads 'Fonte host (pagina non trovata)' as text", () => {
+      const detail = happyDetail();
+      detail.link_health = deadHome("https://www.aerobus.pt/", null);
+      render(<PlanView detail={detail} trip={happyTrip()} loadTrip={unused} />);
+      expect(screen.getByText("aerobus.pt (pagina non trovata)")).toBeTruthy();
+      expect(document.querySelector('a[href="https://www.aerobus.pt/"]')).toBeNull();
+    });
+
+    const DEAD_TITLE = "Pagina di prenotazione non trovata";
+    const deadRow = () => bookingRows().find((r) => r.textContent?.includes(DEAD_TITLE)) as HTMLElement;
+    /** The dead block's paragraphs, in order. */
+    const blockOf = (row: HTMLElement) => within(row).getByText(DEAD_TITLE).parentElement?.parentElement as HTMLElement;
+
+    it("a dead booking link shows, in order: title, cause, the way forward, the address last as text", () => {
+      const detail = happyDetail();
+      const booking = detail.plan!.bookings[0]!;
+      booking.phone = "+351 21 000 0000";
+      // The price was read on another, live page of the booking's own site.
+      booking.price!.source_url = "https://www.expedia.it/Flights-Search?trip=other";
+      detail.booking_links[0] = { allowed: true, provider: "expedia", label: "Expedia", host: "www.expedia.it" };
+      detail.link_health = deadHome(booking.link!, null);
+      render(<PlanView detail={detail} trip={happyTrip()} loadTrip={unused} />);
+      expect(screen.getAllByRole("link", { name: /^Prenota su / })).toHaveLength(1);
+      const row = deadRow();
+      const title = within(row).getByText(DEAD_TITLE);
+      expect(title.closest("a")).toBeNull();
+      expect(title.parentElement?.className).toMatch(/font-semibold/);
+      expect(title.parentElement?.className).toMatch(/text-ink\b/);
+      expect(title.parentElement?.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+      const box = blockOf(row);
+      // Named, never linked: the source has not passed the booking allowlist.
+      const source = within(box).getByText("Cerca l'offerta su Expedia");
+      expect(source.closest("a")).toBeNull();
+      const phone = within(box).getByRole("link", { name: "+351 21 000 0000" });
+      expect(phone.getAttribute("href")).toBe("tel:+351210000000");
+      expect([...box.querySelectorAll("a")]).toEqual([phone]);
+      const lines = [...box.querySelectorAll("p")].map((p) => p.textContent?.replace(/\s*\(si apre in una nuova scheda\)/, "").trim());
+      expect(lines).toEqual([
+        DEAD_TITLE,
+        "Il link del piano non apre nessuna pagina.",
+        "Cerca l'offerta su Expedia",
+        "Prenota direttamente con TAP Air Portugal.",
+        "Telefono +351 21 000 0000",
+        `Indirizzo originale: ${booking.link}`,
+      ]);
+      const address = within(box).getByText(booking.link!);
+      expect(address.closest("a")).toBeNull();
+      expect(address.className).toMatch(/select-all/);
+      expect(address.closest("p")?.className).toMatch(/line-clamp-3/);
+      expect(address.closest("p")?.className).toMatch(/text-micro/);
+      expect(address.closest(".text-ink-2")).toBeTruthy();
+      expect(row.querySelector(`a[href="${booking.link}"]`)).toBeNull();
+      expect(row.textContent).not.toMatch(/non esiste più|Il prezzo è stato letto/);
+    });
+
+    it("a dead booking link whose price source is a homepage names it as text: 'Cerca l'offerta sul sito di {host}'", () => {
+      const detail = happyDetail();
+      const booking = detail.plan!.bookings[0]!;
+      // A price source of its own (in the fixture it is the booking link itself).
+      booking.price!.source_url = "https://www.aerobus.es/tarifas";
+      detail.link_health = {
+        ...deadHome(booking.link!, null),
+        ...deadHome(booking.price!.source_url, "https://www.aerobus.es/"),
+      };
+      render(<PlanView detail={detail} trip={happyTrip()} loadTrip={unused} />);
+      const box = blockOf(deadRow());
+      expect(within(box).getByText("Cerca l'offerta sul sito di aerobus.es").closest("a")).toBeNull();
+      expect(box.querySelector('a[href="https://www.aerobus.es/"]')).toBeNull();
+    });
+
+    it("a dead booking link that is its own price source never links the homepage the backend refused", () => {
+      const detail = happyDetail();
+      const booking = detail.plan!.bookings[0]!;
+      expect(booking.price!.source_url).toBe(booking.link);
+      detail.link_health = deadHome(booking.link!, "https://www.google.com/");
+      render(<PlanView detail={detail} trip={happyTrip()} loadTrip={unused} />);
+      expect(screen.queryAllByRole("link", { name: /^Prenota su / })).toHaveLength(1);
+      expect(blockOf(deadRow()).querySelector('a[href="https://www.google.com/"]')).toBeNull();
+    });
+
+    it("a dead booking link with nothing else to go on says to look on the supplier's site", () => {
+      const detail = happyDetail();
+      const booking = detail.plan!.bookings[0]!;
+      booking.vendor = null;
+      booking.phone = null;
+      detail.link_health = deadHome(booking.link!, null);
+      render(<PlanView detail={detail} trip={happyTrip()} loadTrip={unused} />);
+      const box = blockOf(deadRow());
+      expect(within(box).getByText("Cerca il servizio sul sito del fornitore.")).toBeTruthy();
+      expect(box.querySelectorAll("a")).toHaveLength(0);
+      const paragraphs = [...box.querySelectorAll("p")].map((p) => p.textContent);
+      expect(paragraphs[paragraphs.length - 1]).toBe(`Indirizzo originale: ${booking.link}`);
+    });
+
+    it("a dead booking link whose price source is dead too does not name the source", () => {
+      const detail = happyDetail();
+      const booking = detail.plan!.bookings[0]!;
+      detail.link_health = deadHome(booking.link!, null);
+      render(<PlanView detail={detail} trip={happyTrip()} loadTrip={unused} />);
+      // The flight's price source is its own link: dead as well, so nothing is named.
+      const row = deadRow();
+      expect(within(row).queryByText(/Cerca l'offerta su|Cerca l'offerta sul sito di/)).toBeNull();
+      expect(within(row).getByText("Prenota direttamente con TAP Air Portugal.")).toBeTruthy();
+    });
+
+    it("a dead booking link that does not parse still shows its text and the vendor", () => {
+      const detail = happyDetail();
+      const booking = detail.plan!.bookings[0]!;
+      booking.link = "expedia senza indirizzo";
+      detail.link_health = deadHome(booking.link, null);
+      render(<PlanView detail={detail} trip={happyTrip()} loadTrip={unused} />);
+      const row = deadRow();
+      expect(within(row).getByText("expedia senza indirizzo")).toBeTruthy();
+      expect(within(row).getByText("Prenota direttamente con TAP Air Portugal.")).toBeTruthy();
+      expect(screen.getAllByRole("link", { name: /^Prenota su / })).toHaveLength(1);
+    });
+
+    it("a booking without a link whose source is dead never names that host", () => {
+      const detail = happyDetail();
+      detail.link_health = deadHome("https://www.aerobus.pt/", null);
+      render(<PlanView detail={detail} trip={happyTrip()} loadTrip={unused} />);
+      const row = bookingRows().find((r) => r.textContent?.includes("Aerobus")) as HTMLElement;
+      expect(within(row).getByText(/Nessun link di prenotazione\./)).toBeTruthy();
+      expect(row.textContent).toMatch(/Prenota direttamente con /);
+      expect(row.textContent).not.toMatch(/Prenota sul sito di .*aerobus\.pt/);
+      expect(row.querySelector("[class*='font-semibold'][class*='text-ink']")?.textContent).not.toBe("aerobus.pt");
+    });
+
+    it("a booking without a link whose source is a homepage names the homepage's host", () => {
+      const detail = happyDetail();
+      detail.link_health = deadHome("https://www.aerobus.pt/", "https://www.aerobus.es/");
+      render(<PlanView detail={detail} trip={happyTrip()} loadTrip={unused} />);
+      const row = bookingRows().find((r) => r.textContent?.includes("Aerobus")) as HTMLElement;
+      expect(row.textContent).toMatch(/Prenota sul sito di .*aerobus\.es/);
+    });
+
+    it("'Link non verificato' has the warning glyph before its title, hidden from readers", () => {
+      const detail = happyDetail();
+      detail.booking_links[0] = { allowed: false, provider: null, label: null, host: "www.expedia.it" };
+      render(<PlanView detail={detail} trip={happyTrip()} loadTrip={unused} />);
+      const title = screen.getByText("Link non verificato");
+      expect(title.parentElement?.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+    });
+
+    describe("a dead link whose button goes to the allowed homepage", () => {
+      const fallbackDetail = () => {
+        const detail = happyDetail();
+        const booking = detail.plan!.bookings[0]!;
+        detail.booking_links[0] = { allowed: true, provider: "expedia", label: "Expedia", host: "www.expedia.it" };
+        detail.link_health = { [booking.link!]: { status: "dead", fallback: "https://www.expedia.it/", fallback_allowed: true } };
+        return { detail, booking };
+      };
+      it("says under the button that the search must be redone", () => {
+        const { detail } = fallbackDetail();
+        render(<PlanView detail={detail} trip={happyTrip()} loadTrip={unused} />);
+        const button = screen.getAllByRole("link", { name: /^Prenota su Expedia/ })[0] as HTMLElement;
+        expect(button.getAttribute("href")).toBe("https://www.expedia.it/");
+        const line = within(button.closest("li") as HTMLElement).getByText("Porta alla home di Expedia: la ricerca va rifatta.");
+        expect(line.className).toMatch(/text-micro/);
+        expect(line.className).toMatch(/text-ink-2/);
+        expect(line.closest("a")).toBeNull();
+        expect(button.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      });
+      it("says nothing under a normal button", () => {
+        render(<PlanView detail={happyDetail()} trip={happyTrip()} loadTrip={unused} />);
+        expect(screen.queryByText(/la ricerca va rifatta/)).toBeNull();
+      });
+    });
+
+    describe("the plan-level notice", () => {
+      const NOTICE = "Da sapere prima di prenotare";
+      const TAIL = ": pagina di prenotazione non trovata. Nella sua riga trovi dove prenotare.";
+      const noticeOf = () => screen.getByText(NOTICE).closest("section, div") as HTMLElement;
+
+      it("names one dead booking as a link to its row, even when the plan has no warnings of its own", () => {
+        const detail = happyDetail();
+        detail.plan!.warnings = [];
+        const booking = detail.plan!.bookings[0]!;
+        detail.link_health = deadHome(booking.link!, null);
+        render(<PlanView detail={detail} trip={happyTrip()} loadTrip={unused} />);
+        const notice = noticeOf();
+        const link = within(notice).getByRole("link", { name: booking.title });
+        const row = bookingRows().find((r) => r.querySelector("h3")?.textContent === booking.title) as HTMLElement;
+        expect(link.getAttribute("href")).toBe(`#${row.id}`);
+        expect(link.parentElement?.textContent).toBe(`${booking.title}${TAIL}`);
+      });
+
+      it("gives each dead booking its own item, first, before the plan's warnings", () => {
+        const detail = happyDetail();
+        detail.plan!.warnings = ["Prezzi stimati."];
+        const [a, b] = detail.plan!.bookings;
+        a!.title = "Volo (TAP), Lisbona";
+        detail.link_health = { ...deadHome(a!.link!, null), ...deadHome(b!.link!, null) };
+        render(<PlanView detail={detail} trip={happyTrip()} loadTrip={unused} />);
+        const items = [...noticeOf().querySelectorAll("li")];
+        expect(items.map((li) => li.textContent)).toEqual([
+          `${a!.title}${TAIL}`,
+          `${b!.title}${TAIL}`,
+          "Prezzi stimati.",
+        ]);
+        const links = items.slice(0, 2).map((li) => li.querySelector("a"));
+        expect(links.map((l) => l?.textContent)).toEqual([a!.title, b!.title]);
+        expect(links.every((l) => l?.getAttribute("href")?.startsWith("#"))).toBe(true);
+        expect(links.map((l) => document.getElementById(l!.getAttribute("href")!.slice(1))?.id)).toEqual(
+          links.map((l) => l!.getAttribute("href")!.slice(1)),
+        );
+      });
+
+      it("is absent when no booking link is dead", () => {
+        render(<PlanView detail={happyDetail()} trip={happyTrip()} loadTrip={unused} />);
+        expect(screen.queryByText(/pagina di prenotazione non trovata\. Nella/)).toBeNull();
+      });
+    });
+
+    it("renders an older plan without link_health exactly as before", () => {
+      const snapshot = () => ({
+        text: document.body.textContent,
+        links: [...document.querySelectorAll("a")].map((a) => [a.getAttribute("href")?.replace(/^#.*/, "#"), a.textContent]),
+      });
+      const { unmount } = render(<PlanView detail={happyDetail()} trip={happyTrip()} loadTrip={unused} />);
+      const before = snapshot();
+      unmount();
+      const detail = happyDetail();
+      detail.link_health = {
+        [OCEANARIO]: { status: "unknown", fallback: null, fallback_allowed: false },
+        [PENA]: { status: "ok", fallback: null, fallback_allowed: false },
+      };
+      render(<PlanView detail={detail} trip={happyTrip()} loadTrip={unused} />);
+      expect(snapshot()).toEqual(before);
+      expect(screen.queryByText(/non trovata/)).toBeNull();
+    });
+  });
 });

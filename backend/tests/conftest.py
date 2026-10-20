@@ -56,6 +56,8 @@ TEST_ENV: dict[str, str] = {
     "TRIP_SCHEMA_URL": "https://viaggi.bellittim.com/schema/trip.json",
     "DATABASE_URL": TEST_DATABASE_URL,
     "AGENT_PROFILE": "development",
+    # No test builds a real link checker by accident; a test that wants one sets it itself.
+    "LINK_CHECK_ENABLED": "false",
     # Never a real key in tests. Blank rather than unset: an unset variable would let Settings
     # read a developer's backend/.env.
     "ANTHROPIC_API_KEY": "",
@@ -459,6 +461,7 @@ class PlanRows:
         created_at: dt.datetime | None = None,
         failure_reason: str | None = None,
         session_id: str | None = "sesn_test",
+        link_health: dict[str, Any] | None = None,
     ) -> PlanRecord:
         record = PlanRecord(
             user_email=user_email,
@@ -472,6 +475,7 @@ class PlanRows:
             cost_cents=cost_cents,
             budget_cents=budget_cents,
             failure_reason=failure_reason,
+            link_health=link_health,
         )
         if created_at is not None:
             record.created_at = created_at

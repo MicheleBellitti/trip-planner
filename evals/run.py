@@ -553,6 +553,7 @@ def build_entry(
         submit_attempts=row.get("submit_attempts"),
         cost_cents=cost,
         web_search_requests=searches,
+        link_health=row.get("link_health"),
     )
     results = checks.run_checks(
         request,
@@ -601,6 +602,7 @@ def record_fields(record: PlanRecord | None) -> dict[str, Any] | None:
         "failure_reason": record.failure_reason,
         "submit_attempts": record.submit_attempts,
         "cost_cents": record.cost_cents,
+        "link_health": record.link_health,
         "plan": record.plan,
         "trip": record.trip,
         "agent_versions": record.agent_versions,

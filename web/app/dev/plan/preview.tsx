@@ -94,7 +94,8 @@ function edgeCase(now: number): { detail: PlanDetail; trip: unknown } {
   aerobus.phone = "+351 21 358 2334";
   if (trip.bookings[4]) delete trip.bookings[4].scheduledFor;
   detail.booking_links = [
-    detail.booking_links[0] ?? null,
+    // The flight's link is Google Flights (below); its price source stays Expedia, alive.
+    { allowed: true, provider: "google_flights", label: "Google Voli", host: "www.google.com" },
     detail.booking_links[1] ?? null,
     null,
     { allowed: false, provider: null, label: null, host: "www.parquesdesintra.pt" },
@@ -102,6 +103,20 @@ function edgeCase(now: number): { detail: PlanDetail; trip: unknown } {
   ];
   const firstStop = plan.days[0]?.stops[0];
   if (firstStop) firstStop.url = "javascript:alert(1)";
+  // The link check's three dead cases (PlanDetail.link_health): a stop page with a homepage
+  // fallback ("Sito di ..."), a price source without one ("pagina non trovata") and a Google
+  // Flights booking link, which never falls back to a button ("Pagina di prenotazione non trovata").
+  // An https page (the first stop's unsafe URL above never renders as a link), moved off the
+  // site's homepage: in the fixture it is also a price source, whose verdict would win.
+  const stopPage = plan.days.flatMap((day) => day.stops).find((stop) => stop.url?.startsWith("https://"));
+  if (stopPage?.url) stopPage.url = new URL("/it/visita", stopPage.url).href;
+  const flightsLink = "https://www.google.com/travel/flights?q=Flights%20from%20MXP%20to%20LIS";
+  flight.link = flightsLink;
+  detail.link_health = {
+    ...(stopPage?.url ? { [stopPage.url]: { status: "dead", fallback: new URL(stopPage.url).origin + "/", fallback_allowed: false } } : {}),
+    ...(aerobus.price ? { [aerobus.price.source_url]: { status: "dead", fallback: null, fallback_allowed: false } } : {}),
+    [flightsLink]: { status: "dead", fallback: "https://www.google.com/", fallback_allowed: false },
+  };
   plan.alternatives = [
     ...(plan.alternatives ?? []),
     {

@@ -610,6 +610,81 @@ async def test_get_plan_returns_status_plan_link_checks_and_import_link(
     ]
 
 
+async def test_plan_detail_exposes_link_health(api: Api, plan_rows: PlanRows) -> None:
+    record = await plan_rows.add_plan(
+        status=PlanStatus.READY,
+        plan=ACCEPTED_PLAN,
+        trip=STORED_TRIP,
+        link_health={
+            "https://a.example/gone": {
+                "status": "dead",
+                "reason": "http_404",
+                "http_status": 404,
+                "fallback": "https://a.example/",
+                "fallback_allowed": False,
+                "checked_at": "2026-10-18T10:00:00+00:00",
+            }
+        },
+    )
+
+    response = await api.client.get(f"/plans/{record.id}")
+
+    assert response.status_code == 200
+    assert response.json()["link_health"] == {
+        "https://a.example/gone": {
+            "status": "dead",
+            "fallback": "https://a.example/",
+            "fallback_allowed": False,
+        }
+    }
+
+
+async def test_plan_detail_fallback_allowed_asks_the_allowlist_as_it_is_now(
+    api: Api, plan_rows: PlanRows
+) -> None:
+    """A stored `fallback_allowed: true` holds only while the link and its fallback both pass
+    the allowlist: a link check_link refuses (the backslash) gets no homepage button."""
+
+    def dead(fallback: str) -> dict[str, object]:
+        return {
+            "status": "dead",
+            "reason": "http_404",
+            "fallback": fallback,
+            "fallback_allowed": True,
+        }
+
+    record = await plan_rows.add_plan(
+        status=PlanStatus.READY,
+        plan=ACCEPTED_PLAN,
+        trip=STORED_TRIP,
+        link_health={
+            "https://www.booking.com/hotel/it/x.html": dead("https://www.booking.com/"),
+            "https://www.booking.com/hotel\\it/x.html": dead("https://www.booking.com/"),
+        },
+    )
+
+    response = await api.client.get(f"/plans/{record.id}")
+
+    allowed = {
+        url: entry["fallback_allowed"] for url, entry in response.json()["link_health"].items()
+    }
+    assert allowed == {
+        "https://www.booking.com/hotel/it/x.html": True,
+        "https://www.booking.com/hotel\\it/x.html": False,
+    }
+
+
+async def test_plan_detail_link_health_is_empty_for_older_plans(
+    api: Api, plan_rows: PlanRows
+) -> None:
+    record = await plan_rows.add_plan(status=PlanStatus.READY, plan=ACCEPTED_PLAN, trip=STORED_TRIP)
+
+    response = await api.client.get(f"/plans/{record.id}")
+
+    assert response.status_code == 200
+    assert response.json()["link_health"] == {}
+
+
 async def test_get_plan_before_acceptance_has_no_plan_and_no_import_link(
     api: Api, plan_rows: PlanRows
 ) -> None:

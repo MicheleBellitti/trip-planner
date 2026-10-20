@@ -127,6 +127,7 @@ from app import clock
 from app.db import EventRecord, PlanRecord, PlanStatus
 from app.events import NOISE_EVENT_TYPES, AgentName, EventKind, UIEvent, normalize, one_line
 from app.fx import fx_keys
+from app.link_health import NO_LINK_CHECKS, LinkHealthChecker, LinkHealthMap
 from app.ma_client import (
     PRIMARY_SCOPE,
     ApiRejectedError,
@@ -316,6 +317,8 @@ class ConsumerDeps:
     """Factory of the id source for each accepted Trip (`SeededTripIds` in tests)."""
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep
     """Backoff sleeps (tests pass a no-op)."""
+    link_checker: LinkHealthChecker = NO_LINK_CHECKS
+    """Checks the accepted plan's URLs (`link_health`); checks nothing by default."""
 
 
 # --- plan updates and event persistence ----------------------------------------------------------
@@ -355,6 +358,8 @@ class PlanUpdate:
     """The accepted Plan as JSON (`Plan.model_dump(mode="json")` plus mapping warnings)."""
     trip: Mapping[str, Any] | None = None
     """The translated TripTracker Trip (`TripMapping.trip`)."""
+    link_health: Mapping[str, Any] | None = None
+    """The link verdicts as JSON (`LinkHealthMap.to_json()`), stored in `plans.link_health`."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -528,6 +533,8 @@ def _apply_update(plan: PlanRecord, update: PlanUpdate, *, allowed: bool) -> boo
         plan.plan = dict(update.plan)
     if update.trip is not None:
         plan.trip = dict(update.trip)
+    if update.link_health is not None:
+        plan.link_health = dict(update.link_health)
     return applied
 
 
@@ -959,6 +966,8 @@ class Accepted:
     """`plan.model_dump(mode="json")` with the mapping's warnings appended (no duplicates)."""
     trip: dict[str, Any]
     """`TripMapping.trip`, exactly what GET /plans/{id}/trip will serve."""
+    link_health: dict[str, Any] = field(default_factory=dict[str, Any])
+    """`LinkHealthMap.to_json()`: the verdicts the trip followed (`{}` without checks)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -999,6 +1008,7 @@ def translate_submission(
     fx: FxRates,
     now: dt.datetime,
     ids: TripIds,
+    health: LinkHealthMap | None = None,
 ) -> SubmitOutcome:
     """Check the deadlines against `now`, then `mapping.plan_to_trip`, then
     `schema.validate(trip)`. Pure.
@@ -1031,7 +1041,7 @@ def translate_submission(
     except ValidationError as error:
         return _plan_rejected(error)
 
-    mapping = plan_to_trip(plan, now=now, fx=fx, ids=ids)
+    mapping = plan_to_trip(plan, now=now, fx=fx, ids=ids, health=health)
     trip = dict(mapping.trip)
     trip_errors = schema.validate(trip)
     if trip_errors:
@@ -1058,22 +1068,60 @@ def translate_submission(
         if warning not in warnings:
             warnings.append(warning)
     plan_json["warnings"] = warnings
-    return Accepted(plan=plan, plan_json=plan_json, trip=trip)
+    return Accepted(
+        plan=plan,
+        plan_json=plan_json,
+        trip=trip,
+        link_health=health.to_json() if health is not None else {},
+    )
 
 
 async def evaluate_submission(
     tool_input: Mapping[str, Any], *, deps: ConsumerDeps
 ) -> SubmitOutcome:
-    """The I/O wrapper: `parse_submission`, `deps.fx.prefetch(fx_keys(plan))`,
-    `await deps.trip_schema.require()`, `translate_submission(..., now=deps.now(),
-    ids=deps.ids())`. `TripSchemaUnavailableError` propagates (the plan fails with a backend
-    reason; it does not count as the agent's attempt)."""
+    """The I/O wrapper: `parse_submission`; the link check (`_check_links`) starts as a task
+    while the FX prefetch and `deps.trip_schema.require()` run; `translate_submission(...,
+    now=deps.now(), ids=deps.ids())` without verdicts; a Rejected is answered at once and
+    cancels the check; an accepted plan waits for the check (at most its deadline) and is
+    translated again with `health=`. `TripSchemaUnavailableError` propagates (the plan fails
+    with a backend reason; it does not count as the agent's attempt) and cancels the check too.
+    A link never rejects the plan, and neither does a failing link check: verdicts only replace
+    a URL by its homepage or drop it, and if the second translation still refused the plan the
+    first one, without verdicts, is kept (docs/backend-interfaces.md decision 40)."""
     parsed = parse_submission(tool_input)
     if isinstance(parsed, Rejected):
         return parsed
-    rates = await deps.fx.prefetch(fx_keys(parsed))
-    schema = await deps.trip_schema.require()
-    return translate_submission(parsed, schema=schema, fx=rates, now=deps.now(), ids=deps.ids())
+    check = asyncio.ensure_future(_check_links(deps.link_checker, parsed))
+    try:
+        rates = await deps.fx.prefetch(fx_keys(parsed))
+        schema = await deps.trip_schema.require()
+        now = deps.now()
+        plain = translate_submission(parsed, schema=schema, fx=rates, now=now, ids=deps.ids())
+        if isinstance(plain, Rejected):
+            return plain
+        health = await check
+    finally:
+        check.cancel()  # a no-op once the check has finished
+        await asyncio.wait([check])
+    outcome = translate_submission(
+        parsed, schema=schema, fx=rates, now=now, ids=deps.ids(), health=health
+    )
+    if isinstance(outcome, Rejected):
+        log.warning("link_health_trip_rejected", stage=outcome.stage)
+        return plain
+    return outcome
+
+
+async def _check_links(checker: LinkHealthChecker, plan: Plan) -> LinkHealthMap:
+    """`checker.check_plan(plan)`, which never fails because of a URL. An unexpected failure (a
+    bug) is logged once, by its class only (the message could carry a URL), and gives no
+    verdicts, so the task never ends with an exception nobody retrieves. Cancellation
+    propagates."""
+    try:
+        return await checker.check_plan(plan)
+    except Exception as exc:
+        log.warning("link_check_failed", error=type(exc).__name__)
+        return LinkHealthMap.empty()
 
 
 def check_result_writes(writes: Mapping[str, str]) -> dict[str, list[str]]:
@@ -1880,7 +1928,10 @@ class PlanConsumer:
         attempt = state.submit_attempts + 1
         if isinstance(outcome, Accepted):
             update = PlanUpdate(
-                submit_attempts_increment=1, plan=outcome.plan_json, trip=outcome.trip
+                submit_attempts_increment=1,
+                plan=outcome.plan_json,
+                trip=outcome.trip,
+                link_health=outcome.link_health,
             )
             result = await self._emit_outcome(
                 key,

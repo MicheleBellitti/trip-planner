@@ -190,6 +190,7 @@ describe("checks", () => {
 
   it("translates the checks of checks.py and spells out an unknown one", () => {
     expect(checkLabel("prices_have_source")).toBe("Ogni prezzo ha una fonte e una data");
+    expect(checkLabel("dead_links")).toBe("Nessun link rotto");
     expect(checkLabel("some_new_check")).toBe("some new check");
   });
 

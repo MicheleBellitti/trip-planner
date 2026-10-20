@@ -85,6 +85,7 @@ from app.covers import Cover, CoverErrorCode, CoverResolver
 from app.db import DbSession, PlanRecord, PlanStatus
 from app.events import UIEvent, one_line
 from app.hub import PlanEnded, SubscriptionLaggedError
+from app.link_health import LinkHealthMap
 from app.links import LinkVerdict, check_link
 from app.ma_client import ManagedAgentsError
 from app.request import PlanRequest
@@ -368,6 +369,19 @@ class LinkCheck(BaseModel):
         )
 
 
+class LinkHealthOut(BaseModel):
+    """The link check's verdict on one URL. `reason`, `http_status` and `checked_at` stay in the
+    database; the web needs only what it renders."""
+
+    status: str = Field(description="ok, dead or unknown; the web treats anything else as ok.")
+    fallback: str | None = Field(
+        default=None, description="The URL's own origin, computed by the backend; only if dead."
+    )
+    fallback_allowed: bool = Field(
+        default=False, description="True when a booking link may be replaced by `fallback`."
+    )
+
+
 class PlanDetail(BaseModel):
     """Everything the plan page needs besides the event stream."""
 
@@ -408,6 +422,13 @@ class PlanDetail(BaseModel):
     alternative_links: list[LinkCheck | None] = Field(
         default_factory=list[LinkCheck | None],
         description="Aligned with plan.alternatives.",
+    )
+    link_health: dict[str, LinkHealthOut] = Field(
+        default_factory=dict[str, LinkHealthOut],
+        description=(
+            "The link check's verdict per URL of the accepted plan; {} when no check ran or "
+            "the plan predates the check."
+        ),
     )
     import_url: str | None = Field(
         default=None, description="TripTracker's /import?plan=<id>, only when ready."
@@ -589,6 +610,25 @@ def _link_checks(plan: Mapping[str, Any] | None, field: str) -> list[LinkCheck |
     return checks
 
 
+def _link_health(record: PlanRecord) -> dict[str, LinkHealthOut]:
+    """The stored verdicts; `fallback_allowed` also asks the allowlist as it is now, for the URL
+    and for its fallback, as `booking_links` does on every GET (never more than was stored)."""
+    health = LinkHealthMap.from_json(record.link_health)
+    out: dict[str, LinkHealthOut] = {}
+    for url in health:
+        entry = health.get(url)
+        if entry is not None:
+            out[url] = LinkHealthOut(
+                status=entry.status,
+                fallback=entry.fallback,
+                fallback_allowed=entry.fallback_allowed
+                and entry.fallback is not None
+                and check_link(url).allowed
+                and check_link(entry.fallback).allowed,
+            )
+    return out
+
+
 def plan_detail(record: PlanRecord, *, settings: Settings) -> PlanDetail:
     """Build the GET /plans/{id} answer: link checks from `links.check_link` for every booking
     and alternative of the stored plan, `import_url` only when `ready`. Pure."""
@@ -609,6 +649,7 @@ def plan_detail(record: PlanRecord, *, settings: Settings) -> PlanDetail:
         plan=dict(record.plan) if record.plan is not None else None,
         booking_links=_link_checks(record.plan, "bookings"),
         alternative_links=_link_checks(record.plan, "alternatives"),
+        link_health=_link_health(record),
         import_url=import_url(record, settings=settings),
     )
 

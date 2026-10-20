@@ -47,6 +47,7 @@ import {
   sortByDeadline,
   tripPlaceLabel,
   tripZoneName,
+  bookingAction,
 } from "./plan-model";
 import { PlanSummary } from "./plan-summary";
 
@@ -203,7 +204,11 @@ export function PlanView({
     deadline: deadlines[index] ?? ({ kind: "unknown" } as const),
     check: checks[index] ?? null,
     startsAtHome: bookingStartsAtHome(plan, booking),
+    noLink: bookingAction(booking.link, checks[index] ?? null, detail.link_health).kind === "missing",
   }));
+  const deadLinks = items
+    .filter((item) => item.noLink)
+    .map((item) => ({ title: item.booking.title, href: `#${bookingAnchor(item.index)}` }));
   const byUrgency = sortByDeadline(items);
   const zoneName = tripZoneName(plan, HOME_TIMEZONE);
   // A booking that starts from home (the flight) reads on the clock at home, with the trip's as the
@@ -274,6 +279,7 @@ export function PlanView({
             title={displayTitle(detail.title)}
             budgetEur={requestBudget(detail.request)}
             headingId={ids.summary}
+            deadLinks={deadLinks}
             aside={aside}
           >
             {plan.bookings.length > 0 ? (
@@ -301,6 +307,7 @@ export function PlanView({
                       timeZone={plan.timezone}
                       bookings={plan.bookings}
                       bookingAnchor={bookingAnchor}
+                      health={detail.link_health}
                     />
                   </ItineraryDays>
                 </>
@@ -327,6 +334,7 @@ export function PlanView({
                 id={bookingAnchor(index)}
                 booking={booking}
                 check={check ?? null}
+                health={detail.link_health}
                 deadline={deadline}
                 timeZone={plan.timezone}
                 startsAtHome={startsAtHome}
@@ -364,6 +372,7 @@ export function PlanView({
                       alternative
                       booking={item.booking}
                       check={item.check}
+                      health={detail.link_health}
                       deadline={alternativeDeadline(item.booking)}
                       timeZone={plan.timezone}
                       startsAtHome={bookingStartsAtHome(plan, item.booking)}

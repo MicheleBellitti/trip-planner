@@ -1095,6 +1095,33 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
     the keys are set, verified server side, with a per-address window on the join: the backend
     has no part in it.
 
+40. The link check (`app/link_health.py`; spec
+    `docs/superpowers/specs/2026-10-18-plan-creation-ux-design.md` section 3).
+    `consumer.evaluate_submission` starts the check as a task for every `submit_plan` whose
+    input parses as a Plan, beside the FX prefetch and the trip.json load, then translates
+    without verdicts: a submission that translation rejects is answered at once and its check
+    cancelled, so only a Plan that validates and translates is checked to the end (up to 10 s
+    before "Plan accepted.") and translated again with the verdicts. Every distinct page of
+    the plan is fetched once (GET only, homepages included); only an accepted plan's verdicts
+    are stored, in `plans.link_health` (`{}` when nothing ran, NULL for a plan stored before
+    the check). Limits: at most 5 redirects with every hop vetted, 5 s per request, 8 requests
+    in parallel, 10 s for the whole plan (unchecked URLs become `unknown`; a URL already found
+    dead stays dead), at most 65,536 body bytes read; http and https only, no userinfo, port
+    absent, 80 or 443, every resolved address public on every hop, connections only to vetted
+    addresses, no cookies, credentials or environment proxy. `dead` means a final 404 or 410,
+    a host that does not exist, or a soft 404; 401, 403, 405, 429, 5xx, timeouts and TLS or
+    network errors are `unknown`. The fallback is the URL's own origin, computed by code
+    (never by an agent); a booking link uses it only when `links.check_link` allows both the
+    link and the fallback (fail closed, in the export as in the web app). A checker that
+    raises is logged (`link_check_failed`) and gives no verdicts. A plan is **never
+    rejected** and the coordinator is never messaged because of a link: a dead page is a
+    presentation problem the user can still act on (the supplier's homepage), whereas a
+    rejection would cost a paid retry for something the agents cannot verify better than we
+    do, and a flaky host would block a good plan. `GET /plans/{id}` carries `link_health` as
+    `{url: {status, fallback, fallback_allowed}}` (`LinkHealthOut`); `reason`, `http_status`
+    and `checked_at` stay in the database, and the logs carry host and reason only. Absent or
+    NULL gives `{}`, so the web app tolerates both sides of a deploy.
+
 ## 7. Contracts with events.py, the database, config, the web app and the agents
 
 **events.py (`normalize`).**
