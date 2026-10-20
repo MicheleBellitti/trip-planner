@@ -50,7 +50,7 @@ import subprocess
 import sys
 import time
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
@@ -71,6 +71,7 @@ from app import clock  # noqa: E402
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+    from app.auth import CurrentUser
     from app.config import Settings
     from app.db import PlanRecord
     from app.request import PlanRequest
@@ -483,8 +484,10 @@ async def wait_for_terminal(
     *,
     timeout_seconds: float,
     poll_seconds: float = POLL_SECONDS,
+    on_poll: Callable[[], Awaitable[None]] | None = None,
 ) -> PlanRecord | None:
-    """The plan row once its status is in `TERMINAL_FOR_EVALS`; None on timeout."""
+    """The plan row once its status is in `TERMINAL_FOR_EVALS`; None on timeout. `on_poll`, when
+    given, is awaited once per pass that did not end the wait (the evals answer choices there)."""
     deadline = time.monotonic() + timeout_seconds
     while True:
         record = await load_plan(session_factory, plan_id)
@@ -492,7 +495,41 @@ async def wait_for_terminal(
             return record
         if time.monotonic() >= deadline:
             return None
+        if on_poll is not None:
+            await on_poll()
         await asyncio.sleep(poll_seconds)
+
+
+async def answer_choices(planner: PlannerServices, plan_id: uuid.UUID, user: CurrentUser) -> None:
+    """Answer the plan's open choice at once (the first option, the first two when several can
+    be picked), so every eval exercises the picks. Never raises for an expected condition: an
+    eval must not die because of a choice."""
+    from app import sessions
+
+    try:
+        await sessions.answer_pending_choice(plan_id, user, services=planner)
+    except asyncio.CancelledError:
+        raise
+    except Exception as error:
+        print(f"[{plan_id}] choice not answered: {type(error).__name__}: {error}", flush=True)
+
+
+def pick_line(record: Any, request: Any) -> str:
+    """One line for the judge: `<kind> (<answered_by>): <id> <title>; ...`, or the coordinator
+    chose when nothing was picked (skip, timeout, closed)."""
+    titles = {option.id: option.title for option in request.options}
+    picked = [f"{i} {titles.get(i, '')}".strip() for i in (record.answer or [])]
+    outcome = "; ".join(picked) if picked else "none, the coordinator chose"
+    return f"{record.kind} ({record.answered_by}): {outcome}"
+
+
+async def collect_picks(planner: PlannerServices, plan_id: uuid.UUID) -> list[str]:
+    """The pick lines of the plan's answered choices, in the order they were asked."""
+    from app import choices
+
+    async with planner.session_factory() as db:
+        rows = await choices.answered_choices(db, plan_id)
+    return [pick_line(row, choices.request_of(row)) for row in rows]
 
 
 def usage_json(usage: Any) -> dict[str, Any] | None:
@@ -628,11 +665,13 @@ async def run_case(case: EvalCase, request: PlanRequest, ctx: RunContext) -> dic
             request, user, services=planner, user_quota_applies=False
         )
         extra["plan_id"] = str(plan_id)
+        started_id = plan_id
         record = await wait_for_terminal(
             planner.session_factory,
             plan_id,
             timeout_seconds=ctx.timeout_seconds,
             poll_seconds=ctx.poll_seconds,
+            on_poll=lambda: answer_choices(planner, started_id, user),
         )
         if record is None:
             extra["timed_out"] = True
@@ -664,7 +703,13 @@ async def run_case(case: EvalCase, request: PlanRequest, ctx: RunContext) -> dic
         except Exception as error:
             extra["usage_error"] = f"{type(error).__name__}: {error}"
     fields = record_fields(record)
-    judge_result = await judge_entry(fields, request, ctx)
+    picks: list[str] = []
+    if plan_id is not None:
+        try:
+            picks = await collect_picks(planner, plan_id)
+        except Exception as error:  # the picks only inform the judge
+            extra["picks_error"] = f"{type(error).__name__}: {error}"
+    judge_result = await judge_entry(fields, request, ctx, picks)
     extra["duration_seconds"] = round(time.monotonic() - started, 1)
     entry = build_entry(
         case,
@@ -684,7 +729,10 @@ async def run_case(case: EvalCase, request: PlanRequest, ctx: RunContext) -> dic
 
 
 async def judge_entry(
-    fields: Mapping[str, Any] | None, request: PlanRequest, ctx: RunContext
+    fields: Mapping[str, Any] | None,
+    request: PlanRequest,
+    ctx: RunContext,
+    picks: Sequence[str] = (),
 ) -> judge.JudgeResult:
     plan = fields.get("plan") if fields else None
     if ctx.judge_client is None:
@@ -698,6 +746,7 @@ async def judge_entry(
         today=ctx.today,
         budget=ctx.judge_budget,
         rubric=ctx.rubric,
+        picks=picks,
     )
 
 

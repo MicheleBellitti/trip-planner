@@ -63,6 +63,8 @@ destination", a choice that matches the stated idea, with reasons), the party (c
 reflected in the activities and lodging), the budget, and every free-text preference: modes of
 transport, times to avoid, food, pace, kinds of activities and lodging.
 
+When the traveller picked options in the pauses (the <picks> block), the plan is built around the picked activities and food styles and leaves out the options they did not pick.
+
 - 5: every explicit preference is visibly honoured, and the plan says how.
 - 3: the main constraints are met, but one stated preference is ignored or only vaguely met.
 - 1: the plan contradicts the request (wrong dates, wrong destination, a forbidden mode of
