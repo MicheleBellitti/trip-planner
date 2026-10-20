@@ -269,6 +269,10 @@ class Settings(BaseSettings):
     # lookup, the cards go out without photos.
     choice_photos_enabled: bool = True
 
+    # How long a choice (ask_traveller) waits for the traveller before Atlas picks. Keep it under
+    # 300, the prompt cache's lifetime (probe P14): an answer within it resumes on a warm cache.
+    choice_timeout_seconds: int = Field(default=240, ge=1, le=290)
+
     # Local demo for UI work (development only): POST /plans replays a scripted session from
     # backend/tests/fixtures/ma through the fake Managed Agents client, offline and free.
     demo_mode: bool = False

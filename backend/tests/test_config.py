@@ -517,6 +517,19 @@ def test_link_check_settings(make_settings: MakeSettings) -> None:
     assert settings.link_check_user_agent == "AtlasLinkCheck/1.0 (+https://atlas.example)"
 
 
+def test_choice_timeout_setting(make_settings: MakeSettings) -> None:
+    """Under the 5-minute prompt cache (probe P14), with room for the answer to reach it."""
+    assert Settings.model_fields["choice_timeout_seconds"].default == 240
+    assert make_settings().choice_timeout_seconds == 240
+    assert make_settings(choice_timeout_seconds="290").choice_timeout_seconds == 290
+    assert make_settings(choice_timeout_seconds="1").choice_timeout_seconds == 1
+    for bad in ("291", "300", "0", "-5", "soon"):
+        with pytest.raises(ValidationError):
+            make_settings(choice_timeout_seconds=bad)
+    example = Path(__file__).resolve().parents[1] / ".env.example"
+    assert "\nCHOICE_TIMEOUT_SECONDS=240\n" in example.read_text(encoding="utf-8")
+
+
 def test_choice_photos_setting(make_settings: MakeSettings) -> None:
     assert Settings.model_fields["choice_photos_enabled"].default is True
     assert make_settings(choice_photos_enabled="false").choice_photos_enabled is False

@@ -202,6 +202,11 @@ MAX_COMMAND_PARSE_CHARS = 4000
 WORKSPACE_PREFIX = "/workspace/"
 SUBMIT_PLAN_TOOL = "submit_plan"
 """The coordinator's custom tool (`consumer.SUBMIT_PLAN_TOOL`)."""
+ASK_TRAVELLER_TOOL = "ask_traveller"
+"""The coordinator's other custom tool (`choices.ASK_TRAVELLER_TOOL`; choices imports this
+module, so the name is repeated here)."""
+ASK_TRAVELLER_TITLE = "Domanda al viaggiatore"
+"""The title of its raw tool use (`choices.TOOL_USE_TITLE`)."""
 BUILD_LINK_SCRIPT = "build_link.py"
 """The booking-links skill's script: `build_link.py <provider> --param value ...`."""
 
@@ -597,11 +602,15 @@ def _mcp_tool_use(event: Mapping[str, Any], agent: AgentName) -> _Built:
 
 def _custom_tool_use(event: Mapping[str, Any], agent: AgentName) -> _Built:
     """`agent.custom_tool_use`: `submit_plan` is a `plan` event; its input (the whole plan)
-    never goes to `detail`."""
+    never goes to `detail`. `ask_traveller` is a `tool` event without its input either: the
+    question and its cards are the backend's own `choice` event (`consumer._ask_traveller`)."""
     name = _text(event.get("name"), 128)
     if name == SUBMIT_PLAN_TOOL:
         detail = {"tool": SUBMIT_PLAN_TOOL, "tool_use_id": _id(event)}
         return _Built(EventKind.PLAN, "Piano inviato per la verifica", detail)
+    if name == ASK_TRAVELLER_TOOL:
+        detail = {"tool": ASK_TRAVELLER_TOOL, "tool_use_id": _id(event)}
+        return _Built(EventKind.TOOL, ASK_TRAVELLER_TITLE, detail)
     tool = _inline(name, 60)
     detail = {
         "tool": name,

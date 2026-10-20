@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import copy
+import dataclasses
 import datetime as dt
 import json
 import logging
@@ -221,10 +222,10 @@ def harness_factory(
     make_settings: Callable[..., Settings],
     http: httpx.AsyncClient,
 ) -> HarnessFactory:
-    """`build(fake, trip_schema=None, fx=None, link_checker=None)`: a `Harness` with real
-    collaborators
-    (`TripSchemaStore` over the vendored trip.json through a file:// URL, an offline
-    `FxConverter`, `PlanHub`); also used by test_consumer_resume.py."""
+    """`build(fake, trip_schema=None, fx=None, link_checker=None, photos=None)`: a `Harness`
+    with real collaborators (`TripSchemaStore` over the vendored trip.json through a file:// URL,
+    an offline `FxConverter`, `PlanHub`, no photo lookups unless `photos` is given); also used by
+    test_consumer_resume.py and test_consumer_choices.py."""
     settings = make_settings(trip_schema_url=DEV_FALLBACK_SCHEMA_PATH.as_uri())
 
     def build(
@@ -233,6 +234,7 @@ def harness_factory(
         trip_schema: Any = None,
         fx: Any = None,
         link_checker: Any = None,
+        photos: Any = None,
     ) -> Harness:
         sleeps: list[float] = []
 
@@ -257,6 +259,8 @@ def harness_factory(
             sleep=record_sleep,
             link_checker=link_checker or NO_LINK_CHECKS,
         )
+        if photos is not None:
+            deps = dataclasses.replace(deps, photos=photos)
         return Harness(factory, fake, deps, hub, sleeps)
 
     return build
@@ -1684,7 +1688,9 @@ async def test_other_custom_tools_and_late_submissions_are_answered_without_eval
     assert await h.run(plan_id) is PlanStatus.READY
     fake.assert_script_done()
     texts = [r["content"][0]["text"] for r in tool_results(fake)]
-    assert texts[0] == "Unknown tool 'book_hotel': the only custom tool is submit_plan."
+    assert texts[0] == (
+        "Unknown tool 'book_hotel': the custom tools are submit_plan and ask_traveller."
+    )
     assert texts[1:] == [PLAN_ACCEPTED_TEXT, PLAN_ALREADY_ACCEPTED_TEXT]
     assert (await h.plan(plan_id)).submit_attempts == 1
 

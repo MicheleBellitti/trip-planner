@@ -12,6 +12,7 @@ import asyncio
 import dataclasses
 import datetime as dt
 import json
+import logging
 import uuid
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
@@ -21,20 +22,26 @@ from typing import Any, cast
 
 import httpx
 import pytest
+import structlog
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from structlog.testing import LogCapture
+from structlog.typing import EventDict
 
 from app import clock, sessions
 from app import consumer as consumer_module
 from app.auth import CurrentUser, SessionVerifier
+from app.choices import ChoiceAnswer, ChoiceRequest, get_choice, insert_choice
 from app.config import Settings
 from app.consumer import (
     ConsumerAlreadyRunningError,
     ConsumerDeps,
     ConsumerRegistry,
+    EventSink,
     PlanNotFoundError,
 )
+from app.covers import NO_PHOTOS, PHOTO_DEADLINE_SECONDS, PLACE_KEY_PREFIX, PlacePhotos
 from app.db import EventRecord, PlanRecord, PlanStatus, UserRecord
 from app.fx import FxConverter
 from app.hub import PlanHub
@@ -52,11 +59,17 @@ from app.sessions import (
     TITLE_INTERRUPT_REQUESTED,
     TITLE_INTERRUPTED,
     TITLE_PLAN_CREATED,
+    AnsweredChoice,
+    ChoiceClosedError,
+    ChoiceNotFoundError,
+    InvalidChoiceAnswerError,
     MonthlyLimitReachedError,
     PlannerServices,
     PlannerUnavailableError,
     PlanStateError,
     UserGoneError,
+    answer_choice,
+    answer_pending_choice,
     build_brief,
     continue_plan,
     get_user_plan,
@@ -1855,3 +1868,386 @@ async def test_the_eval_runner_is_exempt_from_the_user_quota_not_from_the_ceilin
     )
     with pytest.raises(MonthlyLimitReachedError):
         await start_plan(REQUEST, USER, services=quota_planner.services, user_quota_applies=False)
+
+
+# --- answer_choice --------------------------------------------------------------------------------
+
+CHOICE_ID = "sevt_q1"
+ACTIVITIES_INPUT: dict[str, Any] = {
+    "kind": "activities",
+    "question": "Cosa ti va di vedere?",
+    "multiple": True,
+    "options": [
+        {"id": "a1", "title": "Torre di Belém", "reason": "Il simbolo della città."},
+        {"id": "a2", "title": "Castelo de São Jorge", "reason": "Vista su tutta Lisbona."},
+        {"id": "a3", "title": "Alfama e i miradouros", "reason": "Si gira a piedi."},
+    ],
+}
+JOURNEY_INPUT: dict[str, Any] = {
+    "kind": "journey",
+    "question": "Come preferisci arrivare?",
+    "multiple": False,
+    "options": [
+        {"id": "c1", "title": "Volo", "reason": "Il più veloce."},
+        {"id": "c2", "title": "Treno", "reason": "Dal centro al centro."},
+    ],
+}
+
+
+async def add_choice(
+    planner: Planner,
+    plan_id: uuid.UUID,
+    choice_id: str = CHOICE_ID,
+    tool_input: dict[str, Any] = ACTIVITIES_INPUT,
+    *,
+    asked_at: dt.datetime = FROZEN_NOW,
+) -> None:
+    """A stored question, and its `agent.custom_tool_use` in the fake session (the platform
+    accepts a result only for a call it knows)."""
+    async with planner.session_factory() as db, db.begin():
+        await insert_choice(
+            db,
+            choice_id=choice_id,
+            plan_id=plan_id,
+            request=ChoiceRequest.model_validate(tool_input),
+            photos={},
+            asked_at=asked_at,
+            deadline_at=asked_at + dt.timedelta(seconds=240),
+        )
+    planner.fake.emit(
+        {
+            "type": "agent.custom_tool_use",
+            "id": choice_id,
+            "name": "ask_traveller",
+            "input": tool_input,
+        }
+    )
+
+
+async def load_choice(planner: Planner, plan_id: uuid.UUID, choice_id: str = CHOICE_ID) -> Any:
+    async with planner.session_factory() as db:
+        return await get_choice(db, plan_id, choice_id)
+
+
+def sessions_logs(monkeypatch: pytest.MonkeyPatch) -> list[EventDict]:
+    capture = LogCapture()
+    logger = structlog.wrap_logger(
+        structlog.PrintLogger(),
+        processors=[capture],
+        wrapper_class=structlog.make_filtering_bound_logger(logging.DEBUG),
+    )
+    monkeypatch.setattr(sessions, "log", logger)
+    return capture.entries
+
+
+def timeout_wins_first(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The deadline closes the choice just before the traveller's answer lands."""
+    real = consumer_module.close_choice
+
+    async def racing(sink: EventSink, choice_id: str, **kwargs: Any) -> Any:
+        await real(sink, choice_id, answered_by="timeout", selected=[], now=FROZEN_NOW)
+        return await real(sink, choice_id, **kwargs)
+
+    monkeypatch.setattr(sessions, "close_choice", racing)
+
+
+async def test_answer_choice_closes_the_row_and_sends_the_answer(
+    planner: Planner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    logs = sessions_logs(monkeypatch)
+    plan_id = await insert_plan(planner.session_factory)
+    await add_choice(planner, plan_id)
+
+    answered = await answer_choice(
+        plan_id, CHOICE_ID, ChoiceAnswer(selected=["a2"]), USER, services=planner.services
+    )
+
+    assert answered == AnsweredChoice(id=CHOICE_ID, answered_by="traveller", selected=["a2"])
+    [call] = planner.fake.calls_of("send_custom_tool_result")
+    assert call.session_id == "sesn_fake_0001"
+    assert call.args == {
+        "tool_use_id": CHOICE_ID,
+        "content": (
+            'The traveller chose: a2 "Castelo de São Jorge". Build the plan around it and drop '
+            "the other options you offered."
+        ),
+        "is_error": False,
+    }
+    row = await load_choice(planner, plan_id)
+    assert (row.answered_by, row.answer, row.answered_at) == ("traveller", ["a2"], FROZEN_NOW)
+    choice_events = [
+        event
+        for event in await load_events(planner.session_factory, plan_id)
+        if event.kind == "choice"
+    ]
+    assert [event.title for event in choice_events] == ["Hai scelto: Castelo de São Jorge"]
+    [entry] = [entry for entry in logs if entry["event"] == "choice_answered"]
+    assert entry == {
+        "event": "choice_answered",
+        "log_level": "info",
+        "plan_id": str(plan_id),
+        "session_id": "sesn_fake_0001",
+        "kind": "activities",
+        "answered_by": "traveller",
+        "options": 3,
+        "selected": 1,
+        "latency_ms": 0,
+    }
+
+    # A second answer finds it closed and sends nothing.
+    with pytest.raises(ChoiceClosedError) as caught:
+        await answer_choice(
+            plan_id, CHOICE_ID, ChoiceAnswer(skip=True), USER, services=planner.services
+        )
+    assert caught.value.answered_by == "traveller"
+    assert len(planner.fake.calls_of("send_custom_tool_result")) == 1
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "closed",
+        "unknown_option",
+        "single_choice",
+        "duplicate",
+        "not_running",
+        "interrupt_requested",
+        "foreign_plan",
+        "unknown_choice",
+    ],
+)
+async def test_answer_choice_refuses(planner: Planner, case: str) -> None:
+    factory = planner.session_factory
+    plan_id = await insert_plan(
+        factory,
+        status=PlanStatus.BUDGET_PAUSED if case == "not_running" else PlanStatus.RUNNING,
+        user_email=OTHER_USER.email if case == "foreign_plan" else USER.email,
+    )
+    if case != "unknown_choice":
+        await add_choice(
+            planner,
+            plan_id,
+            tool_input=JOURNEY_INPUT if case == "single_choice" else ACTIVITIES_INPUT,
+        )
+    if case == "closed":
+        sink = EventSink(plan_id, session_factory=factory, hub=planner.services.hub)
+        closed = await consumer_module.close_choice(
+            sink, CHOICE_ID, answered_by="timeout", selected=[], now=FROZEN_NOW
+        )
+        assert closed is not None
+    if case == "interrupt_requested":
+        async with factory() as db, db.begin():
+            await db.execute(
+                update(PlanRecord)
+                .where(PlanRecord.id == plan_id)
+                .values(interrupt_requested_at=FROZEN_NOW)
+            )
+    selected = {
+        "unknown_option": ["a1", "zz"],
+        "single_choice": ["c1", "c2"],
+        "duplicate": ["a1", "a1"],
+    }.get(case, ["a1"])
+    expected: dict[str, tuple[type[Exception], str | None]] = {
+        "closed": (ChoiceClosedError, "timeout"),
+        "unknown_option": (InvalidChoiceAnswerError, "unknown_option"),
+        "single_choice": (InvalidChoiceAnswerError, "single_choice"),
+        "duplicate": (InvalidChoiceAnswerError, "duplicate"),
+        "not_running": (ChoiceClosedError, None),
+        "interrupt_requested": (ChoiceClosedError, None),
+        "foreign_plan": (PlanNotFoundError, None),
+        "unknown_choice": (ChoiceNotFoundError, None),
+    }
+    error_type, value = expected[case]
+
+    with pytest.raises(error_type) as caught:
+        await answer_choice(
+            plan_id, CHOICE_ID, ChoiceAnswer(selected=selected), USER, services=planner.services
+        )
+
+    if isinstance(caught.value, ChoiceClosedError):
+        assert caught.value.answered_by == value
+    if isinstance(caught.value, InvalidChoiceAnswerError):
+        assert caught.value.reason == value
+    assert planner.fake.calls_of("send_custom_tool_result") == []
+    row = await load_choice(planner, plan_id)
+    if case == "unknown_choice":
+        assert row is None
+    else:
+        assert row.answered_by == ("timeout" if case == "closed" else None)
+
+
+async def test_answer_choice_needs_a_ready_planner(planner: Planner) -> None:
+    plan_id = await insert_plan(planner.session_factory)
+    await add_choice(planner, plan_id)
+    planner.services.client = None
+
+    with pytest.raises(PlannerUnavailableError):
+        await answer_choice(
+            plan_id, CHOICE_ID, ChoiceAnswer(skip=True), USER, services=planner.services
+        )
+    assert (await load_choice(planner, plan_id)).answered_by is None
+
+
+async def test_answer_choice_that_loses_the_race_names_the_winner(
+    planner: Planner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan_id = await insert_plan(planner.session_factory)
+    await add_choice(planner, plan_id)
+    timeout_wins_first(monkeypatch)
+
+    with pytest.raises(ChoiceClosedError) as caught:
+        await answer_choice(
+            plan_id, CHOICE_ID, ChoiceAnswer(selected=["a1"]), USER, services=planner.services
+        )
+
+    assert caught.value.answered_by == "timeout"
+    assert planner.fake.calls_of("send_custom_tool_result") == []
+    assert (await load_choice(planner, plan_id)).answered_by == "timeout"
+
+
+async def test_a_failed_send_is_logged_and_the_answer_stands(
+    planner: Planner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The row is the truth: the consumer resends it at the deadline (no result echo came)."""
+    logs = sessions_logs(monkeypatch)
+    plan_id = await insert_plan(planner.session_factory)
+    await add_choice(planner, plan_id)
+    planner.fake.fail_next("send_custom_tool_result", "api_unavailable")
+
+    answered = await answer_choice(
+        plan_id, CHOICE_ID, ChoiceAnswer(skip=True), USER, services=planner.services
+    )
+
+    assert answered == AnsweredChoice(id=CHOICE_ID, answered_by="skip", selected=[])
+    assert (await load_choice(planner, plan_id)).answered_by == "skip"
+    [call] = planner.fake.calls_of("send_custom_tool_result")
+    assert call.error is not None
+    failures = [entry for entry in logs if entry["event"] == "choice_answer_send_failed"]
+    assert failures == [
+        {
+            "event": "choice_answer_send_failed",
+            "log_level": "warning",
+            "plan_id": str(plan_id),
+            "session_id": "sesn_fake_0001",
+            "error_type": "api_error",
+        }
+    ]
+    assert [entry["event"] for entry in logs].count("choice_answered") == 1
+
+
+async def test_answer_pending_choice_uses_auto_pick(planner: Planner) -> None:
+    services = planner.services
+    plan_id = await insert_plan(planner.session_factory)
+    assert await answer_pending_choice(plan_id, USER, services=services) is None  # none asked
+
+    await add_choice(planner, plan_id)
+    answered = await answer_pending_choice(plan_id, USER, services=services)
+    assert answered == AnsweredChoice(id=CHOICE_ID, answered_by="traveller", selected=["a1", "a2"])
+    assert await answer_pending_choice(plan_id, USER, services=services) is None  # answered
+
+    later = FROZEN_NOW + dt.timedelta(minutes=1)
+    await add_choice(planner, plan_id, "sevt_q2", JOURNEY_INPUT, asked_at=later)
+    assert await answer_pending_choice(plan_id, USER, services=services) == AnsweredChoice(
+        id="sevt_q2", answered_by="traveller", selected=["c1"]
+    )
+
+    # An empty pick is a skip.
+    await add_choice(
+        planner, plan_id, "sevt_q3", ACTIVITIES_INPUT | {"kind": "food"}, asked_at=later
+    )
+    assert await answer_pending_choice(
+        plan_id, USER, services=services, pick=lambda request: []
+    ) == AnsweredChoice(id="sevt_q3", answered_by="skip", selected=[])
+    texts = [call.args["content"] for call in planner.fake.calls_of("send_custom_tool_result")]
+    assert texts == [
+        'The traveller chose: a1 "Torre di Belém", a2 "Castelo de São Jorge". Build the plan '
+        "around these and drop the other options you offered.",
+        'The traveller chose: c1 "Volo". Build the plan around it and drop the other options '
+        "you offered.",
+        "The traveller let you choose. Pick what fits the request best and go on; do not "
+        "mention it in the warnings.",
+    ]
+
+    with pytest.raises(PlanNotFoundError):
+        await answer_pending_choice(plan_id, OTHER_USER, services=services)
+
+
+async def test_answer_pending_choice_is_none_when_the_timeout_wins(
+    planner: Planner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan_id = await insert_plan(planner.session_factory)
+    await add_choice(planner, plan_id)
+    timeout_wins_first(monkeypatch)
+
+    assert await answer_pending_choice(plan_id, USER, services=planner.services) is None
+    assert planner.fake.calls_of("send_custom_tool_result") == []
+
+
+async def test_answer_pending_choice_is_none_when_the_plan_stopped_waiting(
+    planner: Planner,
+) -> None:
+    plan_id = await insert_plan(planner.session_factory, status=PlanStatus.BUDGET_PAUSED)
+    await add_choice(planner, plan_id)
+
+    assert await answer_pending_choice(plan_id, USER, services=planner.services) is None
+    assert (await load_choice(planner, plan_id)).answered_by is None
+
+
+# --- start_planner: the photos of the choice cards ----------------------------------------------
+
+
+async def test_start_planner_wires_the_place_photos(
+    make_settings: Callable[..., Settings],
+    db_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    settings = planner_settings(make_settings, choice_photos_enabled=True)
+    async with httpx.AsyncClient() as http:
+        services = await start_planner(
+            settings,
+            session_factory=db_session_factory,
+            http=http,
+            client=FakeManagedAgentsClient(),
+        )
+        try:
+            photos = services.require_ready().deps.photos
+            assert isinstance(photos, PlacePhotos)
+            assert photos._deadline == PHOTO_DEADLINE_SECONDS
+            resolver = photos._resolver
+            assert resolver._key_prefix == PLACE_KEY_PREFIX
+            assert resolver._http is http
+            assert resolver._headers["User-Agent"] == settings.wikimedia_user_agent
+            # A slow lookup ends inside the resolver (a transient miss is cached) before the
+            # overall deadline cancels it.
+            assert resolver._lookup_deadline == sessions.PLACE_PHOTO_LOOKUP_SECONDS == 2.5
+            assert sessions.PLACE_PHOTO_LOOKUP_SECONDS < PHOTO_DEADLINE_SECONDS
+        finally:
+            await stop_planner(services)
+
+
+@pytest.mark.parametrize(
+    ("overrides", "start_kwargs"),
+    [
+        ({"choice_photos_enabled": False}, {}),
+        ({"choice_photos_enabled": True}, {"fx_offline": True}),
+        ({"choice_photos_enabled": True, "demo_mode": True}, {}),
+    ],
+)
+async def test_start_planner_looks_up_no_photos_when_disabled_offline_or_in_the_demo(
+    make_settings: Callable[..., Settings],
+    db_session_factory: async_sessionmaker[AsyncSession],
+    overrides: dict[str, Any],
+    start_kwargs: dict[str, Any],
+) -> None:
+    settings = planner_settings(make_settings, **overrides)
+    async with httpx.AsyncClient() as http:
+        services = await start_planner(
+            settings,
+            session_factory=db_session_factory,
+            http=http,
+            client=FakeManagedAgentsClient(),
+            **start_kwargs,
+        )
+        try:
+            assert services.require_ready().deps.photos is NO_PHOTOS
+        finally:
+            await stop_planner(services)

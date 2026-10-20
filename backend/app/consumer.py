@@ -21,8 +21,19 @@ What a consumer does, in order (the six spec steps, corrected by the notes):
    with pre-fetched FX), check the Trip against trip.json. Accepted: store `plans.plan` and
    `plans.trip`, answer `PLAN_ACCEPTED_TEXT`. Rejected: answer the error list with
    `is_error=True` so the agent fixes it. The `MAX_FAILED_SUBMISSIONS`th failure -> `failed`.
+4b. `agent.custom_tool_use` named `ask_traveller` (`_ask_traveller`, app/choices.py): validate
+   (`parse_choice_request`; invalid: answer the problems with `is_error`), admit
+   (`admission_refusal`: at most 3 pauses, a kind once, one of `destination`/`journey`/`other`,
+   none once a plan is accepted; refused: `NO_MORE_QUESTIONS_TEXT` with `is_error`), look up
+   the photos of the options that name a place (`ConsumerDeps.photos`, 3 s in all), store the
+   `choices` row (deadline `CHOICE_TIMEOUT_SECONDS` away), THEN its `choice` timeline event,
+   and wait: the session idles with `requires_action` (`decide_idle`: WAIT) until the
+   traveller's answer, which `sessions.answer_choice` sends itself once its conditional update
+   closed the row. A rejected or refused call stores nothing and shows nothing (no row, no
+   backend event); being pure, it is re-evaluated identically on resume. A call whose row
+   exists is answered from the row: a closed answer is resent, `closed` sends nothing.
 5. `session.status_idle` (see `decide_idle`): once a plan is accepted (its Trip is already
-   stored) every idle except one waiting on our own `submit_plan` answer -> `ready` and archive
+   stored) every idle except one waiting on our own custom tool use -> `ready` and archive
    the session, whatever the stop reason; before that, `end_turn` -> `interrupted` after an
    interrupt request, else `failed`; `budget_reached` -> `interrupted` after an interrupt
    request, else `budget_paused`; an unexpected `requires_action` (a confirmation nobody will
@@ -34,7 +45,7 @@ What a consumer does, in order (the six spec steps, corrected by the notes):
    and the latest unseen status, then tail.
    Reconcile like the SDK's own session runner [SDK lib/tools/_beta_session_runner.py:574-627,
    657-666]: open the stream first, read the WHOLE history before acting on any of it (two
-   passes: pending `submit_plan` uses = `agent.custom_tool_use` ids minus the
+   passes: pending custom tool uses = `agent.custom_tool_use` ids minus the
    `custom_tool_use_id`s of the `user.custom_tool_result`s in history), and if a listing page
    fails halfway, act on nothing from that pass and mark nothing as handled: the next
    reconnect reconciles again. (The runner itself is not used: the backend needs every event
@@ -67,7 +78,9 @@ Invariants the implementation must keep:
 - A custom tool use is answered after the transaction that records its outcome commits. On
   resume, a `submit_plan` use without a `user.custom_tool_result` in history is answered again
   from the recorded outcome (the synthetic `backend:` event), never re-evaluated, so attempts
-  are never double counted. Sending a second result is harmless (notes §2e).
+  are never double counted; an `ask_traveller` use from its `choices` row, or, with no row,
+  through the same pure validation and admission as live. Sending a second result is
+  harmless (notes §2e).
 - Dedupe key (`dedupe_key`): `ma_event_id` = the event `id`; for an event with an empty id
   (`user.interrupt` [SKILL]) a synthetic key built from the plan, the stream scope, the type
   and `processed_at`, so a resume that lists it again never stores it twice; an empty-id event
@@ -124,7 +137,23 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app import clock
-from app.choices import AnsweredBy, PendingChoice, answered_title, asked_title, request_of
+from app.choices import (
+    ASK_TRAVELLER_TOOL,
+    NO_MORE_QUESTIONS_TEXT,
+    AnsweredBy,
+    ChoiceRejected,
+    PendingChoice,
+    admission_refusal,
+    answer_text,
+    answered_title,
+    asked_kinds,
+    asked_title,
+    get_choice,
+    insert_choice,
+    parse_choice_request,
+    request_of,
+)
+from app.covers import NO_PHOTOS, ChoicePhotos
 from app.db import ChoiceRecord, EventRecord, PlanRecord, PlanStatus
 from app.events import NOISE_EVENT_TYPES, AgentName, EventKind, UIEvent, normalize, one_line
 from app.fx import fx_keys
@@ -167,7 +196,7 @@ PLAN_ACCEPTED_TEXT = "Plan accepted."
 PLAN_ALREADY_ACCEPTED_TEXT = (
     "Plan already accepted. Do not call submit_plan again; end your turn with a short summary."
 )
-UNKNOWN_TOOL_TEXT = "Unknown tool {name!r}: the only custom tool is submit_plan."
+UNKNOWN_TOOL_TEXT = "Unknown tool {name!r}: the custom tools are submit_plan and ask_traveller."
 NO_ATTEMPTS_LEFT_TEXT = (
     "No attempts left: the plan was rejected {count} times and the run is being stopped."
 )
@@ -320,6 +349,9 @@ class ConsumerDeps:
     """Backoff sleeps (tests pass a no-op)."""
     link_checker: LinkHealthChecker = NO_LINK_CHECKS
     """Checks the accepted plan's URLs (`link_health`); checks nothing by default."""
+    photos: ChoicePhotos = NO_PHOTOS
+    """Finds the photos of the places on the choice cards (`covers.PlacePhotos`); finds none by
+    default."""
 
 
 # --- plan updates and event persistence ----------------------------------------------------------
@@ -847,7 +879,7 @@ class IdleDecision(StrEnum):
     BUDGET_PAUSED = "budget_paused"  # budget_reached: wait for "Continua"
     BLOCKED = "blocked"  # requires_action on something we will never confirm; unknown reason
     FAILED = "failed"  # retries_exhausted, refusal, end_turn without a plan
-    WAIT = "wait"  # requires_action only on our own submit_plan uses: keep following
+    WAIT = "wait"  # requires_action only on our own custom tool uses: keep following
 
 
 @dataclass(frozen=True, slots=True)
@@ -872,7 +904,9 @@ def decide_idle(raw: RawEvent, state: ConsumerState) -> IdleOutcome:
     """Classify a `session.status_idle` event (`raw["stop_reason"]["type"]`), in this order:
 
     1. `requires_action` whose `stop_reason.event_ids` are all in `state.custom_tool_use_ids`:
-       WAIT (we are answering our own `submit_plan` use), accepted or not.
+       WAIT, accepted or not, whatever the tool: we are answering our own `submit_plan` use, or
+       an `ask_traveller` waits for the traveller (its answer, the deadline or an interrupt
+       closes it). Log reason `requires_action:custom_tool`.
     2. `state.accepted`: READY for every other stop reason (`end_turn`, `budget_reached`,
        `retries_exhausted`, `refusal`, a blocking `requires_action`, unknown), with the stop
        reason in `log_reason`. The plan is finished, validated and its Trip stored: never ask
@@ -896,7 +930,7 @@ def decide_idle(raw: RawEvent, state: ConsumerState) -> IdleOutcome:
         event_ids = stop_reason.get("event_ids")
         ids = list(cast(list[Any], event_ids)) if isinstance(event_ids, list) else []
         if ids and all(isinstance(item, str) and item in state.custom_tool_use_ids for item in ids):
-            return IdleOutcome(IdleDecision.WAIT, log_reason="requires_action:submit_plan")
+            return IdleOutcome(IdleDecision.WAIT, log_reason="requires_action:custom_tool")
 
     if reason == "refusal":
         category = _text(_mapping(raw.get("stop_details")).get("category"))
@@ -1984,11 +2018,14 @@ class PlanConsumer:
     # --- submit_plan -------------------------------------------------------------------------
 
     async def _answer_tool_use(self, raw: RawEvent) -> PlanStatus | None:
-        """Answer one `agent.custom_tool_use` (live or pending on resume): from the recorded
-        outcome when there is one, else by evaluating it (submit_plan) once."""
+        """Answer one `agent.custom_tool_use` (live or pending on resume). `ask_traveller` goes
+        to `_ask_traveller` (its own record is the `choices` row); any other use is answered
+        from the recorded outcome when there is one, else by evaluating it (submit_plan) once."""
         state = self._require_state()
         tool_use_id = cast(str, raw.get("id"))
         name = _text(raw.get("name"))
+        if name == ASK_TRAVELLER_TOOL:
+            return await self._ask_traveller(raw)
         bound = self._log.bind(event_type="agent.custom_tool_use")
         key = backend_event_id(self.plan_id, "submit", tool_use_id)
         stored = await self._stored_answer(key)
@@ -2172,6 +2209,78 @@ class PlanConsumer:
         detail = _mapping(row[0])
         answer = _text(detail.get("answer")) or PLAN_ALREADY_ACCEPTED_TEXT
         return answer, detail.get("is_error") is True
+
+    # --- ask_traveller ------------------------------------------------------------------------
+
+    async def _ask_traveller(self, raw: RawEvent) -> PlanStatus | None:
+        """Put an `ask_traveller` question to the traveller (module docstring, step 4b): the
+        same path live and on resume.
+
+        1. `parse_choice_request`. Rejected: answer the problems (`is_error`), log
+           `choice_rejected`; nothing is stored.
+        2. The `choices` row. With none: `admission_refusal` (refused: answer
+           `NO_MORE_QUESTIONS_TEXT` with `is_error`, log `choice_refused`, nothing stored), then
+           the photos of the options with a `place` (no lookup when none has one), then
+           `insert_choice` (asked now, deadline `CHOICE_TIMEOUT_SECONDS` later). The row it
+           returns is the truth: an existing one wins.
+        3. The `choice` event (`choice_asked_event`), stored after its row, so a question
+           never shows without one; `choice_asked` is logged unless it was already stored.
+        4. A row already answered by the traveller (`traveller`, `skip`) or by the deadline
+           (`timeout`): its answer is sent again (the call has no result yet, or this would not
+           run). `closed` (the platform closed the call on interrupt): nothing is sent.
+
+        Logs carry counts and the kind, never the question, a title, a place or a URL."""
+        state = self._require_state()
+        tool_use_id = cast(str, raw.get("id"))
+        bound = self._log.bind(event_type="agent.custom_tool_use")
+        parsed = parse_choice_request(raw.get("input"))
+        if isinstance(parsed, ChoiceRejected):
+            bound.warning("choice_rejected", errors=len(parsed.errors))
+            await self._send_tool_result(tool_use_id, parsed.message, True)
+            return None
+
+        async with self._deps.session_factory() as db:
+            row = await get_choice(db, self.plan_id, tool_use_id)
+            asked = await asked_kinds(db, self.plan_id) if row is None else []
+        if row is None:
+            refusal = admission_refusal(parsed.kind, asked, accepted=state.accepted)
+            if refusal is not None:
+                bound.info("choice_refused", reason=refusal)
+                await self._send_tool_result(tool_use_id, NO_MORE_QUESTIONS_TEXT, True)
+                return None
+            places = {option.id: option.place for option in parsed.options if option.place}
+            photos = await self._deps.photos.photos_for(places) if places else {}
+            asked_at = self._deps.now()
+            timeout = dt.timedelta(seconds=self._deps.settings.choice_timeout_seconds)
+            async with self._deps.session_factory() as db, db.begin():
+                row = await insert_choice(
+                    db,
+                    choice_id=tool_use_id,
+                    plan_id=self.plan_id,
+                    request=parsed,
+                    photos=photos,
+                    asked_at=asked_at,
+                    deadline_at=asked_at + timeout,
+                )
+
+        result = await self._sink.emit(
+            choice_asked_event(row, cost_cents=state.cost_cents),
+            ma_event_id=backend_event_id(self.plan_id, "choice", f"{row.id}:asked"),
+        )
+        if not result.duplicate:
+            bound.info(
+                "choice_asked",
+                kind=row.kind,
+                options=len(parsed.options),
+                photos=len(row.payload.get("photos") or {}),
+            )
+
+        answered_by = cast(AnsweredBy | None, row.answered_by)
+        if answered_by is not None and answered_by != "closed":
+            text = answer_text(request_of(row), answered_by, row.answer or [])
+            bound.info("choice_answer_resent", kind=row.kind, answered_by=answered_by)
+            await self._send_tool_result(tool_use_id, text, False)
+        return None
 
     async def _send_tool_result(self, tool_use_id: str, content: str, is_error: bool) -> None:
         await self._deps.client.send_custom_tool_result(
