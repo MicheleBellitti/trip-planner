@@ -70,10 +70,11 @@ FIXTURES_DIR = FIXTURES_ROOT / "ma"
 """Where scenario scripts live: backend/tests/fixtures/ma/<scenario>.jsonl."""
 
 FAKE_EPOCH = dt.datetime(2026, 10, 12, 10, 0, tzinfo=dt.UTC)
-INTERRUPTED_TOOL_TEXT = "Tool execution was interrupted before completion. Please retry."
-"""What the platform answers a waiting custom tool call with on `user.interrupt` (probe P14)."""
 """`processed_at` of the first auto-stamped event of a session; every later auto-stamped event
 is `AUTO_STAMP_STEP` after the latest `processed_at` the session has seen."""
+
+INTERRUPTED_TOOL_TEXT = "Tool execution was interrupted before completion. Please retry."
+"""What the platform answers a waiting custom tool call with on `user.interrupt` (probe P14)."""
 
 AUTO_STAMP_STEP = dt.timedelta(milliseconds=1)
 """Small on purpose: an echo stamped while the driver is between two scripted events (with

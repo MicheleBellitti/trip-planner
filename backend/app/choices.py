@@ -101,7 +101,8 @@ class ChoiceOption(ContractModel):
     title: str = Field(
         min_length=1,
         max_length=MAX_TITLE,
-        description="Name of the option, Italian, at most 80 characters, no URL.",
+        pattern=SINGLE_LINE_PATTERN,
+        description="Name of the option, Italian, one line, at most 80 characters, no URL.",
     )
     reason: str = Field(
         min_length=1,
@@ -126,15 +127,19 @@ class ChoiceOption(ContractModel):
         default=None,
         min_length=1,
         max_length=MAX_AREA,
-        description="Neighbourhood or area, at most 60 characters, no URL. Omit when unknown.",
+        pattern=SINGLE_LINE_PATTERN,
+        description=(
+            "Neighbourhood or area, one line, at most 60 characters, no URL. Omit when unknown."
+        ),
     )
     place: str | None = Field(
         default=None,
         min_length=1,
         max_length=MAX_PLACE,
+        pattern=SINGLE_LINE_PATTERN,
         description=(
-            "Name and address of the place, at most 120 characters, no URL, used to look up a "
-            "photo. Omit when the option is not a place."
+            "Name and address of the place, one line, at most 120 characters, no URL, used to "
+            "look up a photo. Omit when the option is not a place."
         ),
     )
 

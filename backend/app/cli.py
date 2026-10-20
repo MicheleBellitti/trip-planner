@@ -727,7 +727,8 @@ def _automatic_chooser(
 def _terminal_chooser(
     services: sessions.PlannerServices, plan_id: uuid.UUID, user: CurrentUser, out: TextIO
 ) -> Chooser:
-    """`run --choose`: print the question and the numbered options, read the answer."""
+    """`run --choose`: print the question and the numbered options, read the answer (the end
+    of input skips)."""
 
     async def choose(event: UIEvent) -> None:
         assert event.detail is not None
@@ -739,7 +740,10 @@ def _terminal_chooser(
             print(f"  {number}. {option['title']}: {option['reason']}", file=out)
         hint = CHOICE_HINT if multiple else CHOICE_HINT_SINGLE
         while True:
-            line = await asyncio.to_thread(input, "Scegli: ")
+            try:
+                line = await asyncio.to_thread(input, "Scegli: ")
+            except EOFError:  # a piped or closed stdin: "Scegli tu"
+                line = ""
             numbers = parse_choice_line(line, count=len(options), multiple=multiple)
             if numbers is not None:
                 break

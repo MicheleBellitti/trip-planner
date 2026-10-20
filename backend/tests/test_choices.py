@@ -97,6 +97,9 @@ def test_a_valid_activities_request_parses() -> None:
         ({"options": [{**OPTIONS[0], "duration_min": 1441}, *OPTIONS[1:]]}, ("options", 0)),
         ({"options": [{**OPTIONS[0], "reason": "a\nb"}, *OPTIONS[1:]]}, ("options", 0, "reason")),
         ({"options": [{**OPTIONS[0], "title": "x" * 81}, *OPTIONS[1:]]}, ("options", 0, "title")),
+        ({"options": [{**OPTIONS[0], "title": "a\nb"}, *OPTIONS[1:]]}, ("options", 0, "title")),
+        ({"options": [{**OPTIONS[0], "area": "a\nb"}, *OPTIONS[1:]]}, ("options", 0, "area")),
+        ({"options": [{**OPTIONS[0], "place": "a\rb"}, *OPTIONS[1:]]}, ("options", 0, "place")),
         ({"unknown": 1}, ("unknown",)),
     ],
 )

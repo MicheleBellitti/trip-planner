@@ -506,6 +506,33 @@ async def test_run_choose_reads_the_terminal(
     assert any("Hai lasciato scegliere ad Atlas" in line for line in lines)  # the empty line
 
 
+async def test_run_choose_skips_on_a_closed_stdin(
+    make_settings: Callable[..., Settings],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`--choose` with a piped or closed stdin: end of input is "Scegli tu", never a crash that
+    leaves the plan running."""
+
+    def closed_input(prompt: str = "") -> str:
+        raise EOFError
+
+    monkeypatch.setattr("builtins.input", closed_input)
+    code = await cli.replay_command(
+        MA_FIXTURES / "choices.jsonl",
+        settings=make_settings(),
+        request_path=None,
+        color=False,
+        out_dir=tmp_path,
+        choose=True,
+    )
+    out = capsys.readouterr().out
+    assert code == cli.EXIT_READY
+    assert out.count(cli.CHOICE_SKIPPED_LINE) == 2
+    assert sum("Hai lasciato scegliere ad Atlas" in line for line in out.splitlines()) == 2
+
+
 def test_parse_choice_line() -> None:
     assert cli.parse_choice_line("2", count=3, multiple=False) == [2]
     assert cli.parse_choice_line(" 1, 3 ", count=3, multiple=True) == [1, 3]

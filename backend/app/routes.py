@@ -59,7 +59,17 @@ from enum import StrEnum
 from typing import Annotated, Any, cast
 
 import structlog
-from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, Request, Response
+from fastapi import (
+    APIRouter,
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Path,
+    Query,
+    Request,
+    Response,
+)
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import AwareDatetime, BaseModel, Field, ValidationError
@@ -1306,6 +1316,11 @@ async def continue_plan(
     return ContinueResponse(id=plan_id, status=PlanStatus.RUNNING, budget_cents=budget_cents)
 
 
+CHOICE_ID_PATTERN = r"^[A-Za-z0-9_-]{1,128}$"
+"""A choice id (the `agent.custom_tool_use` event id, the fake's namespaced ids included):
+anything else is FastAPI's 422 before the database (Postgres rejects U+0000 in text)."""
+
+
 @router.post(
     "/{plan_id}/choices/{choice_id}",
     dependencies=[RequireOrigin],
@@ -1318,7 +1333,7 @@ async def continue_plan(
 )
 async def answer_choice(
     plan_id: uuid.UUID,
-    choice_id: str,
+    choice_id: Annotated[str, Path(pattern=CHOICE_ID_PATTERN)],
     body: ChoiceAnswer,
     user: CurrentUserDep,
     planner: PlannerDep,

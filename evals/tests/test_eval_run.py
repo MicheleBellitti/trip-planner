@@ -402,6 +402,10 @@ def test_pick_lines() -> None:
     )  # pyright: ignore[reportArgumentType]
     assert run.pick_line(timeout, request) == "food (timeout): none, the coordinator chose"  # pyright: ignore[reportArgumentType]
     assert run.pick_line(skipped, request) == "other (traveller): none, the coordinator chose"  # pyright: ignore[reportArgumentType]
+    # A title on two lines stays on the judge's one line.
+    broken = SimpleNamespace(options=[SimpleNamespace(id="a3", title="Alfama\ne i  miradouros")])
+    picked = SimpleNamespace(kind="activities", answered_by="traveller", answer=["a3"])
+    assert run.pick_line(picked, broken) == "activities (traveller): a3 Alfama e i miradouros"  # pyright: ignore[reportArgumentType]
 
 
 def test_run_case_timeout_interrupts_the_plan(monkeypatch: pytest.MonkeyPatch) -> None:

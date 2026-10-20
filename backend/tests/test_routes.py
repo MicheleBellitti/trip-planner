@@ -1581,6 +1581,40 @@ async def test_answer_choice_body_needs_selected_or_skip(
     assert calls == []
 
 
+@pytest.mark.parametrize("choice_id", ["a%00b", "a%20b", "a.b", "x" * 129])
+async def test_answer_choice_id_is_checked_before_the_database(
+    api: Api, monkeypatch: pytest.MonkeyPatch, choice_id: str
+) -> None:
+    # Postgres rejects U+0000 in text: such an id must never reach it (it would be a 500).
+    calls = patch_answer_choice(monkeypatch, error=AssertionError("must not be reached"))
+
+    response = await api.client.post(
+        f"/plans/{uuid.uuid4()}/choices/{choice_id}", json={"skip": True}, headers=POST_HEADERS
+    )
+
+    assert response.status_code == 422
+    [issue] = response.json()["detail"]  # FastAPI's own 422 shape
+    assert issue["loc"] == ["path", "choice_id"]
+    assert calls == []
+
+
+async def test_answer_choice_id_takes_the_fakes_namespaced_ids(
+    api: Api, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    choice_id = "sevt_022CZchoiceActivitiesPa1_0123456789ab"  # namespace_event_ids, the demo's
+    calls = patch_answer_choice(
+        monkeypatch,
+        result=sessions.AnsweredChoice(id=choice_id, answered_by="skip", selected=[]),
+    )
+
+    response = await api.client.post(
+        f"/plans/{uuid.uuid4()}/choices/{choice_id}", json={"skip": True}, headers=POST_HEADERS
+    )
+
+    assert response.status_code == 200
+    assert calls[0][1] == choice_id
+
+
 @pytest.mark.parametrize(
     ("error", "status", "code", "data", "message"),
     [
