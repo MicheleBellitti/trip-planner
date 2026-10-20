@@ -7,6 +7,7 @@ The files are generated, never edited by hand:
 
     plan.json              Plan: the input_schema of the coordinator's submit_plan tool
     request.json           PlanRequest: POST /plans body, drives the web form
+    ask_traveller.json     ChoiceRequest: the input_schema of the coordinator's ask_traveller tool
     ui_event.json          UIEvent: what the browser receives over SSE
     results/<agent>.json   the subagents' blackboard files (travel-research-rules skill)
 
@@ -27,6 +28,7 @@ from typing import Any
 from pydantic import BaseModel
 from pydantic.json_schema import GenerateJsonSchema, JsonSchemaMode
 
+from app.choices import ChoiceRequest
 from app.events import UIEvent
 from app.plan import Plan
 from app.request import PlanRequest
@@ -88,6 +90,16 @@ def plan_input_schema() -> JsonSchema:
     return schema
 
 
+def ask_traveller_input_schema() -> JsonSchema:
+    """The ask_traveller input_schema: a self-contained JSON Schema object."""
+    schema = model_schema(ChoiceRequest)
+    if schema.get("type") != "object":
+        msg = "a tool input_schema must describe an object"
+        raise ValueError(msg)
+    check_self_contained(schema)
+    return schema
+
+
 def _result_schema(agent: SubagentName) -> Callable[[], JsonSchema]:
     return lambda: model_schema(RESULT_MODELS[agent])
 
@@ -95,6 +107,7 @@ def _result_schema(agent: SubagentName) -> Callable[[], JsonSchema]:
 SCHEMAS: dict[str, Callable[[], JsonSchema]] = {
     "plan.json": plan_input_schema,
     "request.json": lambda: model_schema(PlanRequest),
+    "ask_traveller.json": ask_traveller_input_schema,
     # The browser receives serialized events: describe the output shape.
     "ui_event.json": lambda: model_schema(UIEvent, mode="serialization"),
     **{f"results/{agent}.json": _result_schema(agent) for agent in SUBAGENTS},

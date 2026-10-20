@@ -19,6 +19,7 @@ from app.request import PlanRequest
 from app.schemas import (
     SCHEMA_DIR,
     SCHEMAS,
+    ask_traveller_input_schema,
     build_all,
     check_self_contained,
     iter_refs,
@@ -39,6 +40,7 @@ EXPECTED_FILES = {
     "plan.json",
     "request.json",
     "ui_event.json",
+    "ask_traveller.json",
     "results/flights.json",
     "results/lodging.json",
     "results/activities.json",
@@ -89,7 +91,7 @@ def test_check_flag_passes_on_the_repository() -> None:
     )
 
     assert completed.returncode == 0, completed.stderr
-    assert "up to date (7 schemas)" in completed.stdout
+    assert "up to date (8 schemas)" in completed.stdout
 
 
 @pytest.mark.parametrize("name", sorted(EXPECTED_FILES))
@@ -304,3 +306,15 @@ def test_writing_skips_unchanged_files(tmp_path: Path) -> None:
 
     assert schemas.write_all(tmp_path) == []
     assert plan.stat().st_mtime_ns == before
+
+
+# --- ask_traveller.json --------------------------------------------------------------------
+
+
+def test_ask_traveller_schema_is_a_self_contained_object() -> None:
+    schema = load("ask_traveller.json")
+
+    assert schema["type"] == "object"
+    assert schema == ask_traveller_input_schema()
+    check_self_contained(schema)
+    assert set(schema["required"]) == {"kind", "question", "multiple", "options"}
