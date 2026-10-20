@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { displayTitle, formatCreated, formatDateTime, formatElapsed, formatEur, formatRunningFor, formatUsd, HOME_TIMEZONE, splitDateRange } from "./format";
+import { displayTitle, formatCreated, formatDateTime, formatElapsed, formatEur, formatMinutes, formatMoney, formatRunningFor, formatUsd, HOME_TIMEZONE, splitDateRange } from "./format";
 
 describe("formatCreated", () => {
   const now = Date.parse("2026-10-12T15:00:00Z");
@@ -95,5 +95,19 @@ describe("splitDateRange", () => {
     for (const title of ["Lisbona in famiglia, 14–18 aprile 2027", "Roma, 28 apr–2 mag", "Aix-en-Provence, 3–5 mag", "x"]) {
       expect(joined(title)).toBe(title);
     }
+  });
+});
+
+describe("formatMinutes and formatMoney", () => {
+  it("formatMinutes: 45 min, 3 h, 2 h 30 min", () => {
+    expect(formatMinutes(45)).toBe("45 min");
+    expect(formatMinutes(180)).toBe("3 h");
+    expect(formatMinutes(150)).toBe("2 h 30 min");
+  });
+
+  it("formatMoney: (6000, EUR) 60,00 €, (1250, USD) 12,50 $, (1250, GBP) 12,50 GBP", () => {
+    expect(formatMoney(6000, "EUR")).toBe("60,00 €");
+    expect(formatMoney(1250, "USD")).toBe("12,50 $");
+    expect(formatMoney(1250, "GBP")).toBe("12,50 GBP");
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { PlanDetailSchema } from "./api";
+import { ChoiceAnswerResponseSchema, PLAN_ERROR_CODES, PlanDetailSchema } from "./api";
 
 const BASE_DETAIL = {
   id: "6f1c2a7e-3b4d-4e5f-8a9b-0c1d2e3f4a5b",
@@ -47,6 +47,24 @@ describe("PlanDetailSchema link_health", () => {
       status: "quarantined",
       fallback: "https://a.example/",
       fallback_allowed: true,
+    });
+  });
+});
+
+describe("PlanDetailSchema pending_choice", () => {
+  it("PlanDetail keeps pending_choice, and defaults it to null from an older backend", () => {
+    expect(PlanDetailSchema.parse(BASE_DETAIL).pending_choice).toBeNull();
+    const choice = { id: "c1", kind: "food", options: [] };
+    expect(PlanDetailSchema.parse({ ...BASE_DETAIL, pending_choice: choice }).pending_choice).toEqual(choice);
+    expect(PlanDetailSchema.parse({ ...BASE_DETAIL, pending_choice: null }).pending_choice).toBeNull();
+  });
+
+  it("knows the three choice error codes and parses the answer", () => {
+    expect(PLAN_ERROR_CODES).toEqual(expect.arrayContaining(["choice_not_found", "choice_closed", "invalid_choice_answer"]));
+    expect(ChoiceAnswerResponseSchema.parse({ id: "c1", answered_by: "traveller", selected: ["a1"] })).toEqual({
+      id: "c1",
+      answered_by: "traveller",
+      selected: ["a1"],
     });
   });
 });
