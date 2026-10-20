@@ -147,6 +147,48 @@ class BlockingFx:
         return FxRates()
 
 
+class Deadlines:
+    """A `ConsumerDeps.sleep_until` the test controls. Every wait is recorded (`requested`, the
+    deadline it was asked to wait for) and lasts until `expire()` ends the waits in progress (the
+    clock passed them) or until it is cancelled (`cancelled`: the timer was disarmed). With
+    `immediate`, every wait ends at once (every deadline has already passed)."""
+
+    def __init__(self, *, immediate: bool = False) -> None:
+        self.immediate = immediate
+        self.requested: list[dt.datetime] = []
+        self.cancelled: list[dt.datetime] = []
+        self._waiting: list[asyncio.Future[None]] = []
+
+    async def __call__(self, deadline: dt.datetime) -> None:
+        self.requested.append(deadline)
+        if self.immediate:
+            await asyncio.sleep(0)
+            return
+        waiter: asyncio.Future[None] = asyncio.get_running_loop().create_future()
+        self._waiting.append(waiter)
+        try:
+            await waiter
+        except asyncio.CancelledError:
+            self.cancelled.append(deadline)
+            raise
+        finally:
+            if waiter in self._waiting:
+                self._waiting.remove(waiter)
+
+    @property
+    def waiting(self) -> int:
+        """How many waits are in progress (armed timers)."""
+        return len(self._waiting)
+
+    def expire(self) -> int:
+        """End every wait in progress; later waits block again. Returns how many ended."""
+        waiters, self._waiting = self._waiting, []
+        for waiter in waiters:
+            if not waiter.done():
+                waiter.set_result(None)
+        return len(waiters)
+
+
 @dataclass
 class Harness:
     """A consumer's dependencies over the fake, the test database and the vendored schema."""
@@ -156,6 +198,9 @@ class Harness:
     deps: ConsumerDeps
     hub: RecordingHub
     sleeps: list[float] = field(default_factory=list[float])
+    deadlines: Deadlines = field(default_factory=Deadlines)
+    """The choices' deadlines (`deps.sleep_until` unless the test gave its own): they never
+    pass unless the test says so."""
 
     async def create_plan(
         self,
@@ -222,10 +267,12 @@ def harness_factory(
     make_settings: Callable[..., Settings],
     http: httpx.AsyncClient,
 ) -> HarnessFactory:
-    """`build(fake, trip_schema=None, fx=None, link_checker=None, photos=None)`: a `Harness`
-    with real collaborators (`TripSchemaStore` over the vendored trip.json through a file:// URL,
-    an offline `FxConverter`, `PlanHub`, no photo lookups unless `photos` is given); also used by
-    test_consumer_resume.py and test_consumer_choices.py."""
+    """`build(fake, trip_schema=None, fx=None, link_checker=None, photos=None, deadlines=None,
+    sleep_until=None, now=None)`: a `Harness` with real collaborators (`TripSchemaStore` over
+    the vendored trip.json through a file:// URL, an offline `FxConverter`, `PlanHub`, no photo
+    lookups unless `photos` is given), the clock frozen at `NOW` unless `now` is given, and the
+    choices' deadlines in the test's hands (`Deadlines`, unless `sleep_until` is given); also
+    used by test_consumer_resume.py and test_consumer_choices.py."""
     settings = make_settings(trip_schema_url=DEV_FALLBACK_SCHEMA_PATH.as_uri())
 
     def build(
@@ -235,6 +282,9 @@ def harness_factory(
         fx: Any = None,
         link_checker: Any = None,
         photos: Any = None,
+        deadlines: Deadlines | None = None,
+        sleep_until: Any = None,
+        now: Any = None,
     ) -> Harness:
         sleeps: list[float] = []
 
@@ -247,6 +297,7 @@ def harness_factory(
         converter = fx or FxConverter(
             session_factory=factory, http=http, offline=True, today=NOW.date
         )
+        timers = deadlines or Deadlines()
         deps = ConsumerDeps(
             settings=settings,
             session_factory=factory,
@@ -254,14 +305,15 @@ def harness_factory(
             hub=hub,
             trip_schema=store,
             fx=converter,
-            now=lambda: NOW,
+            now=now or (lambda: NOW),
             ids=lambda: SeededTripIds(7),
             sleep=record_sleep,
             link_checker=link_checker or NO_LINK_CHECKS,
+            sleep_until=sleep_until or timers,
         )
         if photos is not None:
             deps = dataclasses.replace(deps, photos=photos)
-        return Harness(factory, fake, deps, hub, sleeps)
+        return Harness(factory, fake, deps, hub, sleeps, timers)
 
     return build
 

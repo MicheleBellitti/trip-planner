@@ -26,12 +26,24 @@ What a consumer does, in order (the six spec steps, corrected by the notes):
    (`admission_refusal`: at most 3 pauses, a kind once, one of `destination`/`journey`/`other`,
    none once a plan is accepted; refused: `NO_MORE_QUESTIONS_TEXT` with `is_error`), look up
    the photos of the options that name a place (`ConsumerDeps.photos`, 3 s in all), store the
-   `choices` row (deadline `CHOICE_TIMEOUT_SECONDS` away), THEN its `choice` timeline event,
-   and wait: the session idles with `requires_action` (`decide_idle`: WAIT) until the
-   traveller's answer, which `sessions.answer_choice` sends itself once its conditional update
-   closed the row. A rejected or refused call stores nothing and shows nothing (no row, no
-   backend event); being pure, it is re-evaluated identically on resume. A call whose row
-   exists is answered from the row: a closed answer is resent, `closed` sends nothing.
+   `choices` row (deadline `CHOICE_TIMEOUT_SECONDS` away) and its `choice` timeline event in
+   one transaction, arm the deadline, and wait: the session idles with `requires_action`
+   (`decide_idle`: WAIT) until one of three things closes the row, exactly once
+   (`close_choice`'s conditional update):
+   - the traveller's answer, which `sessions.answer_choice` sends itself;
+   - the deadline: a timer task (`ConsumerDeps.sleep_until`) puts `_ChoiceDeadline` in the
+     inbox, handled in turn with the stream events: `timeout` and its answer
+     (`answer_text`), or, when the traveller won but no echo of the answer came (its send
+     failed), the stored answer sent once more. No timeout once an interrupt was asked: the
+     platform closes the call;
+   - `user.interrupt`: the platform closes the waiting call itself with an `agent.tool_result`
+     (`is_error`, notes §2e); the row closes as `closed` and nothing is sent.
+   A result echo (`user.custom_tool_result` or `agent.tool_result`) for the call disarms its
+   timer; so do the closure and the consumer's stop. A rejected or refused call stores nothing
+   and shows nothing (no row, no backend event); being pure, it is re-evaluated identically on
+   resume. A call whose row exists is answered from the row, never re-validated: a closed
+   answer is resent, `closed` sends nothing, an open row is armed with its own deadline (or
+   times out at once when that has passed).
 5. `session.status_idle` (see `decide_idle`): once a plan is accepted (its Trip is already
    stored) every idle except one waiting on our own custom tool use -> `ready` and archive
    the session, whatever the stop reason; before that, `end_turn` -> `interrupted` after an
@@ -46,10 +58,13 @@ What a consumer does, in order (the six spec steps, corrected by the notes):
    Reconcile like the SDK's own session runner [SDK lib/tools/_beta_session_runner.py:574-627,
    657-666]: open the stream first, read the WHOLE history before acting on any of it (two
    passes: pending custom tool uses = `agent.custom_tool_use` ids minus the
-   `custom_tool_use_id`s of the `user.custom_tool_result`s in history), and if a listing page
-   fails halfway, act on nothing from that pass and mark nothing as handled: the next
-   reconnect reconciles again. (The runner itself is not used: the backend needs every event
-   for the UI, not only the tool calls.)
+   `custom_tool_use_id`s of the `user.custom_tool_result`s and the `tool_use_id`s of the
+   `agent.tool_result`s in history: a call the platform closed on interrupt is answered, notes
+   §2e), and if a listing page fails halfway, act on nothing from that pass and mark nothing
+   as handled: the next reconnect reconciles again. An `ask_traveller` call that only the
+   platform answered closes its row as `closed` (it may have happened while no consumer
+   ran). (The runner itself is not used: the backend needs every event for the UI, not only
+   the tool calls.)
 7. Threads: a session holds at most 25 concurrent child threads, idle ones included until
    archived (notes §2a). The roster (4 subagents, at most 2 follow-ups each) stays far below it
    even if every delegation opened a new thread, so threads are not archived routinely: only
@@ -80,7 +95,9 @@ Invariants the implementation must keep:
   from the recorded outcome (the synthetic `backend:` event), never re-evaluated, so attempts
   are never double counted; an `ask_traveller` use from its `choices` row, or, with no row,
   through the same pure validation and admission as live. Sending a second result is
-  harmless (notes §2e).
+  harmless (notes §2e). A question's row and its `choice` event are stored in one
+  transaction, so neither exists without the other and its answer always comes later in
+  `seq`.
 - Dedupe key (`dedupe_key`): `ma_event_id` = the event `id`; for an event with an empty id
   (`user.interrupt` [SKILL]) a synthetic key built from the plan, the stream scope, the type
   and `processed_at`, so a resume that lists it again never stores it twice; an empty-id event
@@ -352,6 +369,9 @@ class ConsumerDeps:
     photos: ChoicePhotos = NO_PHOTOS
     """Finds the photos of the places on the choice cards (`covers.PlacePhotos`); finds none by
     default."""
+    sleep_until: Callable[[dt.datetime], Awaitable[None]] = clock.sleep_until
+    """Waits until an instant on the clock `now` reads (a choice's deadline). The default reads
+    `clock.now`, so it matches the production `now`; tests that freeze `now` pass their own."""
 
 
 # --- plan updates and event persistence ----------------------------------------------------------
@@ -1400,7 +1420,15 @@ class _SessionStreamClosed:
     error: BaseException | None
 
 
-_InboxItem = _Received | _SessionStreamClosed
+@dataclass(frozen=True, slots=True)
+class _ChoiceDeadline:
+    """The deadline of the choice `choice_id` passed (its timer task, `_arm_choice`). Handled
+    by `_tail` in turn with the stream events; ignored by `_drain` (no more actions then)."""
+
+    choice_id: str
+
+
+_InboxItem = _Received | _SessionStreamClosed | _ChoiceDeadline
 
 
 class _ReconnectError(Exception):
@@ -1466,6 +1494,10 @@ class PlanConsumer:
         self._thread_backfilled: dict[str, asyncio.Event] = {}
         """Thread id -> set once that thread's history listing is all in the inbox (or its
         task gave up): what the resume and the final drain wait for."""
+        self._choice_timers: dict[str, asyncio.Task[None]] = {}
+        """Choice id -> the timer task waiting for its deadline (`_arm_choice`). Removed when
+        it fires, when a result echo for the call arrives, when the choice closes here, and
+        all of them when the consumer stops."""
         self._archive_on_exit = False
         self._interrupt_on_exit = False
         """Set when this consumer failed the plan for a backend-side reason (crash, API errors,
@@ -1506,6 +1538,7 @@ class PlanConsumer:
                 self._settled.set()
                 try:
                     await self._stop_threads()
+                    await self._stop_choice_timers()
                     await self._release_lease()
                 finally:
                     self._done = True
@@ -1702,6 +1735,12 @@ class PlanConsumer:
                 if item.error is not None:
                     raise _ReconnectError(item.error)
                 return await self._session_stream_ended()
+            if isinstance(item, _ChoiceDeadline):
+                with structlog.contextvars.bound_contextvars(
+                    agent=AgentName.COORDINATOR.value, event_type="backend.choice"
+                ):
+                    await self._choice_deadline_passed(item.choice_id)
+                continue
             if item.scope == PRIMARY_SCOPE:
                 self._session_events_received = True
             outcome = await self._handle(item.scope, item.raw)
@@ -1755,12 +1794,16 @@ class PlanConsumer:
             # Nothing of this pass was stored or acted on: the next connection reconciles again.
             raise _ReconnectError(exc) from exc
 
-        answered = {
+        # A call is answered by our result or by the platform's (an interrupt closes a waiting
+        # call with an `agent.tool_result`, notes §2e): neither is answered again.
+        ours = {
             key
             for raw in history
             if raw.get("type") == "user.custom_tool_result"
             and (key := _text(raw.get("custom_tool_use_id"))) is not None
         }
+        answered = {key for raw in history if (key := _result_echo_id(raw)) is not None}
+        closed_by_platform = answered - ours
         tool_uses = [
             raw
             for raw in history
@@ -1802,6 +1845,12 @@ class PlanConsumer:
 
         for raw in tool_uses:
             tool_use_id = cast(str, raw["id"])
+            if tool_use_id in closed_by_platform and raw.get("name") == ASK_TRAVELLER_TOOL:
+                # Closed (an interrupt) while no consumer followed the plan: a no-op when the
+                # row is already closed, or when there is none.
+                await self._close_by_platform(tool_use_id)
+        for raw in tool_uses:
+            tool_use_id = cast(str, raw["id"])
             if tool_use_id in answered or tool_use_id in state.answered_tool_use_ids:
                 continue
             outcome = await self._answer_tool_use(raw)
@@ -1821,13 +1870,16 @@ class PlanConsumer:
         self, scope: StreamScope, raw: RawEvent, *, act: bool = True
     ) -> PlanStatus | None:
         """Store one received event (when this stream owns it) and, with `act`, do what it
-        means. Returns the plan's new status when the consumer must stop following."""
+        means. Returns the plan's new status when the consumer must stop following.
+
+        A result echo (`user.custom_tool_result`, or the platform's `agent.tool_result`) counts
+        the call as answered and disarms its choice's timer, from whichever stream it comes."""
         state = self._require_state()
         event_type = _text(raw.get("type"))
-        if raw.get("type") == "user.custom_tool_result":
-            answered = _text(raw.get("custom_tool_use_id"))
-            if answered is not None:
-                state.answered_tool_use_ids.add(answered)
+        answered = _result_echo_id(raw)
+        if answered is not None:
+            state.answered_tool_use_ids.add(answered)
+            self._disarm_choice(answered)
         if not stream_owns(scope, raw):
             return None
         key = dedupe_key(raw, plan_id=self.plan_id, scope=scope)
@@ -1869,6 +1921,11 @@ class PlanConsumer:
                 await self._archive_superseded()
             case "agent.custom_tool_use" if scope == PRIMARY_SCOPE:
                 return await self._answer_tool_use(raw)
+            case "agent.tool_result" if scope == PRIMARY_SCOPE:
+                # The platform answered one of our calls itself (an interrupt, notes §2e).
+                tool_use_id = _text(raw.get("tool_use_id"))
+                if tool_use_id is not None and tool_use_id in state.custom_tool_use_ids:
+                    await self._close_by_platform(tool_use_id)
             case "session.status_rescheduled":
                 bound.info("session_rescheduled")
             case "session.error" if change.target is None:
@@ -2216,33 +2273,39 @@ class PlanConsumer:
         """Put an `ask_traveller` question to the traveller (module docstring, step 4b): the
         same path live and on resume.
 
-        1. `parse_choice_request`. Rejected: answer the problems (`is_error`), log
-           `choice_rejected`; nothing is stored.
-        2. The `choices` row. With none: `admission_refusal` (refused: answer
-           `NO_MORE_QUESTIONS_TEXT` with `is_error`, log `choice_refused`, nothing stored), then
-           the photos of the options with a `place` (no lookup when none has one), then
-           `insert_choice` (asked now, deadline `CHOICE_TIMEOUT_SECONDS` later). The row it
-           returns is the truth: an existing one wins.
-        3. The `choice` event (`choice_asked_event`), stored after its row, so a question
-           never shows without one; `choice_asked` is logged unless it was already stored.
+        1. The `choices` row is read first: when it exists it is the truth, and the raw input
+           is neither validated nor admitted again (a rule may have changed since it was
+           stored).
+        2. With no row: `parse_choice_request` (rejected: answer the problems with `is_error`,
+           log `choice_rejected`, nothing stored), `admission_refusal` (refused: answer
+           `NO_MORE_QUESTIONS_TEXT` with `is_error`, log `choice_refused`, nothing stored), the
+           photos of the options with a `place` (no lookup when none has one), then the row
+           (asked now, deadline `CHOICE_TIMEOUT_SECONDS` later).
+        3. The row and its `choice` event (`choice_asked_event`) in one transaction
+           (`_show_choice`); with a row already stored only the event, usually already stored
+           too. `choice_asked` is logged only when the event is new.
         4. A row already answered by the traveller (`traveller`, `skip`) or by the deadline
            (`timeout`): its answer is sent again (the call has no result yet, or this would not
            run). `closed` (the platform closed the call on interrupt): nothing is sent.
+        5. An open row: past its deadline, `_close_by_timeout` now; otherwise `_arm_choice`
+           with the row's own deadline (a resume keeps the original one).
 
         Logs carry counts and the kind, never the question, a title, a place or a URL."""
         state = self._require_state()
         tool_use_id = cast(str, raw.get("id"))
         bound = self._log.bind(event_type="agent.custom_tool_use")
-        parsed = parse_choice_request(raw.get("input"))
-        if isinstance(parsed, ChoiceRejected):
-            bound.warning("choice_rejected", errors=len(parsed.errors))
-            await self._send_tool_result(tool_use_id, parsed.message, True)
-            return None
-
         async with self._deps.session_factory() as db:
-            row = await get_choice(db, self.plan_id, tool_use_id)
-            asked = await asked_kinds(db, self.plan_id) if row is None else []
-        if row is None:
+            known = await get_choice(db, self.plan_id, tool_use_id)
+            asked = await asked_kinds(db, self.plan_id) if known is None else []
+
+        if known is not None:
+            row, shown = await self._show_choice(tool_use_id, known=known)
+        else:
+            parsed = parse_choice_request(raw.get("input"))
+            if isinstance(parsed, ChoiceRejected):
+                bound.warning("choice_rejected", errors=len(parsed.errors))
+                await self._send_tool_result(tool_use_id, parsed.message, True)
+                return None
             refusal = admission_refusal(parsed.kind, asked, accepted=state.accepted)
             if refusal is not None:
                 bound.info("choice_refused", reason=refusal)
@@ -2252,8 +2315,9 @@ class PlanConsumer:
             photos = await self._deps.photos.photos_for(places) if places else {}
             asked_at = self._deps.now()
             timeout = dt.timedelta(seconds=self._deps.settings.choice_timeout_seconds)
-            async with self._deps.session_factory() as db, db.begin():
-                row = await insert_choice(
+
+            async def insert(db: AsyncSession) -> ChoiceRecord:
+                return await insert_choice(
                     db,
                     choice_id=tool_use_id,
                     plan_id=self.plan_id,
@@ -2263,24 +2327,200 @@ class PlanConsumer:
                     deadline_at=asked_at + timeout,
                 )
 
-        result = await self._sink.emit(
-            choice_asked_event(row, cost_cents=state.cost_cents),
-            ma_event_id=backend_event_id(self.plan_id, "choice", f"{row.id}:asked"),
-        )
-        if not result.duplicate:
+            row, shown = await self._show_choice(tool_use_id, insert=insert)
+
+        if shown:
             bound.info(
                 "choice_asked",
                 kind=row.kind,
-                options=len(parsed.options),
+                options=len(request_of(row).options),
                 photos=len(row.payload.get("photos") or {}),
             )
-
         answered_by = cast(AnsweredBy | None, row.answered_by)
-        if answered_by is not None and answered_by != "closed":
-            text = answer_text(request_of(row), answered_by, row.answer or [])
-            bound.info("choice_answer_resent", kind=row.kind, answered_by=answered_by)
-            await self._send_tool_result(tool_use_id, text, False)
+        if answered_by is not None:
+            if answered_by != "closed":
+                text = answer_text(request_of(row), answered_by, row.answer or [])
+                bound.info("choice_answer_resent", kind=row.kind, answered_by=answered_by)
+                await self._send_tool_result(tool_use_id, text, False)
+            return None
+        if self._deps.now() >= row.deadline_at:
+            await self._close_by_timeout(tool_use_id)
+        else:
+            self._arm_choice(tool_use_id, row.deadline_at)
         return None
+
+    async def _show_choice(
+        self,
+        choice_id: str,
+        *,
+        known: ChoiceRecord | None = None,
+        insert: Callable[[AsyncSession], Awaitable[ChoiceRecord]] | None = None,
+    ) -> tuple[ChoiceRecord, bool]:
+        """Store the question's `choice` event (key `<choice id>:asked`) and, with `insert`,
+        its row, in ONE transaction: `insert` runs as the emit's guard, under the plan row's
+        lock and after the duplicate check. So a crash never leaves a row without its event
+        (or the reverse), and `close_choice`, which locks the same row, can only store the
+        answer after the question, with a higher `seq`. The photos were looked up before: no
+        network call holds the lock.
+
+        Returns the row (`known`, the inserted one, or the one already stored: an existing row
+        wins the insert) and whether the event was stored now."""
+        state = self._require_state()
+        found: list[ChoiceRecord] = []
+
+        async def guard(db: AsyncSession) -> bool:
+            row = await get_choice(db, self.plan_id, choice_id)
+            if row is None and insert is not None:
+                row = await insert(db)
+            if row is None:
+                return False
+            found.append(row)
+            return True
+
+        def build(seq: int) -> UIEvent | None:
+            return choice_asked_event(found[0], cost_cents=state.cost_cents)(seq)
+
+        result = await self._sink.emit(
+            build,
+            ma_event_id=backend_event_id(self.plan_id, "choice", f"{choice_id}:asked"),
+            guard=guard,
+        )
+        if result.event is not None and found:
+            return found[0], True
+        if known is not None:
+            return known, False
+        # The event was already stored, so its row was too (they are written together).
+        async with self._deps.session_factory() as db:
+            row = await get_choice(db, self.plan_id, choice_id)
+        if row is None:  # pragma: no cover - the row and its event are stored together
+            msg = f"choice {choice_id} has an asked event but no row"
+            raise RuntimeError(msg)
+        return row, False
+
+    def _arm_choice(self, choice_id: str, deadline: dt.datetime) -> None:
+        """Start the choice's timer: a task that waits (`ConsumerDeps.sleep_until`) until
+        `deadline`, then puts `_ChoiceDeadline` in the inbox. A timer already armed for the
+        choice is kept (a reconnect reconciles the same call again)."""
+        timer = self._choice_timers.get(choice_id)
+        if timer is not None and not timer.done():
+            return
+        self._choice_timers[choice_id] = asyncio.create_task(
+            self._choice_timer(choice_id, deadline),
+            name=f"plan-consumer-{self.plan_id}-choice-{choice_id}",
+        )
+
+    async def _choice_timer(self, choice_id: str, deadline: dt.datetime) -> None:
+        try:
+            await self._deps.sleep_until(deadline)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            # A broken clock must not leave the coordinator waiting forever: the deadline
+            # counts as passed.
+            self._log.warning("choice_timer_failed", error=type(exc).__name__)
+        self._inbox.put_nowait(_ChoiceDeadline(choice_id))
+
+    def _disarm_choice(self, choice_id: str) -> None:
+        """Cancel the choice's timer, if one is armed (no-op otherwise)."""
+        timer = self._choice_timers.pop(choice_id, None)
+        if timer is not None and not timer.done():
+            timer.cancel()
+
+    async def _stop_choice_timers(self) -> None:
+        timers = [timer for timer in self._choice_timers.values() if not timer.done()]
+        self._choice_timers.clear()
+        for timer in timers:
+            timer.cancel()
+        if timers:
+            await asyncio.gather(*timers, return_exceptions=True)
+
+    async def _choice_deadline_passed(self, choice_id: str) -> None:
+        """A `_ChoiceDeadline` from the inbox. Nothing to do when the call already has a
+        result (an echo came after the timer had fired); else `_close_by_timeout`. Either way
+        the choice's timer is disarmed (one a reconnect armed again meanwhile included)."""
+        self._disarm_choice(choice_id)
+        if choice_id in self._require_state().answered_tool_use_ids:
+            return
+        await self._close_by_timeout(choice_id)
+
+    async def _close_by_timeout(self, choice_id: str) -> None:
+        """The choice's deadline passed with no result for its call.
+
+        - An interrupt was asked (here or through another process, `plans.
+          interrupt_requested_at`): nothing, the platform closes the call (`closed`) and the
+          traveller could no longer answer either.
+        - `close_choice(..., "timeout")` won: send `answer_text(..., "timeout", [])`, log
+          `choice_answered`.
+        - The traveller won (`traveller`, `skip`) and no echo of the answer came: its send
+          failed (decision 2), so the stored answer is sent once more (`choice_answer_resent`).
+          A send that is still on the wire makes this a second result for the call, which the
+          platform accepts and ignores (notes §2e).
+        A failed send propagates like any other `_send_tool_result` failure."""
+        self._disarm_choice(choice_id)
+        state = self._require_state()
+        bound = self._log.bind(event_type="backend.choice")
+        if not state.interrupt_requested:
+            await self._refresh_interrupt_request()
+        if state.interrupt_requested:
+            bound.info("choice_deadline_skipped", reason="interrupt_requested")
+            return
+        now = self._deps.now()
+        closed = await close_choice(
+            self._sink,
+            choice_id,
+            answered_by="timeout",
+            selected=[],
+            now=now,
+            cost_cents=state.cost_cents,
+        )
+        if closed is not None:
+            request = request_of(closed)
+            bound.info(
+                "choice_answered",
+                kind=closed.kind,
+                answered_by="timeout",
+                options=len(request.options),
+                selected=0,
+                latency_ms=_latency_ms(closed, now),
+            )
+            await self._send_tool_result(choice_id, answer_text(request, "timeout", []), False)
+            return
+        async with self._deps.session_factory() as db:
+            row = await get_choice(db, self.plan_id, choice_id)
+        if row is None or choice_id in state.answered_tool_use_ids:
+            return
+        answered_by = cast(AnsweredBy | None, row.answered_by)
+        if answered_by not in ("traveller", "skip"):
+            return
+        bound.info("choice_answer_resent", kind=row.kind, answered_by=answered_by)
+        text = answer_text(request_of(row), answered_by, row.answer or [])
+        await self._send_tool_result(choice_id, text, False)
+
+    async def _close_by_platform(self, tool_use_id: str) -> None:
+        """The platform answered the call itself (`agent.tool_result`: an interrupt closes a
+        waiting call, notes §2e): its choice closes as `closed` and nothing is sent. A no-op
+        for a call without a row (`submit_plan`, a refused question) or a choice already
+        closed."""
+        self._disarm_choice(tool_use_id)
+        state = self._require_state()
+        now = self._deps.now()
+        closed = await close_choice(
+            self._sink,
+            tool_use_id,
+            answered_by="closed",
+            selected=[],
+            now=now,
+            cost_cents=state.cost_cents,
+        )
+        if closed is not None:
+            self._log.bind(event_type="agent.tool_result").info(
+                "choice_answered",
+                kind=closed.kind,
+                answered_by="closed",
+                options=len(request_of(closed).options),
+                selected=0,
+                latency_ms=_latency_ms(closed, now),
+            )
 
     async def _send_tool_result(self, tool_use_id: str, content: str, is_error: bool) -> None:
         await self._deps.client.send_custom_tool_result(
@@ -2488,6 +2728,8 @@ class PlanConsumer:
             state.cost_cents = cost
 
     async def _drain(self) -> None:
+        """Store what the inbox still holds, acting on nothing (a `_ChoiceDeadline` is
+        dropped: the plan has left `running`)."""
         if self._state is None:
             return
         while True:
@@ -2608,6 +2850,24 @@ _IDLE_TARGETS: dict[IdleDecision, PlanStatus] = {
     IdleDecision.BLOCKED: PlanStatus.BLOCKED,
     IdleDecision.FAILED: PlanStatus.FAILED,
 }
+
+
+def _result_echo_id(raw: RawEvent) -> str | None:
+    """The tool use a result event answers: `custom_tool_use_id` of a `user.custom_tool_result`
+    (ours), `tool_use_id` of an `agent.tool_result` (the platform's, e.g. the closure of a
+    waiting custom call on interrupt; or a built-in tool's, harmless). None otherwise."""
+    match raw.get("type"):
+        case "user.custom_tool_result":
+            return _text(raw.get("custom_tool_use_id"))
+        case "agent.tool_result":
+            return _text(raw.get("tool_use_id"))
+        case _:
+            return None
+
+
+def _latency_ms(record: ChoiceRecord, now: dt.datetime) -> int:
+    """Milliseconds from the question to its answer (never negative), for `choice_answered`."""
+    return max(int((now - record.asked_at).total_seconds() * 1000), 0)
 
 
 def _actionable_status(raw: RawEvent) -> bool:
