@@ -39,7 +39,8 @@ Contents:
 | `app/ma_client.py` | `ManagedAgentsClient` Protocol, value types, errors, helpers; `SdkManagedAgentsClient` over `anthropic==1.13.0` (which runs on `httpx2`) | Backend FastAPI; Log e resilienza; Costi | A |
 | `tests/fakes/__init__.py`, `tests/fakes/README.md`, `tests/fixtures/ma/*.jsonl` | `FakeManagedAgentsClient`: scripted JSONL replay, recording, fault injection; 14 scenarios | Test e verifica; CLAUDE.md "Testing offline" | A |
 | `tests/fakes/demo.py` | `DemoManagedAgentsClient`: the DEMO_MODE client, the scenarios replayed at their recorded pace (decision 32) | Interfaccia e design (UI work without cost) | R |
-| `app/consumer.py` | One task per plan: streams to UI events, `submit_plan`, idle handling, resume; `EventSink` persistence; the plan's lease across processes (`PlanLease`, decision 31) | Backend FastAPI, consumer steps 1-6 | B, R |
+| `app/consumer.py` | One task per plan: streams to UI events, `submit_plan`, `ask_traveller`, idle handling, resume; `EventSink` persistence; the plan's lease across processes (`PlanLease`, decision 31) | Backend FastAPI, consumer steps 1-6 | B, R |
+| `app/choices.py` | The `ask_traveller` contract (input model, limits, the answers to the coordinator, the Italian titles) and the `choices` table's queries (decision 41) | Piano di creazione UX, §2 | T |
 | `app/events.py` (`normalize`) | Managed Agents event to `UIEvent`, Italian titles | Backend FastAPI, `UIEvent` | C |
 | `app/mapping.py` | `plan_to_trip()`, a pure function | Contratto del piano, mapping table | D |
 | `app/links.py` | Booking-link domain allowlist | Sicurezza e privacy | D |
@@ -71,6 +72,7 @@ only) and time-machine, and never a real key.
 | E | `test_fx.py` (respx with `tests/fixtures/fx/*`, the test vectors in integrations.md §2.3, the cache on Postgres) |
 | F | `test_auth.py`, `test_hub.py`, `test_routes.py`, `test_sse.py` (the route's protocol, with `stub_planner` and the reference replay reader; the settle-before-end cases) |
 | G | `test_lockfile.py`, `test_sessions.py`, `test_jobs.py`, `test_cli.py` (replay through the fake) |
+| T | `test_choices.py` (the contract), `test_choices_store.py` (the queries, closed once), `test_consumer_choices.py` (ask, wait, deadline, closure, resume), `test_covers.py` (place photos) |
 | S | `test_evals_store.py` (validation, the list fields, idempotency, concurrent uploads), `test_evals_routes.py` (bearer token, size caps, the read side) |
 | R | `test_demo.py` (the settings guard, the paced scenarios, `?demo_scenario=`, whole demo runs through `create_app`), `test_plan_lease.py` (one consumer per plan across two registries on one database; no Managed Agents call without the lease), `test_logging_context.py` (the plan keys on every line, those of other modules included) |
 | Integration | `test_e2e_offline.py`: the whole spec flow through the real app (§3, "End to end") |
@@ -257,6 +259,8 @@ Signatures are abbreviated where the code has more keyword defaults; the code is
 | sessions | `start_plan(request: PlanRequest, user: CurrentUser, *, services: PlannerServices, demo_scenario: str \| None = None) -> uuid.UUID` | POST /plans (`demo_scenario` from `?demo_scenario=`, checked first by `routes.check_demo_scenario` against `services.demo_scenarios`) |
 | sessions | `interrupt_plan(plan_id, user, *, services) -> PlanStatus` | POST /plans/{id}/interrupt |
 | sessions | `continue_plan(plan_id, user, *, services, extra_cents=200) -> int` | POST /plans/{id}/continue |
+| sessions | `answer_choice(plan_id, choice_id, answer: ChoiceAnswer, user, *, services) -> AnsweredChoice` (raises `consumer.PlanNotFoundError`, `ChoiceNotFoundError`, `ChoiceClosedError(answered_by)`, `InvalidChoiceAnswerError(reason)`) | POST /plans/{id}/choices/{choice_id} |
+| choices | `pending_choice(db, plan_id) -> ChoiceRecord \| None`, `PendingChoice.from_record` | `GET /plans/{id}`: `pending_choice`, only while the plan is `running` with no interrupt requested |
 | sessions | `get_user_plan(db, plan_id, user) -> PlanRecord` (raises `consumer.PlanNotFoundError`) | every `{id}` route |
 | consumer | `load_events_after(db, plan_id, after_seq: int \| None, *, limit=1000) -> list[UIEvent]` | SSE replay, in pages of `REPLAY_PAGE_SIZE` |
 | consumer | `services.registry.get(plan_id) -> PlanConsumer \| None`, `PlanConsumer.wait_settled()` | SSE: the end waits for a winding-down consumer (decision 22b) |
@@ -278,6 +282,7 @@ Signatures are abbreviated where the code has more keyword defaults; the code is
 | hub | `PlanHub()` | startup |
 | auth | `SessionVerifier(settings, http)` | startup |
 | consumer | `ConsumerDeps(settings, session_factory, client, hub, trip_schema, fx, now, ids=RandomTripIds, sleep=asyncio.sleep)`, `ConsumerRegistry(deps)`, `.start(plan_id, session_id, *, first_message=None) -> PlanConsumer`, `.get(plan_id)`, `.stop(plan_id, *, grace_seconds=10.0)`, `.aclose()` | start, resume, continue, shutdown |
+| consumer | `close_choice(sink, choice_id, *, answered_by, selected, now, cost_cents=None) -> ChoiceRecord \| None` (the conditional update as `emit`'s guard; the row only when this call closed it) | `answer_choice`, the consumer's deadline and closure |
 | consumer | `PlanConsumer.wait_started()` (bounded by `consumer.START_TIMEOUT_SECONDS`, decision 30), `.request_interrupt()`, `.done` | start, interrupt |
 | consumer | `EventSink(plan_id, *, session_factory, hub).emit(build, *, ma_event_id, update=None) -> EmitResult` (`PlanUpdate.interrupt_requested_at`, `.budget_cents`); `set_plan_status(session_factory, hub, plan_id, StatusChange, *, title, event_key, budget_cents=None)`, `event_key` unique per occurrence; `backend_event(kind, title, *, ts, ...)`, `backend_event_id(plan_id, name, key)` | status changes and their events |
 | consumer | `record_session_cost(client, sink, session_id, *, known_cents=None) -> int \| None` | the final cost of a session no consumer follows: a start that timed out, an interrupt without a live consumer (decision 11b) |
@@ -301,7 +306,9 @@ outside DEMO_MODE).
 | ma_client | `iter_session_history(client, sid, *, since=None)`, `iter_thread_history(client, sid, tid)`, `list_threads(sid) -> list[ThreadInfo]` | backfill, resume, first-message check |
 | ma_client | `archive_thread(sid, tid)` | an idle thread superseded by a newer thread of the same agent |
 | ma_client | `send_user_message(sid, text)` | the first message |
-| ma_client | `send_custom_tool_result(sid, tool_use_id, content, is_error)` | step 4 |
+| ma_client | `send_custom_tool_result(sid, tool_use_id, content, is_error)` | steps 4 and 4b |
+| choices | `parse_choice_request(input) -> ChoiceRequest \| ChoiceRejected`, `admission_refusal(kind, asked, *, accepted)`, `insert_choice(...)`, `get_choice`, `asked_kinds`, `answered_choices`, `answer_text(request, answered_by, selected)`, `auto_pick`, `asked_title`, `answered_title` | step 4b |
+| covers | `ChoicePhotos` Protocol (`PlacePhotos`, `NoPhotos`): the photos of the options that name a place, 3 s in all | step 4b |
 | ma_client | `send_interrupt(sid)` | after the 3rd failed submission, or trip.json unavailable |
 | ma_client | `usage_from_event(raw) -> SessionUsage \| None`; `retrieve_session(sid)` (through `record_session_cost`) | cost; the final cost read (decision 11b) |
 | ma_client | `archive_when_idle(client, sid)` | ready, interrupted |
@@ -421,6 +428,28 @@ agent.custom_tool_use(id=U, name=submit_plan, input)   # on the session stream o
                   answer, send_interrupt, stop
 ```
 
+### ask_traveller
+
+```
+agent.custom_tool_use(id=U, name=ask_traveller, input)   # on the session stream only
+  a row for U exists? -> it is the truth (never re-validated):
+      closed by traveller|skip|timeout -> resend its answer;  closed by `closed` -> send nothing;
+      open -> arm its deadline (timeout at once when it has passed)
+  parse_choice_request -> ChoiceRejected? -> answer the problems (is_error); no row, no event
+  admission_refusal(kind, asked, accepted=...) -> NO_MORE_QUESTIONS_TEXT (is_error); no row, no event
+  photos = ChoicePhotos for the options with a `place` (3 s in all; a miss goes out without)
+  one transaction: insert the `choices` row (deadline = now + CHOICE_TIMEOUT_SECONDS) as the
+      emit guard, and the `choice` event (phase "asked"); arm the deadline timer
+  session.status_idle(requires_action) -> decide_idle: WAIT (the plan stays `running`)
+  first to close the row wins (close_choice: the conditional update + the `choice` event "answered"):
+      POST /plans/{id}/choices/{cid} -> sessions.answer_choice closes (traveller | skip), then
+                                        sends user.custom_tool_result(U, answer_text) itself
+      deadline timer -> inbox -> close as timeout, send answer_text; or, when the traveller won
+                        but no echo of the answer came, resend the stored answer
+      user.interrupt -> agent.tool_result(U, is_error) on the session stream -> close as `closed`, send nothing
+  echo of U (user.custom_tool_result | agent.tool_result) -> disarm the timer
+```
+
 ### session.status_idle
 
 `decide_idle(raw, state)` returns one of these, and `PlanUpdate.status` applies it in the same
@@ -428,7 +457,7 @@ transaction as the event:
 
 | stop_reason | condition | plan | then |
 |---|---|---|---|
-| `requires_action` | only our `submit_plan` uses pending | (running) | keep following |
+| `requires_action` | only our own custom tool uses pending (`submit_plan`, `ask_traveller`) | (running) | keep following |
 | any other | plan accepted (Trip stored) | `ready`, stop reason logged | `archive_when_idle`, `hub.end` |
 | `end_turn` | interrupt requested (`plans.interrupt_requested_at`) | `interrupted` | archive, `hub.end` |
 | `end_turn` | neither | `failed` ("Il coordinatore ha chiuso senza consegnare il piano.") | keep the session |
@@ -450,7 +479,10 @@ for t in list_threads(sid) if not primary:
     archived -> backfill its history only (it gets no new events)
     else     -> open thread stream, then backfill its history
 wait (at most RESUME_BACKFILL_WAIT_SECONDS = 30 s) until every thread's history is listed
-answer submit_plan uses minus the answered ones (from the stored outcome when there is one)
+answer submit_plan uses minus the answered ones (from the stored outcome when there is one);
+answer ask_traveller uses from their rows (a closed row's answer is resent, `closed` sends nothing,
+an open row is re-armed); an `agent.tool_result` counts as an answer
+(`PlanConsumer._reconcile`)
 act on the latest unseen status event, if any
 tail the streams
 ```
@@ -511,9 +543,11 @@ then sees the new status. Monthly check with the extra $2 included (`spent + 200
    storing `plans.budget_cents` and restarting `plans.running_since` in the same transaction;
    `status_applied` False raises `PlanStateError`.
 3. A paused consumer still winding down is stopped, then `registry.start(...)` in resume mode
-   (the old `budget_reached` idle is already stored, so it is not acted on).
+   (the old `budget_reached` idle is already stored, so it is not acted on). A choice still
+   open is re-armed there.
 4. [INFERRED, probe P9] After `CONTINUE_RESUME_WAIT_SECONDS` (5 s), if the plan is still
-   `running`, the session `idle` and its cost unchanged, send `CONTINUE_MESSAGE`.
+   `running`, the session `idle` and its cost unchanged, send `CONTINUE_MESSAGE`, unless a
+   choice is open: its tool result is what resumes the coordinator (decision 41).
 
 The notes (§2d) say a budget can be raised at any time to a value above consumption, and that
 only a budget update lets a `budget_reached` session go on. The fake resumes by itself after
@@ -609,7 +643,7 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
    complete anyway.
 7. `end_turn` without an accepted plan -> `failed`, with no automatic nudge (it would spend
    money outside the spec's flow). The spec leaves this case open. Once a plan is accepted
-   (its Trip stored), every later idle except our own pending `submit_plan` answer ends the
+   (its Trip stored), every later idle except one waiting on our own pending custom tool answer ends the
    plan `ready`, whatever the stop reason (`budget_reached`, `refusal`, ...): the user never
    pays $2 more or loses a validated plan for what happens after acceptance.
 7a. An interrupt request is persisted (`plans.interrupt_requested_at`, written with its status
@@ -742,7 +776,8 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
     - plan routes (`routes.PlanErrorCode`): `plan_not_found` 404, `plan_not_ready` 409,
       `invalid_plan_state` 409 (`data.status`), `monthly_limit_reached` 429 (`data:
       {spent_cents, limit_cents}`; the spec gives no status code), `planner_unavailable` 503,
-      `agents_unavailable` 502, `request_too_large` 413, `demo_unavailable` 404;
+      `agents_unavailable` 502, `request_too_large` 413, `demo_unavailable` 404, `choice_not_found` 404,
+      `choice_closed` 409 (`data.answered_by`), `invalid_choice_answer` 422 (`data.reason`);
     - auth (`auth.AuthErrorCode`): `not_authenticated` 401, `email_not_allowed` 403,
       `bad_origin` 403, `admin_only` 403, `auth_unavailable` 503;
     - the framework's own (`main.AppErrorCode`): `not_found` 404 (unknown path),
@@ -1122,6 +1157,55 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
     and `checked_at` stay in the database, and the logs carry host and reason only. Absent or
     NULL gives `{}`, so the web app tolerates both sides of a deploy.
 
+41. The traveller's choices (`app/choices.py`, the `choices` table, `ask_traveller`; spec
+    `docs/superpowers/specs/2026-10-18-plan-creation-ux-design.md` section 2; probe P14). The
+    coordinator may call `ask_traveller` (kind `destination`, `journey`, `activities`, `food`
+    or `other`, 2 to 6 options, no URL anywhere in the input); the consumer shows the question
+    as a `choice` event, the session idles with `requires_action`, and the plan stays `running`
+    until the row is closed, exactly once, by the traveller, the deadline or the platform. The
+    flow is in section 5, "ask_traveller". Six decisions of the plan:
+    - (a) `choices.answered_by` is `traveller`, `skip`, `timeout` or `closed`: the spec lists
+      the first three, and P14 shows that on `user.interrupt` the platform closes the pending
+      call itself with an `agent.tool_result` (`is_error`), so the row closes as `closed` and
+      nothing is sent.
+    - (b) The endpoint sends the answer itself. A request can land on the process that does
+      not hold the plan's lease (a redeploy's overlap), so it does not hand the answer to the
+      consumer; the conditional update decides the winner, and if the send fails the consumer
+      resends the stored answer at the deadline, because no result echo arrived.
+    - (c) A refused (a limit, a plan already accepted) or invalid call gets no backend
+      timeline event and no row: the raw tool use ("Domanda al viaggiatore") and the result
+      echo already show. Both are pure, so resume answers them again, identically.
+    - (d) `budget_reached` during a pause is `budget_paused` as for any plan (in P14 the
+      subagents kept working, and spending, while the coordinator waited). "Continua" restarts
+      the consumer, which re-arms the choice (or times it out when its deadline has passed),
+      and it skips `CONTINUE_MESSAGE` while a choice is open: the tool result resumes the
+      coordinator. [INFERRED]: P14 did not test a budget pause during a wait.
+    - (e) The demo scenario `choices` is offered with `?demo_scenario=choices` and is not the
+      default (`happy_path` stays until the web can draw the cards); `choice_interrupt` is a
+      test scenario. `DEMO_MODE` and `app.cli replay` look up no photos.
+    - (f) Place photos share `destination_covers`, keyed `place:<cache_key>` so they cannot
+      collide with a destination, with the same TTLs and free-licence rules. Photo lookups get
+      3 s in all, then the event goes out without the photos still missing.
+    Limits: at most 3 pauses per plan, a kind at most once, at most one of `destination`,
+    `journey`, `other` (they share the third slot). `CHOICE_TIMEOUT_SECONDS` (240) keeps the
+    answer inside the 5-minute prompt cache (P14 resumed warm after 243 s). `PlanRequest.journey_mode`
+    (null: the coordinator decides) is the traveller's preferred way to get there. Rulings taken
+    while building:
+    - The endpoint sends the answer itself after the conditional update, and the consumer's
+      deadline resends a stored answer whose echo never came.
+    - The row insert and the asked event share one transaction (the insert is the asked emit's
+      guard, under the plan-row lock), so an answered event never precedes its asked event.
+    - On resume a stored row is the truth: its raw input is not re-validated.
+    - A stored `timeout` answer is resent on resume like a traveller's.
+    - No timeout is sent once an interrupt was asked: the platform closes the call.
+    - The place resolver's own deadline is 2.5 s inside the 3 s photo deadline, so a slow
+      lookup caches a transient miss.
+    - [INFERRED] The shape of the interrupt's `agent.tool_result` on the session stream: the
+      closure acts on the session stream's own copy; nobody probed the exact payload beyond P14's
+      `is_error` result.
+    - [INFERRED] What `budget_reached` does to a waiting call: hence `continue` skips
+      `CONTINUE_MESSAGE` while a choice is open.
+
 ## 7. Contracts with events.py, the database, config, the web app and the agents
 
 **events.py (`normalize`).**
@@ -1162,12 +1246,12 @@ def normalize(
 
   | Key | Sent on (Managed Agents type, or the backend's own) | Value | Web reader (aliases) |
   |---|---|---|---|
-  | `event_type` | every event | the Managed Agents type, `backend.status` or `backend.submit_plan`; null when the event had none | `readEventType` (`type`) |
+  | `event_type` | every event | the Managed Agents type, `backend.status`, `backend.submit_plan` or `backend.choice`; null when the event had none | `readEventType` (`type`) |
   | `lane_state` | status changes of a lane: `session(.thread)_status_running` / `_terminated`, `session.deleted`, idles, `session.thread_created`, `session.error` with `exhausted` / `terminal` retries | `working` \| `waiting` \| `done` \| `error` | `readAgentState` (`agent_state`) |
   | `stop_reason` | `session.status_idle`, `session.thread_status_idle` | a string: `end_turn`, `requires_action`, `budget_reached`, `retries_exhausted`, `refusal`, ... | `readStopReason` (also `{type}`) |
   | `event_ids`, `refusal_category`, `explanation` | idles | the pending event ids; a refusal's category and explanation | not read |
   | `plan_status` | `backend.status` (every `set_plan_status`); the last `backend.submit_plan` rejection | the plan's new status | `readPlanStatus`; with the four types below, "re-read GET /plans/{id}" |
-  | `tool` | `agent.tool_use`, `agent.mcp_tool_use`, `agent.custom_tool_use` | tool name (`submit_plan` for the coordinator's custom tool) | `readTool` (`name`) |
+  | `tool` | `agent.tool_use`, `agent.mcp_tool_use`, `agent.custom_tool_use` | tool name (`submit_plan` or `ask_traveller` for the coordinator's custom tools; the latter titled "Domanda al viaggiatore", its input never in `detail`) | `readTool` (`name`) |
   | `server` | `agent.mcp_tool_use`; `session.error` of an MCP failure | MCP server name | `readTool`, `readSourceFailure` (`mcp_server`, `mcp_server_name`) |
   | `params` | tool uses | main parameters, bounded: `query` (web_search), `host` (web_fetch), `file_path` (read, write, edit), `pattern`, `path`, `agent` (send_to_agent), `command`, `provider(s)`, `args` (a `build_link.py` call), or the MCP input; never results | `readTool` (`input`) |
   | `params_truncated` | an event whose `detail` passed `MAX_DETAIL_CHARS` | true | not read |
@@ -1187,6 +1271,7 @@ def normalize(
   | `outcome` | `backend.submit_plan` | `accepted` \| `rejected` \| `already_accepted` \| `unknown_tool` | `readPlanOutcome` (`accepted`) |
   | `errors` | `backend.submit_plan` rejections | the rejection lines | `readPlanOutcome` |
   | `attempt`, `warnings`, `answer`, `stage`, `failed_submissions` | `backend.submit_plan` | the submission's number, the accepted plan's warning count, the backend's answer text, the failing stage (`plan`, `trip`), failures so far | not read |
+  | `phase`, `choice`, `choice_id`, `kind`, `answered_by`, `selected`, `answered_at` | `backend.choice` (`kind` "choice"): `phase` "asked" carries `choice` (the `PendingChoice` view: id, kind, question, multiple, options with photos, deadline); "answered" carries the rest | `phase`; `choice` the question and its options; `choice_id`, `kind`; `traveller` \| `skip` \| `timeout` \| `closed`; the picked option ids in the order offered; ISO instant | not read yet (PR 3) |
   | `source` | never sent by the backend | a failed source that is not an MCP server | `readSourceFailure` |
 
   The status events with no `plan_status` that may still change the plan's status, so the web
@@ -1194,7 +1279,7 @@ def normalize(
   `session.status_terminated`, `session.deleted`, `session.error`. The backend's "Piano
   avviato" and "Interruzione richiesta" events carry no `detail` at all.
 - `detail` never carries tool results, fetched pages, file contents written by `write`/`edit`,
-  or the `submit_plan` input.
+  or the `submit_plan` and `ask_traveller` inputs.
 
 **db.py and migrations.** The initial migration has `plans.budget_cents` (the session's current
 cap, written at start and on "Continua"), `plans.running_since` (not null, `now()` at insert,
@@ -1207,15 +1292,16 @@ carries a key (decision 5), because NULLs bypass the constraint.
 per-profile defaults for `SESSION_BUDGET_CENTS` (400/60) and `LOCKFILE_PATH`, and
 `AGENT_PROFILE` required in production. `DEMO_MODE` (default false) and `DEMO_PACE` (default
 1.0, above 0 and at most 100; an empty value means the default) are refused outside
-`ENVIRONMENT=development` (decision 32). The retention, retry and timeout figures are
-constants in their modules.
+`ENVIRONMENT=development` (decision 32). `CHOICE_TIMEOUT_SECONDS` (default 240, 1 to 290) and
+`CHOICE_PHOTOS_ENABLED` (default true) belong to decision 41. The retention, retry and timeout
+figures are constants in their modules.
 
 **The web app.** It talks only to these endpoints and reads: the SSE wire format of decision
 22 and the end semantics of 22b; the `detail` keys of the table above through
 `web/lib/plan-events/detail.ts`, with `plan_status` and the four status types as "re-read GET
 /plans/{id}"; the error envelope of decision 20 (it lists `routes.PlanErrorCode` and
 `auth.AuthErrorCode` in `web/lib/schemas/api.ts` and falls back to the HTTP status for any
-other code); `PlanDetail` (`budget_cents` is the end of the cost bar, `booking_links` and
+other code); `PlanDetail` (`pending_choice` is the open question, only while `running`; `budget_cents` is the end of the cost bar, `booking_links` and
 `alternative_links` are aligned with the plan's lists, `import_url` only when `ready`). With
 DEMO_MODE the same app runs against the demo (decision 32); the web form never sends
 `demo_scenario`.
