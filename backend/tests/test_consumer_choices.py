@@ -42,6 +42,7 @@ from app.choices import (
     ONE_QUESTION_AT_A_TIME_TEXT,
     ChoiceAnswer,
     ChoiceRequest,
+    choice_payload,
     get_choice,
     insert_choice,
 )
@@ -54,6 +55,7 @@ from app.consumer import (
     PlanUpdate,
     backend_event,
     backend_event_id,
+    choice_answered_event,
     close_choice,
     decide_idle,
 )
@@ -1671,3 +1673,52 @@ async def test_continue_nudges_when_the_platform_closed_the_choice_meanwhile(
     assert "sevt_q1" not in results_by_id(fake)  # the platform answered it, never the backend
     assert logged(choice_logs, "continue_message_skipped", "reason") == []
     assert len(logged(choice_logs, "continue_message_sent")) == 1
+
+
+# --- the two pure helpers the web fixture generator shares ------------------------------------
+
+
+def test_choice_answered_event_is_close_choices_event() -> None:
+    from tests.test_choices import ACTIVITIES
+
+    now = dt.datetime(2026, 10, 20, 10, 0, 9, tzinfo=dt.UTC)
+    built = choice_answered_event(
+        choice_id="c-1",
+        request=ACTIVITIES,
+        answered_by="traveller",
+        selected=["a1", "a2"],
+        now=now,
+        cost_cents=None,
+    )(7)
+    assert built is not None
+    assert built.kind is EventKind.CHOICE
+    assert built.title == "Hai scelto: Torre di Belém, Castelo de São Jorge"
+    assert built.detail == {
+        "event_type": "backend.choice",
+        "phase": "answered",
+        "choice_id": "c-1",
+        "kind": "activities",
+        "answered_by": "traveller",
+        "selected": ["a1", "a2"],
+        "answered_at": now.isoformat(),
+    }
+
+
+async def test_choice_payload_is_what_insert_choice_stores(
+    db_session_factory: async_sessionmaker[AsyncSession], plan_rows: Any
+) -> None:
+    from tests.test_choices import ACTIVITIES
+
+    plan = await plan_rows.add_plan()
+    photos = {"a1": cover("Belem")}
+    async with db_session_factory() as db, db.begin():
+        row = await insert_choice(
+            db,
+            choice_id="c-1",
+            plan_id=plan.id,
+            request=ACTIVITIES,
+            photos=photos,
+            asked_at=NOW,
+            deadline_at=DEADLINE,
+        )
+    assert row.payload == choice_payload(ACTIVITIES, photos)

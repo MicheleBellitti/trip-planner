@@ -438,6 +438,14 @@ def request_of(record: ChoiceRecord) -> ChoiceRequest:
 # ============================================================================================
 
 
+def choice_payload(request: ChoiceRequest, photos: Mapping[str, Cover]) -> dict[str, Any]:
+    """The `payload` of a `choices` row: the request and the photos found, by option id."""
+    return {
+        "request": request.model_dump(mode="json", exclude_none=True),
+        "photos": {key: cover.model_dump(mode="json") for key, cover in photos.items()},
+    }
+
+
 async def insert_choice(
     db: AsyncSession,
     *,
@@ -450,10 +458,7 @@ async def insert_choice(
 ) -> ChoiceRecord:
     """Store the question; `ON CONFLICT DO NOTHING`, so a replayed call keeps the first row.
     Returns the stored row (an existing one wins). The caller owns the transaction."""
-    payload = {
-        "request": request.model_dump(mode="json", exclude_none=True),
-        "photos": {key: cover.model_dump(mode="json") for key, cover in photos.items()},
-    }
+    payload = choice_payload(request, photos)
     await db.execute(
         pg_insert(ChoiceRecord)
         .values(

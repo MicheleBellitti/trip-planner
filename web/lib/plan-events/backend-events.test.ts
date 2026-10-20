@@ -6,9 +6,11 @@
 
 import { describe, expect, it } from "vitest";
 
+import choicePhotos from "../demo/choice-photos.json";
 import { PlanDetailSchema, type PlanStatus } from "../schemas/api";
 import { UIEventSchema, type UIEvent } from "../schemas/generated/ui-event";
 import budgetReached from "./__fixtures__/backend/budget-reached.json";
+import choices from "./__fixtures__/backend/choices.json";
 import happyPath from "./__fixtures__/backend/happy-path.json";
 import mcpFailure from "./__fixtures__/backend/mcp-failure.json";
 import samples from "./__fixtures__/backend/samples.json";
@@ -195,5 +197,50 @@ describe("budget reached, then 'Continua'", () => {
     expect(state.budgetCents).toBe(261);
     expect(state.stoppedAt).toBeNull();
     expect(state.lanes.coordinator.state).toBe("working");
+  });
+});
+
+describe("choices", () => {
+  interface ChoiceDetail {
+    phase: "asked" | "answered";
+    choice?: {
+      kind: string;
+      asked_at: string;
+      deadline_at: string;
+      options: { id: string; place?: unknown; photo: unknown }[];
+    };
+    choice_id?: string;
+    selected?: string[];
+    answered_by?: string;
+  }
+  const run = eventsOf(choices);
+  const choiceEvents = run.filter((event) => event.kind === "choice");
+  const details = choiceEvents.map((event) => event.detail as unknown as ChoiceDetail);
+
+  it("two questions, each asked then answered on the coordinator's lane, then ready", () => {
+    expect(choiceEvents).toHaveLength(4);
+    expect(choiceEvents.every((event) => event.agent === "coordinator")).toBe(true);
+    expect(details.map((detail) => detail.phase)).toEqual(["asked", "answered", "asked", "answered"]);
+
+    const first = details[0]?.choice;
+    expect(first?.kind).toBe("activities");
+    expect(first?.options).toHaveLength(3);
+    expect(Date.parse(first?.deadline_at ?? "") - Date.parse(first?.asked_at ?? "")).toBe(240_000);
+    expect(details[1]?.selected).toEqual(["a1", "a2"]);
+    expect(details[1]?.answered_by).toBe("traveller");
+    expect(details[3]?.selected).toEqual(["c1", "c2"]);
+
+    expect(reducePlanEvents(run, { end: "ready" }).status).toBe("ready");
+    expect(choices.statuses).toEqual([{ after_seq: run.length - 1, status: "ready" }]);
+  });
+
+  it("carries the captured photos on the options that have one, and none on the others", () => {
+    const photos: Record<string, unknown> = choicePhotos.photos;
+    for (const detail of details) {
+      for (const option of detail.choice?.options ?? []) {
+        expect(option.photo ?? null).toEqual(photos[option.id] ?? null);
+        expect(option).not.toHaveProperty("place");
+      }
+    }
   });
 });

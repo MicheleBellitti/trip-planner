@@ -1,0 +1,16 @@
+{
+  "captured_on": "2026-10-20",
+  "source": "Wikimedia Commons through the backend's PlacePhotos (app/covers.py): the free photo of each option's place in tests/fixtures/ma/choices.jsonl",
+  "photos": {
+    "a1": {
+      "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0b/Lisboa-Oceanario.jpg/1920px-Lisboa-Oceanario.jpg",
+      "width": 1920,
+      "height": 1358,
+      "author": "Jose Manuel",
+      "license": "CC BY 2.5",
+      "license_url": "https://creativecommons.org/licenses/by/2.5",
+      "source_page": "https://commons.wikimedia.org/wiki/File:Lisboa-Oceanario.jpg",
+      "title": "Lisboa-Oceanario"
+    }
+  }
+}
