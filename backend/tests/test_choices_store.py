@@ -129,6 +129,19 @@ async def test_pending_choice_is_the_open_one(
     assert [c.id for c in answered] == ["sevt_q1", "sevt_q2"]
 
 
+async def test_pending_choice_breaks_a_tie_by_id(
+    db_session_factory: Factory, plan_rows: PlanRows
+) -> None:
+    # Two calls of one model turn can be stored in the same instant: the order stays fixed.
+    plan_id, _ = await setup(db_session_factory, plan_rows)
+    for choice_id in ("sevt_qb", "sevt_qa", "sevt_qc", "sevt_q0"):
+        await add(db_session_factory, plan_id, choice_id, request=FOOD)
+    for _ in range(5):
+        found = await _pending(db_session_factory, plan_id)
+        assert found is not None
+        assert found.id == "sevt_qc"
+
+
 async def _pending(factory: Factory, plan_id: uuid.UUID) -> ChoiceRecord | None:
     async with factory() as db:
         return await pending_choice(db, plan_id)

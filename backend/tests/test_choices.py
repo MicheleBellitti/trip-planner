@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from app.choices import (
     NO_MORE_QUESTIONS_TEXT,
+    ONE_QUESTION_AT_A_TIME_TEXT,
     ChoiceAnswer,
     ChoiceRejected,
     ChoiceRequest,
@@ -145,18 +146,26 @@ def test_parse_choice_request_rejects_a_non_object() -> None:
 
 
 @pytest.mark.parametrize(
-    ("kind", "asked", "accepted", "reason"),
+    ("kind", "asked", "accepted", "another_open", "reason"),
     [
-        ("food", ["activities"], False, None),
-        ("other", ["activities", "food"], False, None),
-        ("destination", ["activities", "food", "other"], False, "limit"),
-        ("food", ["food"], False, "same_kind"),
-        ("journey", ["destination"], False, "shared_slot"),
-        ("food", [], True, "accepted"),
+        ("food", ["activities"], False, False, None),
+        ("other", ["activities", "food"], False, False, None),
+        ("destination", ["activities", "food", "other"], False, False, "limit"),
+        ("food", ["food"], False, False, "same_kind"),
+        ("journey", ["destination"], False, False, "shared_slot"),
+        ("food", [], True, False, "accepted"),
+        # One question at a time, checked before the limits.
+        ("food", ["activities"], False, True, "open"),
+        ("destination", ["activities", "food", "other"], False, True, "open"),
+        ("food", ["food"], False, True, "open"),
+        ("journey", ["destination"], False, True, "open"),
+        ("food", [], True, True, "accepted"),
     ],
 )
-def test_admission_refusal(kind: Any, asked: list[str], accepted: bool, reason: str | None) -> None:
-    assert admission_refusal(kind, asked, accepted=accepted) == reason
+def test_admission_refusal(
+    kind: Any, asked: list[str], accepted: bool, another_open: bool, reason: str | None
+) -> None:
+    assert admission_refusal(kind, asked, accepted=accepted, another_open=another_open) == reason
 
 
 def test_answer_texts_are_the_spec_s() -> None:
@@ -188,6 +197,10 @@ def test_answer_texts_are_the_spec_s() -> None:
         == ("The traveller let you choose. Take your leading candidate and go on.")
     )
     assert NO_MORE_QUESTIONS_TEXT == "No more questions: choose yourself."
+    assert ONE_QUESTION_AT_A_TIME_TEXT == (
+        "One question at a time: the traveller has not answered your open question yet. Ask "
+        "again after the answer."
+    )
 
 
 def test_selection_problem() -> None:

@@ -23,8 +23,10 @@ What a consumer does, in order (the six spec steps, corrected by the notes):
    `is_error=True` so the agent fixes it. The `MAX_FAILED_SUBMISSIONS`th failure -> `failed`.
 4b. `agent.custom_tool_use` named `ask_traveller` (`_ask_traveller`, app/choices.py): validate
    (`parse_choice_request`; invalid: answer the problems with `is_error`), admit
-   (`admission_refusal`: at most 3 pauses, a kind once, one of `destination`/`journey`/`other`,
-   none once a plan is accepted; refused: `NO_MORE_QUESTIONS_TEXT` with `is_error`), look up
+   (`admission_refusal`: one question at a time, refused with `ONE_QUESTION_AT_A_TIME_TEXT`
+   while another row is open; then at most 3 pauses, a kind once, one of
+   `destination`/`journey`/`other`, none once a plan is accepted; refused:
+   `NO_MORE_QUESTIONS_TEXT`; both with `is_error`), look up
    the photos of the options that name a place (`ConsumerDeps.photos`, 3 s in all), store the
    `choices` row (deadline `CHOICE_TIMEOUT_SECONDS` away) and its `choice` timeline event in
    one transaction, arm the deadline, and wait: the session idles with `requires_action`
@@ -157,6 +159,7 @@ from app import clock
 from app.choices import (
     ASK_TRAVELLER_TOOL,
     NO_MORE_QUESTIONS_TEXT,
+    ONE_QUESTION_AT_A_TIME_TEXT,
     AnsweredBy,
     ChoiceRejected,
     PendingChoice,
@@ -168,6 +171,7 @@ from app.choices import (
     get_choice,
     insert_choice,
     parse_choice_request,
+    pending_choice,
     request_of,
 )
 from app.covers import NO_PHOTOS, ChoicePhotos
@@ -2278,7 +2282,8 @@ class PlanConsumer:
            stored).
         2. With no row: `parse_choice_request` (rejected: answer the problems with `is_error`,
            log `choice_rejected`, nothing stored), `admission_refusal` (refused: answer
-           `NO_MORE_QUESTIONS_TEXT` with `is_error`, log `choice_refused`, nothing stored), the
+           `ONE_QUESTION_AT_A_TIME_TEXT` while another question is open, else
+           `NO_MORE_QUESTIONS_TEXT`, with `is_error`, log `choice_refused`, nothing stored), the
            photos of the options with a `place` (no lookup when none has one), then the row
            (asked now, deadline `CHOICE_TIMEOUT_SECONDS` later).
         3. The row and its `choice` event (`choice_asked_event`) in one transaction
@@ -2297,6 +2302,8 @@ class PlanConsumer:
         async with self._deps.session_factory() as db:
             known = await get_choice(db, self.plan_id, tool_use_id)
             asked = await asked_kinds(db, self.plan_id) if known is None else []
+            # With no row of its own, any open row is another question.
+            another_open = known is None and await pending_choice(db, self.plan_id) is not None
 
         if known is not None:
             row, shown = await self._show_choice(tool_use_id, known=known)
@@ -2306,10 +2313,13 @@ class PlanConsumer:
                 bound.warning("choice_rejected", errors=len(parsed.errors))
                 await self._send_tool_result(tool_use_id, parsed.message, True)
                 return None
-            refusal = admission_refusal(parsed.kind, asked, accepted=state.accepted)
+            refusal = admission_refusal(
+                parsed.kind, asked, accepted=state.accepted, another_open=another_open
+            )
             if refusal is not None:
                 bound.info("choice_refused", reason=refusal)
-                await self._send_tool_result(tool_use_id, NO_MORE_QUESTIONS_TEXT, True)
+                text = ONE_QUESTION_AT_A_TIME_TEXT if refusal == "open" else NO_MORE_QUESTIONS_TEXT
+                await self._send_tool_result(tool_use_id, text, True)
                 return None
             places = {option.id: option.place for option in parsed.options if option.place}
             photos = await self._deps.photos.photos_for(places) if places else {}

@@ -39,6 +39,7 @@ from app import consumer as consumer_module
 from app.auth import CurrentUser, SessionVerifier
 from app.choices import (
     NO_MORE_QUESTIONS_TEXT,
+    ONE_QUESTION_AT_A_TIME_TEXT,
     ChoiceAnswer,
     ChoiceRequest,
     get_choice,
@@ -691,6 +692,136 @@ async def test_ask_after_acceptance_is_refused(env: Env) -> None:
     assert results_by_id(fake)["sevt_late"] == [(NO_MORE_QUESTIONS_TEXT, True)]
     assert await choice_rows(h, plan_id) == []
     assert await choice_titles(h, plan_id) == []
+
+
+def two_at_once(
+    first_id: str, first: Mapping[str, Any], second_id: str, second: Mapping[str, Any]
+) -> list[dict[str, Any]]:
+    """Two `ask_traveller` calls of one model turn (P14: one request can issue several tool
+    calls), the idle waiting on both, the second's refusal, the first's answer, then the
+    session running again."""
+    uses = [
+        {
+            "op": "emit",
+            "event": {
+                "type": "agent.custom_tool_use",
+                "id": tool_use_id,
+                "name": "ask_traveller",
+                "input": dict(tool_input),
+            },
+        }
+        for tool_use_id, tool_input in ((first_id, first), (second_id, second))
+    ]
+    return [
+        *uses,
+        {
+            "op": "emit",
+            "event": {
+                "type": "session.status_idle",
+                "id": f"{first_id}_idle",
+                "stop_reason": {"type": "requires_action", "event_ids": [first_id, second_id]},
+            },
+        },
+        {
+            "op": "await",
+            "match": {
+                "type": "user.custom_tool_result",
+                "custom_tool_use_id": second_id,
+                "is_error": True,
+            },
+        },
+        {
+            "op": "await",
+            "match": {
+                "type": "user.custom_tool_result",
+                "custom_tool_use_id": first_id,
+                "is_error": False,
+            },
+        },
+        {"op": "emit", "event": {"type": "session.status_running", "id": f"{first_id}_run"}},
+    ]
+
+
+async def test_one_question_at_a_time(env: Env, choice_logs: list[EventDict]) -> None:
+    fake = script(
+        two_at_once("sevt_q1", request("activities"), "sevt_q2", request("food")),
+        pause("sevt_q3", request("food")),
+    )
+    h = env.harness(fake)
+    planner = env.planner(h)
+    plan_id = await h.create_plan()
+
+    async with running(h, plan_id) as task:
+        await wait_asked(h, plan_id, "sevt_q1")
+        await until(lambda: "sevt_q2" in results_by_id(fake))
+        # The second call of the turn is refused while the first waits: no row, no question.
+        assert [row.id for row in await choice_rows(h, plan_id)] == ["sevt_q1"]
+        await answer_next(h, planner, plan_id, "sevt_q1")
+        # Once the first is answered, the refused kind can be asked: the refusal counted for
+        # nothing.
+        await answer_next(h, planner, plan_id, "sevt_q3")
+        assert await finish(task) is PlanStatus.READY
+    fake.assert_script_done()
+
+    sent = results_by_id(fake)
+    assert sent["sevt_q2"] == [(ONE_QUESTION_AT_A_TIME_TEXT, True)]
+    assert [(row.id, row.kind) for row in await choice_rows(h, plan_id)] == [
+        ("sevt_q1", "activities"),
+        ("sevt_q3", "food"),
+    ]
+    keys = {event.ma_event_id or "" for event in await h.events(plan_id)}
+    assert not any("sevt_q2" in key for key in keys if key.startswith("backend:"))
+    assert await choice_titles(h, plan_id) == [
+        "Tocca a te: scegli cosa vedere",
+        "Hai scelto: Torre di Belém, Castelo de São Jorge",
+        "Tocca a te: scegli cosa mangiare",
+        "Hai scelto: Torre di Belém, Castelo de São Jorge",
+    ]
+    assert logged(choice_logs, "choice_refused", "reason") == [{"reason": "open"}]
+
+
+class HeldResults:
+    """The consumer's client: the fake, but a tool result never leaves (the process dies while
+    it is on the wire)."""
+
+    def __init__(self, fake: FakeManagedAgentsClient) -> None:
+        self._fake = fake
+        self.entered = asyncio.Event()
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._fake, name)
+
+    async def send_custom_tool_result(
+        self, session_id: str, tool_use_id: str, content: str, is_error: bool
+    ) -> None:
+        self.entered.set()
+        await asyncio.Event().wait()
+
+
+async def test_resume_refuses_the_second_question_while_the_first_is_open(env: Env) -> None:
+    fake = script(two_at_once("sevt_q1", request("activities"), "sevt_q2", request("food")))
+    h = env.harness(fake)
+    held = HeldResults(fake)
+    planner = env.planner(h)
+    plan_id = await h.create_plan()
+
+    async with consumers(h) as start:
+        first = start(plan_id, harness=at(h, NOW, client=cast(ManagedAgentsClient, held)))
+        async with asyncio.timeout(RUN_TIMEOUT):
+            await held.entered.wait()
+        await stop(first)  # the process dies while the second call's refusal is on the wire
+        assert [row.id for row in await choice_rows(h, plan_id)] == ["sevt_q1"]
+        assert tool_results(fake) == []  # both calls are pending
+
+        resumed = start(plan_id, fresh=False)
+        await until(lambda: "sevt_q2" in results_by_id(fake))
+        await answer_next(h, planner, plan_id, "sevt_q1")
+        assert await finish(resumed) is PlanStatus.READY
+    fake.assert_script_done()
+
+    assert results_by_id(fake)["sevt_q2"] == [(ONE_QUESTION_AT_A_TIME_TEXT, True)]
+    assert [row.id for row in await choice_rows(h, plan_id)] == ["sevt_q1"]
+    assert h.deadlines.requested == [DEADLINE, DEADLINE]  # the first re-armed with its own
 
 
 async def test_photos_get_only_the_place_names(env: Env) -> None:
