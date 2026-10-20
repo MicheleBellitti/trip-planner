@@ -136,11 +136,13 @@ def bare_env(monkeypatch: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
 # --- the scenarios and their pace ---------------------------------------------------------------
 
 
-def test_every_shipped_scenario_but_restart_resume_is_offered() -> None:
+def test_every_shipped_scenario_but_the_excluded_ones_are_offered() -> None:
     shipped = {path.stem for path in FIXTURES_DIR.glob("*.jsonl")}
     assert set(demo_scenarios()) == shipped - EXCLUDED_SCENARIOS
     assert list(demo_scenarios()) == sorted(demo_scenarios())
-    assert {"restart_resume"} == EXCLUDED_SCENARIOS
+    assert {"restart_resume", "choice_interrupt"} == EXCLUDED_SCENARIOS
+    assert "choices" in demo_scenarios()
+    assert sessions.DEFAULT_DEMO_SCENARIO == "happy_path"
     assert {*SHIPPED_STATES, "budget_reached", "interrupt"} <= set(demo_scenarios())
     assert sessions.DEFAULT_DEMO_SCENARIO in demo_scenarios()
 
