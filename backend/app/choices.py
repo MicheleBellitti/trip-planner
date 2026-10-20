@@ -210,6 +210,13 @@ class ChoiceRequest(ContractModel):
 NO_MORE_QUESTIONS_TEXT = "No more questions: choose yourself."
 """The (`is_error`) answer to a call refused for a limit, or made once a plan is accepted."""
 
+ONE_QUESTION_AT_A_TIME_TEXT = (
+    "One question at a time: the traveller has not answered your open question yet. Ask again "
+    "after the answer."
+)
+"""The (`is_error`) answer to a call made while another question of the plan is open: the
+traveller sees one card at a time (`PlanDetail.pending_choice` is singular)."""
+
 
 @dataclass(frozen=True, slots=True)
 class ChoiceRejected:
@@ -234,13 +241,21 @@ def parse_choice_request(tool_input: Any) -> ChoiceRequest | ChoiceRejected:
         )
 
 
-def admission_refusal(kind: ChoiceKind, asked: Collection[str], *, accepted: bool) -> str | None:
+def admission_refusal(
+    kind: ChoiceKind, asked: Collection[str], *, accepted: bool, another_open: bool
+) -> str | None:
     """Why a valid call cannot be shown, as the log reason, or None when it can.
 
     `asked` holds the kinds already asked in this plan; `accepted` is true once the plan was
-    accepted. A refused call is not a pause: no row, nothing shown."""
+    accepted; `another_open` is true while another question of the plan waits for the
+    traveller (a row with `answered_by IS NULL` that is not this call's own). One question at a
+    time ("open", answered with `ONE_QUESTION_AT_A_TIME_TEXT`) is checked before the limits:
+    the coordinator can issue several calls in one model request (P14). A refused call is not a
+    pause: no row, nothing shown, and it counts against no limit."""
     if accepted:
         return "accepted"
+    if another_open:
+        return "open"
     if len(asked) >= MAX_CHOICES_PER_PLAN:
         return "limit"
     if kind in asked:
@@ -470,11 +485,12 @@ async def asked_kinds(db: AsyncSession, plan_id: uuid.UUID) -> list[str]:
 
 
 async def pending_choice(db: AsyncSession, plan_id: uuid.UUID) -> ChoiceRecord | None:
-    """The open question (`answered_by IS NULL`), the latest asked."""
+    """The open question (`answered_by IS NULL`), the latest asked (ties by id). The consumer
+    admits one at a time, so there is at most one."""
     return await db.scalar(
         select(ChoiceRecord)
         .where(ChoiceRecord.plan_id == plan_id, ChoiceRecord.answered_by.is_(None))
-        .order_by(ChoiceRecord.asked_at.desc())
+        .order_by(ChoiceRecord.asked_at.desc(), ChoiceRecord.id.desc())
         .limit(1)
     )
 

@@ -320,7 +320,7 @@ outside DEMO_MODE).
 | ma_client | `archive_thread(sid, tid)` | an idle thread superseded by a newer thread of the same agent |
 | ma_client | `send_user_message(sid, text)` | the first message |
 | ma_client | `send_custom_tool_result(sid, tool_use_id, content, is_error)` | steps 4 and 4b (§5, "ask_traveller") |
-| choices | `parse_choice_request(input) -> ChoiceRequest \| ChoiceRejected`, `admission_refusal(kind, asked, *, accepted)`, `insert_choice(...)`, `get_choice`, `asked_kinds`, `answered_choices`, `answer_text(request, answered_by, selected)`, `auto_pick`, `asked_title`, `answered_title` | the consumer's step 4b (§5, "ask_traveller") |
+| choices | `parse_choice_request(input) -> ChoiceRequest \| ChoiceRejected`, `admission_refusal(kind, asked, *, accepted, another_open)`, `insert_choice(...)`, `get_choice`, `asked_kinds`, `pending_choice`, `answered_choices`, `answer_text(request, answered_by, selected)`, `auto_pick`, `asked_title`, `answered_title` | the consumer's step 4b (§5, "ask_traveller") |
 | covers | `ChoicePhotos` Protocol (`PlacePhotos`, `NoPhotos`): the photos of the options that name a place, 3 s in all | the consumer's step 4b (§5, "ask_traveller") |
 | ma_client | `send_interrupt(sid)` | after the 3rd failed submission, or trip.json unavailable |
 | ma_client | `usage_from_event(raw) -> SessionUsage \| None`; `retrieve_session(sid)` (through `record_session_cost`) | cost; the final cost read (decision 11b) |
@@ -449,7 +449,8 @@ agent.custom_tool_use(id=U, name=ask_traveller, input)   # on the session stream
       closed by traveller|skip|timeout -> resend its answer;  closed by `closed` -> send nothing;
       open -> arm its deadline (timeout at once when it has passed)
   parse_choice_request -> ChoiceRejected? -> answer the problems (is_error); no row, no event
-  admission_refusal(kind, asked, accepted=...) -> NO_MORE_QUESTIONS_TEXT (is_error); no row, no event
+  admission_refusal(kind, asked, accepted=..., another_open=...) -> another row open: ONE_QUESTION_AT_A_TIME_TEXT,
+      else a limit: NO_MORE_QUESTIONS_TEXT (both is_error); no row, no event, no limit counted
   photos = ChoicePhotos for the options with a `place` (3 s in all; a miss goes out without)
   one transaction: insert the `choices` row (deadline = now + CHOICE_TIMEOUT_SECONDS) as the
       emit guard, and the `choice` event (phase "asked"); arm the deadline timer
@@ -1209,6 +1210,12 @@ Spec divergences are marked **(diverges)**. Each has its reason in the code's do
     - The row insert and the asked event share one transaction (the insert is the asked emit's
       guard, under the plan-row lock), so an answered event never precedes its asked event.
     - On resume a stored row is the truth: its raw input is not re-validated.
+    - One question at a time: P14 shows several tool calls in one model request, and
+      `PlanDetail.pending_choice` is singular, so a call made while another row of the plan is
+      open (`answered_by IS NULL`, not the call's own) is refused with
+      `ONE_QUESTION_AT_A_TIME_TEXT` (`is_error`, logged reason `open`), checked before the
+      limits; it stores no row and no event and counts against no limit. `pending_choice` ties
+      by id.
     - A stored `timeout` answer is resent on resume like a traveller's.
     - No timeout is sent once an interrupt was asked: the platform closes the call.
     - The place resolver's own deadline is 2.5 s inside the 3 s photo deadline, so a slow
