@@ -18,8 +18,8 @@ import {
   PlanRequestSchema,
   planRequestErrorCodes,
   planRequestJsonSchema,
+  type PlanRequest,
   type PlanRequestErrorCode,
-  type PlanRequestInput,
 } from "./schemas/generated/request";
 
 // --- schema metadata ------------------------------------------------------------------------
@@ -650,8 +650,21 @@ export function buildPlanRequest(values: RequestFormValues): Record<string, unkn
   return request;
 }
 
+/** The POST /plans body: the parsed request with `journey_mode` left out while it is null. */
+export type PlanRequestBody = Omit<PlanRequest, "journey_mode"> & {
+  journey_mode?: NonNullable<PlanRequest["journey_mode"]>;
+};
+
+/** Leave `journey_mode` out of the body while it is null. A backend from before the travel mode
+ * forbids unknown keys and would answer 422 while a deploy is under way (contract rule 7,
+ * docs/deploy.md "Deploy order when the contract changes"). A chosen mode is kept. */
+export function omitNullJourneyMode(request: PlanRequest): PlanRequestBody {
+  const { journey_mode: mode, ...rest } = request;
+  return mode === null ? rest : { ...rest, journey_mode: mode };
+}
+
 export type RequestFormResult =
-  | { ok: true; request: PlanRequestInput }
+  | { ok: true; request: PlanRequestBody }
   | { ok: false; errors: FieldErrors; issues: RequestIssue[] };
 
 /** The form always sends the chosen date mode, so "no dates at all" (`dates_required`, the
@@ -685,7 +698,7 @@ export function validateRequestForm(values: RequestFormValues, options: Validati
     }));
     return { ok: false, errors: issuesToFieldErrors(schemaIssues), issues: schemaIssues };
   }
-  return { ok: true, request: parsed.data };
+  return { ok: true, request: omitNullJourneyMode(parsed.data) };
 }
 
 /** Every request error code the backend can return, with its English template (re-exported for

@@ -222,10 +222,12 @@ describe("RequestForm", () => {
         budget_eur: 2400,
         preferences: "Quartieri tranquilli, cucina locale.",
         destination_idea: null,
-        journey_mode: null,
       },
       { demoScenario: null },
     );
+    // No journey_mode key while it is null: a backend from before the travel mode answers 422.
+    const [body] = mocks.createPlan.mock.calls[0] ?? [];
+    expect(Object.keys(body as object)).not.toContain("journey_mode");
     expect(mocks.push).toHaveBeenCalledWith(`/plans/${PLAN_ID}`);
     expect(submitButton().textContent).toContain("Avvio il piano…");
     expect(submitButton().disabled).toBe(true);

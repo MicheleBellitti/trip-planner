@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { planRequestErrorCodes, planRequestJsonSchema } from "./schemas/generated/request";
+import { PlanRequestSchema, planRequestErrorCodes, planRequestJsonSchema } from "./schemas/generated/request";
 import {
   buildPlanRequest,
   childAgePath,
@@ -11,6 +11,7 @@ import {
   MAX_NIGHTS,
   MAX_TRIP_DAYS,
   monthLabel,
+  omitNullJourneyMode,
   REQUEST_ERROR_MESSAGES,
   REQUEST_FIELD_COPY,
   REQUEST_FIELDS,
@@ -419,6 +420,22 @@ describe("the form", () => {
       expect(flexible.errors["dates.month"]).toBe("Scegli il mese di partenza.");
       expect(flexible.errors["dates.nights"]).toBe("Indica quante notti.");
     }
+  });
+
+  it("leaves journey_mode out of the body while it is null, and keeps a chosen mode", () => {
+    // A backend from before the travel mode forbids unknown keys (contract rule 7).
+    const result = validateRequestForm(form(), { today: TODAY });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(Object.keys(result.request)).not.toContain("journey_mode");
+
+    const parsed = PlanRequestSchema.parse(request());
+    expect(parsed.journey_mode).toBeNull();
+    const dropped = omitNullJourneyMode(parsed);
+    expect("journey_mode" in dropped).toBe(false);
+    expect(dropped).toEqual({ ...parsed, journey_mode: undefined });
+    // PR 5 sends the mode the traveller chose.
+    const kept = omitNullJourneyMode(PlanRequestSchema.parse(request({ journey_mode: "train" })));
+    expect(kept.journey_mode).toBe("train");
   });
 
   it("starts empty, one adult, destination mode, fixed dates", () => {
