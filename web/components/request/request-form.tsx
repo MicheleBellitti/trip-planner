@@ -18,17 +18,19 @@ import { flushSync } from "react-dom";
 
 import { Button } from "@/components/ui/button";
 import { cx } from "@/components/ui/cx";
-import { Field, NumberStepper, SegmentedControl, Select, TextArea, TextInput } from "@/components/ui/field";
+import { ChoiceChips, Field, NumberStepper, SegmentedControl, Select, TextArea, TextInput } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icon";
 import { useIsDesktop } from "@/components/live/hooks";
 import { Notice } from "@/components/ui/notice";
 import { MonthUsage } from "@/components/home/month-usage";
 import { api, RequestValidationError, UnauthorizedError } from "@/lib/api";
+import { JOURNEY_MODE_LABELS } from "@/lib/journey-mode";
 import { useMe } from "@/lib/me";
 import {
   childAgePath,
   fieldConstraints,
   fieldErrorsFromServer,
+  JOURNEY_MODES,
   MAX_NIGHTS,
   validateRequestForm,
   type FieldErrors,
@@ -46,6 +48,7 @@ import {
   errorTargets,
   fieldId,
   groupErrorId,
+  JOURNEY_MODE_ICONS,
   MAX_TRAVELERS,
   monthOptions,
   nextDay,
@@ -67,6 +70,12 @@ const STANDING_ID = "submit-plan-quota";
 const FAILURE_ID = "submit-plan-failure";
 const SUMMARY_ID = "request-errors";
 const AGE_OPTIONS = childAgeOptions();
+/** Aereo, Treno, Traghetto, Auto, Pullman: the schema's modes, in its order. */
+const MODE_OPTIONS = JOURNEY_MODES.map((mode) => ({
+  value: mode,
+  label: JOURNEY_MODE_LABELS[mode],
+  icon: JOURNEY_MODE_ICONS[mode],
+}));
 
 /** The error summary appears from three problems up, or when one has no field to sit by: with one
  * or two, the messages beside the fields are the whole story. */
@@ -112,6 +121,7 @@ export function RequestForm({ today, initialValues, restoreLast = false, demoSce
   const desktop = useIsDesktop();
   const me = useMe();
   const destinationMode = useId();
+  const journeyMode = useId();
   const dateMode = useId();
 
   // After hydration (the server cannot know): the form is still untouched on the first effect.
@@ -300,6 +310,16 @@ export function RequestForm({ today, initialValues, restoreLast = false, demoSce
           )}
         </Field>
       )}
+      <ChoiceChips
+        legend="Come viaggi"
+        hint="Per andata e ritorno. L'auto è la tua, anche se serve un traghetto."
+        name={journeyMode}
+        options={MODE_OPTIONS}
+        value={values.journeyMode}
+        id={fieldId("journey_mode")}
+        error={errors.journey_mode}
+        onValueChange={(mode) => change({ journeyMode: mode }, is("journey_mode"))}
+      />
     </Section>
   );
 

@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { emptyRequestForm, exampleRequestForm, validateRequestForm, type RequestFormValues } from "@/lib/request-form";
+import { emptyRequestForm, exampleRequestForm, JOURNEY_MODES, validateRequestForm, type RequestFormValues } from "@/lib/request-form";
 
 import {
   ADULTS_ID,
+  JOURNEY_MODE_ICONS,
   childAgeOptions,
   DEMO_SCENARIO_PATH,
   errorTargets,
@@ -18,6 +19,21 @@ import {
 
 const TODAY = "2026-10-12";
 
+describe("the travel mode", () => {
+  it("visits the mode right after the destination", () => {
+    const targets = errorTargets(emptyRequestForm(), { demo: false });
+    expect(targets.map((target) => target.path).slice(0, 3)).toEqual(["origin", "destination", "journey_mode"]);
+    expect(targets[2]).toEqual({ path: "journey_mode", controlId: "field-journey_mode", label: "Come viaggi" });
+    const suggest = errorTargets({ ...emptyRequestForm(), suggestDestination: true }, { demo: false });
+    expect(suggest.map((target) => target.path).slice(0, 3)).toEqual(["origin", "destination_idea", "journey_mode"]);
+  });
+
+  it("has an icon for every mode", () => {
+    expect(Object.keys(JOURNEY_MODE_ICONS)).toEqual([...JOURNEY_MODES]);
+    expect(JOURNEY_MODE_ICONS).toEqual({ flight: "airplane-tilt", train: "train", ferry: "boat", car: "car", coach: "bus" });
+  });
+});
+
 function values(overrides: Partial<RequestFormValues> = {}): RequestFormValues {
   return { ...emptyRequestForm(), ...overrides };
 }
@@ -27,6 +43,7 @@ describe("errorTargets", () => {
     expect(errorTargets(values({ adults: 2, childAges: ["8", ""] }), { demo: false }).map((target) => target.path)).toEqual([
       "origin",
       "destination",
+      "journey_mode",
       "dates",
       "dates.exact_start",
       "dates.exact_end",

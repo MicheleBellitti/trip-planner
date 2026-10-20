@@ -4,6 +4,8 @@
  * demo scenarios. Pure: tested without rendering.
  */
 
+import type { IconName } from "@/components/ui/icon";
+import type { JourneyMode } from "@/lib/journey-mode";
 import {
   childAgePath,
   fieldConstraints,
@@ -13,6 +15,15 @@ import {
 } from "@/lib/request-form";
 
 import { monthTitle } from "./summary";
+
+/** Each travel mode's icon (DESIGN.md, Iconography): the plane is the flights line's own. */
+export const JOURNEY_MODE_ICONS: Readonly<Record<JourneyMode, IconName>> = {
+  flight: "airplane-tilt",
+  train: "train",
+  ferry: "boat",
+  car: "car",
+  coach: "bus",
+};
 
 /** The 422 path of `?demo_scenario=` (backend routes.check_demo_scenario: loc query, demo_scenario). */
 export const DEMO_SCENARIO_PATH = "query.demo_scenario";
@@ -50,6 +61,7 @@ export function errorTargets(values: RequestFormValues, options: { demo: boolean
   } else {
     targets.push({ path: "destination", controlId: fieldId("destination"), label: "Dove vuoi andare" });
   }
+  targets.push({ path: "journey_mode", controlId: fieldId("journey_mode"), label: "Come viaggi" });
   if (values.dateMode === "exact") {
     targets.push(
       { path: "dates", controlId: fieldId("dates.exact_start"), label: "Date" },

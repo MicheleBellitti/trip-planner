@@ -48,6 +48,14 @@ describe("RequestForm", () => {
     }
     expect(screen.getByRole("radio", { name: "Suggeriscimi tu" })).toBeTruthy();
     expect(screen.getByRole("radio", { name: "Mese e notti" })).toBeTruthy();
+    // How they get there: five modes after the destination, before the dates; the plane chosen.
+    const modes = screen.getByRole("group", { name: "Come viaggi" });
+    const modeRadios = within(modes).getAllByRole("radio") as HTMLInputElement[];
+    expect(modeRadios.map((radio) => radio.labels?.[0]?.textContent)).toEqual(["Aereo", "Treno", "Traghetto", "Auto", "Pullman"]);
+    expect(modeRadios.filter((radio) => radio.checked).map((radio) => radio.value)).toEqual(["flight"]);
+    const follows = (a: Node, b: Node) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(follows(screen.getByLabelText("Dove vuoi andare"), modes)).toBe(true);
+    expect(follows(modes, screen.getByLabelText("Partenza"))).toBe(true);
     expect(screen.getByRole("spinbutton", { name: "Adulti" })).toBeTruthy();
     expect(submitButton().getAttribute("aria-describedby")).toBe("submit-plan-estimate");
     expect(document.getElementById("submit-plan-estimate")?.textContent).toBe("Il planner costa circa 2–4 $ per piano");
@@ -252,6 +260,65 @@ describe("RequestForm", () => {
       budget_eur: 900,
     });
     expect((request as { destination?: string | null }).destination ?? null).toBeNull();
+  });
+
+  it("sends the chosen mode", async () => {
+    mocks.createPlan.mockResolvedValue({ id: PLAN_ID });
+    render(<RequestForm today={TODAY} initialValues={exampleRequestForm(TODAY)} />);
+
+    fireEvent.click(screen.getByRole("radio", { name: "Treno" }));
+    await submit();
+
+    expect(mocks.createPlan.mock.calls[0]?.[0]).toMatchObject({ destination: "Lisbona", journey_mode: "train" });
+  });
+
+  it("keeps the chosen mode across the other choices", async () => {
+    mocks.createPlan.mockResolvedValue({ id: PLAN_ID });
+    render(<RequestForm today={TODAY} initialValues={{ ...emptyRequestForm(), origin: "MXP", budgetEur: "900" }} />);
+
+    fireEvent.click(screen.getByRole("radio", { name: "Pullman" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Suggeriscimi tu" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Mese e notti" }));
+    fireEvent.change(screen.getByLabelText("Mese di partenza"), { target: { value: "2026-11" } });
+    expect((screen.getByRole("radio", { name: "Pullman" }) as HTMLInputElement).checked).toBe(true);
+    await submit();
+
+    expect(mocks.createPlan.mock.calls[0]?.[0]).toMatchObject({ suggest_destination: true, journey_mode: "coach" });
+  });
+
+  it("Enter on a mode moves to the dates", async () => {
+    render(<RequestForm today={TODAY} initialValues={exampleRequestForm(TODAY)} />);
+    const train = screen.getByRole("radio", { name: "Treno" });
+    fireEvent.click(train);
+    train.focus();
+
+    await act(async () => {
+      fireEvent.keyDown(train, { key: "Enter" });
+    });
+
+    expect(document.activeElement).toBe(screen.getByLabelText("Partenza"));
+    expect(mocks.createPlan).not.toHaveBeenCalled();
+  });
+
+  it("puts a 422 on the mode under its row", async () => {
+    mocks.createPlan.mockRejectedValue(
+      new RequestValidationError(422, [
+        { type: "literal_error", loc: ["body", "journey_mode"], msg: "Input should be 'flight', 'train', 'ferry', 'car' or 'coach'" },
+      ]),
+    );
+    render(<RequestForm today={TODAY} initialValues={exampleRequestForm(TODAY)} />);
+
+    await submit();
+
+    const plane = screen.getByRole("radio", { name: "Aereo" });
+    expect(document.activeElement).toBe(plane);
+    const described = (plane.getAttribute("aria-describedby") ?? "").split(" ");
+    expect(described.map((id) => document.getElementById(id)?.textContent)).toContain("Scelta non valida.");
+    expect(screen.queryByText(/da sistemare/)).toBeNull();
+
+    // Choosing again clears it.
+    fireEvent.click(screen.getByRole("radio", { name: "Treno" }));
+    expect(screen.queryByText("Scelta non valida.")).toBeNull();
   });
 
   it("asks each child's age and keeps the count within nine travellers", async () => {
