@@ -39,7 +39,7 @@ explain.
 
 `--static` needs no API: it estimates the fixed context of each agent from
 `profiles/<profile>/agents/*.md` (system prompt), the custom tools it declares
-(`agents/tools/submit_plan.json`) and the skills it references (descriptions, always present;
+(`agents/tools/*.json`) and the skills it references (descriptions, always present;
 SKILL.md and the data files the agent reads), in characters and tokens. Built-in tool and MCP tool
 definitions cannot be measured offline: compare with the live "first request" context.
 

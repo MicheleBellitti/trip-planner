@@ -455,11 +455,14 @@ def test_static_estimate_reads_prompts_tools_and_skills(fake_repo: Path) -> None
     coordinator = agents[0]
     body = (fake_repo / "profiles/development/agents/coordinator.md").read_text(encoding="utf-8")
     assert coordinator.system_chars == len(sr.split_frontmatter(body)[1])
-    assert [name for name, _ in coordinator.custom_tools] == ["submit_plan"]
-    submit = json.loads(
-        (fake_repo / "profiles/development/agents/tools/submit_plan.json").read_text("utf-8")
-    )
-    assert coordinator.tools_chars == sr.json_chars(submit)
+    assert [name for name, _ in coordinator.custom_tools] == ["submit_plan", "ask_traveller"]
+    tools = [
+        json.loads(
+            (fake_repo / f"profiles/development/agents/tools/{name}.json").read_text("utf-8")
+        )
+        for name in ("submit_plan", "ask_traveller")
+    ]
+    assert coordinator.tools_chars == sum(sr.json_chars(tool) for tool in tools)
     assert coordinator.skills == ["trip-tracker-schema", "travel-research-rules"]
     assert coordinator.floor_chars == (
         coordinator.system_chars + coordinator.tools_chars + coordinator.descriptions_chars

@@ -137,7 +137,7 @@ def test_agent_matches_the_spec_table(profile: str, agent: str) -> None:
 @pytest.mark.parametrize("profile", rp.PROFILE_NAMES)
 def test_coordinator_roster_and_custom_tool(profile: str) -> None:
     fields, _ = agent_file(profile, "coordinator")
-    assert "./tools/submit_plan.json" in fields["tools"]
+    assert fields["tools"][-2:] == ["./tools/submit_plan.json", "./tools/ask_traveller.json"]
     assert fields["multiagent"] == {
         "type": "multiagent_20261001",
         "subagents": {
@@ -342,6 +342,27 @@ def test_inlined_schema_validates_like_the_original() -> None:
         for instance in (bad, worse):
             with pytest.raises(jsonschema.ValidationError):
                 jsonschema.validate(instance, schema)
+
+
+@pytest.mark.parametrize("profile", rp.PROFILE_NAMES)
+def test_ask_traveller_tool_is_fully_inlined(profile: str) -> None:
+    path = REPO_ROOT / "profiles" / profile / "agents" / "tools" / "ask_traveller.json"
+    tool = json.loads(path.read_text(encoding="utf-8"))
+    assert set(tool) == {"type", "name", "description", "input_schema"}
+    assert (tool["type"], tool["name"]) == ("custom", "ask_traveller")
+    text = json.dumps(tool)
+    assert "$ref" not in text
+    assert "$defs" not in text
+    raw = json.loads((REPO_ROOT / "schema/ask_traveller.json").read_text(encoding="utf-8"))
+    assert tool["input_schema"]["required"] == raw["required"]
+    option = tool["input_schema"]["properties"]["options"]["items"]
+    assert "Bacalhau" in option["properties"]["place"]["description"]
+
+
+def test_inline_refs_names_its_source() -> None:
+    bad = {"type": "object", "properties": {"a": {"$ref": "#/$defs/B"}}}
+    with pytest.raises(rp.RenderError, match=r"ask_traveller\.json"):
+        rp.inline_refs(bad, source="ask_traveller.json")
 
 
 def test_inline_refs_keeps_sibling_keys_and_rejects_bad_refs() -> None:
