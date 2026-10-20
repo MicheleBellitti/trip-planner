@@ -720,8 +720,8 @@ or shape (there is no class merging, on purpose: see JavaScript weight below).
 | `Toaster`, `toast`, `dismissToast` | `toast.tsx` | One message confirming the user's own action | neutral (5 s), error (stays) |
 | `Skeleton` | `skeleton.tsx` | Placeholder in the final shape | line, block, round |
 | `VisuallyHidden` | `visually-hidden.tsx` | Text for screen readers only | |
-| `Icon`, `IconSprite`, `ICON_PATHS` | `icon.tsx`, `icon-sprite.tsx`, `icons.ts` | Phosphor bold, from a sprite | 35 icons |
-| `Field`, `TextInput`, `TextArea`, `Select`, `NumberStepper`, `SegmentedControl` | `field.tsx` | Form controls with label above, hint, error below | default, hint, error, disabled, optional |
+| `Icon`, `IconSprite`, `ICON_PATHS` | `icon.tsx`, `icon-sprite.tsx`, `icons.ts` | Phosphor bold, from a sprite | 39 icons |
+| `Field`, `TextInput`, `TextArea`, `Select`, `NumberStepper`, `SegmentedControl`, `ChoiceChips` | `field.tsx` | Form controls with label above, hint, error below | default, hint, error, disabled, optional |
 | `Mark` | `mark.tsx` | "A di linee" in the theme's line tokens (Brand) | any size via `className` |
 | `Wordmark` | `wordmark.tsx` | The lockup: mark and "Atlas", optionally the link home | `compact` (name hidden below 360 px) |
 | `ThemeScript` | `theme-script.tsx` | Applies the pinned theme before the first paint | |
@@ -842,8 +842,11 @@ the mockup in Atlas's tokens).
   **Disabled:** 55 %.
 - **Steppers** for counts (− and + around a real number input), **segmented control** (native
   radios in a pill track, the chosen one ink; segments 40 px on the phone with the track's padding
-  added to the tap area, 46 px, 36 px from 640 px) for two or three exclusive choices, **native
-  select** for months.
+  added to the tap area, 46 px, 36 px from 640 px) for two or three exclusive choices, **choice
+  chips** (native radios drawn as separate pills with a 16 px icon before the label, 1.5 px
+  `rule-strong` edge, the chosen one ink; 40 px on the phone with 3 px of tap area around each,
+  36 px from 640 px; they wrap onto a second row on the phone) for four or more exclusive choices
+  (the travel mode), **native select** for months.
 
 ### Navigation
 
@@ -925,7 +928,7 @@ the halo (a tool is running) and the turning arrows (something is reconnecting o
 
 ### Iconography
 
-**Phosphor Icons 2.1.1, weight bold, MIT**, the set the study used. 35 icons are copied unchanged
+**Phosphor Icons 2.1.1, weight bold, MIT**, the set the study used. 39 icons are copied unchanged
 from `@phosphor-icons/core@2.1.1` (`assets/bold/<name>-bold.svg`) into `components/ui/icons.ts`
 with a provenance header. The root layout renders them once as a hidden SVG sprite
 (`IconSprite`, a Server Component), and `<Icon name>` references a symbol: 1 em square (or the
@@ -938,7 +941,9 @@ never as JavaScript; the icon names are a TypeScript type.
 
 Agents: `tree-structure` coordinatore, `airplane-tilt` voli, `bed` alloggio, `ticket` attività,
 `tram` spostamenti. States: `hourglass-medium` in attesa, `check-circle` finito, `x-circle` errore,
-`stop-circle` fermato and interrotto, `pause-circle` limite raggiunto, `prohibit` bloccato. Copy
+`stop-circle` fermato and interrotto, `pause-circle` limite raggiunto, `prohibit` bloccato. Travel
+modes (the request form's "Come viaggi"): `airplane-tilt` aereo, `train` treno, `boat` traghetto,
+`car` auto, `bus` pullman. Copy
 the path of any new icon from the same version and weight; never draw one, never mix a family.
 
 **Why not lucide-react** (the spec lists it as Agent Plan's dependency): one family per product,

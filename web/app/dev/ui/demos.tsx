@@ -8,7 +8,16 @@ import { Button } from "@/components/ui/button";
 import { ToolChip } from "@/components/ui/chip";
 import { ChoiceCard, type ChoiceCardMedia } from "@/components/ui/choice-card";
 import { CostMeter } from "@/components/ui/cost-meter";
-import { Field, NumberStepper, SegmentedControl, Select, TextArea, TextInput } from "@/components/ui/field";
+import {
+  ChoiceChips,
+  Field,
+  NumberStepper,
+  SegmentedControl,
+  Select,
+  TextArea,
+  TextInput,
+  type ChoiceChipOption,
+} from "@/components/ui/field";
 import { Sheet } from "@/components/ui/sheet";
 import {
   Timeline,
@@ -167,11 +176,23 @@ export function FoldedLineDemo() {
 
 const MONTHS = ["novembre 2026", "dicembre 2026", "gennaio 2027"] as const;
 
+type Mode = "flight" | "train" | "ferry" | "car" | "coach";
+const MODES: readonly ChoiceChipOption<Mode>[] = [
+  { value: "flight", label: "Aereo", icon: "airplane-tilt" },
+  { value: "train", label: "Treno", icon: "train" },
+  { value: "ferry", label: "Traghetto", icon: "boat" },
+  { value: "car", label: "Auto", icon: "car" },
+  { value: "coach", label: "Pullman", icon: "bus" },
+];
+
 export function FormDemo() {
   const [where, setWhere] = useState<"destination" | "suggest">("destination");
+  const [mode, setMode] = useState<Mode>("flight");
   const [adults, setAdults] = useState(2);
   const [children, setChildren] = useState(2);
   const groupName = useId();
+  const modeName = useId();
+  const modeErrorName = useId();
   return (
     <div className="grid gap-5">
       <SegmentedControl
@@ -190,6 +211,22 @@ export function FormDemo() {
       <Field label="Destinazione" error="Scrivi una città o scegli “Suggeriscimi tu”.">
         {(control) => <TextInput {...control} placeholder="Per esempio Lisbona" />}
       </Field>
+      <ChoiceChips
+        legend="Come viaggi"
+        hint="Per andata e ritorno. L'auto è la tua, anche se serve un traghetto."
+        name={modeName}
+        options={MODES}
+        value={mode}
+        onValueChange={setMode}
+      />
+      <ChoiceChips
+        legend="Come viaggi (con un errore)"
+        error="Scelta non valida."
+        name={modeErrorName}
+        options={MODES}
+        value="ferry"
+        onValueChange={() => {}}
+      />
       <Field label="Mese">
         {(control) => (
           <Select {...control} defaultValue={MONTHS[0]}>
