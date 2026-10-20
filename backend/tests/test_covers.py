@@ -30,9 +30,12 @@ from app import clock, covers
 from app.covers import (
     COVER_TTL,
     MISS_TTL,
+    NO_PHOTOS,
+    PLACE_KEY_PREFIX,
     TRANSIENT_TTL,
     Cover,
     CoverResolver,
+    PlacePhotos,
     cache_key,
     candidate_titles,
     is_free_license,
@@ -1028,3 +1031,201 @@ def test_user_agent_names_the_app_and_a_contact(make_settings: Callable[..., Any
     )
     with pytest.raises(ValueError, match="WIKIMEDIA_CONTACT_URL"):
         make_settings(wikimedia_contact_url="atlas@example.org")
+
+
+# --- place photos ---------------------------------------------------------------------------------
+
+
+@pytest.fixture
+def make_place_photos(
+    make_resolver: Callable[..., CoverResolver],
+) -> Callable[..., PlacePhotos]:
+    def factory(*, deadline_seconds: float = 3.0, **resolver_options: Any) -> PlacePhotos:
+        resolver = make_resolver(
+            key_prefix=PLACE_KEY_PREFIX,
+            lookup_deadline_seconds=deadline_seconds,
+            **resolver_options,
+        )
+        return PlacePhotos(resolver, deadline_seconds=deadline_seconds)
+
+    return factory
+
+
+def lisbon_only(delay: float = 0.0, slow: str = "") -> Callable[[httpx.Request], Any]:
+    """A Wikimedia fake that knows Lisbon and nothing else; the Wikipedia route of a title
+    containing `slow` sleeps `delay` seconds first."""
+    recorded = {
+        "it": load("wikipedia_it_lisbona"),
+        "en": load("wikipedia_en_lisbon"),
+    }
+    commons = {
+        "Bandeira_municipal_de_Lisboa.png": load("commons_flag_lisbona"),
+        LISBON_FILE: load("commons_lisbon_cc_by_sa"),
+    }
+
+    async def answer(request: httpx.Request) -> httpx.Response:
+        params = request.url.params
+        if request.url.host == "commons.wikimedia.org":
+            file = params["titles"].removeprefix("File:")
+            return httpx.Response(200, json=commons.get(file, load("commons_missing")))
+        titles = params["titles"]
+        if slow and slow in titles:
+            await asyncio.sleep(delay)
+        if "lisbona" in titles.lower():
+            return httpx.Response(200, json=recorded[request.url.host.split(".")[0]])
+        return httpx.Response(200, json=missing_wikipedia(titles))
+
+    return answer
+
+
+@pytest.fixture
+def lisbon_wikimedia() -> Iterator[respx.MockRouter]:
+    with respx.mock(assert_all_called=False, assert_all_mocked=True) as router:
+        yield router
+
+
+async def test_place_photos_finds_a_place(
+    wikimedia: Wikimedia, make_place_photos: Callable[..., PlacePhotos]
+) -> None:
+    lisbon(wikimedia)
+
+    photos = await make_place_photos().photos_for({"a1": "Lisbona"})
+
+    assert set(photos) == {"a1"}
+    assert photos["a1"].license == "CC BY-SA 2.0"
+    assert photos["a1"].url.startswith("https://upload.wikimedia.org/")
+
+
+async def test_place_photos_leaves_out_a_place_without_a_free_photo(
+    lisbon_wikimedia: respx.MockRouter, make_place_photos: Callable[..., PlacePhotos]
+) -> None:
+    lisbon_wikimedia.get(host__regex=r"wikipedia\.org|commons\.wikimedia\.org").mock(
+        side_effect=lisbon_only()
+    )
+
+    photos = await make_place_photos().photos_for({"a1": "Lisbona", "a2": "Zzyzx Nowhere"})
+
+    assert set(photos) == {"a1"}
+
+
+async def test_two_options_with_one_place_share_a_lookup(
+    wikimedia: Wikimedia, make_place_photos: Callable[..., PlacePhotos]
+) -> None:
+    lisbon(wikimedia)
+
+    photos = await make_place_photos().photos_for({"a1": "Lisbona", "a2": "  lisbona "})
+
+    assert set(photos) == {"a1", "a2"}
+    assert photos["a1"] == photos["a2"]
+    assert wikimedia.hosts().count("commons.wikimedia.org") == 1
+
+
+async def test_place_photos_returns_what_is_found_by_the_deadline(
+    lisbon_wikimedia: respx.MockRouter, make_place_photos: Callable[..., PlacePhotos]
+) -> None:
+    lisbon_wikimedia.get(host__regex=r"wikipedia\.org|commons\.wikimedia\.org").mock(
+        side_effect=lisbon_only(delay=5.0, slow="Lentissimo")
+    )
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+
+    photos = await make_place_photos(deadline_seconds=0.2).photos_for(
+        {"a1": "Lisbona", "a2": "Lentissimo"}
+    )
+
+    assert set(photos) == {"a1"}
+    assert loop.time() - started < 0.7
+
+
+async def test_place_photos_cancel_unfinished_lookups(
+    lisbon_wikimedia: respx.MockRouter, make_place_photos: Callable[..., PlacePhotos]
+) -> None:
+    lisbon_wikimedia.get(host__regex=r"wikipedia\.org|commons\.wikimedia\.org").mock(
+        side_effect=lisbon_only(delay=5.0, slow="Lentissimo")
+    )
+    before = asyncio.all_tasks()
+
+    await make_place_photos(deadline_seconds=0.1).photos_for({"a2": "Lentissimo"})
+
+    assert asyncio.all_tasks() <= before
+
+
+async def test_place_photos_with_no_places_creates_no_task(
+    make_place_photos: Callable[..., PlacePhotos], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def refuse(*_: Any, **__: Any) -> None:
+        raise AssertionError("no task expected")
+
+    monkeypatch.setattr(asyncio, "create_task", refuse)
+
+    assert await make_place_photos().photos_for({}) == {}
+
+
+async def test_place_keys_do_not_collide_with_destination_covers(
+    wikimedia: Wikimedia,
+    make_resolver: Callable[..., CoverResolver],
+    db_session_factory: SessionFactory,
+) -> None:
+    lisbon(wikimedia)
+    destinations = make_resolver()
+    places = make_resolver(key_prefix=PLACE_KEY_PREFIX)
+
+    assert await destinations.get("Lisbona") is not None
+    assert await places.get("Lisbona") is not None
+
+    assert set(await stored(db_session_factory)) == {"lisbona", "place:lisbona"}
+
+
+async def test_place_photos_send_only_the_place_name(
+    wikimedia: Wikimedia, make_place_photos: Callable[..., PlacePhotos]
+) -> None:
+    lisbon(wikimedia)
+
+    await make_place_photos().photos_for({"a1": "Lisbona, Portogallo"})
+
+    wikipedia = [r for r in wikimedia.requests if r.url.host.endswith("wikipedia.org")]
+    assert wikipedia
+    assert wikipedia[0].url.params["titles"] == "Lisbona, Portogallo|Lisbona"
+    assert "a1" not in str(wikipedia[0].url)
+
+
+async def test_place_photos_log_counts_only(
+    lisbon_wikimedia: respx.MockRouter,
+    make_place_photos: Callable[..., PlacePhotos],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lisbon_wikimedia.get(host__regex=r"wikipedia\.org|commons\.wikimedia\.org").mock(
+        side_effect=lisbon_only()
+    )
+    logs: list[dict[str, Any]] = []
+
+    class Recorder:
+        def __getattr__(self, level: str) -> Callable[..., None]:
+            return lambda event, **kw: logs.append({"event": event, "level": level, **kw})
+
+    monkeypatch.setattr(covers, "log", Recorder())
+
+    await make_place_photos().photos_for({"a1": "Lisbona", "a2": "Zzyzx Nowhere"})
+
+    (line,) = [entry for entry in logs if entry["event"] == "choice_photos"]
+    assert (line["requested"], line["found"], line["timed_out"]) == (2, 1, 0)
+    assert "Lisbona" not in str(logs)
+    assert "Zzyzx" not in str(logs)
+
+
+async def test_no_photos() -> None:
+    assert await NO_PHOTOS.photos_for({"a1": "X"}) == {}
+
+
+def test_cover_text_fields_lose_nul_characters() -> None:
+    cover = Cover(
+        url="https://upload.wikimedia.org/wikipedia/commons/a/ab/X.jpg",
+        width=10,
+        height=10,
+        author="A\x00B",
+        license="CC\x00 0",
+        source_page="https://commons.wikimedia.org/wiki/File:X.jpg",
+        title="T\x00",
+    )
+
+    assert (cover.author, cover.license, cover.title) == ("AB", "CC 0", "T")

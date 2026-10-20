@@ -58,6 +58,8 @@ TEST_ENV: dict[str, str] = {
     "AGENT_PROFILE": "development",
     # No test builds a real link checker by accident; a test that wants one sets it itself.
     "LINK_CHECK_ENABLED": "false",
+    # No test looks up Wikimedia photos for choice cards by accident.
+    "CHOICE_PHOTOS_ENABLED": "false",
     # Never a real key in tests. Blank rather than unset: an unset variable would let Settings
     # read a developer's backend/.env.
     "ANTHROPIC_API_KEY": "",

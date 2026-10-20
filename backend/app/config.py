@@ -265,6 +265,10 @@ class Settings(BaseSettings):
     # site's homepage or shown as text. False skips the check (no request leaves the backend).
     link_check_enabled: bool = True
 
+    # Free-licence Wikimedia photos for the choice cards (app/covers.py PlacePhotos). False = no
+    # lookup, the cards go out without photos.
+    choice_photos_enabled: bool = True
+
     # Local demo for UI work (development only): POST /plans replays a scripted session from
     # backend/tests/fixtures/ma through the fake Managed Agents client, offline and free.
     demo_mode: bool = False
