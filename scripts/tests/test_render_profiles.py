@@ -357,11 +357,35 @@ def test_transport_prompt_covers_every_main_journey() -> None:
         assert phrase in system
 
 
+def test_transport_prompt_states_its_estimates() -> None:
+    """A ferry fare cites the page it was read on; a drive's fuel and a far-stop drive come from
+    stated assumptions, never from memory."""
+    _, system = agent_file("development", "transport")
+    for phrase in (
+        "the page where you read the fare (the operator's, when you can)",
+        "7 L/100 km",
+        "a fuel price shown by a fetched page or a search result",
+        "Never a figure from memory",
+        "about 60 km/h outside cities",
+    ):
+        assert phrase in system
+    assert "the operator's page is the price's `source_url`" not in system
+
+
 def test_activities_prompt_builds_the_days_around_the_picks() -> None:
-    """The coordinator's wave-2 task names the picks and the food styles (step 7)."""
+    """The coordinator's wave-2 task names the picks (the traveller's or its own, worded the
+    same way) and the food styles (step 7); a pick is never dropped silently, and the food
+    styles may add options."""
     _, system = agent_file("development", "activities")
-    assert "the traveller picked" in system
-    assert "food styles" in system
+    for phrase in (
+        "the traveller picked",
+        "whether the traveller picked them or the coordinator did",
+        "keep every picked option",
+        "if a pick cannot fit, say so in `warnings`",
+        "food styles",
+        "add new ones only where a day is empty or for the task's food styles",
+    ):
+        assert phrase in system
 
 
 @pytest.mark.parametrize("agent", rp.SUBAGENTS)
