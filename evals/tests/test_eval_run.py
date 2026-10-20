@@ -245,12 +245,14 @@ class FakeMaClient:
 class FakeJudgeMessages:
     def __init__(self) -> None:
         self.calls = 0
+        self.params: list[dict[str, Any]] = []
 
     async def count_tokens(self, **kwargs: Any) -> Any:
         return SimpleNamespace(input_tokens=12_000)
 
     async def create(self, **kwargs: Any) -> Any:
         self.calls += 1
+        self.params.append(kwargs)
         text = json.dumps({c: {"reason": "ok", "score": 4} for c in judge.CRITERIA})
         return SimpleNamespace(
             content=[SimpleNamespace(type="text", text=text)],
@@ -285,6 +287,15 @@ def context(
     monkeypatch.setattr(sessions, "start_plan", start or fake_start)
     monkeypatch.setattr(sessions, "interrupt_plan", fake_interrupt)
     monkeypatch.setattr(run, "load_plan", fake_load)
+
+    async def fake_answer(planner: Any, pid: uuid.UUID, user: Any) -> None:
+        calls.setdefault("answered", []).append(pid)
+
+    async def fake_picks(planner: Any, pid: uuid.UUID) -> list[str]:
+        return list(calls.get("picks", []))
+
+    monkeypatch.setattr(run, "answer_choices", fake_answer)
+    monkeypatch.setattr(run, "collect_picks", fake_picks)
     ma_client = FakeMaClient()
     planner = SimpleNamespace(
         settings=SimpleNamespace(local_user_email=None),
@@ -331,6 +342,66 @@ def test_run_case_ready_plan(monkeypatch: pytest.MonkeyPatch) -> None:
     assert entry["agent_versions"]["coordinator"]["version"] == 3
     assert entry["warnings_count"] == 1
     json.dumps(entry)
+
+
+def test_wait_for_terminal_calls_on_poll_each_pass(monkeypatch: pytest.MonkeyPatch) -> None:
+    rows = [plan_row("running"), plan_row("running"), plan_row("ready")]
+
+    async def fake_load(factory: Any, pid: uuid.UUID) -> Any:
+        return rows.pop(0)
+
+    monkeypatch.setattr(run, "load_plan", fake_load)
+    polls: list[int] = []
+
+    async def on_poll() -> None:
+        polls.append(len(rows))
+
+    record = asyncio.run(
+        run.wait_for_terminal(
+            object(),  # pyright: ignore[reportArgumentType]
+            uuid.uuid4(),
+            timeout_seconds=5,
+            poll_seconds=0.0,
+            on_poll=on_poll,
+        )
+    )
+    assert record is not None
+    assert record.status == "ready"
+    assert polls == [2, 1]  # once per non-terminal pass
+
+
+def test_run_case_answers_pending_choices(monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx, calls = context(monkeypatch, [plan_row("running"), plan_row("running"), plan_row("ready")])
+    asyncio.run(run.run_case(LISBON, request_for(LISBON), ctx))
+    plan_id = uuid.UUID("00000000-0000-4000-8000-000000000001")
+    assert calls["answered"]
+    assert set(calls["answered"]) == {plan_id}
+
+
+def test_run_case_gives_the_judge_the_picks(monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx, calls = context(monkeypatch, [plan_row("ready")])
+    calls["picks"] = ["activities (traveller): a1 Torre di Belém; a3 Alfama"]
+    asyncio.run(run.run_case(LISBON, request_for(LISBON), ctx))
+    [params] = calls["judge"].params
+    content = params["messages"][0]["content"]
+    assert "<picks>" in content
+    assert "activities (traveller): a1 Torre di Belém; a3 Alfama" in content
+
+
+def test_pick_lines() -> None:
+    options = [
+        SimpleNamespace(id="a1", title="Torre di Belém"),
+        SimpleNamespace(id="a3", title="Alfama"),
+    ]
+    request = SimpleNamespace(options=options)
+    traveller = SimpleNamespace(kind="activities", answered_by="traveller", answer=["a1", "a3"])
+    timeout = SimpleNamespace(kind="food", answered_by="timeout", answer=[])
+    skipped = SimpleNamespace(kind="other", answered_by="traveller", answer=None)
+    assert (
+        run.pick_line(traveller, request) == "activities (traveller): a1 Torre di Belém; a3 Alfama"
+    )  # pyright: ignore[reportArgumentType]
+    assert run.pick_line(timeout, request) == "food (timeout): none, the coordinator chose"  # pyright: ignore[reportArgumentType]
+    assert run.pick_line(skipped, request) == "other (traveller): none, the coordinator chose"  # pyright: ignore[reportArgumentType]
 
 
 def test_run_case_timeout_interrupts_the_plan(monkeypatch: pytest.MonkeyPatch) -> None:

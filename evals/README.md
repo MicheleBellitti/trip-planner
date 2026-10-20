@@ -50,7 +50,9 @@ What `run.py` does for each selected request:
 2. It starts the plan exactly like `POST /plans` (`app.sessions.start_plan`), then polls
    `plans.status` until the plan leaves `running`. `budget_paused` ends the eval of that plan:
    it is never continued. After `--timeout-minutes` (default 40, below the backend's 45-minute
-   stuck threshold) the plan is interrupted.
+   stuck threshold) the plan is interrupted. When the coordinator asks the traveller to pick
+   (`ask_traveller`), each poll answers at once with the first option (the first two when
+   several can be picked); the picks go to the judge in a `<picks>` block.
 3. It reads the plan, the Trip, `submit_attempts` and `agent_versions` from the database, and
    the session usage (`list_cost`, web searches) from `client.retrieve_session`. When
    `list_cost` is absent it falls back to `plans.cost_cents`.
