@@ -3,7 +3,7 @@
  * locale-independent (no Intl): the same text on the server and in every browser.
  */
 
-import { journeyModePhrase } from "@/lib/journey-mode";
+import { JOURNEY_MODE_PHRASES } from "@/lib/journey-mode";
 import { monthLabel, parseBudget, type RequestFormValues } from "@/lib/request-form";
 
 const DAY_MS = 86_400_000;
@@ -107,10 +107,11 @@ export function travelersSummary(values: RequestFormValues): string {
   return `${adults}, ${kids} di ${years} ${unit}`;
 }
 
-/** How they get there, in words ("In treno"), or null for the plane: the default needs no line. */
-export function journeySummary(values: RequestFormValues): string | null {
-  const phrase = journeyModePhrase(values.journeyMode);
-  return phrase ? phrase.charAt(0).toLocaleUpperCase("it") + phrase.slice(1) : null;
+/** How they get there, in words ("In treno", "In aereo"): the form always sends a mode, so its
+ * read-back always says which. */
+export function journeySummary(values: RequestFormValues): string {
+  const phrase = JOURNEY_MODE_PHRASES[values.journeyMode];
+  return phrase.charAt(0).toLocaleUpperCase("it") + phrase.slice(1);
 }
 
 /** The budget in words ("2.400 €"), or null while it is not a whole positive amount. */

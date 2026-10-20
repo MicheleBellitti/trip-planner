@@ -441,12 +441,16 @@ describe("ChoiceChips", () => {
     expect(label.textContent).toBe("Traghetto");
   });
 
-  // aria-invalid is not a radio's attribute (ARIA 1.2): the error reaches each radio as its description.
-  it("wires the hint and the error to every radio", () => {
+  // The hint is the group's description, heard once on entering it, not on every arrow press. The
+  // error is each radio's (aria-invalid is not a radio's attribute, ARIA 1.2), so it is heard where
+  // the focus lands after a refused request.
+  it("describes the group with the hint and every radio with the error", () => {
+    const describedTexts = (element: HTMLElement) =>
+      (element.getAttribute("aria-describedby")?.split(" ") ?? []).map((id) => document.getElementById(id)?.textContent);
     const { rerender } = render(
       <ChoiceChips
         legend="Come viaggi"
-        hint="Per andata e ritorno."
+        hint="Vale per andata e ritorno."
         error="Scelta non valida."
         name="mode"
         options={MODES}
@@ -454,17 +458,37 @@ describe("ChoiceChips", () => {
         onValueChange={() => {}}
       />,
     );
+    expect(describedTexts(screen.getByRole("group", { name: "Come viaggi" }))).toEqual(["Vale per andata e ritorno."]);
     for (const radio of screen.getAllByRole("radio")) {
       expect(radio.hasAttribute("aria-invalid")).toBe(false);
-      const describedBy = radio.getAttribute("aria-describedby")?.split(" ") ?? [];
-      expect(describedBy.map((id) => document.getElementById(id)?.textContent)).toEqual(["Per andata e ritorno.", "Scelta non valida."]);
+      expect(describedTexts(radio)).toEqual(["Scelta non valida."]);
     }
 
-    rerender(<ChoiceChips legend="Come viaggi" hint="Per andata e ritorno." name="mode" options={MODES} value="flight" onValueChange={() => {}} />);
-    for (const radio of screen.getAllByRole("radio")) {
-      const describedBy = radio.getAttribute("aria-describedby")?.split(" ") ?? [];
-      expect(describedBy.map((id) => document.getElementById(id)?.textContent)).toEqual(["Per andata e ritorno."]);
-    }
+    rerender(<ChoiceChips legend="Come viaggi" hint="Vale per andata e ritorno." name="mode" options={MODES} value="flight" onValueChange={() => {}} />);
+    for (const radio of screen.getAllByRole("radio")) expect(radio.hasAttribute("aria-describedby")).toBe(false);
+  });
+
+  it("says a note about the chosen option under the chips, politely", () => {
+    const { rerender } = render(
+      <ChoiceChips legend="Come viaggi" name="mode" options={MODES} value="flight" onValueChange={() => {}} note={null} />,
+    );
+    // The live region is always there, so the note is announced when a choice brings it.
+    const region = screen.getByRole("status");
+    expect(region.getAttribute("aria-live")).toBe("polite");
+    expect(region.textContent).toBe("");
+
+    rerender(
+      <ChoiceChips
+        legend="Come viaggi"
+        name="mode"
+        options={MODES}
+        value="ferry"
+        onValueChange={() => {}}
+        note="A bordo a piedi: se porti l'auto, scegli Auto."
+      />,
+    );
+    expect(screen.getByRole("status").textContent).toBe("A bordo a piedi: se porti l'auto, scegli Auto.");
+    expect(screen.getByRole("group", { name: "Come viaggi" }).contains(screen.getByRole("status"))).toBe(true);
   });
 });
 

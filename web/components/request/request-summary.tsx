@@ -33,7 +33,7 @@ export function RequestSummary({ values, className }: { values: RequestFormValue
         }
       />
       <ul className="grid gap-2 border-t border-rule pt-4 text-small">
-        {journey ? <TripFact icon={JOURNEY_MODE_ICONS[values.journeyMode]}>{journey}</TripFact> : null}
+        <TripFact icon={JOURNEY_MODE_ICONS[values.journeyMode]}>{journey}</TripFact>
         <TripFact icon="calendar-blank" missing={!dates}>
           {dates ?? "Date da scegliere"}
         </TripFact>

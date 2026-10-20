@@ -50,8 +50,8 @@ describe("dates in words", () => {
 });
 
 describe("the travel mode in words", () => {
-  it("names the mode only when it is not the plane", () => {
-    expect(journeySummary(values())).toBeNull();
+  it("names every mode, the plane included: the form always sends one", () => {
+    expect(journeySummary(values())).toBe("In aereo");
     expect(journeySummary(values({ journeyMode: "train" }))).toBe("In treno");
     expect(journeySummary(values({ journeyMode: "ferry" }))).toBe("In traghetto");
     expect(journeySummary(values({ journeyMode: "car" }))).toBe("In auto");
