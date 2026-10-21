@@ -44,6 +44,12 @@ curl -s -X POST 'http://localhost:8000/plans?demo_scenario=budget_reached' \
 # -> {"id":"<id>"}: open http://localhost:3000/plans/<id>
 ```
 
+The traveller's choice cards need `?demo_scenario=choices` (two questions: what to see, what to
+eat; `choice_interrupt` asks once and waits for "Interrompi"). The backend waits `CHOICE_TIMEOUT_SECONDS`
+for an answer (240 by default): set it to 40 to watch a deadline pass, or keep it above 60 to hear
+"Manca un minuto per scegliere." The demo backend looks up no photos, so its cards have none; `/demo`
+has the recording's own.
+
 The scenarios are the `.jsonl` files in `../backend/tests/fixtures/ma/`: `happy_path` (ready),
 `rejected_then_accepted`, `three_rejections_failed` (failed), `budget_reached` (budget paused),
 `requires_action_blocked` (blocked), `interrupt`, `mcp_failure` (a source that did not answer),
@@ -104,6 +110,8 @@ components/ui/             the design system's primitives (Button, Chip, Timelin
 components/live/           the running plan: PlanScreen (data + states), LiveHeader (sticky bar), AgentLanes
                            and AgentLane (the transit lines), stations (reducer state -> lane stations),
                            InterruptControl, StreamStatus, RunSection
+components/choice/         the traveller's choice: ChoicePanel (the coordinator's question as cards, the countdown,
+                           the answer), a lazy chunk of the live screen and the demo
 components/plan/           the finished plan: PlanView, PlanSummary, Itinerary, Bookings, BookingStrip,
                            plan-model (pure helpers), trip-dates (Italian calendar words)
 components/states/         the states that need words: budget paused, ended (failed, blocked, interrupted),
@@ -197,6 +205,17 @@ primitives) but not the rest (the API client, zod), so that chunk is split and t
 worse than one. Keeping it whole would mean loading the API client on `/demo`, which the spec
 forbids. The 190 gate on `/plans/[id]` is still Michele's decision.
 
+Re-measured on 2026-10-21 for the choice cards (plan UX, PR 3), at the branch's last commit:
+`/plans/[id]` is 212.9 KB gzip (210.1 at the branch's start, +2.8; 185.4 in brotli) and `/demo` 184.6
+(179.2, +5.4; 159.8 in brotli). `/` 145.2, `/plans` 195.2 (+0.1) and `/new` 194.3 (+0.1) barely move.
+`ChoicePanel` and `ChoiceCard` are a lazy chunk, warmed with the finished plan (most runs never ask),
+so the cards, the countdown and their copy are on no first load. What `/plans/[id]` gains is what has
+to be there before a question arrives: reading a question and its answer from the stream
+(`lib/choices.ts`), the reducer's open question, the coordinator's plate and answer station, the tab
+title and the POST of the answer. `/demo` gains the same reading code plus its own: the hold on each
+question in the replay, the recording's photos (`lib/demo/choice-photos.json`) and a longer recording
+(the `choices` run is 134 events against `happy_path`'s 120, +1.3 KB gzip).
+
 ## Accessibility
 
 Built to WCAG 2.2 AA; checked by hand in the browser on every screen at 393 and 1440 px, light and
@@ -211,7 +230,9 @@ dark (the last pass is in `.impeccable/critique/audit-finish.md`).
 - **Targets** are 44 px under a finger (`pointer-coarse`) and 24 px at least with a mouse; the 1 px
   radio inputs of the segmented fields are covered by their 40 px labels.
 - **Live region**: the plan page has one polite region. It speaks lane state changes ("Voli: finito") and the
-  plan's own new state ("Piano: budget raggiunto"), never tool calls and never the replayed history.
+  plan's own new state ("Piano: budget raggiunto"), never tool calls and never the replayed history. While
+  the traveller has a question it says once that a minute is left ("Manca un minuto per scegliere."); the
+  question's heading takes the focus when it arrives, and the plan's state when it leaves.
 - **Names and structure**: one `h1`, `h2` per section, `h3` per lane, `role="meter"` with words for the cost,
   `lang="en"` on the agents' English text, links that open a new tab say so for screen readers.
 - **Motion**: every animation has a `motion-reduce` alternative that keeps the state change (a fade
@@ -227,6 +248,7 @@ or P1, `../CLAUDE.md`):
 | Live plan page (running, budget paused, failed, blocked, interrupted): `live-round<N>.md` | 28 | 31 | 32 |
 | Finished plan (ready): `plan-round<N>.md` | 30 | 31 | 32 |
 | Home and request form: `home-form-round<N>.md` | 29 | 32 | 32 (one P1, fixed since) |
+| The traveller's choice cards (the live pause, phone and desktop; the demo's pause): `choice-cards-round<N>.md` | 30 | 33 | |
 
 `audit-finish.md` is the technical audit that closed the work (accessibility, performance, theming,
 responsive).
