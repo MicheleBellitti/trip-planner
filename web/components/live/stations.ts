@@ -433,12 +433,17 @@ interface Present {
   verifying: boolean;
   /** The lane's newest station. */
   last: Station | null;
+  /** The traveller's answer, while it is the lane's newest station (the coordinator's). */
+  answer: string | null;
 }
 
 /** A working lane with no tool running says something true about now, not "thinking" twice:
- * the coordinator what it waits for, a subagent where it got to. */
+ * the coordinator what it waits for, a subagent where it got to. Right after the traveller
+ * answered, the coordinator's line says the answer ("Hai scelto: …"), until it moves on: on the
+ * phone its card is closed, and the line is all that shows of it. */
 function workingLine(agent: AgentName, present: Present): string {
   if (agent === "coordinator") {
+    if (present.answer) return present.answer;
     if (present.verifying) return "Verifica il piano.";
     if (present.outstanding.length > 0) return `Aspetta ${joinItalian(present.outstanding.map(laneName))}.`;
     return "Ragiona sul prossimo passo.";
@@ -549,6 +554,8 @@ export function buildLaneViews(state: PlanLiveState): Record<AgentName, LaneView
   /** Asked questions by choice id: the question for the answer's second line, and the station a
    * stopped plan keeps when nobody answered. */
   const asked = new Map<string, { question: string; station: Station }>();
+  /** The keys of the answers' stations: while one is the coordinator's newest, its line says it. */
+  const answers = new Set<string>();
 
   for (const event of state.events) {
     const build = builds[event.agent];
@@ -736,6 +743,7 @@ export function buildLaneViews(state: PlanLiveState): Record<AgentName, LaneView
             message: null,
           });
           asked.delete(answer.choiceId);
+          answers.add(String(event.seq));
         }
         break;
       }
@@ -799,6 +807,7 @@ export function buildLaneViews(state: PlanLiveState): Record<AgentName, LaneView
     }
     const hasWork = lane.events.some((event) => event.kind !== "status" || !isEmptyDetail(event.detail));
     const planOver = state.status !== null && state.status !== "running" && state.status !== "budget_paused";
+    const last = stations.findLast((station) => station.kind !== "wave") ?? null;
     views[agent] = {
       agent,
       state: lane.state,
@@ -815,7 +824,8 @@ export function buildLaneViews(state: PlanLiveState): Record<AgentName, LaneView
             : summaryFor(agent, lane.state, build, state.status, state.planAccepted, hasWork, blocker, {
               outstanding: AGENTS.filter((other) => waves.outstanding.has(other)),
               verifying: build.open.some((call) => call.submission),
-              last: stations.findLast((station) => station.kind !== "wave") ?? null,
+              last,
+              answer: last !== null && answers.has(last.key) ? last.title : null,
             }),
       errorTitle: lane.state === "error" ? (lane.lastError?.title ?? null) : null,
     };

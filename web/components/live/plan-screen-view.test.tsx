@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ChoiceControls } from "@/components/choice/choice-panel";
@@ -7,10 +7,12 @@ import tripJson from "@/components/plan/__fixtures__/happy-path.trip.json";
 import { readAskedChoice } from "@/lib/choices";
 import choicesRun from "@/lib/plan-events/__fixtures__/backend/choices.json";
 import backend from "@/lib/plan-events/__fixtures__/backend/happy-path.json";
-import { reducePlanEvents } from "@/lib/plan-events/reducer";
+import { planEventsReducer, reducePlanEvents, type PlanLiveState } from "@/lib/plan-events/reducer";
 import { PlanDetailSchema } from "@/lib/schemas/api";
 import type { UIEvent } from "@/lib/schemas/generated/ui-event";
 
+import { SETTLE_MS } from "./hooks";
+import { PLAN_STATE_ID } from "./live-header";
 import { PlanScreenView } from "./plan-screen-view";
 
 // The view is shared with the demo, which must never reach the backend: neither API client may
@@ -172,6 +174,68 @@ describe("PlanScreenView, a question for the traveller", () => {
     render(view(55, asked + 5_000, controls({ deadlineAt: asked + 15_000, windowMs: 15_000 })));
     await screen.findByRole("region", { name: "Cosa ti va di vedere?" });
     expect(liveRegion().textContent).toBe("");
+  });
+
+  it("says the minute once: the note leaves with the live region's next words", async () => {
+    // The question open (up to 55), then alloggio finishing while it waits (59 to 65), applied to
+    // it as the stream does (a lane change is a new announcement).
+    const open = reducePlanEvents(
+      run.filter((event) => event.seq <= 55),
+      { detail: { ...snapshot, created_at: run[0]!.ts, updated_at: run[0]!.ts } },
+    );
+    const lodgingDone = planEventsReducer(open, { type: "events", events: run.filter((event) => event.seq >= 59 && event.seq <= 65) });
+    const at = (state: PlanLiveState, clock: number) => (
+      <PlanScreenView
+        state={state}
+        detail={detail}
+        clock={clock}
+        stale={false}
+        connection="open"
+        header={<div />}
+        choice={controls()}
+      />
+    );
+    const { rerender } = render(at(open, DEADLINE - 70_000));
+    await screen.findByRole("region", { name: "Cosa ti va di vedere?" });
+    // The live baseline settles: from here on lane changes are spoken.
+    await act(async () => {
+      await new Promise((done) => setTimeout(done, SETTLE_MS + 50));
+    });
+    rerender(at(open, DEADLINE - 60_000));
+    expect(liveRegion().textContent).toBe(MINUTE);
+    // The region is atomic: a note that stayed would be read again with "Alloggio: finito".
+    rerender(at(lodgingDone, DEADLINE - 50_000));
+    expect(liveRegion().textContent).toContain("Alloggio");
+    expect(liveRegion().textContent).not.toContain(MINUTE);
+  });
+
+  it("hands the focus to the plan's state when the question leaves with it", async () => {
+    const { rerender } = render(view(55, DEADLINE - 200_000));
+    await screen.findByRole("region", { name: "Cosa ti va di vedere?" });
+    expect(document.activeElement?.id).toBe("scelta-domanda");
+    // The deadline answers (the answered event lands): the heading goes, the focus does not fall to
+    // the page.
+    rerender(view(60, DEADLINE + 1_000));
+    expect(screen.queryByRole("region", { name: "Cosa ti va di vedere?" })).toBeNull();
+    expect(document.activeElement?.id).toBe(PLAN_STATE_ID);
+    cleanup();
+
+    // A focus the traveller moved elsewhere stays there.
+    const elsewhere = render(
+      <>
+        <button type="button">Altrove</button>
+        {view(55, DEADLINE - 200_000)}
+      </>,
+    );
+    await screen.findByRole("region", { name: "Cosa ti va di vedere?" });
+    screen.getByRole("button", { name: "Altrove" }).focus();
+    elsewhere.rerender(
+      <>
+        <button type="button">Altrove</button>
+        {view(60, DEADLINE + 1_000)}
+      </>,
+    );
+    expect(document.activeElement?.textContent).toBe("Altrove");
   });
 
   it("holds the demo's camera while its question shows, and lets it aim again once answered", async () => {

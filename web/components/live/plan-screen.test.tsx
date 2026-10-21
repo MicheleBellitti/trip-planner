@@ -680,7 +680,9 @@ describe("PlanScreen, the traveller's choice", () => {
       for (const event of between(56, 58)) source.send(event);
     });
     await flush(100);
-    expect(within(coordinator()).getByText("Hai scelto: Oceanário de Lisboa, Palácio da Pena a Sintra")).toBeTruthy();
+    // The station on the coordinator's line, and its line under the name (its receipt while the
+    // card is closed on the phone).
+    expect(within(coordinator()).getAllByText("Hai scelto: Oceanário de Lisboa, Palácio da Pena a Sintra")).toHaveLength(2);
     expect(panel()).toBeNull();
   });
 
