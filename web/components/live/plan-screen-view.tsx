@@ -14,7 +14,7 @@
  * While it shows, the demo's camera holds still (AgentLanes `cameraHeld`).
  */
 
-import { lazy, Suspense, useMemo, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import type { ChoiceControls } from "@/components/choice/choice-panel";
 import type { CoverLoader } from "@/components/plan/cover/cover-store";
@@ -30,7 +30,7 @@ import type { PlanDetail } from "@/lib/schemas/api";
 
 import { AgentLanes, type LaneFollow } from "./agent-lanes";
 import { useLaneLayout, useLiveBaseline } from "./hooks";
-import { LiveHeader } from "./live-header";
+import { LiveHeader, PLAN_STATE_ID } from "./live-header";
 import { requestSummary } from "./request-summary";
 import { RunSection } from "./run-section";
 import { buildLaneViews, findBlocker } from "./stations";
@@ -196,13 +196,29 @@ export function PlanScreenView({
   const blocker = status === "blocked" ? findBlocker(state) : null;
   const stationCount = AGENTS.reduce((sum, agent) => sum + views[agent].stations.length, 0);
 
-  // The traveller's choice, and the one time the page says a minute is left (its id).
+  // The traveller's choice, and the one time the page says a minute is left: the question's id,
+  // and what the live region said before it, so the note goes with the region's next words (it is
+  // atomic: a note that stayed would be read again with every lane change).
   const layout = useLaneLayout();
   const asked = choice ? shownChoice(state, closedChoices, interrupting) : null;
-  const [minuteSaid, setMinuteSaid] = useState<string | null>(null);
-  if (asked && choice && clock !== null && minuteSaid !== asked.choice.id && inLastMinute(asked.choice, choice, clock)) {
-    setMinuteSaid(asked.choice.id);
+  const askedId = asked?.choice.id ?? null;
+  const spokenNow = `${announcement?.id ?? ""}|${planNote?.id ?? ""}`;
+  const [minuteSaid, setMinuteSaid] = useState<{ choiceId: string; spoken: string } | null>(null);
+  if (asked && choice && clock !== null && minuteSaid?.choiceId !== asked.choice.id && inLastMinute(asked.choice, choice, clock)) {
+    setMinuteSaid({ choiceId: asked.choice.id, spoken: spokenNow });
   }
+  const minuteNote = asked !== null && minuteSaid?.choiceId === asked.choice.id && minuteSaid.spoken === spokenNow;
+
+  // A question that leaves with the focus (its deadline, the demo's recording answering) hands it
+  // to the plan's state, as the traveller's own answer does; a focus anywhere else stays put.
+  const previousAsked = useRef<string | null>(null);
+  useEffect(() => {
+    const left = previousAsked.current !== null && askedId === null;
+    previousAsked.current = askedId;
+    if (left && (document.activeElement === null || document.activeElement === document.body)) {
+      document.getElementById(PLAN_STATE_ID)?.focus({ preventScroll: true });
+    }
+  }, [askedId]);
   const place = detail?.request.destination;
   const choicePanel =
     asked && choice ? (
@@ -304,9 +320,7 @@ export function PlanScreenView({
       <div aria-live="polite" aria-atomic="true" className="sr-only">
         {announcement ? <span key={announcement.id}>{announcement.text}</span> : null}
         {planNote ? <span key={`plan-${planNote.id}`}>{planNote.text}</span> : null}
-        {asked && minuteSaid === asked.choice.id ? (
-          <span key={`minute-${asked.choice.id}`}>Manca un minuto per scegliere.</span>
-        ) : null}
+        {asked && minuteNote ? <span key={`minute-${asked.choice.id}`}>Manca un minuto per scegliere.</span> : null}
       </div>
     </div>
   );

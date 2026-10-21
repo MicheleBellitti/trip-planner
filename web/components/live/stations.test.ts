@@ -501,6 +501,19 @@ describe("buildLaneViews, the traveller's choices", () => {
     expect(titles(views.coordinator.stations)).not.toContain("Esito inviato all'agente");
   });
 
+  it("right after the answer the coordinator's line says it, until the coordinator moves on", () => {
+    // Its card is closed on the phone: the line is the receipt.
+    const answered = buildLaneViews(reducePlanEvents(upTo(58)));
+    expect(answered.coordinator.state).toBe("working");
+    expect(answered.coordinator.summary).toBe("Hai scelto: Oceanário de Lisboa, Palácio da Pena a Sintra");
+    // Alloggio delivers: the coordinator's newest station is its hand-off, and its line says what is
+    // true again.
+    const movedOn = buildLaneViews(reducePlanEvents(upTo(64)));
+    expect(movedOn.coordinator.summary).not.toMatch(/^Hai scelto/);
+    // Only the coordinator's line: a subagent's is its own.
+    expect(answered.lodging.summary).not.toMatch(/^Hai scelto/);
+  });
+
   it("draws no 'In attesa di una risposta' station for a pause on the traveller", () => {
     expect(titles(waiting.coordinator.stations)).not.toContain("In attesa di una risposta");
     const after = buildLaneViews(reducePlanEvents(upTo(58)));
