@@ -771,7 +771,7 @@ the mockup in Atlas's tokens).
 
 - **Anatomy:** a `rounded-md` `surface` card with a 1 px `rule` edge, flat. On top the photo, 4:3
   (16:10 for food), empty alt (the title names the place), lazy, from Wikimedia's thumbnails like
-  the covers (a third of the page from 1080 px, half below). When some options of a question have
+  the covers (at most a third of the panel's 64rem grid from 1080 px, half the page below). When some options of a question have
   a photo, the others show the cover tile (`notice-wash`, the title's initial in `ink-2`) at the
   same ratio, so a row stays level; when none has one, there is no photo area at all (a tile is
   not a photo). Then the title (condensed 600, title size), the reason (`small`, `ink-2`) and, at
@@ -790,18 +790,32 @@ the mockup in Atlas's tokens).
   not-allowed and the photo stops zooming. The card keeps its full opacity, so its words read
   (55 % is for buttons).
 - **The credit** is a legal requirement, reachable on every card without crowding it: a round
-  `info` button on the photo's bottom right ("Crediti della foto", `aria-expanded`, on a `surface`
-  disc, 44 px under a finger) shows a solid `surface` strip across the photo's foot with the
-  covers' wording, "Foto: Jose Manuel (CC BY 2.5), Wikimedia Commons", the license and the source
-  as new-tab links. The button and its links sit above the label, so they never pick the card. A
-  photo that does not load leaves the tile, and takes its credit with it.
+  `info` button on the photo's bottom right, named after its option ("Crediti della foto:
+  Oceanário de Lisboa", `aria-expanded`, on a `surface` disc, 44 px under a finger), shows a solid
+  `surface` strip across the photo's foot with the covers' wording, "Foto: Jose Manuel (CC BY
+  2.5), Wikimedia Commons", the license and the source as new-tab links. The button and its links
+  sit above the label, so they never pick the card. The photo follows the label in the DOM and is
+  drawn first (`order-first`, clicks pass through it to the label), so Tab reaches the card, then
+  its credit. A photo that does not load leaves the tile, and takes its credit with it.
 - **The countdown:** "4:12" with a clock glyph, beside a thin bar: an ink fill on a `rule` track,
   scaled from the left by the time left over the question's window. A second that has begun
   counts ("4:00" when the question opens, "0:01" in its last one), and the time is clamped to the
   window and to zero, so a browser clock minutes off never shows more or less. At zero: "Tempo
   scaduto: scelgo io." and an empty bar. **Never amber** (it belongs to booking deadlines) and
   never red (running out is the rule at work, not a failure). It is not a live region: the page says
-  "Manca un minuto per scegliere." once, through its own.
+  "Manca un minuto per scegliere." once, through its own, and the note leaves with the region's
+  next words (the region is atomic: a note that stayed would be read again with every lane change).
+- **The panel** (`components/choice/choice-panel.tsx`): the eyebrow with the asking line's roundel,
+  the question (`h2`), the intro that states the rule once, the cards (two across on the phone;
+  three from 1080 px, four for food, in a grid of at most 64rem, the plans list's measure, so the
+  photos never fill a laptop's window), the countdown, the action row. The count is as wide as
+  "Nessuna scelta", so the buttons never move as it counts. When a question arrives its heading
+  takes the focus without scrolling and the panel's top goes under the sticky bars
+  (`scroll-padding-top`): the whole question is in view, not its heading centred with the clock
+  and the buttons under the fold. When it leaves by itself (the deadline, the demo's recording)
+  with the focus in it, the focus goes to the plan's state, as after the traveller's own answer.
+  Answered, the coordinator's line under its name says the answer ("Hai scelto: …") until the
+  coordinator moves on: on the phone its card is closed, and that line is the receipt.
 - **Motion:** the photo's slow zoom on hover (Motion), and nothing else. Cards do not animate in
   or when picked, and the countdown's bar does not ease: it reports the time.
 
