@@ -800,8 +800,11 @@ the mockup in Atlas's tokens).
 - **The countdown:** "4:12" with a clock glyph, beside a thin bar: an ink fill on a `rule` track,
   scaled from the left by the time left over the question's window. A second that has begun
   counts ("4:00" when the question opens, "0:01" in its last one), and the time is clamped to the
-  window and to zero, so a browser clock minutes off never shows more or less. At zero: "Tempo
-  scaduto: scelgo io." and an empty bar. **Never amber** (it belongs to booking deadlines) and
+  window and to zero, so a browser clock minutes off never shows more or less. On the live screen
+  a question that arrives while the page watches counts its window from when the page first shows
+  it, on the browser's clock, so a clock minutes fast never opens it at zero; one first seen in
+  the plan's snapshot or the replayed history counts to the backend's `deadline_at`. At zero:
+  "Tempo scaduto: scelgo io." and an empty bar. **Never amber** (it belongs to booking deadlines) and
   never red (running out is the rule at work, not a failure). It is not a live region: the page says
   "Manca un minuto per scegliere." once, through its own, and the note leaves with the region's
   next words (the region is atomic: a note that stayed would be read again with every lane change).
@@ -813,7 +816,10 @@ the mockup in Atlas's tokens).
   takes the focus without scrolling and the panel's top goes under the sticky bars
   (`scroll-padding-top`): the whole question is in view, not its heading centred with the clock
   and the buttons under the fold. When it leaves by itself (the deadline, the demo's recording)
-  with the focus in it, the focus goes to the plan's state, as after the traveller's own answer.
+  with the focus in it or on the page's body, the focus goes to the plan's state, as after the
+  traveller's own answer; a focus anywhere else stays where it is. The page's live region then
+  says once how it closed, by the answered station's title ("Tempo scaduto: sceglie Atlas", "Hai
+  scelto: …"), never for the replayed history.
   Answered, the coordinator's line under its name says the answer ("Hai scelto: …") until the
   coordinator moves on: on the phone its card is closed, and that line is the receipt.
 - **Motion:** the photo's slow zoom on hover (Motion), and nothing else. Cards do not animate in

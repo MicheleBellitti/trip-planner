@@ -538,10 +538,40 @@ describe("buildLaneViews, the traveller's choices", () => {
   });
 
   it("a question left open on a stopped plan reads 'Senza risposta'", () => {
-    const views = buildLaneViews(reducePlanEvents(upTo(55), { end: "interrupted" }));
-    const left = views.coordinator.stations.find((station) => station.seq === 53);
-    expect(left).toMatchObject({ kind: "status", title: "Tocca a te: scegli cosa vedere", meta: "Senza risposta" });
+    for (const end of ["interrupted", "failed", "blocked", "ready"] as const) {
+      const views = buildLaneViews(reducePlanEvents(upTo(55), { end }));
+      const left = views.coordinator.stations.find((station) => station.seq === 53);
+      expect(left, end).toMatchObject({ kind: "status", title: "Tocca a te: scegli cosa vedere", meta: "Senza risposta" });
+      expect(views.coordinator.asking).toBeNull();
+    }
+  });
+
+  it("a question still pending on a plan paused at its cost cap is not 'Senza risposta': it comes back after 'Continua'", () => {
+    const run = upTo(55);
+    const views = buildLaneViews(reducePlanEvents(run, { detail: detail("budget_paused", run) }));
+    const pending = views.coordinator.stations.find((station) => station.seq === 53);
+    expect(pending).toMatchObject({ kind: "status", title: "Tocca a te: scegli cosa vedere", meta: null });
     expect(views.coordinator.asking).toBeNull();
+  });
+
+  it("draws the plate only for the question the panel shows: none while it is hidden, as before without the option", () => {
+    const state = reducePlanEvents(upTo(55));
+    const id = state.openChoice?.choice.id ?? "";
+    // The panel shows it: the plate and the summary say it.
+    const shown = buildLaneViews(state, { askingChoiceId: id });
+    expect(shown.coordinator.asking).toMatchObject({ title: "Tocca a te: scegli cosa vedere", seq: 53 });
+    expect(shown.coordinator.summary).toBe("Tocca a te: scegli cosa vedere");
+    // Hidden (the viewer is interrupting, or already answered it from the page): no plate linking to
+    // a panel that is gone, and the line under the name says something else.
+    const hidden = buildLaneViews(state, { askingChoiceId: null });
+    expect(hidden.coordinator.asking).toBeNull();
+    expect(hidden.coordinator.summary).not.toMatch(/^Tocca a te/);
+    expect(titles(hidden.coordinator.stations)).not.toContain("Tocca a te: scegli cosa vedere");
+    // Another question's id is not this one.
+    expect(buildLaneViews(state, { askingChoiceId: "another" }).coordinator.asking).toBeNull();
+    // Without the option, the open question is the plate.
+    expect(buildLaneViews(state).coordinator.asking).toMatchObject({ seq: 53 });
+    expect(buildLaneViews(state, {}).coordinator.asking).toMatchObject({ seq: 53 });
   });
 
   it("the whole recording ends with both answers and no leftover question", () => {

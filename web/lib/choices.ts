@@ -258,12 +258,12 @@ export function choiceIntro(choice: ChoiceView): string {
   return choice.multiple ? "Scegli quelle che ti piacciono, anche più di una." : "Scegline una.";
 }
 
-/** The second sentence, while the window runs: whole minutes from 60 s up (rounded), seconds under. */
+/** The second sentence, while the window runs: seconds under 120 s ("90 secondi"), else whole
+ * minutes rounded down, so the rule never promises more time than there is ("4 minuti"). */
 export function choiceRule(windowMs: number): string {
   const seconds = Math.max(0, Math.round(windowMs / 1000));
-  if (seconds < 60) return `Se non scegli entro ${seconds} ${seconds === 1 ? "secondo" : "secondi"}, scelgo io.`;
-  const minutes = Math.round(seconds / 60);
-  return `Se non scegli entro ${minutes} ${minutes === 1 ? "minuto" : "minuti"}, scelgo io.`;
+  if (seconds < 120) return `Se non scegli entro ${seconds} ${seconds === 1 ? "secondo" : "secondi"}, scelgo io.`;
+  return `Se non scegli entro ${Math.floor(seconds / 60)} minuti, scelgo io.`;
 }
 
 /** How long the traveller has: `deadlineAt - askedAt`, never negative. */

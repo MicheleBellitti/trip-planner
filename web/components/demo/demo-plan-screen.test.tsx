@@ -159,6 +159,17 @@ describe("DemoPlanScreen", () => {
     expect(document.title).toBe(PAGE_TITLE);
   });
 
+  it("leaves alone a tab title the next page set while a question waited", async () => {
+    document.title = PAGE_TITLE;
+    const { unmount } = render(<DemoPlanScreen />);
+    await advance(REPLAY_SETTLE_MS + at(53) + 100);
+    expect(document.title).toBe(`Tocca a te · ${PAGE_TITLE}`);
+    // A client-side navigation: the next page names the tab before the demo lets go of it.
+    document.title = `Nuovo piano · ${BRAND_NAME}`;
+    unmount();
+    expect(document.title).toBe(`Nuovo piano · ${BRAND_NAME}`);
+  });
+
   it("draws in the very first replayed station: it lands after the live baseline settles", async () => {
     render(<DemoPlanScreen />);
     // The baseline's moment, then the replay's first tick, each in its own step (React renders
