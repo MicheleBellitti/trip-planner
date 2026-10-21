@@ -116,6 +116,7 @@ function ruleOf(controls: ChoiceControls, windowMs: number, deadlineAt: number |
 export function ChoicePanel({ choice, controls, now, destination }: ChoicePanelProps) {
   const name = useId();
   const headingId = `${CHOICE_PANEL_ID}-domanda`;
+  const sectionRef = useRef<HTMLElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const closedRef = useRef<HTMLDivElement>(null);
   // The question whose first pick was already reported to `onTouch`.
@@ -134,9 +135,12 @@ export function ChoicePanel({ choice, controls, now, destination }: ChoicePanelP
   const media = mediaOf(choice);
 
   // Keyed on the id, never the object: a new object for the same question must not take the focus
-  // back from wherever the traveller moved it.
+  // back from wherever the traveller moved it. The focus alone would centre the heading, leaving
+  // the countdown and the buttons under the fold: the panel's top goes under the sticky bars
+  // instead (`scroll-padding-top`), so the whole question is in view.
   useEffect(() => {
-    headingRef.current?.focus();
+    headingRef.current?.focus({ preventScroll: true });
+    sectionRef.current?.scrollIntoView?.({ block: "start" });
   }, [choice.id]);
 
   // The buttons the traveller pressed are gone: the backend's sentence takes the focus, and says it.
@@ -180,7 +184,7 @@ export function ChoicePanel({ choice, controls, now, destination }: ChoicePanelP
   const sendingVia = phase.kind === "sending" ? phase.via : null;
 
   return (
-    <section id={CHOICE_PANEL_ID} aria-labelledby={headingId} className="min-w-0">
+    <section ref={sectionRef} id={CHOICE_PANEL_ID} aria-labelledby={headingId} className="min-w-0">
       <div className="grid max-w-prose gap-1">
         <p className="flex items-center gap-2 text-meta font-medium text-ink-2">
           <AgentRoundel agent={choice.kind === "activities" ? "activities" : "coordinator"} size="sm" />
@@ -201,7 +205,9 @@ export function ChoicePanel({ choice, controls, now, destination }: ChoicePanelP
         role={choice.multiple ? "group" : "radiogroup"}
         aria-labelledby={headingId}
         className={cx(
-          "mt-4 grid grid-cols-2 gap-2.5 lg:gap-3.5",
+          // At most the plans list's measure: wider, the 4:3 photos alone would fill a laptop's
+          // window and push the countdown and the buttons out of it.
+          "mt-4 grid max-w-[64rem] grid-cols-2 gap-2.5 lg:gap-3.5",
           choice.kind === "food" ? "lg:grid-cols-4" : "lg:grid-cols-3",
         )}
       >
@@ -235,7 +241,8 @@ export function ChoicePanel({ choice, controls, now, destination }: ChoicePanelP
           ) : null}
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
             {choice.multiple ? (
-              <p className="text-meta font-medium text-ink-2 max-sm:w-full">{countLabel(shown.length)}</p>
+              // As wide as its longest wording ("Nessuna scelta"), so the buttons never move as it counts.
+              <p className="text-meta font-medium text-ink-2 max-sm:w-full sm:min-w-[14ch]">{countLabel(shown.length)}</p>
             ) : null}
             <div className="flex gap-2 max-sm:w-full">
               <Button

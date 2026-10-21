@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { CHOICE_PANEL_ID, readAskedChoice, type ChoiceView } from "@/lib/choices";
 import choicesFixture from "@/lib/plan-events/__fixtures__/backend/choices.json";
@@ -173,7 +173,17 @@ describe("ChoicePanel", () => {
     });
   });
 
-  it("focuses its heading when it appears", () => {
+  it("focuses its heading when it appears, and brings its top into view", () => {
+    // jsdom has no scrollIntoView: record who is brought into view, and how.
+    const scrolled: { id: string; options: unknown }[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (this: Element, options?: boolean | ScrollIntoViewOptions) {
+      scrolled.push({ id: this.id, options });
+    };
+    onTestFinished(() => {
+      Element.prototype.scrollIntoView = original;
+    });
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
     const panel = controls();
     const { rerender } = render(
       <>
@@ -182,6 +192,10 @@ describe("ChoicePanel", () => {
       </>,
     );
     expect(document.activeElement?.id).toBe(`${CHOICE_PANEL_ID}-domanda`);
+    // The focus alone would centre the heading: it does not scroll, the section's top goes under
+    // the sticky bars instead.
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+    expect(scrolled).toEqual([{ id: CHOICE_PANEL_ID, options: { block: "start" } }]);
     fireEvent.click(box("Oceanário de Lisboa"));
 
     // The same question as a new object (the reducer derives it again): the focus stays where it
@@ -195,6 +209,7 @@ describe("ChoicePanel", () => {
     );
     expect(document.activeElement?.textContent).toBe("Altrove");
     expect(box("Oceanário de Lisboa").checked).toBe(true);
+    expect(scrolled).toHaveLength(1);
 
     // The next question takes the focus again, and starts with no pick.
     rerender(
@@ -204,6 +219,7 @@ describe("ChoicePanel", () => {
       </>,
     );
     expect(document.activeElement?.textContent).toBe("Che cucina cerchi?");
+    expect(scrolled).toHaveLength(2);
     expect(screen.getAllByRole("checkbox").some((input) => (input as HTMLInputElement).checked)).toBe(false);
     expect(screen.getByText("Nessuna scelta")).toBeTruthy();
   });

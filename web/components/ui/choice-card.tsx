@@ -10,9 +10,12 @@
  *   while the input has keyboard focus.
  * - Picked, the card gets a 2 px ink inset ring and its tick roundel fills: an overlay ring, so
  *   nothing moves. Nothing animates but the photo's slow zoom on hover (motion-safe only).
- * - The photo's credit sits behind its own button on the photo (decision 1 of the plan): the
- *   button and the credit's links sit above the label's overlay and outside the label, so they
- *   never pick the card. A photo that does not load leaves the tile, and its credit goes with it.
+ * - The photo's credit sits behind its own button on the photo (decision 1 of the plan), named
+ *   after the option ("Crediti della foto: Oceanário de Lisboa"): the button and the credit's
+ *   links sit above the label's overlay and outside the label, so they never pick the card. The
+ *   photo follows the label in the DOM and is drawn first (`order-first`), so Tab reaches the card,
+ *   then its credit; the photo lets clicks through to the label, but for its credit. A photo that
+ *   does not load leaves the tile, and its credit goes with it.
  * - Local state only for the credit and a broken photo: the selection is the caller's.
  */
 
@@ -29,8 +32,9 @@ import { Icon, type IconName } from "./icon";
 import { IconButton } from "./icon-button";
 import { VisuallyHidden } from "./visually-hidden";
 
-/** What the photo is drawn at: a third of the page from 1080 px (three columns), half below (two). */
-const PHOTO_SIZES = "(min-width: 67.5rem) 33vw, 50vw";
+/** What the photo is drawn at: at most a third of the panel's 64rem grid from 1080 px (three
+ * columns), half the page below (two). */
+const PHOTO_SIZES = "(min-width: 67.5rem) 21rem, 50vw";
 
 const RATIOS = { "4/3": "aspect-[4/3]", "16/10": "aspect-[16/10]" } as const;
 
@@ -109,64 +113,6 @@ export function ChoiceCard({
         className,
       )}
     >
-      {media !== "none" ? (
-        <div className={cx("relative shrink-0 overflow-hidden bg-notice-wash", RATIOS[media])}>
-          {/* The tile: under the photo while it loads, alone when the option has none. */}
-          <span data-tile="" aria-hidden="true" className="absolute inset-0 grid place-items-center text-ink-2">
-            {initial ? (
-              <span className="font-cond text-display font-semibold">{initial}</span>
-            ) : (
-              <Icon name="map-pin" size={20} />
-            )}
-          </span>
-          {photo && sources ? (
-            <>
-              {/* A plain <img>, as the covers: Wikimedia serves sized thumbnails from its own cache.
-                  Decorative: the title names the place. No referrer: the page's address holds a
-                  plan id. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={sources.src}
-                srcSet={sources.srcSet}
-                sizes={PHOTO_SIZES}
-                width={photo.width}
-                height={photo.height}
-                alt=""
-                loading="lazy"
-                decoding="async"
-                referrerPolicy="no-referrer"
-                onError={() => setBroken(true)}
-                className={cx(
-                  "absolute inset-0 size-full object-cover",
-                  !disabled &&
-                    "motion-safe:transition-[scale] motion-safe:duration-(--duration-zoom) motion-safe:ease-out motion-safe:group-hover:scale-[1.04]",
-                )}
-              />
-              {/* The credit, on demand: a solid strip across the photo's foot. Above the label's
-                  overlay, so its links never pick the card. */}
-              <div
-                id={creditId}
-                hidden={!creditOpen}
-                className="absolute inset-x-0 bottom-0 z-10 max-h-full overflow-y-auto bg-surface py-2 pr-12 pl-3 pointer-coarse:pr-15"
-              >
-                <CoverCredit cover={photo} />
-              </div>
-              <span className="absolute right-2 bottom-2 z-10 grid rounded-full bg-surface">
-                <IconButton
-                  icon="info"
-                  label="Crediti della foto"
-                  size="sm"
-                  aria-expanded={creditOpen}
-                  aria-controls={creditId}
-                  onClick={() => setCreditOpen((open) => !open)}
-                  className="pointer-coarse:size-11"
-                />
-              </span>
-            </>
-          ) : null}
-        </div>
-      ) : null}
-
       <div className="flex flex-1 flex-col gap-1 px-3.5 pt-3 pb-3.5">
         <label
           className={cx(
@@ -207,6 +153,66 @@ export function ChoiceCard({
           ) : null}
         </div>
       </div>
+
+      {/* The photo: drawn first (`order-first`) but after the label in the DOM, so Tab reaches the
+          card, then its credit. Clicks go through to the label's overlay, but for the credit. */}
+      {media !== "none" ? (
+        <div className={cx("pointer-events-none relative order-first shrink-0 overflow-hidden bg-notice-wash", RATIOS[media])}>
+          {/* The tile: under the photo while it loads, alone when the option has none. */}
+          <span data-tile="" aria-hidden="true" className="absolute inset-0 grid place-items-center text-ink-2">
+            {initial ? (
+              <span className="font-cond text-display font-semibold">{initial}</span>
+            ) : (
+              <Icon name="map-pin" size={20} />
+            )}
+          </span>
+          {photo && sources ? (
+            <>
+              {/* A plain <img>, as the covers: Wikimedia serves sized thumbnails from its own cache.
+                  Decorative: the title names the place. No referrer: the page's address holds a
+                  plan id. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={sources.src}
+                srcSet={sources.srcSet}
+                sizes={PHOTO_SIZES}
+                width={photo.width}
+                height={photo.height}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                referrerPolicy="no-referrer"
+                onError={() => setBroken(true)}
+                className={cx(
+                  "absolute inset-0 size-full object-cover",
+                  !disabled &&
+                    "motion-safe:transition-[scale] motion-safe:duration-(--duration-zoom) motion-safe:ease-out motion-safe:group-hover:scale-[1.04]",
+                )}
+              />
+              {/* The credit, on demand: a solid strip across the photo's foot. Above the label's
+                  overlay, so its links never pick the card. */}
+              <div
+                id={creditId}
+                hidden={!creditOpen}
+                className="pointer-events-auto absolute inset-x-0 bottom-0 z-10 max-h-full overflow-y-auto bg-surface py-2 pr-12 pl-3 pointer-coarse:pr-15"
+              >
+                <CoverCredit cover={photo} />
+              </div>
+              <span className="pointer-events-auto absolute right-2 bottom-2 z-10 grid rounded-full bg-surface">
+                <IconButton
+                  icon="info"
+                  label={`Crediti della foto: ${option.title}`}
+                  size="sm"
+                  aria-expanded={creditOpen}
+                  aria-controls={creditId}
+                  onClick={() => setCreditOpen((open) => !open)}
+                  className="pointer-coarse:size-11"
+                />
+              </span>
+            </>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* The tick: hollow, or filled ink with a check when picked; on a surface disc, so it reads on
           any photo. The input carries the state for assistive tech. */}

@@ -123,8 +123,15 @@ describe("ChoiceCard", () => {
     render(<ChoiceCard option={oceanario} control="checkbox" name="q" checked={false} onChange={onChange} media="4/3" />);
     expect(screen.queryByRole("link")).toBeNull();
 
-    const credit = screen.getByRole("button", { name: "Crediti della foto" });
+    const credit = screen.getByRole("button", { name: "Crediti della foto: Oceanário de Lisboa" });
     expect(credit.getAttribute("aria-expanded")).toBe("false");
+    // Tab reaches the card first, then its credit: the photo follows the label in the DOM (drawn
+    // first by `order-first`) and lets clicks through to it, but for the credit.
+    const box = screen.getByRole("checkbox");
+    expect(box.compareDocumentPosition(credit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const frame = credit.closest(".order-first");
+    expect(frame?.className).toContain("pointer-events-none");
+    expect(credit.parentElement?.className).toContain("pointer-events-auto");
     fireEvent.click(credit);
     expect(credit.getAttribute("aria-expanded")).toBe("true");
     const strip = document.getElementById(credit.getAttribute("aria-controls") ?? "");
@@ -161,12 +168,12 @@ describe("ChoiceCard", () => {
     expect(photo?.getAttribute("alt")).toBe("");
     expect(photo?.getAttribute("loading")).toBe("lazy");
     expect(photo?.getAttribute("srcset")).toContain("/500px-Lisboa-Oceanario.jpg 500w");
-    expect(photo?.getAttribute("sizes")).toBe("(min-width: 67.5rem) 33vw, 50vw");
+    expect(photo?.getAttribute("sizes")).toBe("(min-width: 67.5rem) 21rem, 50vw");
     // A photo that does not load leaves the tile, and its credit goes with it.
     fireEvent.error(photo!);
     expect(card(container).getAttribute("data-media")).toBe("tile");
     expect(container.querySelector("img")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Crediti della foto" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Crediti della foto/ })).toBeNull();
     cleanup();
 
     // Some options of the question have a photo: the others keep the frame, with their initial.
@@ -176,7 +183,7 @@ describe("ChoiceCard", () => {
     expect(card(tile).getAttribute("data-media")).toBe("tile");
     expect(tile.querySelector("img")).toBeNull();
     expect(tile.querySelector("[data-tile]")?.textContent).toBe("T");
-    expect(screen.queryByRole("button", { name: "Crediti della foto" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Crediti della foto/ })).toBeNull();
     cleanup();
 
     // None has one: no photo area at all (a tile is not a photo).
@@ -185,7 +192,7 @@ describe("ChoiceCard", () => {
     ).container;
     expect(card(none).getAttribute("data-media")).toBe("none");
     expect(none.querySelector("img, [data-tile]")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Crediti della foto" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Crediti della foto/ })).toBeNull();
   });
 });
 
