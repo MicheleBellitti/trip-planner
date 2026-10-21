@@ -27,9 +27,10 @@
  * - The coordinator's questions to the traveller (`ask_traveller`, lib/choices.ts): the raw tool
  *   call, its result (even an error one: on an interrupt the answered "closed" event tells it) and
  *   the `requires_action` idle that waits on it are no stations. The open question is
- *   `LaneView.asking`, drawn as a plate at the end of the coordinator's line; its answer is a
- *   lozenge (`message`) with the question underneath; a question a stopped plan never got
- *   answered stays as a status station, "Senza risposta".
+ *   `LaneView.asking`, drawn as a plate at the end of the coordinator's line while the page's panel
+ *   shows it (`askingChoiceId`); its answer is a lozenge (`message`) with the question underneath;
+ *   a question a plan that is over never got answered stays as a status station, "Senza risposta"
+ *   (paused at its cost cap, the station has no second line: the question still waits).
  * - A source that did not answer (an MCP server) is a notice on the lane whose tool used it, not
  *   a station and not a plan error; a retried error the plan survives is a red-ring station.
  */
@@ -100,7 +101,7 @@ export interface LaneView {
   /** The tool running now: the live plate. Null unless the lane works on a running plan. */
   live: CurrentTool | null;
   /** The traveller's open question, the coordinator's only: the plate that waits at the end of
-   * its line. `seq` is null when the question comes from the snapshot. */
+   * its line, while the panel shows it. `seq` is null when the question comes from the snapshot. */
   asking: { title: string; seq: number | null; ts: string } | null;
   /** Sources that did not answer, one per source, newest wording. */
   notices: LaneNotice[];
@@ -110,7 +111,8 @@ export interface LaneView {
   errorTitle: string | null;
 }
 
-/** Shown under a question the plan stopped on without an answer. */
+/** Shown under a question a plan that is over (ready, failed, blocked, interrupted) left without
+ * an answer. */
 export const UNANSWERED_META = "Senza risposta";
 
 export const WAVE_NAMES = { first: "Ondata 1", choice: "Scelta", second: "Ondata 2" } as const;
@@ -526,8 +528,14 @@ function sourceLane(calls: readonly { seq: number; server: string; lane: AgentNa
   return before ?? after;
 }
 
+export interface LaneViewOptions {
+  /** The question the page's panel shows: the coordinator's plate and its summary stand for it.
+   * Null: no panel, so no plate. Undefined (the default): the state's open question. */
+  askingChoiceId?: string | null;
+}
+
 /** Every lane's stations, live tool, notices and one-line summary. */
-export function buildLaneViews(state: PlanLiveState): Record<AgentName, LaneView> {
+export function buildLaneViews(state: PlanLiveState, options: LaneViewOptions = {}): Record<AgentName, LaneView> {
   const emptyBuild = (): LaneBuild => ({
     stations: [],
     shown: null,
@@ -718,7 +726,7 @@ export function buildLaneViews(state: PlanLiveState): Record<AgentName, LaneView
             kind: "status",
             ts: event.ts,
             title: event.title,
-            meta: UNANSWERED_META,
+            meta: null,
             metaTone: "default",
             message: null,
           };
@@ -775,19 +783,28 @@ export function buildLaneViews(state: PlanLiveState): Record<AgentName, LaneView
   }
 
   const running = state.status === null || state.status === "running";
-  // On a plan still going the unanswered question is the open one (the plate), not a station.
-  if (running) {
-    for (const { station } of asked.values()) {
+  const planOver = state.status !== null && state.status !== "running" && state.status !== "budget_paused";
+  for (const { station } of asked.values()) {
+    if (running) {
+      // On a plan still going the unanswered question is the open one (the plate), not a station.
       const at = builds.coordinator.stations.indexOf(station);
       if (at >= 0) builds.coordinator.stations.splice(at, 1);
+    } else if (planOver) {
+      station.meta = UNANSWERED_META;
     }
+    // Paused at its cost cap, the question still waits: it comes back as the plate after "Continua".
   }
   const blocker = state.status === "blocked" ? findBlocker(state) : null;
+  // The plate stands for the panel: without it (hidden while the viewer interrupts, or answered
+  // from the page and waiting for its answered event) the plate would link to an anchor that is gone.
+  const open =
+    state.openChoice && (options.askingChoiceId === undefined || options.askingChoiceId === state.openChoice.choice.id)
+      ? state.openChoice
+      : null;
   const views = {} as Record<AgentName, LaneView>;
   for (const agent of AGENTS) {
     const lane = state.lanes[agent];
     const build = builds[agent];
-    const open = state.openChoice;
     const asking = agent === "coordinator" && open ? { title: open.title, seq: open.seq, ts: open.ts } : null;
     let live = running && lane.state === "working" && lane.currentTool ? lane.currentTool : null;
     // The question is not a tool running: its plate is `asking`.
@@ -806,7 +823,6 @@ export function buildLaneViews(state: PlanLiveState): Record<AgentName, LaneView
       }
     }
     const hasWork = lane.events.some((event) => event.kind !== "status" || !isEmptyDetail(event.detail));
-    const planOver = state.status !== null && state.status !== "running" && state.status !== "budget_paused";
     const last = stations.findLast((station) => station.kind !== "wave") ?? null;
     views[agent] = {
       agent,

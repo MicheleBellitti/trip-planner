@@ -73,6 +73,9 @@ const NOTICE = (
   </Notice>
 );
 
+/** What the tab title starts with while a question waits. */
+const TURN_PREFIX = "Tocca a te · ";
+
 /** The intro's second sentence while a question's window runs, in place of the live "scelgo io". */
 const DEMO_RULE = `Se non scegli entro ${DEMO_CHOICE_WINDOW_MS / 1000} secondi, la corsa prosegue con le scelte registrate.`;
 
@@ -131,14 +134,15 @@ function DemoRun({
     [hold, answer, touch],
   );
 
-  // While a question waits, the tab says whose turn it is; its own title comes back after.
+  // While a question waits, the tab says whose turn it is; its own title comes back after, unless
+  // the next page already named the tab (a client-side navigation away during the question).
   const holding = hold !== null;
   useEffect(() => {
     if (!holding) return;
     const previous = document.title;
-    document.title = `Tocca a te · ${previous}`;
+    document.title = `${TURN_PREFIX}${previous}`;
     return () => {
-      document.title = previous;
+      if (document.title.startsWith(TURN_PREFIX)) document.title = previous;
     };
   }, [holding]);
 

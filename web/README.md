@@ -231,8 +231,11 @@ dark (the last pass is in `.impeccable/critique/audit-finish.md`).
   radio inputs of the segmented fields are covered by their 40 px labels.
 - **Live region**: the plan page has one polite region. It speaks lane state changes ("Voli: finito") and the
   plan's own new state ("Piano: budget raggiunto"), never tool calls and never the replayed history. While
-  the traveller has a question it says once that a minute is left ("Manca un minuto per scegliere."); the
-  question's heading takes the focus when it arrives, and the plan's state when it leaves.
+  the traveller has a question it says once that a minute is left ("Manca un minuto per scegliere."), and
+  once how a question it showed closed, by its answered station's title ("Tempo scaduto: sceglie Atlas",
+  "Hai scelto: …"). The question's heading takes the focus when it arrives. When the question leaves with
+  the focus in it or on the page's body, the focus goes to the plan's state, as after the traveller's own
+  answer; a focus anywhere else stays where it is.
 - **Names and structure**: one `h1`, `h2` per section, `h3` per lane, `role="meter"` with words for the cost,
   `lang="en"` on the agents' English text, links that open a new tab say so for screen readers.
 - **Motion**: every animation has a `motion-reduce` alternative that keeps the state change (a fade

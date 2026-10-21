@@ -209,6 +209,59 @@ describe("PlanScreenView, a question for the traveller", () => {
     expect(liveRegion().textContent).not.toContain(MINUTE);
   });
 
+  it("says once, in the one live region, how a question it showed closed", async () => {
+    const open = stateAt(55);
+    // The deadline answers the first question (the recording's answer at seq 56, turned into a timeout).
+    const recorded = run.find((event) => event.seq === 56)!;
+    const timeout: UIEvent = {
+      ...recorded,
+      title: "Tempo scaduto: sceglie Atlas",
+      detail: { ...recorded.detail, answered_by: "timeout", selected: [] },
+    };
+    const closed = planEventsReducer(open, { type: "events", events: [timeout] });
+    const later = planEventsReducer(closed, { type: "events", events: run.filter((event) => event.seq >= 59 && event.seq <= 65) });
+    const at = (state: PlanLiveState, clock: number) => (
+      <PlanScreenView
+        state={state}
+        detail={detail}
+        clock={clock}
+        stale={false}
+        connection="open"
+        header={<div />}
+        choice={controls()}
+      />
+    );
+    const SAID = "Tempo scaduto: sceglie Atlas";
+
+    // Before the live baseline settles the stream is replaying history: nothing of it is spoken.
+    const replayed = render(at(open, DEADLINE - 30_000));
+    await screen.findByRole("region", { name: "Cosa ti va di vedere?" });
+    replayed.rerender(at(closed, DEADLINE + 1_000));
+    expect(liveRegion().textContent).not.toContain(SAID);
+    cleanup();
+
+    const { rerender } = render(at(open, DEADLINE - 30_000));
+    await screen.findByRole("region", { name: "Cosa ti va di vedere?" });
+    await act(async () => {
+      await new Promise((done) => setTimeout(done, SETTLE_MS + 50));
+    });
+    expect(liveRegion().textContent).toBe(MINUTE);
+    rerender(at(closed, DEADLINE + 1_000));
+    expect(screen.queryByRole("region", { name: "Cosa ti va di vedere?" })).toBeNull();
+    // The answered station's own title, in place of the minute's note.
+    expect(liveRegion().textContent).toContain(SAID);
+    expect(liveRegion().textContent).not.toContain(MINUTE);
+    const said = [...liveRegion().querySelectorAll("span")].find((span) => span.textContent === SAID);
+    rerender(at(closed, DEADLINE + 2_000));
+    expect([...liveRegion().querySelectorAll("span")].find((span) => span.textContent === SAID)).toBe(said);
+    // It leaves with the region's next words, and never comes back.
+    rerender(at(later, DEADLINE + 3_000));
+    expect(liveRegion().textContent).toContain("Alloggio");
+    expect(liveRegion().textContent).not.toContain(SAID);
+    rerender(at(later, DEADLINE + 4_000));
+    expect(liveRegion().textContent).not.toContain(SAID);
+  });
+
   it("hands the focus to the plan's state when the question leaves with it", async () => {
     const { rerender } = render(view(55, DEADLINE - 200_000));
     await screen.findByRole("region", { name: "Cosa ti va di vedere?" });
@@ -281,13 +334,22 @@ describe("PlanScreenView, a question for the traveller", () => {
     }
   });
 
-  it("shows no cards without the controls, or once the page has answered", async () => {
+  it("shows no cards without the controls, or once the page has answered, and no plate linking to them", async () => {
     const props = { state: stateAt(55), detail, clock: DEADLINE - 200_000, stale: false, connection: "open" as const, header: <div /> };
+    const plate = () => document.querySelector('section[data-agent="coordinator"] a[href="#scelta"]');
     const { rerender } = render(<PlanScreenView {...props} choice={controls()} />);
     await screen.findByRole("region", { name: "Cosa ti va di vedere?" });
+    expect(plate()?.textContent).toContain("Tocca a te: scegli cosa vedere");
     rerender(<PlanScreenView {...props} />);
     expect(screen.queryByRole("region", { name: "Cosa ti va di vedere?" })).toBeNull();
+    expect(plate()).toBeNull();
     rerender(<PlanScreenView {...props} choice={controls()} closedChoices={new Set([activities.id])} />);
     expect(screen.queryByRole("region", { name: "Cosa ti va di vedere?" })).toBeNull();
+    expect(plate()).toBeNull();
+    // Nor while the viewer is interrupting.
+    rerender(<PlanScreenView {...props} choice={controls()} interrupting />);
+    expect(screen.queryByRole("region", { name: "Cosa ti va di vedere?" })).toBeNull();
+    expect(plate()).toBeNull();
+    expect(document.querySelector('section[data-agent="coordinator"]')?.textContent).not.toContain("Tocca a te");
   });
 });

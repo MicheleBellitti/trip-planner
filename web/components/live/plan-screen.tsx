@@ -11,8 +11,8 @@
  *
  * The traveller's choice: the answer goes through POST /plans/{id}/choices/{choice_id}. Once it
  * went, the question is hidden at once (until its answered event arrives) and the focus moves to
- * the plan's state; a 409 `choice_closed` leaves the backend's sentence on the panel and re-reads
- * the plan. While a question waits, the tab title starts with "Tocca a te ·".
+ * the plan's state; a 409 `choice_closed` or a 404 `choice_not_found` leaves the backend's sentence
+ * on the panel and re-reads the plan. While a question waits, the tab title starts with "Tocca a te ·".
  */
 
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -167,8 +167,12 @@ export function PlanScreen({ planId, client = liveApi }: { planId: string; clien
           setLoginUrl(error.loginUrl);
           return null;
         }
-        if (error instanceof ApiError && error.kind === "conflict") {
-          // Closed already (the deadline, an interrupt): the backend's sentence, and the real status.
+        if (
+          error instanceof ApiError &&
+          (error.kind === "conflict" || (error.kind === "not_found" && error.code === "choice_not_found"))
+        ) {
+          // Closed already (the deadline, an interrupt), or no longer there: the backend's
+          // sentence, and the real status.
           scheduleRefresh(0);
           return { closed: error.message };
         }

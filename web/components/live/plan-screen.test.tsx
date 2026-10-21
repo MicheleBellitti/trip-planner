@@ -684,6 +684,8 @@ describe("PlanScreen, the traveller's choice", () => {
     // card is closed on the phone).
     expect(within(coordinator()).getAllByText("Hai scelto: Oceanário de Lisboa, Palácio da Pena a Sintra")).toHaveLength(2);
     expect(panel()).toBeNull();
+    // A screen reader hears the answer land, through the page's one live region.
+    expect(liveRegion().textContent).toContain("Hai scelto: Oceanário de Lisboa, Palácio da Pena a Sintra");
   });
 
   it("moves the focus to the plan's state without scrolling the page once the answer went", async () => {
@@ -724,6 +726,102 @@ describe("PlanScreen, the traveller's choice", () => {
     expect(getPlan.mock.calls.length).toBeGreaterThan(1);
     expect(panel()).toBeNull();
     expect(document.title).toBe(`${TITLE} · ${BRAND_NAME}`);
+  });
+
+  /** What the countdown says, its hidden words included. */
+  const countdown = () => screen.getByText("Tempo per scegliere:", { exact: false }).parentElement?.textContent;
+
+  it("counts a question that arrives live from when the page shows it: a browser clock 5 minutes fast still gets the whole window", async () => {
+    vi.setSystemTime(Date.parse(PENDING.deadline_at) + 5 * 60_000);
+    const client = fakeClient({ getPlan: vi.fn(async () => running()) });
+    render(<PlanScreen planId={PLAN_ID} client={client} />);
+    await flush();
+    const source = await replay(upTo(52));
+
+    act(() => {
+      for (const event of between(53, 55)) source.send(event);
+    });
+    await flush(100);
+    expect(panel()).not.toBeNull();
+    expect(countdown()).toBe("Tempo per scegliere: 4:00");
+    expect(screen.queryByText("Tempo scaduto: scelgo io.")).toBeNull();
+    fireEvent.click(box("Oceanário de Lisboa"));
+    expect((box("Oceanário de Lisboa") as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole("button", { name: "Scegli tu" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: "Continua con questa" }) as HTMLButtonElement).disabled).toBe(false);
+
+    // It counts down from there, and the page says the last minute on the same clock.
+    await flush(60_000);
+    expect(countdown()).toBe("Tempo per scegliere: 3:00");
+    expect(liveRegion().textContent).not.toContain("Manca un minuto per scegliere.");
+    await flush(120_000);
+    expect(liveRegion().textContent).toContain("Manca un minuto per scegliere.");
+    // At zero the controls rest, as ever.
+    await flush(60_000);
+    expect(screen.getByText("Tempo scaduto: scelgo io.")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Scegli tu" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("keeps the backend's deadline_at for a question first seen in the snapshot or the replayed history", async () => {
+    // A minute into the question's four.
+    vi.setSystemTime(ASKED_AT + 60_000);
+    const client = fakeClient({ getPlan: vi.fn(async () => running({ pending_choice: PENDING })) });
+    render(<PlanScreen planId={PLAN_ID} client={client} />);
+    await flush();
+    expect(panel()).not.toBeNull();
+    expect(countdown()).toBe("Tempo per scegliere: 3:00");
+    // The replay brings its asked event (a new object, the same id): still the backend's deadline.
+    await replay(upTo(55));
+    expect(countdown()).toMatch(/^Tempo per scegliere: (3:00|2:59)$/);
+    cleanup();
+
+    // Without the snapshot, a question that comes with the replayed history: the same.
+    const replayed = fakeClient({ getPlan: vi.fn(async () => running()) });
+    render(<PlanScreen planId={PLAN_ID} client={replayed} />);
+    await flush();
+    await replay(upTo(55));
+    expect(panel()).not.toBeNull();
+    expect(countdown()).toMatch(/^Tempo per scegliere: (3:00|2:59)$/);
+  });
+
+  it("a 404 choice_not_found closes the panel with the backend's words; a 404 plan_not_found is an error", async () => {
+    const getPlan = vi.fn(async () => running());
+    const answerChoice = vi.fn().mockRejectedValue(
+      new ApiError({ kind: "not_found", status: 404, code: "choice_not_found", message: "Questa domanda non c'è." }),
+    );
+    const client = fakeClient({ getPlan, answerChoice });
+    render(<PlanScreen planId={PLAN_ID} client={client} />);
+    await flush();
+    await replay(upTo(55));
+    await flush(1000);
+    const reads = getPlan.mock.calls.length;
+
+    fireEvent.click(box("Oceanário de Lisboa"));
+    fireEvent.click(screen.getByRole("button", { name: "Continua con questa" }));
+    await flush(50);
+    const region = panel();
+    expect(region).not.toBeNull();
+    expect(within(region!).getByText("Questa domanda non c'è.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Scegli tu" })).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+    // The page catches up with the plan.
+    expect(getPlan.mock.calls.length).toBe(reads + 1);
+    cleanup();
+
+    const gone = fakeClient({
+      getPlan: vi.fn(async () => running()),
+      answerChoice: vi.fn().mockRejectedValue(
+        new ApiError({ kind: "not_found", status: 404, code: "plan_not_found", message: "Questo piano non c'è." }),
+      ),
+    });
+    render(<PlanScreen planId={PLAN_ID} client={gone} />);
+    await flush();
+    await replay(upTo(55));
+    fireEvent.click(box("Oceanário de Lisboa"));
+    fireEvent.click(screen.getByRole("button", { name: "Continua con questa" }));
+    await flush(50);
+    expect(screen.getByRole("alert").textContent).toContain("Questo piano non c'è.");
+    expect(screen.getByRole("button", { name: "Scegli tu" })).toBeTruthy();
   });
 
   it("a 409 choice_closed closes the panel with the backend's words", async () => {

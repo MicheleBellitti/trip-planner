@@ -10,8 +10,10 @@
  *
  * The choice (the coordinator's `ask_traveller` pause, components/choice/choice-panel.tsx) shows
  * while the plan runs and the data source gives its controls: first under the live header on the
- * phone, under the lanes from 1080 px. The page's one live region says once that a minute is left.
- * While it shows, the demo's camera holds still (AgentLanes `cameraHeld`).
+ * phone, under the lanes from 1080 px; the coordinator's plate shows only with it. A question that
+ * arrives live counts down on the browser's clock from when the page shows it. The page's one live
+ * region says once that a minute is left, and once how a question it showed closed. While it
+ * shows, the demo's camera holds still (AgentLanes `cameraHeld`).
  */
 
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -22,11 +24,12 @@ import type { PlanHandoff, TripLoader } from "@/components/plan/PlanView";
 import { daysCount, titleStatesDates, tripLength } from "@/components/plan/trip-dates";
 import { isEndedStatus } from "@/components/states/ended-status";
 import { InlineStatus } from "@/components/ui/notice";
-import { choiceWindowMs, type ChoiceView } from "@/lib/choices";
+import { choiceWindowMs, readChoiceAnswer, type ChoiceView } from "@/lib/choices";
 import { displayTitle, formatElapsed } from "@/lib/format";
 import { AGENTS, PLAN_STATUS_LABELS, type ConnectionStatus } from "@/lib/plan-events/labels";
 import { elapsedMs, type OpenChoice, type PlanLiveState } from "@/lib/plan-events/reducer";
 import type { PlanDetail } from "@/lib/schemas/api";
+import type { UIEvent } from "@/lib/schemas/generated/ui-event";
 
 import { AgentLanes, type LaneFollow } from "./agent-lanes";
 import { useLaneLayout, useLiveBaseline } from "./hooks";
@@ -73,6 +76,24 @@ function inLastMinute(choice: ChoiceView, controls: ChoiceControls, clock: numbe
   if (deadlineAt === null) return false;
   const left = deadlineAt - clock;
   return (controls.windowMs ?? choiceWindowMs(choice)) > MINUTE_MS && left > 0 && left <= MINUTE_MS;
+}
+
+/** When the page first showed a question, and whether it arrived live (its asked event came after
+ * the live baseline settled). */
+interface ChoiceSighting {
+  choiceId: string;
+  live: boolean;
+  /** The clock at the first render with one while the question showed; null before. */
+  at: number | null;
+}
+
+/** The title of the event that answered `choiceId` ("Tempo scaduto: sceglie Atlas"), or null. */
+function answeredTitleOf(events: readonly UIEvent[], choiceId: string): string | null {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+    if (event?.kind === "choice" && readChoiceAnswer(event.detail)?.choiceId === choiceId) return event.title;
+  }
+  return null;
 }
 
 /** What the finished plan takes from the data source besides the detail (the demo's cover,
@@ -149,7 +170,14 @@ export function PlanScreenView({
   // The viewer watched the run (the plan was running when the page was up): when it turns ready
   // the plan is an arrival, not a page load (PlanView brings its top into view).
   const [watchedRun, setWatchedRun] = useState(false);
-  const views = useMemo(() => buildLaneViews(state), [state]);
+  // The coordinator's plate stands for the question's panel, and goes with it.
+  const views = useMemo(
+    () =>
+      buildLaneViews(state, {
+        askingChoiceId: choice ? (shownChoice(state, closedChoices, interrupting)?.choice.id ?? null) : null,
+      }),
+    [state, choice, closedChoices, interrupting],
+  );
   const baseline = useLiveBaseline(connection, state.lastSeq, state.announcement?.id ?? null);
 
   // A plan-level change a watcher would miss (budget reached, failed, blocked, interrupted) is
@@ -158,6 +186,8 @@ export function PlanScreenView({
   const settledForSpeech = baseline.announceAfterId !== null;
   const [seenStatus, setSeenStatus] = useState(state.status);
   const [planNote, setPlanNote] = useState<{ id: number; text: string } | null>(null);
+  // This render's note: the choice's notes below go with the region's words as they will be.
+  let note = planNote;
   if (state.status !== seenStatus) {
     const next = state.status;
     setSeenStatus(next);
@@ -169,7 +199,8 @@ export function PlanScreenView({
       next !== "running" &&
       !(next === "interrupted" && interrupting)
     ) {
-      setPlanNote({ id: (planNote?.id ?? 0) + 1, text: `Piano: ${PLAN_STATUS_LABELS[next].toLowerCase()}` });
+      note = { id: (planNote?.id ?? 0) + 1, text: `Piano: ${PLAN_STATUS_LABELS[next].toLowerCase()}` };
+      setPlanNote(note);
     }
   }
 
@@ -196,18 +227,59 @@ export function PlanScreenView({
   const blocker = status === "blocked" ? findBlocker(state) : null;
   const stationCount = AGENTS.reduce((sum, agent) => sum + views[agent].stations.length, 0);
 
+  // The question on screen.
+  const asked = choice ? shownChoice(state, closedChoices, interrupting) : null;
+  const askedId = asked?.choice.id ?? null;
+
+  // The question's clock on the live screen (the demo sets its own deadline). A question that
+  // arrives live counts its window from when this page first shows it, on the browser's clock: one
+  // running minutes fast or slow never opens a question at "Tempo scaduto" or holds it past its
+  // window. One first seen in the snapshot or the replayed history keeps the backend's deadline_at
+  // (the page cannot know when it was asked on this clock). Kept per question id, so a new object
+  // for the same question keeps its anchor and the next question starts afresh.
+  const [sighting, setSighting] = useState<ChoiceSighting | null>(null);
+  let seen = sighting;
+  if (asked && choice?.deadlineAt === undefined) {
+    if (seen?.choiceId !== asked.choice.id) {
+      const freshAfter = baseline.freshAfterSeq;
+      seen = { choiceId: asked.choice.id, live: asked.seq !== null && freshAfter !== null && asked.seq > freshAfter, at: clock };
+    } else if (seen.at === null && clock !== null) {
+      seen = { ...seen, at: clock };
+    }
+    if (seen !== sighting) setSighting(seen);
+  }
+  const askedWindowMs = asked ? choiceWindowMs(asked.choice) : 0;
+  const anchoredDeadline = asked && seen?.choiceId === asked.choice.id && seen.live && seen.at !== null ? seen.at + askedWindowMs : null;
+  const controls: ChoiceControls | undefined =
+    choice && anchoredDeadline !== null ? { ...choice, deadlineAt: anchoredDeadline, windowMs: askedWindowMs } : choice;
+
   // The traveller's choice, and the one time the page says a minute is left: the question's id,
   // and what the live region said before it, so the note goes with the region's next words (it is
   // atomic: a note that stayed would be read again with every lane change).
   const layout = useLaneLayout();
-  const asked = choice ? shownChoice(state, closedChoices, interrupting) : null;
-  const askedId = asked?.choice.id ?? null;
-  const spokenNow = `${announcement?.id ?? ""}|${planNote?.id ?? ""}`;
+  const spokenNow = `${announcement?.id ?? ""}|${note?.id ?? ""}`;
   const [minuteSaid, setMinuteSaid] = useState<{ choiceId: string; spoken: string } | null>(null);
-  if (asked && choice && clock !== null && minuteSaid?.choiceId !== asked.choice.id && inLastMinute(asked.choice, choice, clock)) {
+  if (asked && controls && clock !== null && minuteSaid?.choiceId !== asked.choice.id && inLastMinute(asked.choice, controls, clock)) {
     setMinuteSaid({ choiceId: asked.choice.id, spoken: spokenNow });
   }
   const minuteNote = asked !== null && minuteSaid?.choiceId === asked.choice.id && minuteSaid.spoken === spokenNow;
+
+  // A question that was on screen and closes (its answered event arrives: the deadline, the
+  // traveller's own answer, an interrupt) is said once, by that event's title ("Tempo scaduto:
+  // sceglie Atlas"), with the region's words of that moment: the panel and its words are gone, and
+  // a screen reader still picking would otherwise hear nothing. Never the replayed history.
+  const [watching, setWatching] = useState<string | null>(null);
+  const [receipt, setReceipt] = useState<{ choiceId: string; text: string; spoken: string } | null>(null);
+  if (askedId !== null) {
+    if (askedId !== watching) setWatching(askedId);
+  } else if (watching !== null) {
+    const answered = answeredTitleOf(state.events, watching);
+    if (answered !== null) {
+      setWatching(null);
+      if (settledForSpeech) setReceipt({ choiceId: watching, text: answered, spoken: spokenNow });
+    }
+  }
+  const receiptNote = receipt !== null && receipt.spoken === spokenNow ? receipt : null;
 
   // A question that leaves with the focus (its deadline, the demo's recording answering) hands it
   // to the plan's state, as the traveller's own answer does; a focus anywhere else stays put.
@@ -221,12 +293,12 @@ export function PlanScreenView({
   }, [askedId]);
   const place = detail?.request.destination;
   const choicePanel =
-    asked && choice ? (
+    asked && controls ? (
       <Suspense fallback={null}>
         <div className={layout === "stack" ? "mb-6" : "mt-8"}>
           <ChoicePanel
             choice={asked.choice}
-            controls={choice}
+            controls={controls}
             now={clock}
             destination={typeof place === "string" && place.trim() !== "" ? place : null}
           />
@@ -315,12 +387,13 @@ export function PlanScreenView({
         {/* From 1080 px it sits under the lanes. */}
         {layout === "stack" ? null : choicePanel}
       </main>
-      {/* The page's one live region: lane state changes, the plan's own state and the choice's last
-          minute, never tool calls. */}
+      {/* The page's one live region: lane state changes, the plan's own state, the choice's last
+          minute and how it closed, never tool calls. */}
       <div aria-live="polite" aria-atomic="true" className="sr-only">
         {announcement ? <span key={announcement.id}>{announcement.text}</span> : null}
-        {planNote ? <span key={`plan-${planNote.id}`}>{planNote.text}</span> : null}
+        {note ? <span key={`plan-${note.id}`}>{note.text}</span> : null}
         {asked && minuteNote ? <span key={`minute-${asked.choice.id}`}>Manca un minuto per scegliere.</span> : null}
+        {receiptNote ? <span key={`answer-${receiptNote.choiceId}`}>{receiptNote.text}</span> : null}
       </div>
     </div>
   );

@@ -152,13 +152,20 @@ describe("the choice copy", () => {
     expect(choiceEyebrow(of("other"), "Lisbona")).toBe("Il coordinatore propone 3 opzioni");
   });
 
-  it("writes the intro and the rule: 'Scegline una.', '… anche più di una.', 4 minuti, 1 minuto, 15 secondi", () => {
+  it("writes the intro and the rule: 'Scegline una.', '… anche più di una.', 4 minuti, 90 secondi, 15 secondi", () => {
     expect(choiceIntro(first)).toBe("Scegli quelle che ti piacciono, anche più di una.");
     expect(choiceIntro({ ...first, multiple: false })).toBe("Scegline una.");
     expect(choiceRule(240_000)).toBe("Se non scegli entro 4 minuti, scelgo io.");
-    expect(choiceRule(60_000)).toBe("Se non scegli entro 1 minuto, scelgo io.");
-    expect(choiceRule(150_000)).toBe("Se non scegli entro 3 minuti, scelgo io.");
+    // Whole minutes from 120 s, rounded down: the rule never promises more time than there is.
+    expect(choiceRule(120_000)).toBe("Se non scegli entro 2 minuti, scelgo io.");
+    expect(choiceRule(150_000)).toBe("Se non scegli entro 2 minuti, scelgo io.");
+    expect(choiceRule(239_000)).toBe("Se non scegli entro 3 minuti, scelgo io.");
+    // Seconds under 120 s.
+    expect(choiceRule(119_000)).toBe("Se non scegli entro 119 secondi, scelgo io.");
+    expect(choiceRule(90_000)).toBe("Se non scegli entro 90 secondi, scelgo io.");
+    expect(choiceRule(60_000)).toBe("Se non scegli entro 60 secondi, scelgo io.");
     expect(choiceRule(15_000)).toBe("Se non scegli entro 15 secondi, scelgo io.");
+    expect(choiceRule(1_000)).toBe("Se non scegli entro 1 secondo, scelgo io.");
     expect(choiceWindowMs({ ...first, deadlineAt: "2020-01-01T00:00:00Z" })).toBe(0);
   });
 });
