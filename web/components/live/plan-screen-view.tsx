@@ -226,12 +226,17 @@ export function PlanScreenView({
   const askedId = asked?.choice.id ?? null;
 
   // The question's clock on the live screen (the demo sets its own deadline): the backend's
-  // deadline_at moved onto the browser's clock by its skew, sampled from every server timestamp the
-  // page holds (the newest event's ts, the snapshot's updated_at), so a device clock minutes fast
-  // or slow neither opens a question at "Tempo scaduto" nor holds it past the backend's deadline.
+  // deadline_at moved onto the browser's clock by its skew, set by each GET /plans/{id} answer's
+  // own clock (`now`) and lowered by a newer server timestamp the page holds (the newest event's
+  // ts; the snapshot's updated_at, which matters only from a backend without `now`). So a device
+  // clock minutes fast or slow neither opens a question at "Tempo scaduto" nor holds it past the
+  // backend's deadline, even after a reload in a quiet pause, when every event is minutes old.
   // While the page is stale its clock is a server time (the last known state), so the deadline
   // stays the backend's and nothing is sampled.
-  const skew = useClockSkew(stale ? null : clock, [state.events[state.events.length - 1]?.ts, detail?.updated_at]);
+  const skew = useClockSkew(stale ? null : clock, detail?.now, [
+    state.events[state.events.length - 1]?.ts,
+    detail?.updated_at,
+  ]);
   const controls: ChoiceControls | undefined =
     choice && asked && choice.deadlineAt === undefined
       ? {

@@ -45,8 +45,9 @@ const PlanLoadFailed = lazy(() => loadPanels().then((module) => ({ default: modu
 /** Several events can announce a status change at once: read the plan once after them. */
 const REFRESH_DEBOUNCE_MS = 400;
 
-/** The choice's error when the session expired while the traveller picked (a 401 on the answer). */
-const ANSWER_SIGNED_OUT = "La sessione è scaduta: accedi di nuovo, poi invia la scelta.";
+/** The choice's error when the session expired while the traveller picked (a 401 on the answer).
+ * The sign-in reloads the page, so it never promises the picks will still be there. */
+const ANSWER_SIGNED_OUT = "La sessione è scaduta: accedi di nuovo e rifai la scelta.";
 
 function clockTime(ms: number): string {
   return new Date(ms).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
@@ -269,7 +270,9 @@ export function PlanScreen({ planId, client = liveApi }: { planId: string; clien
   // --- the plan ------------------------------------------------------------------------------
   const status = state.status;
   const stale = !online || loginUrl !== null;
-  const lastUpdate = latest(state.events[state.events.length - 1]?.ts, detail?.updated_at);
+  // The last known state: the newest server time the page holds (the latest answer's `now`, minutes
+  // after the newest event in a quiet pause).
+  const lastUpdate = latest(state.events[state.events.length - 1]?.ts, detail?.updated_at, detail?.now);
   const canInterrupt = status === "running" || status === "budget_paused";
 
   return (
