@@ -943,6 +943,29 @@ describe("PlanScreen, the traveller's choice", () => {
     expect(getPlan.mock.calls.length).toBe(reads + 1);
   });
 
+  it("a 401 keeps the question, the picks and the controls, says to sign in again, and offers the way", async () => {
+    const answerChoice = vi
+      .fn()
+      .mockRejectedValue(new UnauthorizedError({ status: 401, message: "Accedi per usare il planner." }, "https://viaggi.test/accedi"));
+    const client = fakeClient({ getPlan: vi.fn(async () => running()), answerChoice });
+    render(<PlanScreen planId={PLAN_ID} client={client} />);
+    await flush();
+    await replay(upTo(55));
+
+    fireEvent.click(box("Oceanário de Lisboa"));
+    fireEvent.click(screen.getByRole("button", { name: "Continua con questa" }));
+    await flush(50);
+    expect(answerChoice).toHaveBeenCalledTimes(1);
+    // Nothing went: the panel stays, with the reason and the picks, and its buttons answer again.
+    expect(panel()).not.toBeNull();
+    expect(screen.getByRole("alert").textContent).toContain("La sessione è scaduta: accedi di nuovo, poi invia la scelta.");
+    expect((box("Oceanário de Lisboa") as HTMLInputElement).checked).toBe(true);
+    expect(skipButton().disabled).toBe(false);
+    expect((screen.getByRole("button", { name: "Continua con questa" }) as HTMLButtonElement).disabled).toBe(false);
+    // The stream line offers the sign-in, back to this page.
+    expect(screen.getByText(/^Sessione scaduta: quello che vedi non si aggiorna più\./)).toBeTruthy();
+  });
+
   it("hides the cards while interrupting and on budget_paused, and shows them again after Continua", async () => {
     const pausedAt = new Date(ASKED_AT + 2_000).toISOString();
     const resumedAt = new Date(ASKED_AT + 5_000).toISOString();

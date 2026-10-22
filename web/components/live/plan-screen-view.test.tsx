@@ -1,10 +1,10 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ChoiceControls } from "@/components/choice/choice-panel";
 import detailJson from "@/components/plan/__fixtures__/happy-path.detail.json";
 import tripJson from "@/components/plan/__fixtures__/happy-path.trip.json";
-import { readAskedChoice } from "@/lib/choices";
+import { readAskedChoice, readChoiceAnswer } from "@/lib/choices";
 import choicesRun from "@/lib/plan-events/__fixtures__/backend/choices.json";
 import backend from "@/lib/plan-events/__fixtures__/backend/happy-path.json";
 import { planEventsReducer, reducePlanEvents, type PlanLiveState } from "@/lib/plan-events/reducer";
@@ -22,6 +22,11 @@ vi.mock("@/lib/api", () => {
 });
 vi.mock("@/components/live/live-api", () => {
   throw new Error("live-api evaluated");
+});
+// The answer reader, watched: how often the view reads the answered events.
+vi.mock("@/lib/choices", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@/lib/choices")>();
+  return { ...original, readChoiceAnswer: vi.fn(original.readChoiceAnswer) };
 });
 
 afterEach(cleanup);
@@ -267,6 +272,67 @@ describe("PlanScreenView, a question for the traveller", () => {
     expect(liveRegion().textContent).not.toContain(SAID);
     rerender(at(later, DEADLINE + 4_000));
     expect(liveRegion().textContent).not.toContain(SAID);
+  });
+
+  it("says how a question closed when its answer and the next question land together, and the next one takes the focus", async () => {
+    const open = stateAt(55);
+    // One batch: the first question's answer (56) and the second question (77), as after a reconnect.
+    const both = planEventsReducer(open, { type: "events", events: run.filter((event) => event.seq >= 56 && event.seq <= 79) });
+    const at = (state: PlanLiveState, clock: number) => (
+      <PlanScreenView
+        state={state}
+        detail={detail}
+        clock={clock}
+        stale={false}
+        connection="open"
+        header={<div />}
+        choice={controls()}
+      />
+    );
+    const SAID = "Hai scelto: Oceanário de Lisboa, Palácio da Pena a Sintra";
+    const { rerender } = render(at(open, landed(55)));
+    await screen.findByRole("region", { name: "Cosa ti va di vedere?" });
+    await act(async () => {
+      await new Promise((done) => setTimeout(done, SETTLE_MS + 50));
+    });
+
+    rerender(at(both, landed(79)));
+    const next = await screen.findByRole("region", { name: "Che cucina cerchi?" });
+    expect(screen.queryByRole("region", { name: "Cosa ti va di vedere?" })).toBeNull();
+    // The first question's receipt, once, in the one live region...
+    expect([...liveRegion().querySelectorAll("span")].filter((span) => span.textContent === SAID)).toHaveLength(1);
+    // ...while the second question's heading takes the focus.
+    expect(document.activeElement).toBe(within(next).getByRole("heading", { level: 2 }));
+    rerender(at(both, landed(79) + 1_000));
+    expect([...liveRegion().querySelectorAll("span")].filter((span) => span.textContent === SAID)).toHaveLength(1);
+  });
+
+  it("reads the answered titles once per change of the events, never per clock tick", async () => {
+    const state = stateAt(55);
+    const closed = new Set([activities.id]);
+    // One controls object, as the live page's (memoized): a new one would redraw the lanes.
+    const choice = controls();
+    const at = (clock: number, closedChoices?: ReadonlySet<string>) => (
+      <PlanScreenView
+        state={state}
+        detail={detail}
+        clock={clock}
+        stale={false}
+        connection="open"
+        header={<div />}
+        choice={choice}
+        closedChoices={closedChoices}
+      />
+    );
+    const { rerender } = render(at(landed(55)));
+    await screen.findByRole("region", { name: "Cosa ti va di vedere?" });
+    // The page answered: the question hides until its answered event arrives, and the page waits.
+    rerender(at(landed(55) + 1_000, closed));
+    expect(screen.queryByRole("region", { name: "Cosa ti va di vedere?" })).toBeNull();
+    const reads = vi.mocked(readChoiceAnswer);
+    reads.mockClear();
+    for (let tick = 2; tick <= 6; tick += 1) rerender(at(landed(55) + tick * 1_000, closed));
+    expect(reads).not.toHaveBeenCalled();
   });
 
   it("hands the focus to the plan's state when the question leaves with it", async () => {
