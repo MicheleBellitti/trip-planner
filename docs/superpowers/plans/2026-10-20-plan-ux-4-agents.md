@@ -89,8 +89,10 @@ fixes the tool's contract and its answer texts; this plan quotes them.
    spec §1 says.
 8. **Flexible dates with a mode other than flight:** the coordinator fixes the dates itself
    (preferences first), then tasks wave 1. Only `flights` has a "best dates in the month" job.
-9. **`flights.md` and `lodging.md` do not change.** Their "or candidates" wording is now unused
-   and harmless; the spec lists only the coordinator, transport and activities.
+9. ~~**`flights.md` and `lodging.md` do not change.**~~ Overturned by the PR review
+   (2026-10-22): their descriptions are the coordinator's delegation roster, so "destination or
+   candidates" still invited research of destinations the traveller did not pick, and every
+   flights and lodging request paid for the per-candidate rules. The candidate wording is gone.
 
 ## Review Focus
 
