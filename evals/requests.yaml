@@ -181,5 +181,5 @@ requests:
       destination_any: []
       must_mention:
         - [cucina locale, piatti tipici, specialità, ristorante tipico, mercato, guachinche, trattoria, taverna]
-        - [parco, sentiero, belvedere, vulcano, montagna, costa, scogliere, panorama, escursione]
+        - [parco, sentiero, belvedere, vulcano, montagna, costa, scogliere, panoram, escursione, valle, paesagg, vista, natura]
       must_not_book: []
