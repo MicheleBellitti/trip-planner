@@ -26,21 +26,26 @@ export function formatEur(cents: number): string {
   return `${formatCents(cents)} €`;
 }
 
-/** An amount in minutes as Italian copy: 45 -> "45 min", 180 -> "3 h", 150 -> "2 h 30 min". */
-export function formatMinutes(minutes: number): string {
+/** A trip price in its currency, Italian format: EUR 81200 -> "812,00 €", USD 1250 -> "12,50 USD"
+ * (a finished plan's bookings, a choice card's price for the party). Only the run's own cost is
+ * written with "$" (formatUsd). */
+export function formatPrice(price: { amount_cents: number; currency: string }): string {
+  const cents = Math.max(0, Math.round(price.amount_cents));
+  return `${formatCents(cents)} ${price.currency === "EUR" ? "€" : price.currency}`;
+}
+
+/** An expected duration in minutes (a stop's, a choice card's): 45 -> "45 min", 60 -> "1 h",
+ * 160 -> "2 h 40 min", 2880 -> "2 giorni". */
+export function formatDuration(minutes: number): string {
   const total = Math.max(0, Math.round(minutes));
+  if (total >= 1440 && total % 1440 === 0) {
+    const days = total / 1440;
+    return days === 1 ? "1 giorno" : `${days} giorni`;
+  }
   if (total < 60) return `${total} min`;
   const hours = Math.floor(total / 60);
   const rest = total % 60;
   return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
-}
-
-/** An amount of an option's currency, in cents: EUR and USD as the screen writes them, any other
- * code after the figure ("12,50 GBP"). */
-export function formatMoney(cents: number, currency: string): string {
-  if (currency === "EUR") return formatEur(cents);
-  if (currency === "USD") return formatUsd(cents);
-  return `${formatCents(cents)} ${currency}`;
 }
 
 /** Elapsed time for the live header: 65_000 -> "1:05", 3_725_000 -> "1:02:05". Negative values

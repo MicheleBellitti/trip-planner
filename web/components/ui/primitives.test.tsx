@@ -111,6 +111,20 @@ describe("ChoiceCard", () => {
     expect(facts()).toEqual(["Durata: 3 h 30 min"]);
     cleanup();
 
+    // Another currency reads as in the finished plan, its code after the figure: "$" is the run's cost.
+    render(
+      <ChoiceCard
+        option={{ ...belem, durationMin: 1440, price: { amountCents: 1250, currency: "USD" } }}
+        control="checkbox"
+        name="q"
+        checked={false}
+        onChange={vi.fn()}
+        media="4/3"
+      />,
+    );
+    expect(facts()).toEqual(["Durata: 1 giorno", "Prezzo per il gruppo: 12,50 USD"]);
+    cleanup();
+
     const { container } = render(
       <ChoiceCard option={tascas} control="checkbox" name="q" checked={false} onChange={vi.fn()} media="none" />,
     );

@@ -1,6 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-import { displayTitle, formatCreated, formatDateTime, formatElapsed, formatEur, formatMinutes, formatMoney, formatRunningFor, formatUsd, HOME_TIMEZONE, splitDateRange } from "./format";
+import {
+  displayTitle,
+  formatCreated,
+  formatDateTime,
+  formatDuration,
+  formatElapsed,
+  formatEur,
+  formatPrice,
+  formatRunningFor,
+  formatUsd,
+  HOME_TIMEZONE,
+  splitDateRange,
+} from "./format";
 
 describe("formatCreated", () => {
   const now = Date.parse("2026-10-12T15:00:00Z");
@@ -98,16 +110,22 @@ describe("splitDateRange", () => {
   });
 });
 
-describe("formatMinutes and formatMoney", () => {
-  it("formatMinutes: 45 min, 3 h, 2 h 30 min", () => {
-    expect(formatMinutes(45)).toBe("45 min");
-    expect(formatMinutes(180)).toBe("3 h");
-    expect(formatMinutes(150)).toBe("2 h 30 min");
+describe("formatDuration and formatPrice (the finished plan's and the choice cards')", () => {
+  it("writes durations", () => {
+    expect(formatDuration(45)).toBe("45 min");
+    expect(formatDuration(60)).toBe("1 h");
+    expect(formatDuration(150)).toBe("2 h 30 min");
+    expect(formatDuration(160)).toBe("2 h 40 min");
+    expect(formatDuration(1440)).toBe("1 giorno");
+    expect(formatDuration(2880)).toBe("2 giorni");
+    expect(formatDuration(1500)).toBe("25 h");
   });
 
-  it("formatMoney: (6000, EUR) 60,00 €, (1250, USD) 12,50 $, (1250, GBP) 12,50 GBP", () => {
-    expect(formatMoney(6000, "EUR")).toBe("60,00 €");
-    expect(formatMoney(1250, "USD")).toBe("12,50 $");
-    expect(formatMoney(1250, "GBP")).toBe("12,50 GBP");
+  it("formats prices in their currency: euro with its sign, any other code after the figure", () => {
+    expect(formatPrice({ amount_cents: 81200, currency: "EUR" })).toBe("812,00 €");
+    expect(formatPrice({ amount_cents: 12800050, currency: "EUR" })).toBe("128.000,50 €");
+    // Never "$": the dollar sign is the run's cost (formatUsd), not a trip price.
+    expect(formatPrice({ amount_cents: 1250, currency: "USD" })).toBe("12,50 USD");
+    expect(formatPrice({ amount_cents: 1250, currency: "GBP" })).toBe("12,50 GBP");
   });
 });

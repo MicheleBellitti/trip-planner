@@ -10,8 +10,11 @@
 
 import type { BookingDeadline } from "@/lib/booking-dates";
 import type { LinkCheck, LinkHealthMap } from "@/lib/schemas/api";
-import type { Plan, PlanBooking, PlanStop, Price } from "@/lib/schemas/generated/plan";
+import type { Plan, PlanBooking, PlanStop } from "@/lib/schemas/generated/plan";
 import type { AgentName } from "@/lib/schemas/generated/ui-event";
+
+// A booking's price and a stop's duration, shared with the choice cards.
+export { formatDuration, formatPrice } from "@/lib/format";
 
 export {
   daysCount,
@@ -333,14 +336,6 @@ function groupThousands(integer: string): string {
   return integer.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 }
 
-/** A price in its currency, Italian format: EUR 81200 -> "812,00 €", USD 1250 -> "12,50 USD". */
-export function formatPrice(price: Pick<Price, "amount_cents" | "currency">): string {
-  const cents = Math.max(0, Math.round(price.amount_cents));
-  const units = groupThousands(String(Math.floor(cents / 100)));
-  const rest = String(cents % 100).padStart(2, "0");
-  return `${units},${rest} ${price.currency === "EUR" ? "€" : price.currency}`;
-}
-
 export interface PlanTotal {
   /** Sum of the euro prices, in euro cents; null when no booking has one. */
   cents: number | null;
@@ -424,20 +419,6 @@ export const STOP_KIND_LABELS: Record<PlanStop["kind"], string> = {
   transfer: "Spostamento",
   rest: "Tempo libero",
 };
-
-/** A stop's expected duration: 45 -> "45 min", 60 -> "1 h", 160 -> "2 h 40 min", 2880 ->
- * "2 giorni". */
-export function formatDuration(minutes: number): string {
-  const total = Math.max(0, Math.round(minutes));
-  if (total >= 1440 && total % 1440 === 0) {
-    const days = total / 1440;
-    return days === 1 ? "1 giorno" : `${days} giorni`;
-  }
-  if (total < 60) return `${total} min`;
-  const hours = Math.floor(total / 60);
-  const rest = total % 60;
-  return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
-}
 
 /** The bookings of each stop (`PlanBooking.stop_ref` -> positions in plan.bookings). */
 export function bookingsByStop(bookings: readonly Pick<PlanBooking, "stop_ref">[]): Map<string, number[]> {
