@@ -441,6 +441,11 @@ describe("the chosen option of a choice control", () => {
       expect(label.className).not.toMatch(/\bbg-action\b|\btext-on-action\b/);
       expect(label.className).toContain("has-checked:bg-notice-wash");
       expect(label.className).toContain("has-checked:inset-ring-ink");
+      // Forced colours (Windows High Contrast) drop backgrounds, border colours and shadows: the
+      // chosen option takes the system's selection colours, so it never disappears.
+      expect(label.className).toContain("forced-colors:has-checked:bg-[Highlight]");
+      expect(label.className).toContain("forced-colors:has-checked:text-[HighlightText]");
+      expect(label.className).toContain("forced-colors:has-checked:forced-color-adjust-none");
     }
   });
 });

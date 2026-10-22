@@ -457,7 +457,8 @@ export function RequestForm({ today, initialValues, restoreLast = false, demoSce
           </Field>
         </div>
         {children > 0 ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          // Two across from 1080 px: the party's column is the narrower one there (1.25 to 1).
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-2">
             {values.childAges.map((age, index) => {
               const path = childAgePath(index, values.adults);
               return (
