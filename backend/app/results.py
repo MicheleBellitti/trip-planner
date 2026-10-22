@@ -465,11 +465,15 @@ class TransferOption(ResultOption):
         ge=1,
         le=MAX_DISTANCE_KM,
         description=(
-            "Road distance in km for a drive (`car`, `car_rental`); null for every other mode."
+            "Road distance in km for a drive (`car`, `car_rental`); leave it null for other modes."
         ),
     )
     price: Price | None = Field(
-        default=None, description="Total for the whole party; null if free."
+        default=None,
+        description=(
+            "Total for the whole party; null when free, or when not priced (then say so in a "
+            "warning)."
+        ),
     )
     link: str | None = Field(default=None, max_length=MAX_URL, description=_LINK_DESCRIPTION)
 

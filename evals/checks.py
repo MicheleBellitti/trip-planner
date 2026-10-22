@@ -36,7 +36,7 @@ from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from functools import cache
 from pathlib import Path
-from typing import Any, Literal, Protocol, cast
+from typing import Any, Literal, Protocol, cast, get_args
 from urllib.parse import urlsplit
 
 EVALS_DIR = Path(__file__).resolve().parent
@@ -47,6 +47,7 @@ if str(BACKEND_DIR) not in sys.path:  # `app` lives in backend/; evals run from 
 
 from pydantic import ValidationError  # noqa: E402
 
+from app.choices import ChoiceKind  # noqa: E402
 from app.plan import Plan, describe_validation_errors  # noqa: E402
 from app.request import PlanRequest  # noqa: E402
 
@@ -782,7 +783,7 @@ def check_dead_links(
     )
 
 
-CHOICE_KIND_ORDER: tuple[str, ...] = ("destination", "journey", "activities", "food", "other")
+CHOICE_KIND_ORDER: tuple[str, ...] = get_args(ChoiceKind)
 """`app.choices.ChoiceKind`, in the order the kinds are printed."""
 
 

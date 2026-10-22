@@ -181,6 +181,7 @@ export const CHECK_LABELS: Record<string, string> = {
   cost_and_searches_vs_estimate: "Costo e ricerche web rispetto alla stima",
   matches_request: "Il piano risponde alla richiesta",
   dead_links: "Nessun link rotto",
+  choices_asked: "Domande al viaggiatore",
 };
 
 export function checkLabel(name: string): string {

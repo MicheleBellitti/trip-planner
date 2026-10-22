@@ -291,18 +291,14 @@ def context(
     async def fake_answer(planner: Any, pid: uuid.UUID, user: Any) -> None:
         calls.setdefault("answered", []).append(pid)
 
-    async def fake_picks(planner: Any, pid: uuid.UUID) -> list[str]:
-        return list(calls.get("picks", []))
-
     monkeypatch.setattr(run, "answer_choices", fake_answer)
 
-    async def fake_kinds(planner: Any, pid: uuid.UUID) -> list[str]:
-        if "kinds_error" in calls:
-            raise RuntimeError(calls["kinds_error"])
-        return list(calls.get("kinds", ["food", "activities"]))
+    async def fake_choices(planner: Any, pid: uuid.UUID) -> tuple[list[str], list[str]]:
+        if "choices_error" in calls:
+            raise RuntimeError(calls["choices_error"])
+        return list(calls.get("picks", [])), list(calls.get("kinds", ["food", "activities"]))
 
-    monkeypatch.setattr(run, "collect_picks", fake_picks)
-    monkeypatch.setattr(run, "collect_choice_kinds", fake_kinds)
+    monkeypatch.setattr(run, "collect_choices", fake_choices)
     ma_client = FakeMaClient()
     planner = SimpleNamespace(
         settings=SimpleNamespace(local_user_email=None),
@@ -405,14 +401,54 @@ def test_run_case_records_the_choice_kinds(monkeypatch: pytest.MonkeyPatch) -> N
     assert "choice_kinds_error" not in entry
 
 
-def test_run_case_records_a_choice_kinds_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_case_records_a_choices_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     ctx, calls = context(monkeypatch, [plan_row("ready")])
-    calls["kinds_error"] = "db gone"
+    calls["choices_error"] = "db gone"
     entry = asyncio.run(run.run_case(LISBON, request_for(LISBON), ctx))
+    assert entry["status"] == "ready"  # the eval goes on
     assert entry["choice_kinds"] is None
     assert entry["choice_kinds_error"] == "RuntimeError: db gone"
+    assert entry["picks_error"] == "RuntimeError: db gone"
     check = next(c for c in entry["checks"] if c["name"] == "choices_asked")
     assert check["status"] == "skip"
+    assert entry["judge"]["status"] == "ok"  # judged without the picks
+
+
+class FakeChoicesDb:
+    """A session whose one `scalars` call returns the given choice rows."""
+
+    def __init__(self, rows: list[Any]) -> None:
+        self.rows = rows
+        self.reads = 0
+
+    async def __aenter__(self) -> FakeChoicesDb:
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        return None
+
+    async def scalars(self, statement: Any) -> list[Any]:
+        self.reads += 1
+        return list(self.rows)
+
+
+def test_collect_choices_reads_the_plan_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app import choices
+
+    request = SimpleNamespace(options=[SimpleNamespace(id="a1", title="Torre di Belém")])
+    monkeypatch.setattr(choices, "request_of", lambda row: request)
+    rows = [
+        SimpleNamespace(kind="activities", answered_by="traveller", answer=["a1"]),
+        SimpleNamespace(kind="food", answered_by=None, answer=None),  # still open
+    ]
+    db = FakeChoicesDb(rows)
+    planner = SimpleNamespace(session_factory=lambda: db)
+    picks, kinds = asyncio.run(
+        run.collect_choices(planner, uuid.uuid4())  # pyright: ignore[reportArgumentType]
+    )
+    assert db.reads == 1
+    assert picks == ["activities (traveller): a1 Torre di Belém"]
+    assert kinds == ["activities", "food"]
 
 
 def test_pick_lines() -> None:

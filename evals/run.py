@@ -524,21 +524,27 @@ def pick_line(record: Any, request: Any) -> str:
     return f"{record.kind} ({record.answered_by}): {outcome}"
 
 
-async def collect_picks(planner: PlannerServices, plan_id: uuid.UUID) -> list[str]:
-    """The pick lines of the plan's answered choices, in the order they were asked."""
+async def collect_choices(
+    planner: PlannerServices, plan_id: uuid.UUID
+) -> tuple[list[str], list[str]]:
+    """One read of the plan's questions, in the order they were asked: the pick lines of the
+    answered ones (for the judge) and the kinds of all of them, answered or not (for
+    `choices_asked`)."""
+    from sqlalchemy import select
+
     from app import choices
+    from app.db import ChoiceRecord
 
     async with planner.session_factory() as db:
-        rows = await choices.answered_choices(db, plan_id)
-    return [pick_line(row, choices.request_of(row)) for row in rows]
-
-
-async def collect_choice_kinds(planner: PlannerServices, plan_id: uuid.UUID) -> list[str]:
-    """The kinds of the questions the plan asked, answered or not."""
-    from app import choices
-
-    async with planner.session_factory() as db:
-        return await choices.asked_kinds(db, plan_id)
+        rows = list(
+            await db.scalars(
+                select(ChoiceRecord)
+                .where(ChoiceRecord.plan_id == plan_id)
+                .order_by(ChoiceRecord.asked_at, ChoiceRecord.id)
+            )
+        )
+    picks = [pick_line(row, choices.request_of(row)) for row in rows if row.answered_by is not None]
+    return picks, [row.kind for row in rows]
 
 
 def usage_json(usage: Any) -> dict[str, Any] | None:
@@ -716,17 +722,14 @@ async def run_case(case: EvalCase, request: PlanRequest, ctx: RunContext) -> dic
             extra["usage_error"] = f"{type(error).__name__}: {error}"
     fields = record_fields(record)
     picks: list[str] = []
-    if plan_id is not None:
-        try:
-            picks = await collect_picks(planner, plan_id)
-        except Exception as error:  # the picks only inform the judge
-            extra["picks_error"] = f"{type(error).__name__}: {error}"
     choice_kinds: list[str] | None = None
     if plan_id is not None:
         try:
-            choice_kinds = await collect_choice_kinds(planner, plan_id)
-        except Exception as error:  # the check then skips
-            extra["choice_kinds_error"] = f"{type(error).__name__}: {error}"
+            picks, choice_kinds = await collect_choices(planner, plan_id)
+        except Exception as error:  # the picks only inform the judge; choices_asked then skips
+            message = f"{type(error).__name__}: {error}"
+            extra["picks_error"] = message
+            extra["choice_kinds_error"] = message
     judge_result = await judge_entry(fields, request, ctx, picks)
     extra["duration_seconds"] = round(time.monotonic() - started, 1)
     entry = build_entry(
