@@ -848,10 +848,11 @@ the mockup in Atlas's tokens).
 - **Focus:** the edge turns ink and the focus ring shows. **Error:** the edge turns red.
   **Disabled:** 55 %.
 - **Steppers** for counts (− and + around a real number input), **segmented control** (native
-  radios in a pill track, the chosen one ink; segments 40 px on the phone with the track's padding
-  added to the tap area, 46 px, 36 px from 640 px) for two or three exclusive choices, **choice
-  chips** (native radios drawn as separate pills with a 16 px icon before the label, 1.5 px
-  `rule-strong` edge, the chosen one ink; 40 px on the phone with 3 px of tap area around each,
+  radios in a pill track, the chosen one ink-edged on `notice-wash`; segments 40 px on the phone
+  with the track's padding added to the tap area, 46 px, 36 px from 640 px) for two or three
+  exclusive choices, **choice chips** (native radios drawn as separate pills with a 16 px icon
+  before the label, 1.5 px `rule-strong` edge, the chosen one with a 3 px ink edge on
+  `notice-wash`, as the current station; 40 px on the phone with 3 px of tap area around each,
   36 px from 640 px; they wrap onto a second row on the phone) for four or more exclusive choices
   (the travel mode): the hint describes the group, so it is heard once; an optional note under the
   chips about the chosen option sits in a polite live region ("A bordo a piedi: se porti l'auto,
