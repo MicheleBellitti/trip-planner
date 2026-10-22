@@ -1324,7 +1324,9 @@ figures are constants in their modules.
 /plans/{id}"; the error envelope of decision 20 (it lists `routes.PlanErrorCode` and
 `auth.AuthErrorCode` in `web/lib/schemas/api.ts` and falls back to the HTTP status for any
 other code); `PlanDetail` (`pending_choice` is the open question, only while `running`; `budget_cents` is the end of the cost bar, `booking_links` and
-`alternative_links` are aligned with the plan's lists, `import_url` only when `ready`). With
+`alternative_links` are aligned with the plan's lists, `import_url` only when `ready`, `now` is
+the server's clock when it answered: the choice's countdown corrects the device clock with it,
+since during a pause the plan's own timestamps can be minutes old). With
 DEMO_MODE the same app runs against the demo (decision 32); the web form never sends
 `demo_scenario`.
 

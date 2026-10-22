@@ -21,8 +21,9 @@ import pytest
 import respx
 from fastapi import FastAPI
 from starlette.types import Message
+from time_machine import TimeMachineFixture
 
-from app import main, quota, routes, sessions
+from app import clock, main, quota, routes, sessions
 from app.auth import AuthErrorCode, CurrentUser, auth_messages
 from app.config import Settings
 from app.consumer import PlanNotFoundError
@@ -686,6 +687,20 @@ async def test_plan_detail_link_health_is_empty_for_older_plans(
 
     assert response.status_code == 200
     assert response.json()["link_health"] == {}
+
+
+async def test_get_plan_carries_the_servers_clock_with_its_offset(
+    api: Api, plan_rows: PlanRows, time_machine: TimeMachineFixture
+) -> None:
+    # The web corrects a choice's countdown with it: the plan's own timestamps can be minutes old.
+    record = await plan_rows.add_plan()
+    frozen = dt.datetime(2026, 10, 22, 10, 30, 15, 250000, tzinfo=clock.HOME_TIMEZONE)
+    time_machine.move_to(frozen, tick=False)
+
+    body = (await api.client.get(f"/plans/{record.id}")).json()
+
+    assert body["now"] == "2026-10-22T10:30:15.250000+02:00"
+    assert dt.datetime.fromisoformat(body["now"]) == frozen == clock.now()
 
 
 async def test_get_plan_before_acceptance_has_no_plan_and_no_import_link(

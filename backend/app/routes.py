@@ -463,6 +463,11 @@ class PlanDetail(BaseModel):
             "at once. Only while the plan is `running` with no interrupt requested; else null."
         ),
     )
+    now: AwareDatetime = Field(
+        description=(
+            "The server's clock when this answer was made: the web corrects its countdowns with it."
+        )
+    )
 
 
 class StatusResponse(BaseModel):
@@ -668,11 +673,16 @@ def _link_health(record: PlanRecord) -> dict[str, LinkHealthOut]:
 
 
 def plan_detail(
-    record: PlanRecord, *, settings: Settings, pending_choice: ChoiceRecord | None = None
+    record: PlanRecord,
+    *,
+    settings: Settings,
+    now: dt.datetime,
+    pending_choice: ChoiceRecord | None = None,
 ) -> PlanDetail:
     """Build the GET /plans/{id} answer: link checks from `links.check_link` for every booking
     and alternative of the stored plan, `import_url` only when `ready`, `pending_choice` as
-    given (the caller decides whether the plan is waiting). Pure."""
+    given (the caller decides whether the plan is waiting), `now` as given (the caller reads
+    the clock). Pure."""
     return PlanDetail(
         id=record.id,
         status=PlanStatus(record.status),
@@ -695,6 +705,7 @@ def plan_detail(
         pending_choice=(
             PendingChoice.from_record(pending_choice) if pending_choice is not None else None
         ),
+        now=now,
     )
 
 
@@ -1135,12 +1146,12 @@ async def get_plan(
     plan_id: uuid.UUID, user: CurrentUserDep, db: DbSession, settings: SettingsDep
 ) -> PlanDetail:
     """`plan_detail()` of the user's plan (`budget_cents` from `plans.budget_cents`, the open
-    choice while the plan is running and no interrupt was asked); 404 `plan_not_found`
-    otherwise."""
+    choice while the plan is running and no interrupt was asked, `now` from `clock.now()` once
+    the rows are read); 404 `plan_not_found` otherwise."""
     record = await _user_plan(db, plan_id, user, settings)
     waiting = record.status == PlanStatus.RUNNING.value and record.interrupt_requested_at is None
     open_choice = await pending_choice(db, plan_id) if waiting else None
-    return plan_detail(record, settings=settings, pending_choice=open_choice)
+    return plan_detail(record, settings=settings, now=clock.now(), pending_choice=open_choice)
 
 
 @router.get("/{plan_id}/events", response_class=EventSourceResponse, responses=_ERRORS)
