@@ -554,6 +554,25 @@ describe("PlanScreen, other states", () => {
     vi.unstubAllGlobals();
   });
 
+  it("names the requested mode while the plan runs, never above the finished plan", async () => {
+    // A journey pause may change the mode (spec §2) and the stored request keeps the asked one:
+    // the finished plan's own facts say how it travels, as they carry its total for the budget.
+    const running = detail("running");
+    const asked = { ...running, request: { ...running.request, journey_mode: "ferry" } };
+    const client = fakeClient({ getPlan: vi.fn().mockResolvedValue(asked) });
+    render(<PlanScreen planId={PLAN_ID} client={client} />);
+    await flush();
+    expect(screen.getByText("Da Milano in traghetto, 2 adulti e 2 bambini (8 e 11 anni), budget 2.400 €")).toBeTruthy();
+    cleanup();
+
+    const ready = PlanDetailSchema.parse({ ...structuredClone(happyDetailJson), id: PLAN_ID });
+    const readyAsked = { ...ready, request: { ...ready.request, journey_mode: "ferry" } };
+    render(<PlanScreen planId={PLAN_ID} client={fakeClient({ getPlan: vi.fn().mockResolvedValue(readyAsked) })} />);
+    await flush(500);
+    expect(screen.getByRole("heading", { level: 2, name: "Prenotazioni" })).toBeTruthy();
+    expect(document.body.textContent).not.toContain("in traghetto");
+  });
+
   it("does not move the focus when a finished plan is simply opened", async () => {
     const ready = PlanDetailSchema.parse({ ...structuredClone(happyDetailJson), id: PLAN_ID });
     const client = fakeClient({ getPlan: vi.fn().mockResolvedValue(ready) });

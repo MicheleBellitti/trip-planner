@@ -203,11 +203,13 @@ export function PlanScreenView({
   const measured = clock === null ? null : formatElapsed(elapsedMs(state, clock));
   const elapsed = status === "ready" && finishedElapsed ? finishedElapsed : measured;
   const ready = state.planReady && detail?.plan ? detail : null;
-  // A finished plan sets its total against the budget and states its dates in its own facts, so
-  // the header says who travels and from where, and the length when the title has no dates.
+  // A finished plan sets its total against the budget and states its dates and its transport in
+  // its own facts, so the header says who travels and from where, and the length when the title
+  // has no dates (a journey pause may have changed the mode the request asked for).
   const subtitle = ready?.plan
     ? requestSummary(ready.request, {
         withBudget: false,
+        withMode: false,
         extra: titleStatesDates(title, ready.plan.start_date, ready.plan.end_date)
           ? daysCount(tripLength(ready.plan.start_date, ready.plan.end_date) ?? 0)
           : null,
