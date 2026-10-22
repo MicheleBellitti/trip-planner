@@ -21,8 +21,10 @@ approval); this guard keeps the workflows from drifting away from that design. I
   4. `id-token: write` is requested only by jobs that call Anthropic (the action, or a reusable
      workflow), and a job that uses the action requests it (federation needs it).
   5. secrets.ANTHROPIC_API_KEY appears only as the `api-key` input of the anthropic-auth action,
-     written exactly `${{ secrets.ANTHROPIC_API_KEY }}`. No other secrets.ANTHROPIC_* exists, no
-     `secrets: inherit`, and no secret is read inside the action or its scripts.
+     written exactly `${{ secrets.ANTHROPIC_API_KEY }}`. No other secrets.ANTHROPIC_* exists, and
+     no secret is read inside the action or its scripts. `secrets: inherit` only in a workflow
+     no pull request can run, on a call to a workflow of this repository (./.github/workflows/):
+     without it a called workflow's job does not see its environment's secrets.
   6. No reference to the retired names ANTHROPIC_API_KEY_DEV / ANTHROPIC_API_KEY_PROD anywhere
      under .github/.
   7. Nothing sets ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN or ANTHROPIC_IDENTITY_TOKEN in an
@@ -60,6 +62,13 @@ def requests_id_token(permissions: Any) -> bool:
 
 def uses_auth_action(job: dict[str, Any]) -> bool:
     return any(AUTH_ACTION in str(step.get("uses", "")) for step in job.get("steps") or [])
+
+
+def inherit_allowed(job: dict[str, Any], untrusted: list[str]) -> bool:
+    """`secrets: inherit` only from a workflow no pull request can run, to a workflow of this
+    repository: a called workflow's job reads its environment's secrets only when the caller
+    passes them (deploy-agents.yml -> evals.yml found the development key empty without it)."""
+    return not untrusted and str(job.get("uses", "")).startswith("./.github/workflows/")
 
 
 def walk(node: Any, path: tuple[str, ...] = ()) -> Iterator[tuple[tuple[str, ...], Any]]:
@@ -125,7 +134,7 @@ def check_workflow(path: Path, doc: dict[str, Any], errors: list[str]) -> None:
         )
         names = environment_names(doc, job.get("environment"))
 
-        if job.get("secrets") == "inherit":
+        if job.get("secrets") == "inherit" and not inherit_allowed(job, untrusted):
             errors.append(f"{where} passes `secrets: inherit` to a reusable workflow")
         if names is not None and untrusted and any("production" in name for name in names):
             errors.append(f"{where} can run in production from {untrusted}")
@@ -336,10 +345,22 @@ CASES: list[tuple[str, str, str | None]] = [
         "sets ANTHROPIC_AUTH_TOKEN",
     ),
     (
-        "secrets: inherit",
-        "name: t\non: {push: {}}\njobs:\n  j:\n    uses: ./.github/workflows/other.yml\n"
+        "secrets: inherit from a pull request workflow",
+        "name: t\non: {pull_request: {}}\njobs:\n  j:\n    uses: ./.github/workflows/other.yml\n"
         "    secrets: inherit\n",
         "secrets: inherit",
+    ),
+    (
+        "secrets: inherit to another repository's workflow",
+        "name: t\non: {push: {}}\njobs:\n  j:\n    uses: someone/else/.github/workflows/x.yml@v1\n"
+        "    secrets: inherit\n",
+        "secrets: inherit",
+    ),
+    (
+        "secrets: inherit from a push workflow to a local one",
+        "name: t\non: {push: {}, workflow_dispatch: {}}\njobs:\n  j:\n"
+        "    uses: ./.github/workflows/other.yml\n    secrets: inherit\n",
+        None,
     ),
 ]
 
