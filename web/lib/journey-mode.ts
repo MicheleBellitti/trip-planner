@@ -9,7 +9,8 @@ import type { PlanRequest } from "./schemas/generated/request";
 
 export type JourneyMode = NonNullable<PlanRequest["journey_mode"]>;
 
-/** Aereo is chosen when the form opens (spec 2026-10-18, "The form"). */
+/** Aereo is chosen the first time the form opens (spec 2026-10-18, "The form"); after that the
+ * form opens on the last mode sent from this browser (lib/remembered-request.ts). */
 export const DEFAULT_JOURNEY_MODE: JourneyMode = "flight";
 
 /** The form's labels, in the schema's order. */

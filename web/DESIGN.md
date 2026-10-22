@@ -601,10 +601,11 @@ layout, not a stretched phone.
   lines below the fold, and the sticky card keeps the button in view. From 1080 to about 1420 px
   the modes break three and two. The "Date" legend is for screen readers only: "Quando" says it.
   The read-back card names the travel mode first, the plane included ("In aereo"); the plan
-  page's header names it only when it is not the plane ("Da Milano in treno"). The form remembers the origin, the adults and the number
-  of children, never the children's ages (they go stale and set the price): each age is a tap on
-  "Scegli". Enter in a single-line field
-  moves to the next field; only the budget, the last one, sends the form. The error summary
+  page's header names it only when it is not the plane ("Da Milano in treno"). The form remembers the origin, the adults, the number
+  of children and the travel mode (Aereo until a plan is sent), never the children's ages (they go
+  stale and set the price): each age is a tap on "Scegli". Enter in a single-line field moves to
+  the next field, and stops on the chosen travel mode (its default decides what is researched);
+  only the budget, the last one, sends the form. The error summary
   appears from three problems (or one with no field of its own), lists the fields by name as
   links, and takes the focus; with one or two problems the focus goes to the field.
 - **`/plans` ends on its help** (`PlansFooter`): after the list and its photo credit, a rule and

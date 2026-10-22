@@ -179,7 +179,7 @@ describe("RequestForm", () => {
     render(<RequestForm today={TODAY} initialValues={exampleRequestForm(TODAY)} />);
     await submit();
     const stored = JSON.parse(window.localStorage.getItem("atlas:last-request") ?? "null");
-    expect(stored).toEqual({ origin: "Milano", adults: 2, childAges: ["8", "11"] });
+    expect(stored).toEqual({ origin: "Milano", adults: 2, childAges: ["8", "11"], journeyMode: "flight" });
     cleanup();
 
     render(<RequestForm today={TODAY} initialValues={emptyRequestForm()} restoreLast />);
@@ -194,6 +194,32 @@ describe("RequestForm", () => {
     // The home page's example is a request of its own.
     render(<RequestForm today={TODAY} initialValues={exampleRequestForm(TODAY)} />);
     expect((screen.getByLabelText("Da dove parti") as HTMLInputElement).value).toBe("Milano");
+    window.localStorage.clear();
+  });
+
+  it("remembers the travel mode for the next plan, the plane until one is sent", async () => {
+    window.localStorage.clear();
+    const chosen = () =>
+      (screen.getAllByRole("radio") as HTMLInputElement[]).filter((radio) => radio.name.length > 0 && radio.checked && ["flight", "train", "ferry", "car", "coach"].includes(radio.value)).map((radio) => radio.value);
+    render(<RequestForm today={TODAY} initialValues={emptyRequestForm()} restoreLast />);
+    expect(chosen()).toEqual(["flight"]);
+    cleanup();
+
+    mocks.createPlan.mockResolvedValue({ id: PLAN_ID });
+    render(<RequestForm today={TODAY} initialValues={exampleRequestForm(TODAY)} />);
+    fireEvent.click(screen.getByRole("radio", { name: "Treno" }));
+    await submit();
+    cleanup();
+
+    render(<RequestForm today={TODAY} initialValues={emptyRequestForm()} restoreLast />);
+    expect(chosen()).toEqual(["train"]);
+    cleanup();
+
+    // A request remembered before the mode existed opens on the plane.
+    window.localStorage.setItem("atlas:last-request", JSON.stringify({ origin: "Torino", adults: 1, childAges: [] }));
+    render(<RequestForm today={TODAY} initialValues={emptyRequestForm()} restoreLast />);
+    expect((screen.getByLabelText("Da dove parti") as HTMLInputElement).value).toBe("Torino");
+    expect(chosen()).toEqual(["flight"]);
     window.localStorage.clear();
   });
 
