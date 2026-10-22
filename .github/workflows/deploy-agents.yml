@@ -166,7 +166,9 @@ jobs:
           retention-days: 30
 
       # Also after a failed apply: a partial apply still records what it created, and the next
-      # run needs those IDs (ant apply docs, "Run ant apply in CI"). The commit is made on top
+      # run needs those IDs (ant apply docs, "Run ant apply in CI"). An apply that created
+      # nothing commits nothing: ant still writes a lockfile with empty `resources`, which
+      # main got once (95f458c, a failed login on 2026-10-22). The commit is made on top
       # of the current main, never rebased: main moves while the job waits for approval, and
       # the lockfile is the only file this commit changes.
       - name: Commit the lockfile to main
@@ -176,6 +178,10 @@ jobs:
         run: |
           if [ ! -f "$LOCKFILE" ]; then
             echo "ant wrote no $LOCKFILE: nothing to commit."
+            exit 0
+          fi
+          if ! jq -e '(.resources // {}) | length > 0' "$LOCKFILE" > /dev/null; then
+            echo "$LOCKFILE records no resources (the apply created nothing): nothing to commit."
             exit 0
           fi
           applied="$RUNNER_TEMP/claude-lock.production.json"
