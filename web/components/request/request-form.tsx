@@ -312,7 +312,7 @@ export function RequestForm({ today, initialValues, restoreLast = false, demoSce
       )}
       <ChoiceChips
         legend="Come viaggi"
-        hint="Vale per andata e ritorno."
+        hint="Per andata e ritorno; gli spostamenti sul posto li sceglie il planner."
         note={JOURNEY_MODE_NOTES[values.journeyMode] ?? null}
         name={journeyMode}
         options={MODE_OPTIONS}

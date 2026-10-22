@@ -10,13 +10,16 @@ import type { KeyboardEvent } from "react";
 
 /** The fields in the order the form shows them: inputs, selects and text areas that can take focus.
  * Buttons are not stops, and neither are the radios of a segmented choice that already has its
- * answer (the one Enter was pressed on excepted): Enter goes on to the field the choice opens. */
+ * answer (the one Enter was pressed on excepted): Enter goes on to the field the choice opens. The
+ * chosen radio of a group marked `data-enter-stop` (the travel mode, whose default decides what
+ * the agents research) is a stop, so Enter never passes that choice unseen. */
 function stops(form: HTMLFormElement, from: EventTarget | null): HTMLElement[] {
   return Array.from(form.elements).filter((element): element is HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement => {
     if (element instanceof HTMLSelectElement || element instanceof HTMLTextAreaElement) return !element.disabled;
     if (!(element instanceof HTMLInputElement) || element.disabled) return false;
     if (["button", "submit", "reset", "image", "hidden"].includes(element.type)) return false;
-    return element.type !== "radio" || element === from;
+    if (element.type !== "radio" || element === from) return true;
+    return element.checked && element.closest("[data-enter-stop]") !== null;
   });
 }
 

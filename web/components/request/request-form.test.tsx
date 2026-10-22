@@ -126,9 +126,15 @@ describe("RequestForm", () => {
     expect(screen.queryByText(/da sistemare/)).toBeNull();
     expect(origin.getAttribute("aria-invalid")).toBeNull();
 
-    // From the destination to the date (the radios are skipped), and so on down the form.
+    // From the destination to the chosen travel mode: its default decides what is researched, so
+    // Enter never passes it unseen (the radios of the two-way choices are skipped).
     await act(async () => {
       fireEvent.keyDown(screen.getByLabelText("Dove vuoi andare"), { key: "Enter" });
+    });
+    expect(document.activeElement).toBe(screen.getByRole("radio", { name: "Aereo" }));
+    // Then on to the dates, and so on down the form.
+    await act(async () => {
+      fireEvent.keyDown(screen.getByRole("radio", { name: "Aereo" }), { key: "Enter" });
     });
     expect(document.activeElement).toBe(screen.getByLabelText("Partenza"));
     await act(async () => {
@@ -328,13 +334,18 @@ describe("RequestForm", () => {
   it("explains on foot or with the car under the chips, only for those two modes", () => {
     render(<RequestForm today={TODAY} initialValues={exampleRequestForm(TODAY)} />);
     const group = screen.getByRole("group", { name: "Come viaggi" });
-    const hint = (group.getAttribute("aria-describedby") ?? "").split(" ").map((id) => document.getElementById(id)?.textContent);
-    expect(hint).toEqual(["Vale per andata e ritorno."]);
+    const described = () =>
+      (group.getAttribute("aria-describedby") ?? "").split(" ").map((id) => document.getElementById(id)?.textContent);
+    expect(described()).toEqual(["Per andata e ritorno; gli spostamenti sul posto li sceglie il planner."]);
     const note = within(group).getByRole("status");
     expect(note.textContent).toBe("");
 
     fireEvent.click(screen.getByRole("radio", { name: "Traghetto" }));
     expect(note.textContent).toBe("A bordo a piedi: se porti l'auto, scegli Auto.");
+    expect(described()).toEqual([
+      "Per andata e ritorno; gli spostamenti sul posto li sceglie il planner.",
+      "A bordo a piedi: se porti l'auto, scegli Auto.",
+    ]);
     fireEvent.click(screen.getByRole("radio", { name: "Auto" }));
     expect(note.textContent).toBe("Con la tua auto, anche sui traghetti se servono.");
     fireEvent.click(screen.getByRole("radio", { name: "Treno" }));

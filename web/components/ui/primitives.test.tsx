@@ -508,7 +508,13 @@ describe("ChoiceChips", () => {
       />,
     );
     expect(screen.getByRole("status").textContent).toBe("A bordo a piedi: se porti l'auto, scegli Auto.");
-    expect(screen.getByRole("group", { name: "Come viaggi" }).contains(screen.getByRole("status"))).toBe(true);
+    const group = screen.getByRole("group", { name: "Come viaggi" });
+    expect(group.contains(screen.getByRole("status"))).toBe(true);
+    // Coming back to the group, the note is part of what describes it.
+    const describedBy = (group.getAttribute("aria-describedby") ?? "").split(" ");
+    expect(describedBy.map((id) => document.getElementById(id)?.textContent)).toEqual([
+      "A bordo a piedi: se porti l'auto, scegli Auto.",
+    ]);
   });
 });
 
