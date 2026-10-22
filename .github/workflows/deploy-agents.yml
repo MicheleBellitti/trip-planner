@@ -59,6 +59,12 @@ jobs:
       # The ceiling for evals.yml's development jobs, which mint an OIDC token for Anthropic
       # federation (a called workflow cannot ask for more than its caller allows).
       id-token: write
+    # Without it the called jobs see an empty secrets context, the `development` environment's
+    # ANTHROPIC_API_KEY included: every run until 2026-10-22 stopped at "No Anthropic
+    # credentials". This workflow runs only on main, so the guard allows it here
+    # (.github/scripts/check_anthropic_credentials.py, rule 5); there is no repository-level
+    # Anthropic secret to inherit.
+    secrets: inherit
 
   production:
     name: ant apply (production)
