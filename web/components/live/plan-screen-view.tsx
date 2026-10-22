@@ -79,13 +79,15 @@ function inLastMinute(choice: ChoiceView, controls: ChoiceControls, clock: numbe
   return (controls.windowMs ?? choiceWindowMs(choice)) > MINUTE_MS && left > 0 && left <= MINUTE_MS;
 }
 
-/** The title of the event that answered `choiceId` ("Tempo scaduto: sceglie Atlas"), or null. */
-function answeredTitleOf(events: readonly UIEvent[], choiceId: string): string | null {
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    const event = events[index];
-    if (event?.kind === "choice" && readChoiceAnswer(event.detail)?.choiceId === choiceId) return event.title;
+/** The title of the event that answered each question ("Tempo scaduto: sceglie Atlas"), by its id:
+ * the latest one when a question has several. */
+function answeredTitles(events: readonly UIEvent[]): ReadonlyMap<string, string> {
+  const titles = new Map<string, string>();
+  for (const event of events) {
+    const answer = event.kind === "choice" ? readChoiceAnswer(event.detail) : null;
+    if (answer) titles.set(answer.choiceId, event.title);
   }
-  return null;
+  return titles;
 }
 
 /** What the finished plan takes from the data source besides the detail (the demo's cover,
@@ -253,17 +255,18 @@ export function PlanScreenView({
   // A question that was on screen and closes (its answered event arrives: the deadline, the
   // traveller's own answer, an interrupt) is said once, by that event's title ("Tempo scaduto:
   // sceglie Atlas"), with the region's words of that moment: the panel and its words are gone, and
-  // a screen reader still picking would otherwise hear nothing. Never the replayed history.
+  // a screen reader still picking would otherwise hear nothing. So is one the next question
+  // replaces at once (both events in one batch), whose panel then takes the focus. Never the
+  // replayed history. The titles are read once per change of the events, never per clock tick.
+  const titles = useMemo(() => answeredTitles(state.events), [state.events]);
   const [watching, setWatching] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<{ choiceId: string; text: string; spoken: string } | null>(null);
-  if (askedId !== null) {
-    if (askedId !== watching) setWatching(askedId);
-  } else if (watching !== null) {
-    const answered = answeredTitleOf(state.events, watching);
-    if (answered !== null) {
-      setWatching(null);
-      if (settledForSpeech) setReceipt({ choiceId: watching, text: answered, spoken: spokenNow });
-    }
+  if (watching !== null && askedId !== watching) {
+    const answered = titles.get(watching);
+    if (answered !== undefined || askedId !== null) setWatching(askedId);
+    if (answered !== undefined && settledForSpeech) setReceipt({ choiceId: watching, text: answered, spoken: spokenNow });
+  } else if (watching === null && askedId !== null) {
+    setWatching(askedId);
   }
   const receiptNote = receipt !== null && receipt.spoken === spokenNow ? receipt : null;
 

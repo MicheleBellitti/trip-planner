@@ -12,7 +12,8 @@
  * The traveller's choice: the answer goes through POST /plans/{id}/choices/{choice_id}. Once it
  * went, the question is hidden at once (until its answered event arrives) and the focus moves to
  * the plan's state; a 409 `choice_closed` or a 404 `choice_not_found` leaves the backend's sentence
- * on the panel and re-reads the plan. While a question waits, the tab title starts with "Tocca a te ·".
+ * on the panel and re-reads the plan; a 401 keeps the picks with a sentence to sign in again. While a
+ * question waits, the tab title starts with "Tocca a te ·".
  */
 
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -43,6 +44,9 @@ const PlanLoadFailed = lazy(() => loadPanels().then((module) => ({ default: modu
 
 /** Several events can announce a status change at once: read the plan once after them. */
 const REFRESH_DEBOUNCE_MS = 400;
+
+/** The choice's error when the session expired while the traveller picked (a 401 on the answer). */
+const ANSWER_SIGNED_OUT = "La sessione è scaduta: accedi di nuovo, poi invia la scelta.";
 
 function clockTime(ms: number): string {
   return new Date(ms).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
@@ -164,8 +168,9 @@ export function PlanScreen({ planId, client = liveApi }: { planId: string; clien
         return null;
       } catch (error) {
         if (error instanceof UnauthorizedError) {
+          // Nothing went: the panel keeps the picks and says why, the stream line offers the sign-in.
           setLoginUrl(error.loginUrl);
-          return null;
+          return ANSWER_SIGNED_OUT;
         }
         if (
           error instanceof ApiError &&
