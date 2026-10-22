@@ -128,6 +128,9 @@ export const PlanDetailSchema = z.object({
    * running and no interrupt was asked; null otherwise and from a backend that predates it. Kept
    * loose on purpose: `readChoice` (lib/choices.ts) is the tolerant reader. */
   pending_choice: z._default(z.nullable(z.record(z.string(), z.unknown())), null),
+  /** The server's clock when this answer was made: the choice's countdown corrects the device
+   * clock with it. Missing from a backend that predates it. */
+  now: z.optional(InstantSchema),
 });
 export type PlanDetail = z.output<typeof PlanDetailSchema>;
 

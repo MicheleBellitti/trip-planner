@@ -735,9 +735,10 @@ describe("PlanScreen, the traveller's choice", () => {
   const EXPIRED = "Tempo scaduto: scelgo io.";
   const skipButton = () => screen.getByRole("button", { name: "Scegli tu" }) as HTMLButtonElement;
 
-  // The countdown corrects the device clock (R13): the skew is the smallest gap seen between the
-  // page's clock and a server timestamp (an event's ts, the snapshot's updated_at), and the local
-  // deadline is deadline_at plus that skew.
+  // The countdown corrects the device clock (R13): the local deadline is deadline_at plus the skew.
+  // Until the tests of the server's `now` below, the snapshots come from a backend without it, and
+  // the skew is the smallest gap seen between the page's clock and a server timestamp (an event's
+  // ts, the snapshot's updated_at).
 
   it("times a question from the snapshot on a device clock 5 minutes fast: open, never at zero before the backend's deadline", async () => {
     // The backend is a minute into the question, and its snapshot was written then.
@@ -858,7 +859,88 @@ describe("PlanScreen, the traveller's choice", () => {
     }
   });
 
-  it("a reload long after the last server timestamp only lengthens the window: the backend's 409 answers a late press", async () => {
+  // GET /plans/{id} carries the server's clock (`now`, R14): each new value sets the skew afresh,
+  // so a reload in a quiet pause, when every timestamp the page holds is as old as the question, is
+  // timed as well as a question asked live, and a device clock stepped since heals with the next
+  // answer. The backend's answers here are read off a server clock `offset` behind the device's.
+
+  /** GET /plans/{id}, answered by a backend whose clock runs `offset()` ms behind the device's. */
+  const serverAnswers = (offset: () => number) =>
+    vi.fn(async () => running({ now: new Date(Date.now() - offset()).toISOString(), pending_choice: PENDING }));
+
+  it.each([
+    ["an accurate clock", 0],
+    ["a device clock 5 minutes fast", 5 * 60_000],
+    ["a device clock 3 minutes slow", -3 * 60_000],
+  ])("a reload 2 minutes into a quiet pause shows the backend's 2:00 left, on %s", async (_, offset) => {
+    // Nothing has happened since the question: its events and updated_at are 2 minutes old.
+    vi.setSystemTime(ASKED_AT + 120_000 + offset);
+    const getPlan = serverAnswers(() => offset);
+    render(<PlanScreen planId={PLAN_ID} client={fakeClient({ getPlan })} />);
+    await flush();
+    expect(panel()).not.toBeNull();
+    expect(countdown()).toBe("Tempo per scegliere: 2:00");
+
+    // The replay brings the question's events (and, after its idle event, a second answer): the
+    // skew stays the answers', the events' timestamps being older.
+    await replay(upTo(55));
+    expect(getPlan).toHaveBeenCalledTimes(2);
+    expect(countdown()).toBe("Tempo per scegliere: 2:00");
+    expect(skipButton().disabled).toBe(false);
+  });
+
+  it("offline after such a reload, the countdown stops at what the backend had left at its latest answer", async () => {
+    vi.setSystemTime(ASKED_AT + 120_000);
+    const getPlan = serverAnswers(() => 0);
+    render(<PlanScreen planId={PLAN_ID} client={fakeClient({ getPlan })} />);
+    await flush();
+    await replay(upTo(55));
+    expect(countdown()).toBe("Tempo per scegliere: 2:00");
+
+    // The page's clock stops at its last known state, a server time: the latest answer's now, not
+    // the question's events 2 minutes before it.
+    const online = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    try {
+      act(() => {
+        window.dispatchEvent(new Event("offline"));
+      });
+      expect(countdown()).toBe("Tempo per scegliere: 2:00");
+      expect(screen.getByText(/^Non aggiornato: sei offline, ultimo stato alle /)).toBeTruthy();
+    } finally {
+      online.mockRestore();
+    }
+  });
+
+  it("heals a device clock stepped forward with the backend's next answer", async () => {
+    let offset = 0;
+    vi.setSystemTime(ASKED_AT + 60_000);
+    const getPlan = serverAnswers(() => offset);
+    render(<PlanScreen planId={PLAN_ID} client={fakeClient({ getPlan })} />);
+    await flush();
+    const source = await replay(upTo(55));
+    expect(countdown()).toBe("Tempo per scegliere: 3:00");
+
+    // NTP steps the device clock 2 minutes forward; the server's does not move. The skew set before
+    // the step puts the deadline 2 minutes early (the events' timestamps can only lower it).
+    offset = 120_000;
+    vi.setSystemTime(Date.now() + offset);
+    await flush(1_000);
+    expect(countdown()).toBe("Tempo per scegliere: 0:59");
+
+    // The browser gives up on the stream: the page reads the plan again before it reconnects, and
+    // that answer's clock sets the skew afresh. The backend's 2:58 left (a second that has begun
+    // counts).
+    act(() => {
+      source.readyState = 2;
+      source.onerror?.(new Event("error"));
+    });
+    await flush(1_000);
+    expect(getPlan).toHaveBeenCalledTimes(3);
+    expect(countdown()).toBe("Tempo per scegliere: 2:58");
+    expect(skipButton().disabled).toBe(false);
+  });
+
+  it("from an older backend's answer, without now, a reload long after the last server timestamp only lengthens the window: the backend's 409 answers a late press", async () => {
     // A minute into the question, on an accurate clock; the newest timestamps are the question's.
     vi.setSystemTime(ASKED_AT + 60_000);
     const client = fakeClient({ getPlan: vi.fn(async () => running()) });
@@ -958,7 +1040,8 @@ describe("PlanScreen, the traveller's choice", () => {
     expect(answerChoice).toHaveBeenCalledTimes(1);
     // Nothing went: the panel stays, with the reason and the picks, and its buttons answer again.
     expect(panel()).not.toBeNull();
-    expect(screen.getByRole("alert").textContent).toContain("La sessione è scaduta: accedi di nuovo, poi invia la scelta.");
+    // The sign-in reloads the page: the sentence never promises the picks will be there after it.
+    expect(screen.getByRole("alert").textContent).toBe("Scelta non inviataLa sessione è scaduta: accedi di nuovo e rifai la scelta.");
     expect((box("Oceanário de Lisboa") as HTMLInputElement).checked).toBe(true);
     expect(skipButton().disabled).toBe(false);
     expect((screen.getByRole("button", { name: "Continua con questa" }) as HTMLButtonElement).disabled).toBe(false);

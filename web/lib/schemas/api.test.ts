@@ -59,6 +59,15 @@ describe("PlanDetailSchema pending_choice", () => {
     expect(PlanDetailSchema.parse({ ...BASE_DETAIL, pending_choice: null }).pending_choice).toBeNull();
   });
 
+  it("PlanDetail keeps the server's now, which an older backend leaves out", () => {
+    expect(PlanDetailSchema.parse(BASE_DETAIL).now).toBeUndefined();
+    expect(PlanDetailSchema.parse({ ...BASE_DETAIL, now: "2026-10-18T12:05:30.250000+02:00" }).now).toBe(
+      "2026-10-18T12:05:30.250000+02:00",
+    );
+    // An instant without its offset is not the backend's.
+    expect(PlanDetailSchema.safeParse({ ...BASE_DETAIL, now: "2026-10-18T12:05:30" }).success).toBe(false);
+  });
+
   it("knows the three choice error codes and parses the answer", () => {
     expect(PLAN_ERROR_CODES).toEqual(expect.arrayContaining(["choice_not_found", "choice_closed", "invalid_choice_answer"]));
     expect(ChoiceAnswerResponseSchema.parse({ id: "c1", answered_by: "traveller", selected: ["a1"] })).toEqual({

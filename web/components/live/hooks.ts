@@ -72,25 +72,48 @@ export function useOnline(): boolean {
   );
 }
 
+/** `clock` minus a server instant, when both are numbers: never NaN, which would differ from
+ * itself and render again and again. */
+function gapTo(clock: number, instant: string | null | undefined): number | null {
+  const gap = instant ? clock - Date.parse(instant) : Number.NaN;
+  return Number.isFinite(gap) ? gap : null;
+}
+
 /**
- * How far the browser's clock runs ahead of the server's, in ms (negative when it runs behind):
- * the smallest gap seen between `clock` and a server timestamp the page holds. A timestamp never
- * postdates its arrival, so the estimate errs high, by the delivery delay (more after a reload long
- * after the newest timestamp), and low by at most the clock's one-second tick. It is kept while
- * the page lives, across reconnects: a later sample can only lower it. 0 until the first sample;
- * no sample with a null `clock` (pass null too when the clock is not the browser's).
+ * How far the browser's clock runs ahead of the server's, in ms (negative when it runs behind).
+ *
+ * - `serverNow` is the server's clock when it made its latest answer (GET /plans/{id}'s `now`).
+ *   Each new value (compared by value) sets the skew to `clock` minus it, replacing what came
+ *   before: a near-exact sample (high by the answer's delivery, low by at most the clock's
+ *   one-second tick), and the way a device clock stepped forward since the last one heals.
+ * - `timestamps` are the other server instants the page holds (the newest event's ts, the
+ *   snapshot's updated_at). One never postdates its arrival, so `clock` minus it errs high, by the
+ *   delivery delay (minutes after a reload in a quiet pause): they can only lower the skew, until
+ *   the next `serverNow`. From a backend without `now` they are all there is.
+ *
+ * Kept while the page lives, across reconnects. 0 until the first sample; no sample with a null
+ * `clock` (pass null too when the clock is not the browser's).
  */
-export function useClockSkew(clock: number | null, timestamps: readonly (string | null | undefined)[]): number {
-  const [skew, setSkew] = useState<number | null>(null);
-  let next = skew;
+export function useClockSkew(
+  clock: number | null,
+  serverNow: string | null | undefined,
+  timestamps: readonly (string | null | undefined)[],
+): number {
+  const [kept, setKept] = useState<{ skew: number | null; serverNow: string | null }>({ skew: null, serverNow: null });
+  let { skew, serverNow: sampled } = kept;
   if (clock !== null) {
+    const fresh = serverNow && serverNow !== sampled ? gapTo(clock, serverNow) : null;
+    if (fresh !== null) {
+      skew = fresh;
+      sampled = serverNow ?? null;
+    }
     for (const timestamp of timestamps) {
-      const at = timestamp ? Date.parse(timestamp) : Number.NaN;
-      if (!Number.isNaN(at) && (next === null || clock - at < next)) next = clock - at;
+      const gap = gapTo(clock, timestamp);
+      if (gap !== null && (skew === null || gap < skew)) skew = gap;
     }
   }
-  if (next !== skew) setSkew(next);
-  return next ?? 0;
+  if (skew !== kept.skew || sampled !== kept.serverNow) setKept({ skew, serverNow: sampled });
+  return skew ?? 0;
 }
 
 /** How long after the stream opens its replay of history counts as settled. */

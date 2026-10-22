@@ -803,11 +803,14 @@ the mockup in Atlas's tokens).
   scaled from the left by the time left over the question's window. A second that has begun
   counts ("4:00" when the question opens, "0:01" in its last one), and the time is clamped to the
   window and to zero, so a browser clock minutes off never shows more or less. On the live screen
-  it counts to the backend's `deadline_at` moved onto the browser's clock by its skew: the
-  smallest gap the page has seen between its clock and a server timestamp (an event's `ts`, the
-  snapshot's `updated_at`), kept across reconnects. A clock minutes fast never opens a question at
-  zero and a slow one never holds it past the backend's deadline; a reload long after the newest
-  timestamp only lengthens the window, and a late press gets the backend's closed sentence. At zero:
+  it counts to the backend's `deadline_at` moved onto the browser's clock by its skew: the gap
+  between the page's clock and the server's own clock in each GET /plans/{id} answer (`now`),
+  lowered meanwhile by a newer server timestamp (an event's `ts`), kept across reconnects. A clock
+  minutes fast never opens a question at zero and a slow one never holds it past the backend's
+  deadline, a reload in a quiet pause shows the time the backend has left, and a clock stepped
+  forward heals with the next answer. From a backend without `now` the skew is the smallest gap to
+  an event's `ts` or the snapshot's `updated_at`: there a reload long after the newest timestamp
+  only lengthens the window, and a late press gets the backend's closed sentence. At zero:
   "Tempo scaduto: scelgo io." and an empty bar. **Never amber** (it belongs to booking deadlines) and
   never red (running out is the rule at work, not a failure). It is not a live region: the page says
   "Manca un minuto per scegliere." once, through its own, and the note leaves with the region's
