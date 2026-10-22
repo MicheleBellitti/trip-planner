@@ -16,6 +16,7 @@
  * demo's synthesized answer); tests pin both against the recorded fixture.
  */
 
+import { BRAND_NAME } from "./brand";
 import type { Cover } from "./schemas/api";
 import type { UIEvent } from "./schemas/generated/ui-event";
 import { AGENT_LABELS } from "./plan-events/labels";
@@ -229,8 +230,8 @@ export function answeredTitle(choice: ChoiceView, by: AnsweredBy, selected: read
       .join(", ");
     return `Hai scelto: ${titles}`.replace(/\s+/g, " ").trim();
   }
-  if (by === "skip") return "Hai lasciato scegliere ad Atlas";
-  if (by === "timeout") return "Tempo scaduto: sceglie Atlas";
+  if (by === "skip") return `Hai lasciato scegliere ad ${BRAND_NAME}`;
+  if (by === "timeout") return `Tempo scaduto: sceglie ${BRAND_NAME}`;
   return "Domanda chiusa: piano interrotto";
 }
 

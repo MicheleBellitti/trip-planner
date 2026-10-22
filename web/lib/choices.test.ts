@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import fixture from "./plan-events/__fixtures__/backend/choices.json";
 import {
@@ -139,6 +139,19 @@ describe("the choice copy", () => {
     expect(answeredTitle(first, "skip", [])).toBe("Hai lasciato scegliere ad Atlas");
     expect(answeredTitle(first, "timeout", [])).toBe("Tempo scaduto: sceglie Atlas");
     expect(answeredTitle(first, "closed", [])).toBe("Domanda chiusa: piano interrotto");
+  });
+
+  it("answeredTitle names the product through BRAND_NAME, never by hand", async () => {
+    vi.resetModules();
+    vi.doMock("./brand", () => ({ BRAND_NAME: "Orbis" }));
+    try {
+      const renamed = await import("./choices");
+      expect(renamed.answeredTitle(first, "skip", [])).toBe("Hai lasciato scegliere ad Orbis");
+      expect(renamed.answeredTitle(first, "timeout", [])).toBe("Tempo scaduto: sceglie Orbis");
+    } finally {
+      vi.doUnmock("./brand");
+      vi.resetModules();
+    }
   });
 
   it("writes the eyebrow per kind, with and without a destination", () => {
