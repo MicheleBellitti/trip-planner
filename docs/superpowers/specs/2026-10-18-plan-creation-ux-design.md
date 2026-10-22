@@ -148,7 +148,7 @@ coordinator chooses. Instead (Michele, 2026-10-18):
 | `destination` | At the very start, only with "Suggeriscimi tu" | the 2 or 3 candidates | one |
 | `journey` | At the very start, only when the chosen mode is impossible or the preferences contradict it | 2 to 4 modes | one |
 | `activities` | When the wave-1 activities reply is in | 3 to 6 of its options, the most different from each other | several |
-| `food` | After the journey and lodging are chosen, before wave 2 | 3 or 4 eating styles typical of the destination (written by the coordinator, no research) | several |
+| `food` | During wave 1, while the subagents research (Michele, 2026-10-22; first: after the journey and lodging were chosen, which left the session idle while the traveller answered) | 3 or 4 eating styles typical of the destination (written by the coordinator, no research) | several |
 | `other` | At most once, only for a real fork the traveller would care about (two very different lodgings, ferry or flight to an island) | 2 to 4 | one |
 
 `destination`, `journey` and `other` share the third slot, in that order of precedence: a plan

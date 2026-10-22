@@ -93,6 +93,11 @@ fixes the tool's contract and its answer texts; this plan quotes them.
    (2026-10-22): their descriptions are the coordinator's delegation roster, so "destination or
    candidates" still invited research of destinations the traveller did not pick, and every
    flights and lodging request paid for the per-candidate rules. The candidate wording is gone.
+10. **The `food` pause runs during wave 1** (Michele, 2026-10-22, after the PR review), not
+    after the choice: there it left every agent idle while the traveller answered (up to the
+    240 s deadline), and it needs only the destination. Step 4 now holds both wave-1 pauses
+    (`food` first unless the activities reply is already in); the old step 6 is gone, so wave 2
+    is step 6 and the close step 7. Spec §2's table says so too.
 
 ## Review Focus
 
