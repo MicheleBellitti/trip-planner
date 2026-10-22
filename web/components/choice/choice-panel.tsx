@@ -43,8 +43,8 @@ export interface ChoiceControls {
    *  { closed: message } when the backend says the question is closed or gone (409, 404). */
   answer(choiceId: string, answer: ChoiceAnswerInput): Promise<null | string | { closed: string }>;
   /** The countdown's deadline (ms on the clock `now` reads), which also rests the controls at zero.
-   *  Default: the choice's deadline_at. The live screen sets it for a question that arrived live
-   *  (anchored on the browser's clock); the demo sets its own. Null: no countdown and no rule. */
+   *  Default: the choice's deadline_at. The live screen sets it to deadline_at corrected for the
+   *  browser clock's skew; the demo sets its own. Null: no countdown and no rule. */
   deadlineAt?: number | null;
   /** The countdown's whole window (ms), for its bar. Default: choiceWindowMs(choice). */
   windowMs?: number;

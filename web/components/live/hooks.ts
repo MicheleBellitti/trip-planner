@@ -72,6 +72,27 @@ export function useOnline(): boolean {
   );
 }
 
+/**
+ * How far the browser's clock runs ahead of the server's, in ms (negative when it runs behind):
+ * the smallest gap seen between `clock` and a server timestamp the page holds. A timestamp never
+ * postdates its arrival, so the estimate errs high, by the delivery delay (more after a reload long
+ * after the newest timestamp), and low by at most the clock's one-second tick. It is kept while
+ * the page lives, across reconnects: a later sample can only lower it. 0 until the first sample;
+ * no sample with a null `clock` (pass null too when the clock is not the browser's).
+ */
+export function useClockSkew(clock: number | null, timestamps: readonly (string | null | undefined)[]): number {
+  const [skew, setSkew] = useState<number | null>(null);
+  let next = skew;
+  if (clock !== null) {
+    for (const timestamp of timestamps) {
+      const at = timestamp ? Date.parse(timestamp) : Number.NaN;
+      if (!Number.isNaN(at) && (next === null || clock - at < next)) next = clock - at;
+    }
+  }
+  if (next !== skew) setSkew(next);
+  return next ?? 0;
+}
+
 /** How long after the stream opens its replay of history counts as settled. */
 export const SETTLE_MS = 600;
 
