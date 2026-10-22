@@ -776,9 +776,11 @@ the mockup in Atlas's tokens).
   same ratio, so a row stays level; when none has one, there is no photo area at all (a tile is
   not a photo). Then the title (condensed 600, title size), the reason (`small`, `ink-2`) and, at
   the card's foot, quiet chips with their glyph: duration, price for the party (the option's
-  currency, Italian format), area; screen readers hear "Durata: ", "Prezzo per il gruppo: ",
-  "Zona: " before each value. An unknown value has no chip, and a missing price is never
-  "gratis".
+  currency, Italian format, as the finished plan writes it: "12,50 USD", never "$"), area; screen
+  readers hear "Durata: ", "Prezzo per il gruppo: ", "Zona: " before each value. A destination's
+  area is the rough travel time there by the chosen mode ("Circa 2 h di volo"): a `clock` glyph
+  (not `airplane-tilt`, the flights line's, since the mode may be a train) and "Viaggio: ". An
+  unknown value has no chip, and a missing price is never "gratis".
 - **The control is native:** a visually hidden checkbox (several picks) or radio (one, grouped
   by `name`) whose label stretches over the whole card, so a tap anywhere picks it; the reason and
   the chips describe it. Keyboard focus draws the focus ring around the card.
