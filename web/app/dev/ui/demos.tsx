@@ -214,7 +214,7 @@ export function FormDemo() {
       </Field>
       <ChoiceChips
         legend="Come viaggi"
-        hint="Vale per andata e ritorno."
+        hint="Per andata e ritorno; gli spostamenti sul posto li sceglie il planner."
         note={JOURNEY_MODE_NOTES[mode] ?? null}
         name={modeName}
         options={MODES}

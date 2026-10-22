@@ -277,11 +277,16 @@ export function ChoiceChips<T extends string>({
 }: ChoiceChipsProps<T>) {
   const generated = useId();
   const hintId = `${generated}-hint`;
+  const noteId = `${generated}-note`;
   const errorId = `${generated}-error`;
+  // The group is described by its hint and, while there is one, the note: heard on entering it.
+  const describedBy = [hint ? hintId : null, note ? noteId : null].filter(Boolean).join(" ") || undefined;
 
   return (
     <fieldset
-      aria-describedby={hint ? hintId : undefined}
+      aria-describedby={describedBy}
+      // Enter in a form stops on the chosen chip (components/request/advance-on-enter.ts).
+      data-enter-stop=""
       className={cx("grid min-w-0 gap-1.5 border-0 p-0", className)}
     >
       <legend className="mb-1.5 p-0 text-meta font-semibold text-ink">{legend}</legend>
@@ -323,7 +328,7 @@ export function ChoiceChips<T extends string>({
       </div>
       {/* Always rendered and never display:none (empty, it takes no room): a live region that
           appears together with its text is often not announced. */}
-      <p role="status" aria-live="polite" className="text-meta text-ink-2 not-empty:mt-2">
+      <p id={noteId} role="status" aria-live="polite" className="text-meta text-ink-2 not-empty:mt-2">
         {note}
       </p>
       </div>
