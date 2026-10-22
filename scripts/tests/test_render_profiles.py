@@ -267,6 +267,73 @@ def test_coordinator_waits_for_pending_reports_after_an_answer() -> None:
     assert "because it seems slow" in system
 
 
+def test_coordinator_always_runs_the_food_pause_and_wave_2() -> None:
+    """Evals run 1 (train-trip-florence): transport had answered in wave 1, and the coordinator
+    went from its reply straight to submit_plan: no food pause, no days, no local legs. Steps 6
+    and 7 run for every mode, and their follow-ups are not re-delegation."""
+    _, system = agent_file("development", "coordinator")
+    for phrase in (
+        "6. **The `food` pause**, always, whatever the mode",
+        "always, whatever the mode and whatever wave 1 already answered",  # step 7
+        "it researches only the main journey now, the local legs in wave 2",  # step 3
+        "**Close**, only once activities and transport have answered wave 2",
+        "Step 7's wave-2 tasks (the activities days, transport's legs, lodging when needed) are "
+        "planned work, not re-delegation",
+        "wave 2 takes one for activities, and one for transport when it researched the main "
+        "journey",
+        "skip follow-ups you don't need (wave 2 is always needed)",
+        "Wave 2 ran: the `food` pause was asked; activities.json gives the kept options a "
+        "`suggested_day`; transport.json answers the arrival, departure and far-stop legs.",
+    ):
+        assert phrase in system
+    assert "activities and transport usually need one each" not in system
+
+
+def test_coordinator_never_offers_what_the_request_asks_for() -> None:
+    """Evals run 1 (train-trip-florence): the requested day trip was offered as activity cards,
+    the picks went elsewhere and the plan dropped it. What the request asks for is never a card;
+    one of several is the coordinator's choice or the `other` pause."""
+    _, system = agent_file("development", "coordinator")
+    for phrase in (
+        "only what the request leaves open: what it explicitly asks for (a day trip, a named "
+        "museum or show) is never a card and stays in the plan whatever the picks",
+        "when it asks for one of several (a day trip: Sintra or Cascais), choose yourself, or ask "
+        "the `other` pause among them when the third pause is free",
+        "or for the one of several the request asks for (a day trip: Sintra or Cascais)",  # table
+        "most different options (kinds and areas) among those the request leaves open",  # step 4
+        "Add what the request asks for to the picks",  # step 7
+        "what the request explicitly asks for is in the plan, whatever the picks",  # the check
+    ):
+        assert phrase in system
+    assert "Siena" not in system  # an example from the train-trip-florence request leaks it
+
+
+def test_coordinator_titles_food_cards_by_style_and_meals_say_local_cuisine() -> None:
+    """Evals run 1 (suggest-direct-flight-solo): food cards titled by dish gave meal stops that
+    never said the food was local, against "cibo locale sublime"."""
+    _, system = agent_file("development", "coordinator")
+    for phrase in (
+        'each `title` a style ("Tascas di quartiere"), never a single dish, which goes in `place`',
+        "a `meal` from a food pick names its style and calls it local cuisine or a specialty",
+        "Pranzo in una tasca di quartiere, cucina locale",
+    ):
+        assert phrase in system
+
+
+def test_coordinator_candidates_meet_the_idea_hard_constraints() -> None:
+    """Evals run 1 (suggest-direct-flight-solo): with "Volo diretto" in the idea, Madeira came
+    first, and Bologna has no direct flight there."""
+    _, system = agent_file("development", "coordinator")
+    for phrase in (
+        "offering only places you are sure meet the hard constraints of `destination_idea` and "
+        "the preferences from the origin (a direct flight, reachable by train, a budget)",
+        "your leading candidate first, the one that meets them best",
+        "a destination's city and its country (`<città>, <paese>`)",  # names no real place
+    ):
+        assert phrase in system
+    assert "Funchal" not in system  # the old `place` example primed Madeira as a candidate
+
+
 def test_coordinator_prompt_handles_every_refusal() -> None:
     """The prompt quotes the refusals `ask_traveller` answers with (backend/app/choices.py).
     "One question at a time" comes only for two calls in one request, whose results arrive
