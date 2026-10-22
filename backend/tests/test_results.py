@@ -122,7 +122,8 @@ def transfer(**overrides: Any) -> dict[str, Any]:
     }
 
 
-DRIVE: dict[str, Any] = {
+# A car_rental drive as a file written before `distance_km` existed has it: no such key.
+OLD_RENTAL: dict[str, Any] = {
     "id": "t3",
     "from": "Milano",
     "to": "Genova Porto",
@@ -133,9 +134,6 @@ DRIVE: dict[str, Any] = {
     "price": ESTIMATED,
     "link": None,
 }
-
-# A car_rental option as a file written before `distance_km` existed has it: no such key.
-RENTAL_WITHOUT_DISTANCE: dict[str, Any] = dict(DRIVE)
 
 
 OPTION_BUILDERS = {
@@ -568,21 +566,21 @@ def test_transfer_fields_are_checked() -> None:
 
 
 def test_transfer_option_accepts_own_car_with_distance() -> None:
-    option = TransferOption.model_validate({**DRIVE, "mode": "car", "distance_km": 160})
+    option = TransferOption.model_validate({**OLD_RENTAL, "mode": "car", "distance_km": 160})
 
     assert (option.mode, option.distance_km) == ("car", 160)
 
 
 @pytest.mark.parametrize("distance", [0, -5, 20_001])
 def test_transfer_option_rejects_a_distance_out_of_range(distance: int) -> None:
-    assert option_error_types("transport", {**DRIVE, "distance_km": distance}) == {
+    assert option_error_types("transport", {**OLD_RENTAL, "distance_km": distance}) == {
         (("distance_km",), "greater_than_equal" if distance < 1 else "less_than_equal")
     }
 
 
 def test_transfer_option_without_distance_still_validates() -> None:
     # a transport option written before this PR: no distance_km key, mode car_rental
-    assert TransferOption.model_validate(RENTAL_WITHOUT_DISTANCE).distance_km is None
+    assert TransferOption.model_validate(OLD_RENTAL).distance_km is None
 
 
 # --- rules shared by every option ----------------------------------------------------------

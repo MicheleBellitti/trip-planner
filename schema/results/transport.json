@@ -118,7 +118,7 @@
             }
           ],
           "default": null,
-          "description": "Road distance in km for a drive (`car`, `car_rental`); null for every other mode."
+          "description": "Road distance in km for a drive (`car`, `car_rental`); leave it null for other modes."
         },
         "duration_min": {
           "description": "Door-to-door duration in minutes.",
@@ -180,7 +180,7 @@
             }
           ],
           "default": null,
-          "description": "Total for the whole party; null if free."
+          "description": "Total for the whole party; null when free, or when not priced (then say so in a warning)."
         },
         "to": {
           "description": "Destination, e.g. 'Hotel Lisboa Plaza'.",

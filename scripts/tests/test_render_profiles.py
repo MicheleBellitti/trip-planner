@@ -292,6 +292,8 @@ def test_coordinator_prompt_covers_the_journey_modes() -> None:
         "Circa 3 h 30 con scalo",
         "the easier mode",
         "foot passengers",
+        # transport's ferry fare may come from an aggregator: the stop's url is that page
+        "the page the fare was read on (its price's `source_url`) as the stop's `url`",
         "the party's own car",
         "car ferr",
         "under about five hours",
@@ -299,11 +301,19 @@ def test_coordinator_prompt_covers_the_journey_modes() -> None:
         "never reopened by a pause",
         "wave 1 finds no service at all for it",  # the one switch, for a mode the agent chose
         "If only one mode works",  # the journey pause needs two options
+        # no mainland ferry reaches the Azores; ferries do reach Tenerife (Huelva, Cádiz)
+        "a train to Ponta Delgada, in the Azores, leaves only the plane",
+        "a train to Tenerife cannot",
+        "no warning unless you switch (above)",  # the one switch has its warning line
         "the main journey uses the mode settled in step 1",
         "the last leg's arrival",  # a car ferry's journey arrives with its last drive
     ):
         assert phrase in system
     assert "compare the two in wave 2" not in system
+    assert "Tenerife leaves only the plane" not in system
+    assert "the operator's page (its price's" not in system
+    assert "the operator's page in the stop's `url`" not in system
+    assert "No pause and no warning about the mode" not in system
     assert "or the mode the traveller picked" not in system
     # Only the picked destination is researched: constraints.json no longer lists candidates
     # (step 2 still offers "at most three candidates", through `ask_traveller`).
@@ -315,22 +325,39 @@ def test_coordinator_prompt_covers_the_journey_modes() -> None:
 
 
 def test_coordinator_counts_and_paces_the_drives() -> None:
-    """A drive is not a booking, but its fuel and tolls count against the budget; a drive that
-    transport split takes two days, with the night between them unbooked; a far stop's null
-    drive price is not free."""
+    """A drive is not a booking, but its fuel and tolls count against the budget and the
+    summary compares the sum with it; a drive that transport split takes two days, with the
+    night between them unbooked; a far stop's null drive price is not free."""
     _, system = agent_file("development", "coordinator")
     for phrase in (
         "Compare `budget_eur` with that total plus the drives' estimated fuel and tolls",
         "the budget check counts it",
+        "the summary names its cost apart from the bookings' total and compares the sum with "
+        "the budget",
         "total plus the drives' fuel and tolls within `budget_eur`",
         "A drive transport split in two takes consecutive days",
         "the night there is not booked (no lodging research for it)",
-        "task lodging from the day after the start date to the day before the end date",
         "a split drive's night aside",
         "a far stop's null `price` is not free",
     ):
         assert phrase in system
     assert "the summary names it apart from the total" not in system
+    assert "the summary may name its cost" not in system
+
+
+def test_coordinator_tasks_lodging_after_transport_for_a_long_drive() -> None:
+    """Only transport knows whether a drive splits (route time plus stops), so for a long drive
+    the lodging's dates come from its options, never from the coordinator's own estimate."""
+    _, system = agent_file("development", "coordinator")
+    for phrase in (
+        "for a main journey by car you expect over about 7 hours, task `transport` and "
+        "`activities` first, and `lodging` only after transport replies",
+        "with check-in and check-out from transport's options",
+        "a split drive arrives the day after it leaves",
+    ):
+        assert phrase in system
+    assert "task lodging from the day after the start date" not in system
+    assert "A drive you expect over about 9 hours" not in system
 
 
 # A `web_fetch` URL the agent would have to build: a URL with a <placeholder> in it.
@@ -390,7 +417,8 @@ def test_transport_prompt_covers_every_main_journey() -> None:
         "out <id> <mode>",  # the main-journey reply line
         "the party is not travelling in its own car",  # a car rental is not for a car trip
         # a day's driving is capped: the coordinator puts the two legs on consecutive days
-        "A drive over about 9 hours is split at a town roughly halfway",
+        "A drive over about 9 hours is split at a town roughly halfway, once",
+        "two legs, even when each is still long",  # Milano to Lisbona: no third leg
         "about 15 minutes per 2 hours of driving",  # route planners leave the stops out
     ):
         assert phrase in system
