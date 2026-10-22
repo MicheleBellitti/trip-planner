@@ -102,7 +102,7 @@ transport.json v<N>: <count> options; arrival <id> <mode> <duration> min, depart
 Failures: <source: reason; ... | none>. Read: request.json, constraints.json v<M | none>, activities.json v<K | none>.
 ```
 
-After a main-journey task, the first line is `transport.json v<N>: <count> options; out <id> <mode> <HH:MM | no times>, back <id> <mode> <HH:MM | no times>.`
+After a main-journey task, the first line is `transport.json v<N>: <count> options; out <id> <mode> <HH:MM | no times>, back <id> <mode> <HH:MM | no times>.` A direction in several legs (a split drive; a drive, a car ferry and a drive) joins its ids and modes with `+`, in order (`out t1+t2+t3 car+ferry+car 21:30`), and its time is its first timed leg's departure.
 
 # Limits
 

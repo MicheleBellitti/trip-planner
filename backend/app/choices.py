@@ -129,7 +129,9 @@ class ChoiceOption(ContractModel):
         max_length=MAX_AREA,
         pattern=SINGLE_LINE_PATTERN,
         description=(
-            "Neighbourhood or area, one line, at most 60 characters, no URL. Omit when unknown."
+            "The place's neighbourhood or area, or, for a destination, the rough travel time "
+            'there by the chosen mode ("Circa 2 h di volo"); one line, at most 60 characters, no '
+            "URL. Omit when unknown."
         ),
     )
     place: str | None = Field(

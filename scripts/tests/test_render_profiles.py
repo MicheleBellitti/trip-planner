@@ -217,7 +217,9 @@ def test_coordinator_reaches_the_traveller_only_through_ask_traveller(profile: s
     for phrase in (
         "only through `ask_traveller`",
         "at most three times per plan",
-        "Never ask what the request already says",
+        # what the request names is not asked again, but the food pause is, "cibo locale" or not
+        "Never ask what the request already settles (a destination it names, a workable "
+        "`journey_mode`; `activities` and `food` are asked all the same)",
         "never ask a question in a message",
         "Nobody reads or answers your messages during the run",
         "state the assumption in `warnings`",
@@ -239,8 +241,13 @@ def test_coordinator_prompt_covers_the_pauses() -> None:
         "leave out a2, a5",
         "even when the preferences touch them",  # "Cucina locale" still gets the food pause
         "with `multiple` true (false for the others)",
+        # a destination card shows the travel time where a place shows its district (spec §1)
+        "for a destination, the rough travel time there instead (step 2)",
     ):
         assert phrase in system
+    # The tool's schema states the length caps, the one-kind-once rule and "no URL".
+    assert "`title` at most 80 characters" not in system
+    assert "Each kind once; never more than three pauses." not in system
 
 
 def test_coordinator_keeps_unpicked_options_out_of_stops_and_bookings() -> None:
@@ -346,9 +353,14 @@ def test_coordinator_prompt_handles_every_refusal() -> None:
         "No more questions: choose yourself.",
         "One question at a time",
         "you made two calls at once; act on the other call's answer",
+        # the backend sends "No more questions" for a repeated kind and a taken shared slot too
+        # (consumer: anything but "open"), so it must not stop the food pause
+        "It also answers a kind already asked and a third pause already taken, so still ask "
+        "`activities` and `food` if you have not asked them yet, and nothing else.",
     ):
         assert phrase in system
     assert "wait for the open answer" not in system
+    assert "decide alone and ask nothing more" not in system
 
 
 def test_coordinator_prompt_covers_the_journey_modes() -> None:
@@ -421,10 +433,36 @@ def test_coordinator_tasks_lodging_after_transport_for_a_long_drive() -> None:
         "`activities` first, and `lodging` only after transport replies",
         "with check-in and check-out from transport's options",
         "a split drive arrives the day after it leaves",
+        "as does an overnight ferry, and on the way back both leave the day before `end_date`",
     ):
         assert phrase in system
     assert "task lodging from the day after the start date" not in system
     assert "A drive you expect over about 9 hours" not in system
+
+
+def test_coordinator_mirrors_a_split_or_overnight_journey_on_the_way_back() -> None:
+    """The return of a split drive or an overnight car ferry still arrives on the request's
+    end date (matches_request blocks on the nights): it leaves the day before, which is the
+    lodging's check-out."""
+    _, system = agent_file("development", "coordinator")
+    assert (
+        "The way back mirrors it: its last leg arrives on `end_date`, so a split return drive or "
+        "an overnight ferry leaves the day before, and that day is the lodging's check-out; "
+        "`start_date` and `end_date` stay the request's dates (or the ones you fixed)."
+    ) in system
+
+
+def test_coordinator_keeps_transport_within_its_follow_ups() -> None:
+    """With a non-flight journey, transport's wave-2 task and the re-sync after activities
+    already use both follow-ups: a cheaper journey is asked in the wave-2 task, never as a
+    third follow-up."""
+    _, system = agent_file("development", "coordinator")
+    for phrase in (
+        "when that subagent is `transport`, ask in its wave-2 task instead (step 7)",  # step 5
+        "whose second may go to the re-sync in step 7 (so a cheaper journey is asked in that "
+        "wave-2 task)",
+    ):
+        assert phrase in system
 
 
 # A `web_fetch` URL the agent would have to build: a URL with a <placeholder> in it.
@@ -482,6 +520,7 @@ def test_transport_prompt_covers_every_main_journey() -> None:
         "car ferry",
         "parking",  # an `other` option near the lodging (plan decision 3)
         "out <id> <mode>",  # the main-journey reply line
+        "joins its ids and modes with `+`, in order (`out t1+t2+t3 car+ferry+car 21:30`)",
         "the party is not travelling in its own car",  # a car rental is not for a car trip
         # a day's driving is capped: the coordinator puts the two legs on consecutive days
         "A drive over about 9 hours is split at a town roughly halfway, once",
@@ -635,6 +674,19 @@ def test_ask_traveller_tool_is_fully_inlined(profile: str) -> None:
     assert tool["input_schema"]["required"] == raw["required"]
     option = tool["input_schema"]["properties"]["options"]["items"]
     assert "Bacalhau" in option["properties"]["place"]["description"]
+    assert "Circa 2 h di volo" in option["properties"]["area"]["description"]
+    # The refusals are the prompt's to explain: "No more questions" does not always mean stop.
+    assert "No more questions" not in tool["description"]
+    assert "your instructions say what each one asks of you" in tool["description"]
+
+
+@pytest.mark.parametrize("agent", ["flights", "lodging"])
+def test_flights_and_lodging_research_one_destination(agent: str) -> None:
+    """Only the traveller's pick is researched (spec §1, "Suggest a destination"): the
+    descriptions in the coordinator's roster no longer invite candidate destinations."""
+    fields, system = agent_file("development", agent)
+    assert "candidate" not in fields["description"]
+    assert "candidate" not in system
 
 
 def test_inline_refs_names_its_source() -> None:

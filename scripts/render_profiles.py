@@ -69,12 +69,11 @@ SUBMIT_PLAN_DESCRIPTION = (
     "call it again; three rejected submissions fail the plan."
 )
 ASK_TRAVELLER_DESCRIPTION = (
-    "Ask the traveller to choose among 2 to 6 options, shown as cards with photos. Use it only "
-    "at the moments your instructions name: at most three questions per plan, one at a time. "
-    "The call returns when the traveller answers, or after a few minutes without an answer: "
-    "the result names the picked option ids, or says the traveller let you choose. A call with "
-    "invalid input shows nothing and returns the validation errors: fix every one and call it "
-    "again. 'No more questions: choose yourself.' means decide alone and do not ask again."
+    "Ask the traveller to choose among 2 to 6 options, shown as cards with photos, only at the "
+    "moments your instructions name. The call returns when the traveller answers, or after a few "
+    "minutes without an answer: the result names the picked option ids, or says the traveller "
+    "let you choose. An error result means nothing was shown; your instructions say what each "
+    "one asks of you."
 )
 
 
