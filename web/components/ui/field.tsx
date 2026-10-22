@@ -219,6 +219,8 @@ export function SegmentedControl<T extends string>({
               // Chosen: the current station's edge (a 1.5 px ink ring inside), on notice-wash. Never
               // the primary button's fill: that one is the action.
               "has-checked:bg-notice-wash has-checked:inset-ring-[1.5px] has-checked:inset-ring-ink",
+              // Forced colours drop the wash and the ring: the system's selection colours instead.
+              "forced-colors:has-checked:forced-color-adjust-none forced-colors:has-checked:bg-[Highlight] forced-colors:has-checked:text-[HighlightText]",
               "has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus",
             )}
           >
@@ -313,6 +315,8 @@ export function ChoiceChips<T extends string>({
               // Chosen: an ink edge 3 px thick (the border plus a 1.5 px ring inside, as the current
               // station), on notice-wash. Never the primary button's fill: that one is the action.
               "has-checked:border-ink has-checked:bg-notice-wash has-checked:inset-ring-[1.5px] has-checked:inset-ring-ink",
+              // Forced colours drop the wash, the ink edge and the ring: the system's selection colours instead.
+              "forced-colors:has-checked:forced-color-adjust-none forced-colors:has-checked:border-[Highlight] forced-colors:has-checked:bg-[Highlight] forced-colors:has-checked:text-[HighlightText]",
               "has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus",
             )}
           >
