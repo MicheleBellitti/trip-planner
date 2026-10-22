@@ -24,7 +24,7 @@ import { useId, useState } from "react";
 import { coverSources, destinationInitial, THUMB_WIDTHS } from "@/components/plan/cover/cover-sources";
 import { CoverCredit } from "@/components/plan/cover/credit-line";
 import type { ChoiceOptionView } from "@/lib/choices";
-import { formatMinutes, formatMoney } from "@/lib/format";
+import { formatDuration, formatPrice } from "@/lib/format";
 
 import { Chip } from "./chip";
 import { cx } from "./cx";
@@ -69,11 +69,11 @@ interface Fact {
 function facts(option: ChoiceOptionView): Fact[] {
   const list: Fact[] = [];
   if (option.durationMin !== null) {
-    list.push({ icon: "clock", label: "Durata: ", value: formatMinutes(option.durationMin) });
+    list.push({ icon: "clock", label: "Durata: ", value: formatDuration(option.durationMin) });
   }
   if (option.price) {
     const { amountCents, currency } = option.price;
-    list.push({ icon: "wallet", label: "Prezzo per il gruppo: ", value: formatMoney(amountCents, currency) });
+    list.push({ icon: "wallet", label: "Prezzo per il gruppo: ", value: formatPrice({ amount_cents: amountCents, currency }) });
   }
   if (option.area) list.push({ icon: "map-pin", label: "Zona: ", value: option.area });
   return list;

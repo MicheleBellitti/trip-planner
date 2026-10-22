@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { formatDuration as formatDurationOfLib, formatPrice as formatPriceOfLib } from "@/lib/format";
 import type { LinkCheck, LinkHealthMap } from "@/lib/schemas/api";
 import type { PlanBooking } from "@/lib/schemas/generated/plan";
 
@@ -181,23 +182,13 @@ describe("trip days", () => {
     expect(formatTripDates("2027-04-08", "2027-04-08")).toBe("L'8 aprile 2027");
   });
 
-  it("writes durations", () => {
-    expect(formatDuration(45)).toBe("45 min");
-    expect(formatDuration(60)).toBe("1 h");
-    expect(formatDuration(160)).toBe("2 h 40 min");
-    expect(formatDuration(1440)).toBe("1 giorno");
-    expect(formatDuration(2880)).toBe("2 giorni");
-    expect(formatDuration(1500)).toBe("25 h");
+  it("re-exports the duration and price formats of lib/format, for its callers", () => {
+    expect(formatDuration).toBe(formatDurationOfLib);
+    expect(formatPrice).toBe(formatPriceOfLib);
   });
 });
 
 describe("money and text", () => {
-  it("formats prices in their currency", () => {
-    expect(formatPrice({ amount_cents: 81200, currency: "EUR" })).toBe("812,00 €");
-    expect(formatPrice({ amount_cents: 12800050, currency: "EUR" })).toBe("128.000,50 €");
-    expect(formatPrice({ amount_cents: 1250, currency: "USD" })).toBe("12,50 USD");
-  });
-
   it("adds up the euro prices and says how much is estimated", () => {
     const price = (amount: number, status: "verified" | "estimated", currency = "EUR") => ({
       amount_cents: amount,
