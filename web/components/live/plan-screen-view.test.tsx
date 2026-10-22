@@ -96,8 +96,11 @@ describe("PlanScreenView, a question for the traveller", () => {
       run.filter((event) => event.seq <= seq),
       { detail: { ...snapshot, created_at: run[0]!.ts, updated_at: run[0]!.ts } },
     );
-  const detail = PlanDetailSchema.parse({ ...detailJson, status: "running", plan: null });
+  // The run's own timestamps: the snapshot's updated_at is a server time the countdown's skew reads.
+  const detail = PlanDetailSchema.parse({ ...detailJson, status: "running", plan: null, created_at: run[0]!.ts, updated_at: run[0]!.ts });
   const controls = (extra: Partial<ChoiceControls> = {}): ChoiceControls => ({ answer: vi.fn(async () => null), ...extra });
+  /** When event `seq` landed, on an accurate clock: a first render there sets the skew to zero. */
+  const landed = (seq: number) => Date.parse(run.find((event) => event.seq === seq)!.ts);
 
   function view(seq: number, clock: number | null, choice: ChoiceControls = controls()) {
     return (
@@ -145,6 +148,8 @@ describe("PlanScreenView, a question for the traveller", () => {
   it("announces once when a minute is left", async () => {
     const { rerender } = render(view(55, null));
     await screen.findByRole("region", { name: "Cosa ti va di vedere?" });
+    expect(liveRegion().textContent).toBe("");
+    rerender(view(55, landed(55)));
     expect(liveRegion().textContent).toBe("");
     rerender(view(55, DEADLINE - 61_000));
     expect(liveRegion().textContent).toBe("");
@@ -195,8 +200,9 @@ describe("PlanScreenView, a question for the traveller", () => {
         choice={controls()}
       />
     );
-    const { rerender } = render(at(open, DEADLINE - 70_000));
+    const { rerender } = render(at(open, landed(55)));
     await screen.findByRole("region", { name: "Cosa ti va di vedere?" });
+    rerender(at(open, DEADLINE - 70_000));
     // The live baseline settles: from here on lane changes are spoken.
     await act(async () => {
       await new Promise((done) => setTimeout(done, SETTLE_MS + 50));
@@ -240,8 +246,9 @@ describe("PlanScreenView, a question for the traveller", () => {
     expect(liveRegion().textContent).not.toContain(SAID);
     cleanup();
 
-    const { rerender } = render(at(open, DEADLINE - 30_000));
+    const { rerender } = render(at(open, landed(55)));
     await screen.findByRole("region", { name: "Cosa ti va di vedere?" });
+    rerender(at(open, DEADLINE - 30_000));
     await act(async () => {
       await new Promise((done) => setTimeout(done, SETTLE_MS + 50));
     });

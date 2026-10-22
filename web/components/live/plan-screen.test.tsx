@@ -731,8 +731,45 @@ describe("PlanScreen, the traveller's choice", () => {
   /** What the countdown says, its hidden words included. */
   const countdown = () => screen.getByText("Tempo per scegliere:", { exact: false }).parentElement?.textContent;
 
-  it("counts a question that arrives live from when the page shows it: a browser clock 5 minutes fast still gets the whole window", async () => {
-    vi.setSystemTime(Date.parse(PENDING.deadline_at) + 5 * 60_000);
+  const MINUTE_NOTE = "Manca un minuto per scegliere.";
+  const EXPIRED = "Tempo scaduto: scelgo io.";
+  const skipButton = () => screen.getByRole("button", { name: "Scegli tu" }) as HTMLButtonElement;
+
+  // The countdown corrects the device clock (R13): the skew is the smallest gap seen between the
+  // page's clock and a server timestamp (an event's ts, the snapshot's updated_at), and the local
+  // deadline is deadline_at plus that skew.
+
+  it("times a question from the snapshot on a device clock 5 minutes fast: open, never at zero before the backend's deadline", async () => {
+    // The backend is a minute into the question, and its snapshot was written then.
+    const serverNow = ASKED_AT + 60_000;
+    vi.setSystemTime(serverNow + 5 * 60_000);
+    const client = fakeClient({
+      getPlan: vi.fn(async () => running({ updated_at: new Date(serverNow).toISOString(), pending_choice: PENDING })),
+    });
+    render(<PlanScreen planId={PLAN_ID} client={client} />);
+    await flush();
+    // Before any event: the skew comes from updated_at alone.
+    expect(stream().readyState).toBe(0);
+    expect(panel()).not.toBeNull();
+    expect(countdown()).toBe("Tempo per scegliere: 3:00");
+    expect(screen.queryByText(EXPIRED)).toBeNull();
+    fireEvent.click(box("Oceanário de Lisboa"));
+    expect((box("Oceanário de Lisboa") as HTMLInputElement).checked).toBe(true);
+    expect(skipButton().disabled).toBe(false);
+    expect((screen.getByRole("button", { name: "Continua con questa" }) as HTMLButtonElement).disabled).toBe(false);
+
+    // Ten seconds before the backend's deadline: still open.
+    await flush(170_000);
+    expect(countdown()).toBe("Tempo per scegliere: 0:10");
+    expect(skipButton().disabled).toBe(false);
+    // At the backend's deadline, and not before, the controls rest.
+    await flush(10_000);
+    expect(screen.getByText(EXPIRED)).toBeTruthy();
+    expect(skipButton().disabled).toBe(true);
+  });
+
+  it("times a question asked live on a device clock 5 minutes fast: 4:00 when it arrives, the last minute on the same clock", async () => {
+    vi.setSystemTime(ASKED_AT + 5 * 60_000);
     const client = fakeClient({ getPlan: vi.fn(async () => running()) });
     render(<PlanScreen planId={PLAN_ID} client={client} />);
     await flush();
@@ -744,44 +781,94 @@ describe("PlanScreen, the traveller's choice", () => {
     await flush(100);
     expect(panel()).not.toBeNull();
     expect(countdown()).toBe("Tempo per scegliere: 4:00");
-    expect(screen.queryByText("Tempo scaduto: scelgo io.")).toBeNull();
-    fireEvent.click(box("Oceanário de Lisboa"));
-    expect((box("Oceanário de Lisboa") as HTMLInputElement).checked).toBe(true);
-    expect((screen.getByRole("button", { name: "Scegli tu" }) as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByRole("button", { name: "Continua con questa" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.queryByText(EXPIRED)).toBeNull();
+    expect(skipButton().disabled).toBe(false);
 
-    // It counts down from there, and the page says the last minute on the same clock.
     await flush(60_000);
     expect(countdown()).toBe("Tempo per scegliere: 3:00");
-    expect(liveRegion().textContent).not.toContain("Manca un minuto per scegliere.");
+    expect(liveRegion().textContent).not.toContain(MINUTE_NOTE);
     await flush(120_000);
-    expect(liveRegion().textContent).toContain("Manca un minuto per scegliere.");
+    expect(liveRegion().textContent).toContain(MINUTE_NOTE);
     // At zero the controls rest, as ever.
     await flush(60_000);
-    expect(screen.getByText("Tempo scaduto: scelgo io.")).toBeTruthy();
-    expect((screen.getByRole("button", { name: "Scegli tu" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(EXPIRED)).toBeTruthy();
+    expect(skipButton().disabled).toBe(true);
   });
 
-  it("keeps the backend's deadline_at for a question first seen in the snapshot or the replayed history", async () => {
-    // A minute into the question's four.
-    vi.setSystemTime(ASKED_AT + 60_000);
-    const client = fakeClient({ getPlan: vi.fn(async () => running({ pending_choice: PENDING })) });
+  it("keeps the skew across a reconnect: a question replayed 3 minutes after it was asked has about a minute left, not a fresh 4:00", async () => {
+    vi.setSystemTime(ASKED_AT);
+    const client = fakeClient({ getPlan: vi.fn(async () => running()) });
     render(<PlanScreen planId={PLAN_ID} client={client} />);
     await flush();
-    expect(panel()).not.toBeNull();
-    expect(countdown()).toBe("Tempo per scegliere: 3:00");
-    // The replay brings its asked event (a new object, the same id): still the backend's deadline.
-    await replay(upTo(55));
-    expect(countdown()).toMatch(/^Tempo per scegliere: (3:00|2:59)$/);
-    cleanup();
+    const source = await replay(upTo(52));
 
-    // Without the snapshot, a question that comes with the replayed history: the same.
-    const replayed = fakeClient({ getPlan: vi.fn(async () => running()) });
-    render(<PlanScreen planId={PLAN_ID} client={replayed} />);
+    // The stream drops for 3 minutes: the question is asked meanwhile, and comes with the replay.
+    act(() => source.drop());
+    await flush(180_000);
+    act(() => {
+      source.open();
+      for (const event of between(53, 55)) source.send(event);
+    });
+    await flush(100);
+    expect(panel()).not.toBeNull();
+    // The backend's 60 s, plus the 20 ms between event 52 (the page's best sample) and the question:
+    // a second that has begun counts.
+    expect(countdown()).toBe("Tempo per scegliere: 1:01");
+    await flush(1_000);
+    expect(countdown()).toBe("Tempo per scegliere: 1:00");
+    expect(liveRegion().textContent).toContain(MINUTE_NOTE);
+    await flush(60_000);
+    expect(screen.getByText(EXPIRED)).toBeTruthy();
+  });
+
+  it("times a question from the snapshot on a device clock 3 minutes slow: the backend's 3:00 left, never the window inflated", async () => {
+    const serverNow = ASKED_AT + 60_000;
+    vi.setSystemTime(serverNow - 3 * 60_000);
+    const online = vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+    try {
+      const client = fakeClient({
+        getPlan: vi.fn(async () => running({ updated_at: new Date(serverNow).toISOString(), pending_choice: PENDING })),
+      });
+      render(<PlanScreen planId={PLAN_ID} client={client} />);
+      await flush();
+      expect(countdown()).toBe("Tempo per scegliere: 3:00");
+      await flush(120_000);
+      expect(countdown()).toBe("Tempo per scegliere: 1:00");
+
+      // Offline, the page's clock stops at its last known state, a server time: the countdown stops
+      // at what the backend had left then, never at zero.
+      online.mockReturnValue(false);
+      act(() => {
+        window.dispatchEvent(new Event("offline"));
+      });
+      expect(countdown()).toBe("Tempo per scegliere: 3:00");
+      expect(skipButton().disabled).toBe(false);
+      online.mockReturnValue(true);
+      act(() => {
+        window.dispatchEvent(new Event("online"));
+      });
+      await flush(1_000);
+      expect(countdown()).toBe("Tempo per scegliere: 0:59");
+
+      // It closes at the backend's deadline, not 3 minutes after it.
+      await flush(59_000);
+      expect(screen.getByText(EXPIRED)).toBeTruthy();
+    } finally {
+      online.mockRestore();
+    }
+  });
+
+  it("a reload long after the last server timestamp only lengthens the window: the backend's 409 answers a late press", async () => {
+    // A minute into the question, on an accurate clock; the newest timestamps are the question's.
+    vi.setSystemTime(ASKED_AT + 60_000);
+    const client = fakeClient({ getPlan: vi.fn(async () => running()) });
+    render(<PlanScreen planId={PLAN_ID} client={client} />);
     await flush();
     await replay(upTo(55));
     expect(panel()).not.toBeNull();
-    expect(countdown()).toMatch(/^Tempo per scegliere: (3:00|2:59)$/);
+    // The skew is overstated by the minute since event 55: the clamp shows the whole window.
+    expect(countdown()).toBe("Tempo per scegliere: 4:00");
+    expect(skipButton().disabled).toBe(false);
   });
 
   it("a 404 choice_not_found closes the panel with the backend's words; a 404 plan_not_found is an error", async () => {
@@ -900,9 +987,9 @@ describe("PlanScreen, the traveller's choice", () => {
     await flush(100);
     expect(panel()).not.toBeNull();
     expect(screen.getByText("Scegli quelle che ti piacciono, anche più di una. Se non scegli entro 4 minuti, scelgo io.")).toBeTruthy();
-    expect(screen.getByText("Tempo per scegliere:", { exact: false }).parentElement?.textContent).toMatch(
-      /^Tempo per scegliere: 3:4\d$/,
-    );
+    // Not a fresh 4:00: the backend's deadline on the page's clock (the fixture's server times run a
+    // few seconds behind the page's, so the skew adds those seconds).
+    expect(countdown()).toMatch(/^Tempo per scegliere: 3:[45]\d$/);
     expect(document.title).toBe(`Tocca a te · ${TITLE} · ${BRAND_NAME}`);
 
     // "Interrompi il piano": the cards go as soon as it is confirmed, before the plan stops.

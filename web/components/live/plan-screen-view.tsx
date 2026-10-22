@@ -10,10 +10,11 @@
  *
  * The choice (the coordinator's `ask_traveller` pause, components/choice/choice-panel.tsx) shows
  * while the plan runs and the data source gives its controls: first under the live header on the
- * phone, under the lanes from 1080 px; the coordinator's plate shows only with it. A question that
- * arrives live counts down on the browser's clock from when the page shows it. The page's one live
- * region says once that a minute is left, and once how a question it showed closed. While it
- * shows, the demo's camera holds still (AgentLanes `cameraHeld`).
+ * phone, under the lanes from 1080 px; the coordinator's plate shows only with it. On the live
+ * screen it counts down to the backend's deadline corrected for the browser clock's skew
+ * (`useClockSkew`). The page's one live region says once that a minute is left, and once how a
+ * question it showed closed. While it shows, the demo's camera holds still (AgentLanes
+ * `cameraHeld`).
  */
 
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -32,7 +33,7 @@ import type { PlanDetail } from "@/lib/schemas/api";
 import type { UIEvent } from "@/lib/schemas/generated/ui-event";
 
 import { AgentLanes, type LaneFollow } from "./agent-lanes";
-import { useLaneLayout, useLiveBaseline } from "./hooks";
+import { useClockSkew, useLaneLayout, useLiveBaseline } from "./hooks";
 import { LiveHeader, PLAN_STATE_ID } from "./live-header";
 import { requestSummary } from "./request-summary";
 import { RunSection } from "./run-section";
@@ -76,15 +77,6 @@ function inLastMinute(choice: ChoiceView, controls: ChoiceControls, clock: numbe
   if (deadlineAt === null) return false;
   const left = deadlineAt - clock;
   return (controls.windowMs ?? choiceWindowMs(choice)) > MINUTE_MS && left > 0 && left <= MINUTE_MS;
-}
-
-/** When the page first showed a question, and whether it arrived live (its asked event came after
- * the live baseline settled). */
-interface ChoiceSighting {
-  choiceId: string;
-  live: boolean;
-  /** The clock at the first render with one while the question showed; null before. */
-  at: number | null;
 }
 
 /** The title of the event that answered `choiceId` ("Tempo scaduto: sceglie Atlas"), or null. */
@@ -231,27 +223,21 @@ export function PlanScreenView({
   const asked = choice ? shownChoice(state, closedChoices, interrupting) : null;
   const askedId = asked?.choice.id ?? null;
 
-  // The question's clock on the live screen (the demo sets its own deadline). A question that
-  // arrives live counts its window from when this page first shows it, on the browser's clock: one
-  // running minutes fast or slow never opens a question at "Tempo scaduto" or holds it past its
-  // window. One first seen in the snapshot or the replayed history keeps the backend's deadline_at
-  // (the page cannot know when it was asked on this clock). Kept per question id, so a new object
-  // for the same question keeps its anchor and the next question starts afresh.
-  const [sighting, setSighting] = useState<ChoiceSighting | null>(null);
-  let seen = sighting;
-  if (asked && choice?.deadlineAt === undefined) {
-    if (seen?.choiceId !== asked.choice.id) {
-      const freshAfter = baseline.freshAfterSeq;
-      seen = { choiceId: asked.choice.id, live: asked.seq !== null && freshAfter !== null && asked.seq > freshAfter, at: clock };
-    } else if (seen.at === null && clock !== null) {
-      seen = { ...seen, at: clock };
-    }
-    if (seen !== sighting) setSighting(seen);
-  }
-  const askedWindowMs = asked ? choiceWindowMs(asked.choice) : 0;
-  const anchoredDeadline = asked && seen?.choiceId === asked.choice.id && seen.live && seen.at !== null ? seen.at + askedWindowMs : null;
+  // The question's clock on the live screen (the demo sets its own deadline): the backend's
+  // deadline_at moved onto the browser's clock by its skew, sampled from every server timestamp the
+  // page holds (the newest event's ts, the snapshot's updated_at), so a device clock minutes fast
+  // or slow neither opens a question at "Tempo scaduto" nor holds it past the backend's deadline.
+  // While the page is stale its clock is a server time (the last known state), so the deadline
+  // stays the backend's and nothing is sampled.
+  const skew = useClockSkew(stale ? null : clock, [state.events[state.events.length - 1]?.ts, detail?.updated_at]);
   const controls: ChoiceControls | undefined =
-    choice && anchoredDeadline !== null ? { ...choice, deadlineAt: anchoredDeadline, windowMs: askedWindowMs } : choice;
+    choice && asked && choice.deadlineAt === undefined
+      ? {
+          ...choice,
+          deadlineAt: Date.parse(asked.choice.deadlineAt) + (stale ? 0 : skew),
+          windowMs: choiceWindowMs(asked.choice),
+        }
+      : choice;
 
   // The traveller's choice, and the one time the page says a minute is left: the question's id,
   // and what the live region said before it, so the note goes with the region's next words (it is
