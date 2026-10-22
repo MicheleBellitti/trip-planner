@@ -320,7 +320,7 @@ outside DEMO_MODE).
 | ma_client | `archive_thread(sid, tid)` | an idle thread superseded by a newer thread of the same agent |
 | ma_client | `send_user_message(sid, text)` | the first message |
 | ma_client | `send_custom_tool_result(sid, tool_use_id, content, is_error)` | steps 4 and 4b (§5, "ask_traveller") |
-| choices | `parse_choice_request(input) -> ChoiceRequest \| ChoiceRejected`, `admission_refusal(kind, asked, *, accepted, another_open)`, `insert_choice(...)`, `get_choice`, `asked_kinds`, `pending_choice`, `answered_choices`, `answer_text(request, answered_by, selected)`, `auto_pick`, `asked_title`, `answered_title` | the consumer's step 4b (§5, "ask_traveller") |
+| choices | `parse_choice_request(input) -> ChoiceRequest \| ChoiceRejected`, `admission_refusal(kind, asked, *, accepted, another_open)`, `insert_choice(...)`, `get_choice`, `asked_kinds`, `pending_choice`, `plan_choices`, `answer_text(request, answered_by, selected)`, `auto_pick`, `asked_title`, `answered_title` | the consumer's step 4b (§5, "ask_traveller") |
 | covers | `ChoicePhotos` Protocol (`PlacePhotos`, `NoPhotos`): the photos of the options that name a place, 3 s in all | the consumer's step 4b (§5, "ask_traveller") |
 | ma_client | `send_interrupt(sid)` | after the 3rd failed submission, or trip.json unavailable |
 | ma_client | `usage_from_event(raw) -> SessionUsage \| None`; `retrieve_session(sid)` (through `record_session_cost`) | cost; the final cost read (decision 11b) |

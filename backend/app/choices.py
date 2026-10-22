@@ -503,11 +503,11 @@ async def pending_choice(db: AsyncSession, plan_id: uuid.UUID) -> ChoiceRecord |
     )
 
 
-async def answered_choices(db: AsyncSession, plan_id: uuid.UUID) -> list[ChoiceRecord]:
-    """The closed questions, by `asked_at`."""
+async def plan_choices(db: AsyncSession, plan_id: uuid.UUID) -> list[ChoiceRecord]:
+    """The plan's questions, answered or not, in the order they were asked (ties by id)."""
     rows = await db.scalars(
         select(ChoiceRecord)
-        .where(ChoiceRecord.plan_id == plan_id, ChoiceRecord.answered_by.is_not(None))
-        .order_by(ChoiceRecord.asked_at)
+        .where(ChoiceRecord.plan_id == plan_id)
+        .order_by(ChoiceRecord.asked_at, ChoiceRecord.id)
     )
     return list(rows)

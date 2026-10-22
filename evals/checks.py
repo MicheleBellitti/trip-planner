@@ -36,7 +36,7 @@ from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from functools import cache
 from pathlib import Path
-from typing import Any, Literal, Protocol, cast, get_args
+from typing import Any, Literal, Protocol, cast
 from urllib.parse import urlsplit
 
 EVALS_DIR = Path(__file__).resolve().parent
@@ -47,7 +47,6 @@ if str(BACKEND_DIR) not in sys.path:  # `app` lives in backend/; evals run from 
 
 from pydantic import ValidationError  # noqa: E402
 
-from app.choices import ChoiceKind  # noqa: E402
 from app.plan import Plan, describe_validation_errors  # noqa: E402
 from app.request import PlanRequest  # noqa: E402
 
@@ -469,7 +468,8 @@ def check_within_budget(
     metadata: RunMetadata,
 ) -> CheckResult:
     """The estimated total of the chosen bookings is within `budget_eur`, or a plan warning
-    says it is not (one that mentions "budget")."""
+    says it is not (one that mentions "budget"). A drive's fuel and tolls are not bookings and
+    live only in its stop notes, so the judge checks them (rubric.md, preference_respect)."""
     if plan is None:
         return _no_plan(WITHIN_BUDGET, metadata)
     budget_cents = request.budget_eur * 100
@@ -783,8 +783,12 @@ def check_dead_links(
     )
 
 
-CHOICE_KIND_ORDER: tuple[str, ...] = get_args(ChoiceKind)
-"""`app.choices.ChoiceKind`, in the order the kinds are printed."""
+CHOICE_KIND_ORDER: tuple[str, ...] = ("destination", "journey", "activities", "food", "other")
+"""`app.choices.ChoiceKind`, in the order the kinds are printed (a test keeps the two equal;
+importing app.choices here would load the database layer into every eval)."""
+
+MIN_ACTIVITY_OPTIONS = 3
+"""`app.choices.MIN_ACTIVITY_OPTIONS`: with fewer activities the coordinator skips the pause."""
 
 
 def _kinds_in_order(kinds: Iterable[str]) -> list[str]:
@@ -800,13 +804,26 @@ def check_choices_asked(
     metadata: RunMetadata,
 ) -> CheckResult:
     """The coordinator pauses with `ask_traveller` about the activities and the food, and about
-    the destination when the request says "Suggeriscimi tu". The kinds are a set (the order
-    they were asked in is not recorded). Never blocks: a missing pause is a warning."""
+    the destination when the request says "Suggeriscimi tu". `choice_kinds` comes in the order
+    asked, but the prompt fixes no order the check could hold it to, so it compares sets.
+
+    The coordinator skips the activities pause when activities found fewer than three options
+    (or after two rejected calls). The result file is not kept, so the plan stands in for it:
+    with fewer than three distinct `activity` stops the pause is not expected. Never blocks: a
+    missing pause is a warning."""
     if plan is None:
         return replace(_no_plan(CHOICES_ASKED, metadata), blocking=False)
     if metadata.choice_kinds is None:
         return _result(CHOICES_ASKED, "skip", "choices were not collected", blocking=False)
-    expected = {"activities", "food"}
+    details: list[str] = []
+    expected = {"food"}
+    activities = _activity_titles(plan)
+    if len(activities) >= MIN_ACTIVITY_OPTIONS:
+        expected.add("activities")
+    else:
+        details.append(
+            f"activities not expected: the plan has {len(activities)} distinct activity stop(s)"
+        )
     if request.suggest_destination:
         expected.add("destination")
     asked = _kinds_in_order(metadata.choice_kinds)
@@ -816,10 +833,21 @@ def check_choices_asked(
             CHOICES_ASKED,
             "warn",
             f"missing: {', '.join(missing)}",
-            [f"asked: {', '.join(asked) or 'none'}"],
+            [f"asked: {', '.join(asked) or 'none'}", *details],
             blocking=False,
         )
-    return _result(CHOICES_ASKED, "pass", f"asked: {', '.join(asked)}", blocking=False)
+    return _result(
+        CHOICES_ASKED, "pass", f"asked: {', '.join(asked) or 'none'}", details, blocking=False
+    )
+
+
+def _activity_titles(plan: Mapping[str, Any]) -> set[str]:
+    return {
+        title.strip().casefold()
+        for day in _mappings(plan.get("days"))
+        for stop in _mappings(day.get("stops"))
+        if stop.get("kind") == "activity" and isinstance(title := stop.get("title"), str)
+    }
 
 
 # --- running them all ---------------------------------------------------------------------------
