@@ -408,6 +408,43 @@ describe("Field", () => {
   });
 });
 
+describe("the chosen option of a choice control", () => {
+  // A chosen option is the current station (an ink edge on notice-wash), never the primary
+  // button's ink fill: the one filled pill on a view is the action (DESIGN.md, Buttons).
+  it("is never drawn as the primary button", () => {
+    render(
+      <>
+        <SegmentedControl
+          legend="Date"
+          name="dates"
+          options={[
+            { value: "exact", label: "Date fisse" },
+            { value: "flexible", label: "Mese e notti" },
+          ]}
+          value="exact"
+          onValueChange={() => {}}
+        />
+        <ChoiceChips
+          legend="Come viaggi"
+          name="mode"
+          options={[
+            { value: "flight", label: "Aereo", icon: "airplane-tilt" },
+            { value: "train", label: "Treno", icon: "train" },
+          ]}
+          value="flight"
+          onValueChange={() => {}}
+        />
+      </>,
+    );
+    for (const name of ["Date fisse", "Aereo"]) {
+      const label = screen.getByRole("radio", { name }).closest("label") as HTMLElement;
+      expect(label.className).not.toMatch(/\bbg-action\b|\btext-on-action\b/);
+      expect(label.className).toContain("has-checked:bg-notice-wash");
+      expect(label.className).toContain("has-checked:inset-ring-ink");
+    }
+  });
+});
+
 describe("SegmentedControl", () => {
   it("can keep its legend for screen readers only, when a heading above already says it", () => {
     render(

@@ -192,7 +192,8 @@ interface SegmentedControlProps<T extends string> {
 }
 
 /** Two or three mutually exclusive choices ("Destinazione" / "Suggeriscimi tu", "Date fisse" /
- * "Un mese"): native radios in a fieldset, drawn as one pill track. The chosen segment is ink. */
+ * "Un mese"): native radios in a fieldset, drawn as one pill track. The chosen segment carries the
+ * current station's ink edge on notice-wash. */
 export function SegmentedControl<T extends string>({
   legend,
   legendHidden = false,
@@ -215,7 +216,9 @@ export function SegmentedControl<T extends string>({
               "relative flex min-h-10 flex-1 cursor-pointer items-center justify-center rounded-full px-3 text-small font-semibold text-ink sm:min-h-9",
               "before:absolute before:-inset-[3px] before:rounded-full",
               "transition-[background-color,color] duration-(--duration-hover) ease-out hover:bg-notice-wash",
-              "has-checked:bg-action has-checked:text-on-action has-checked:hover:bg-action",
+              // Chosen: the current station's edge (a 1.5 px ink ring inside), on notice-wash. Never
+              // the primary button's fill: that one is the action.
+              "has-checked:bg-notice-wash has-checked:inset-ring-[1.5px] has-checked:inset-ring-ink",
               "has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus",
             )}
           >
@@ -261,8 +264,9 @@ interface ChoiceChipsProps<T extends string> {
 }
 
 /** Four or more mutually exclusive choices, each with an icon (the travel mode): native radios in
- * a fieldset, drawn as pills that wrap onto a second row on the phone. The chosen pill is ink, as
- * the chosen segment of a SegmentedControl; arrow keys move the choice, as in any radio group. */
+ * a fieldset, drawn as pills that wrap onto a second row on the phone. The chosen pill has a 3 px
+ * ink edge on notice-wash, as the chosen segment of a SegmentedControl; arrow keys move the
+ * choice, as in any radio group. */
 export function ChoiceChips<T extends string>({
   legend,
   hint,
@@ -306,7 +310,9 @@ export function ChoiceChips<T extends string>({
               "relative inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-full border-[1.5px] border-rule-strong bg-surface px-3.5 text-small font-semibold text-ink sm:min-h-9",
               "before:absolute before:-inset-[3px] before:rounded-full",
               "transition-[background-color,border-color,color] duration-(--duration-hover) ease-out hover:bg-notice-wash",
-              "has-checked:border-action has-checked:bg-action has-checked:text-on-action has-checked:hover:bg-action",
+              // Chosen: an ink edge 3 px thick (the border plus a 1.5 px ring inside, as the current
+              // station), on notice-wash. Never the primary button's fill: that one is the action.
+              "has-checked:border-ink has-checked:bg-notice-wash has-checked:inset-ring-[1.5px] has-checked:inset-ring-ink",
               "has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus",
             )}
           >
