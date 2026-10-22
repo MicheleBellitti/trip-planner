@@ -23,7 +23,7 @@ import {
   type RequestFormValues,
 } from "./request-form";
 import { JOURNEY_MODE_LABELS } from "./journey-mode";
-import { applyRemembered } from "./remembered-request";
+import { applyRemembered, parseRemembered } from "./remembered-request";
 
 /** "Today" of the backend's tests: 2026-10-12 in Rome. */
 const TODAY = "2026-10-12";
@@ -470,8 +470,24 @@ describe("the form", () => {
     expect(validatePlanRequest(request({ journey_mode: "ferry" }), { today: TODAY })).toEqual([]);
   });
 
-  it("lays a remembered request in without touching the mode", () => {
-    const values = applyRemembered({ ...emptyRequestForm(), journeyMode: "car" }, { origin: "Torino", adults: 2, childAges: [] });
-    expect(values).toMatchObject({ origin: "Torino", adults: 2, journeyMode: "car" });
+  it("lays the remembered travel mode in, only on an untouched form", () => {
+    const remembered = { origin: "Torino", adults: 2, childAges: [], journeyMode: "car" as const };
+    expect(applyRemembered(emptyRequestForm(), remembered)).toMatchObject({ origin: "Torino", adults: 2, journeyMode: "car" });
+    // Chosen before the remembered request arrived: the choice stays, and so does the rest.
+    const touched = { ...emptyRequestForm(), journeyMode: "train" as const };
+    expect(applyRemembered(touched, remembered)).toBe(touched);
+    // Remembered before the mode existed: the plane, as on a first visit.
+    expect(applyRemembered(emptyRequestForm(), { origin: "Torino", adults: 2, childAges: [] }).journeyMode).toBe("flight");
+  });
+
+  it("reads a remembered mode only when it is one of the schema's", () => {
+    const stored = (journeyMode: unknown) => JSON.stringify({ origin: "Torino", adults: 1, childAges: [], journeyMode });
+    expect(parseRemembered(stored("coach"))?.journeyMode).toBe("coach");
+    // An odd mode is dropped, the rest of the entry still counts.
+    for (const odd of ["plane", 3, null, "__proto__"]) {
+      const parsed = parseRemembered(stored(odd));
+      expect(parsed?.origin).toBe("Torino");
+      expect(parsed?.journeyMode).toBeUndefined();
+    }
   });
 });
