@@ -52,17 +52,24 @@ export function travelersText(travelers: unknown): string | null {
 }
 
 /** The one-line summary of a stored PlanRequest, or null when nothing in it can be read. A
- * finished plan sets its total against the budget itself, so its header leaves the budget out
- * (`withBudget: false`) and may add the trip's length (`extra`). */
+ * finished plan sets its total against the budget itself and states how it travels, so its
+ * header leaves the budget and the mode out (`withBudget: false`, `withMode: false`) and may add
+ * the trip's length (`extra`). */
 export function requestSummary(
   request: Record<string, unknown> | null | undefined,
-  { withBudget = true, extra = null }: { withBudget?: boolean; extra?: string | null } = {},
+  {
+    withBudget = true,
+    withMode = true,
+    extra = null,
+  }: { withBudget?: boolean; withMode?: boolean; extra?: string | null } = {},
 ): string | null {
   if (!request) return null;
   const parts: string[] = [];
   const origin = typeof request.origin === "string" ? request.origin.trim() : "";
-  // How they get there, unless by plane (the default): "Da Milano in treno".
-  const journey = journeyModePhrase(request.journey_mode);
+  // How they get there, unless by plane (the default): "Da Milano in treno". A finished plan
+  // leaves it out (`withMode: false`): a journey pause may have changed it, and the stored
+  // request keeps the mode asked for.
+  const journey = withMode ? journeyModePhrase(request.journey_mode) : null;
   if (origin) parts.push(journey ? `Da ${origin} ${journey}` : `Da ${origin}`);
   else if (journey) parts.push(journey.charAt(0).toLocaleUpperCase("it") + journey.slice(1));
   const travelers = travelersText(request.travelers);

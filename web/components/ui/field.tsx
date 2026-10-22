@@ -221,6 +221,9 @@ export function SegmentedControl<T extends string>({
               "has-checked:bg-notice-wash has-checked:inset-ring-[1.5px] has-checked:inset-ring-ink",
               // Forced colours drop the wash and the ring: the system's selection colours instead.
               "forced-colors:has-checked:forced-color-adjust-none forced-colors:has-checked:bg-[Highlight] forced-colors:has-checked:text-[HighlightText]",
+              // The opt-out keeps the theme's focus colour too; the keyboard lands on the chosen
+              // segment, so its ring takes the system's text colour.
+              "forced-colors:has-focus-visible:outline-[CanvasText]",
               "has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus",
             )}
           >
@@ -317,6 +320,9 @@ export function ChoiceChips<T extends string>({
               "has-checked:border-ink has-checked:bg-notice-wash has-checked:inset-ring-[1.5px] has-checked:inset-ring-ink",
               // Forced colours drop the wash, the ink edge and the ring: the system's selection colours instead.
               "forced-colors:has-checked:forced-color-adjust-none forced-colors:has-checked:border-[Highlight] forced-colors:has-checked:bg-[Highlight] forced-colors:has-checked:text-[HighlightText]",
+              // The opt-out keeps the theme's focus colour too; the keyboard lands on the chosen
+              // chip, so its ring takes the system's text colour.
+              "forced-colors:has-focus-visible:outline-[CanvasText]",
               "has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus",
             )}
           >

@@ -446,6 +446,9 @@ describe("the chosen option of a choice control", () => {
       expect(label.className).toContain("forced-colors:has-checked:bg-[Highlight]");
       expect(label.className).toContain("forced-colors:has-checked:text-[HighlightText]");
       expect(label.className).toContain("forced-colors:has-checked:forced-color-adjust-none");
+      // That opt-out also keeps the theme's focus colour, which a contrast theme's canvas can
+      // swallow; the keyboard always lands on the chosen option, so its ring takes CanvasText.
+      expect(label.className).toContain("forced-colors:has-focus-visible:outline-[CanvasText]");
     }
   });
 });
