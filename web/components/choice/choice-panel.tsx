@@ -223,6 +223,7 @@ export function ChoicePanel({ choice, controls, now, destination }: ChoicePanelP
             disabled={resting}
             onChange={(checked) => pick(option.id, checked)}
             media={media}
+            area={choice.kind === "destination" ? "travel" : "zone"}
           />
         ))}
       </div>

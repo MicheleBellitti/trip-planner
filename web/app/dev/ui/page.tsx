@@ -691,6 +691,16 @@ function recordedOption(seq: number, id: string): ChoiceOptionView {
 /** Two columns as on the phone, three as from 1080 px. */
 const CARD_GRID = "grid grid-cols-2 gap-2.5 sm:grid-cols-3";
 
+/** A destination question's cards (the recorded run asks none): a place, why, the rough travel
+ * time in `area`, no price yet (spec §1, "Suggest a destination"). */
+const DESTINATIONS: ChoiceOptionView[] = (
+  [
+    ["d1", "Lisbona", "Mare, tram e musei per i bambini, clima mite ad aprile.", "Circa 3 h di volo"],
+    ["d2", "Valencia", "Spiagge in città e l'acquario più grande d'Europa.", "Circa 2 h di volo"],
+    ["d3", "Nizza", "Lungomare e gite in giornata, senza aereo.", "Circa 5 h di treno"],
+  ] as const
+).map(([id, title, reason, area]) => ({ id, title, reason, area, durationMin: null, price: null, photo: null }));
+
 /** The choice cards in each state, two groups to try, and the countdown. */
 function ChoiceStates() {
   const oceanario = recordedOption(53, "a1");
@@ -722,6 +732,13 @@ function ChoiceStates() {
           <div className={CARD_GRID}>
             {food.map((option, index) => (
               <ChoiceCardStill key={option.id} option={option} control="checkbox" checked={index === 0} media="none" />
+            ))}
+          </div>
+        </Row>
+        <Row label="Una meta, una sola scelta: il tempo di viaggio al posto della zona" stack>
+          <div className={CARD_GRID}>
+            {DESTINATIONS.map((option, index) => (
+              <ChoiceCardStill key={option.id} option={option} control="radio" checked={index === 0} media="none" area="travel" />
             ))}
           </div>
         </Row>

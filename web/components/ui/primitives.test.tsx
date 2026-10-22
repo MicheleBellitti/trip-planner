@@ -125,6 +125,38 @@ describe("ChoiceCard", () => {
     expect(facts()).toEqual(["Durata: 1 giorno", "Prezzo per il gruppo: 12,50 USD"]);
     cleanup();
 
+    // A destination's area is the rough travel time there (spec §1): a clock, and "Viaggio: ".
+    const glyphs = () => [...document.querySelectorAll("li use")].map((use) => use.getAttribute("href"));
+    render(
+      <ChoiceCard
+        option={{ ...pena, durationMin: null, price: null, area: "Circa 2 h di volo" }}
+        area="travel"
+        control="radio"
+        name="meta"
+        checked={false}
+        onChange={vi.fn()}
+        media="4/3"
+      />,
+    );
+    expect(facts()).toEqual(["Viaggio: Circa 2 h di volo"]);
+    expect(screen.getByText("Viaggio:").className).toContain("sr-only");
+    expect(glyphs()).toEqual(["#icon-clock"]);
+    cleanup();
+    // Any other area is a zone, on a map pin.
+    render(
+      <ChoiceCard
+        option={{ ...pena, durationMin: null, price: null, area: "Sintra" }}
+        control="checkbox"
+        name="q"
+        checked={false}
+        onChange={vi.fn()}
+        media="4/3"
+      />,
+    );
+    expect(facts()).toEqual(["Zona: Sintra"]);
+    expect(glyphs()).toEqual(["#icon-map-pin"]);
+    cleanup();
+
     const { container } = render(
       <ChoiceCard option={tascas} control="checkbox" name="q" checked={false} onChange={vi.fn()} media="none" />,
     );

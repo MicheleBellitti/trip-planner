@@ -40,6 +40,15 @@ const RATIOS = { "4/3": "aspect-[4/3]", "16/10": "aspect-[16/10]" } as const;
 
 export type ChoiceCardMedia = keyof typeof RATIOS | "none";
 
+/** What an option's `area` says: a zone (map pin, "Zona: "), or, for a destination, the rough
+ * travel time there by the chosen mode ("Circa 2 h di volo": a clock, "Viaggio: "). */
+export type ChoiceCardArea = "zone" | "travel";
+
+const AREA_FACTS: Record<ChoiceCardArea, { icon: IconName; label: string }> = {
+  zone: { icon: "map-pin", label: "Zona: " },
+  travel: { icon: "clock", label: "Viaggio: " },
+};
+
 interface ChoiceCardProps {
   option: ChoiceOptionView;
   /** `checkbox` (several picks) or `radio` (one); `name` groups the radios of one question. */
@@ -53,6 +62,8 @@ interface ChoiceCardProps {
   /** The photo's frame, the same for every card of a question: 4:3, or 16:10 for food. `none`
    * when no option of the question has a photo: no photo area at all (a tile is not a photo). */
   media: ChoiceCardMedia;
+  /** How the area chip reads (the question's kind decides): `zone` by default. */
+  area?: ChoiceCardArea;
   /** Layout only (grid placement, margins). */
   className?: string;
 }
@@ -64,9 +75,10 @@ interface Fact {
   value: string;
 }
 
-/** The chips: duration, price for the party, area. An unknown value has no chip, and a missing
- * price is never "gratis" (it means "not checked" as often as "free"). */
-function facts(option: ChoiceOptionView): Fact[] {
+/** The chips: duration, price for the party, area (a zone, or a destination's travel time). An
+ * unknown value has no chip, and a missing price is never "gratis" (it means "not checked" as
+ * often as "free"). */
+function facts(option: ChoiceOptionView, area: ChoiceCardArea): Fact[] {
   const list: Fact[] = [];
   if (option.durationMin !== null) {
     list.push({ icon: "clock", label: "Durata: ", value: formatDuration(option.durationMin) });
@@ -75,7 +87,7 @@ function facts(option: ChoiceOptionView): Fact[] {
     const { amountCents, currency } = option.price;
     list.push({ icon: "wallet", label: "Prezzo per il gruppo: ", value: formatPrice({ amount_cents: amountCents, currency }) });
   }
-  if (option.area) list.push({ icon: "map-pin", label: "Zona: ", value: option.area });
+  if (option.area) list.push({ ...AREA_FACTS[area], value: option.area });
   return list;
 }
 
@@ -87,6 +99,7 @@ export function ChoiceCard({
   disabled = false,
   onChange,
   media,
+  area = "zone",
   className,
 }: ChoiceCardProps) {
   const [broken, setBroken] = useState(false);
@@ -97,7 +110,7 @@ export function ChoiceCard({
   const photo = media !== "none" && !broken ? option.photo : null;
   const sources = photo ? coverSources(photo, THUMB_WIDTHS) : null;
   const initial = destinationInitial(option.title);
-  const list = facts(option);
+  const list = facts(option, area);
 
   return (
     <div
@@ -141,7 +154,8 @@ export function ChoiceCard({
           {list.length > 0 ? (
             <ul className="mt-auto flex list-none flex-wrap gap-1.5 p-0">
               {list.map((fact) => (
-                <li key={fact.icon}>
+                // The label, not the icon: a destination's travel time and a duration share the clock.
+                <li key={fact.label}>
                   <Chip tone="quiet">
                     <Icon name={fact.icon} size={13} className="text-ink-2" />
                     <VisuallyHidden>{fact.label}</VisuallyHidden>

@@ -153,6 +153,19 @@ describe("ChoicePanel", () => {
     expect(panel.answer).toHaveBeenCalledWith(destination.id, { selected: ["a2"] });
   });
 
+  it("labels a destination's area as the travel time there, any other kind's as a zone", () => {
+    const withArea = (choice: ChoiceView, area: string): ChoiceView => ({
+      ...choice,
+      options: choice.options.map((option) => ({ ...option, durationMin: null, price: null, area })),
+    });
+    const facts = () => screen.getAllByRole("listitem").map((item) => item.textContent);
+    show(withArea(destination, "Circa 2 h di volo"));
+    expect(facts()).toEqual(Array(3).fill("Viaggio: Circa 2 h di volo"));
+    cleanup();
+    show(withArea(activities, "Belém"));
+    expect(facts()).toEqual(Array(3).fill("Zona: Belém"));
+  });
+
   it("'Continua' is disabled with no pick; 'Scegli tu' sends a skip", async () => {
     const { controls: panel } = show(activities);
     expect(primary().disabled).toBe(true);
