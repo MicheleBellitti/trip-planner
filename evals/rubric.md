@@ -63,6 +63,10 @@ destination", a choice that matches the stated idea, with reasons), the party (c
 reflected in the activities and lodging), the budget, and every free-text preference: modes of
 transport, times to avoid, food, pace, kinds of activities and lodging.
 
+A drive's estimated fuel and tolls appear only in its stop notes, so the budget check in code
+counts the bookings alone: on a trip by car, check that the summary adds the drives' cost to the
+bookings' total and that a sum over the budget has a warning saying so.
+
 When the traveller picked options in the pauses (the <picks> block), the plan is built around the picked activities and food styles and leaves out the options they did not pick.
 
 - 5: every explicit preference is visibly honoured, and the plan says how.

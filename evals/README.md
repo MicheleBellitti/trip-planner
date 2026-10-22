@@ -97,14 +97,14 @@ status is `fail` or `error`:
 |---|---|
 | `schema_valid` | The plan validates with `app.plan.Plan`, and the Trip with TripTracker's trip.json (vendored copy) plus `endDate >= startDate` |
 | `book_by_before_scheduled_for` | Every `book_by` (bookings and alternatives) and every Trip `dueAt` is strictly before its event, with a UTC offset |
-| `within_budget_or_warned` | The bookings' EUR total (the Trip's `costCents`) is within `budget_eur`, or a plan warning mentions "budget" |
+| `within_budget_or_warned` | The bookings' EUR total (the Trip's `costCents`) is within `budget_eur`, or a plan warning mentions "budget" (a drive's fuel and tolls live in notes: the judge checks them) |
 | `prices_have_source` | Every price has an http(s) `source_url` and a `retrieved_at` with an offset |
 | `links_on_allowed_domains` | Every booking link and Trip URL passes `app.links.check_link` (stop URLs are informational and not checked) |
 | `no_empty_days` | Every day strictly between arrival and departure has stops (an empty arrival or departure day only warns) |
 | `submit_plan_attempts` | The plan is `ready`, accepted at the first or second `submit_plan` call |
 | `cost_and_searches_vs_estimate` | Cost and web searches recorded and compared with the spec's estimate (never blocks) |
 | `dead_links` | Counts the plan's links the backend found dead (host and reason only; never blocks; a skip when the links were not checked) |
-| `choices_asked` | The plan asked about activities and food (and the destination with "Suggeriscimi tu"), through `ask_traveller` (never blocks) |
+| `choices_asked` | The plan asked about food, activities (unless it has fewer than three distinct activity stops) and the destination with "Suggeriscimi tu", through `ask_traveller` (never blocks) |
 | `matches_request` | Travellers, dates (or a flexible month and nights), destination, `must_mention` keyword groups, no `must_not_book` keyword in a booking |
 
 The judge (`judge.py` + `rubric.md`) scores each accepted plan from 1 to 5, with a reason, on

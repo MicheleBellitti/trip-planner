@@ -578,6 +578,53 @@ def test_choices_asked_skips_when_not_collected() -> None:
     assert result.message == "choices were not collected"
 
 
+def test_choices_asked_expects_activities_only_with_three_activity_stops() -> None:
+    """With fewer than three activities the coordinator skips that pause on purpose: a plan with
+    fewer than three distinct activity stops stands in for the result file, which is not kept."""
+    result = run_all(ok_plan(), ok_trip(), with_kinds(("food",)))[checks.CHOICES_ASKED]
+    assert result.status == "warn"
+    assert result.message == "missing: activities"
+
+    plan = ok_plan()
+    for day in plan["days"]:
+        for stop in day["stops"]:
+            if stop["kind"] == "activity":
+                stop["title"] = "Passeggiata in centro"  # the same place every day: one option
+    result = run_all(plan, ok_trip(), with_kinds(("food",)))[checks.CHOICES_ASKED]
+    assert result.status == "pass"
+    assert result.message == "asked: food"
+    assert result.details == ["activities not expected: the plan has 1 distinct activity stop(s)"]
+
+
+def test_choices_asked_constants_match_the_backend() -> None:
+    from typing import get_args
+
+    from app import choices
+
+    assert get_args(choices.ChoiceKind) == checks.CHOICE_KIND_ORDER
+    assert choices.MIN_ACTIVITY_OPTIONS == checks.MIN_ACTIVITY_OPTIONS
+
+
+def test_checks_import_leaves_the_database_layer_out() -> None:
+    """compare.py and upload.py import checks: the ORM and the web framework stay out."""
+    import subprocess
+    import sys
+
+    probe = (
+        "import sys; import checks; "
+        "print(sorted(m for m in ('app.db', 'app.choices', 'fastapi', 'sqlalchemy') "
+        "if m in sys.modules))"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", probe],
+        cwd=checks.EVALS_DIR,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert out.stdout.strip() == "[]"
+
+
 # --- dead_links ---------------------------------------------------------------------------------
 
 

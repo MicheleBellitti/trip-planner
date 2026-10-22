@@ -398,7 +398,7 @@ def test_run_case_records_the_choice_kinds(monkeypatch: pytest.MonkeyPatch) -> N
     assert entry["choice_kinds"] == ["activities", "food"]
     check = next(c for c in entry["checks"] if c["name"] == "choices_asked")
     assert check["status"] == "pass"
-    assert "choice_kinds_error" not in entry
+    assert "choices_error" not in entry
 
 
 def test_run_case_records_a_choices_failure(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -407,8 +407,9 @@ def test_run_case_records_a_choices_failure(monkeypatch: pytest.MonkeyPatch) -> 
     entry = asyncio.run(run.run_case(LISBON, request_for(LISBON), ctx))
     assert entry["status"] == "ready"  # the eval goes on
     assert entry["choice_kinds"] is None
-    assert entry["choice_kinds_error"] == "RuntimeError: db gone"
-    assert entry["picks_error"] == "RuntimeError: db gone"
+    assert entry["choices_error"] == "RuntimeError: db gone"
+    assert "picks_error" not in entry  # one key for both
+    assert "choice_kinds_error" not in entry
     check = next(c for c in entry["checks"] if c["name"] == "choices_asked")
     assert check["status"] == "skip"
     assert entry["judge"]["status"] == "ok"  # judged without the picks

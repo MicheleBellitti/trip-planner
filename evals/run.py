@@ -530,19 +530,10 @@ async def collect_choices(
     """One read of the plan's questions, in the order they were asked: the pick lines of the
     answered ones (for the judge) and the kinds of all of them, answered or not (for
     `choices_asked`)."""
-    from sqlalchemy import select
-
     from app import choices
-    from app.db import ChoiceRecord
 
     async with planner.session_factory() as db:
-        rows = list(
-            await db.scalars(
-                select(ChoiceRecord)
-                .where(ChoiceRecord.plan_id == plan_id)
-                .order_by(ChoiceRecord.asked_at, ChoiceRecord.id)
-            )
-        )
+        rows = await choices.plan_choices(db, plan_id)
     picks = [pick_line(row, choices.request_of(row)) for row in rows if row.answered_by is not None]
     return picks, [row.kind for row in rows]
 
@@ -727,9 +718,7 @@ async def run_case(case: EvalCase, request: PlanRequest, ctx: RunContext) -> dic
         try:
             picks, choice_kinds = await collect_choices(planner, plan_id)
         except Exception as error:  # the picks only inform the judge; choices_asked then skips
-            message = f"{type(error).__name__}: {error}"
-            extra["picks_error"] = message
-            extra["choice_kinds_error"] = message
+            extra["choices_error"] = f"{type(error).__name__}: {error}"
     judge_result = await judge_entry(fields, request, ctx, picks)
     extra["duration_seconds"] = round(time.monotonic() - started, 1)
     entry = build_entry(

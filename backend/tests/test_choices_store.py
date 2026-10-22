@@ -12,11 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.choices import (
     PendingChoice,
-    answered_choices,
     asked_kinds,
     get_choice,
     insert_choice,
     pending_choice,
+    plan_choices,
     request_of,
 )
 from app.consumer import (
@@ -124,9 +124,15 @@ async def test_pending_choice_is_the_open_one(
     assert view.deadline_at == NOW + dt.timedelta(seconds=240)
     assert await close_choice(sink, "sevt_q1", answered_by="traveller", selected=["a1"], now=NOW)
     assert await _pending(db_session_factory, plan_id) is None
+    await add(db_session_factory, plan_id, "sevt_q3", request=FOOD, asked_at=DEADLINE)
     async with db_session_factory() as db:
-        answered = await answered_choices(db, plan_id)
-    assert [c.id for c in answered] == ["sevt_q1", "sevt_q2"]
+        asked = await plan_choices(db, plan_id)
+    # Every question, the open one too, in the order asked.
+    assert [(c.id, c.answered_by) for c in asked] == [
+        ("sevt_q1", "traveller"),
+        ("sevt_q2", "skip"),
+        ("sevt_q3", None),
+    ]
 
 
 async def test_pending_choice_breaks_a_tie_by_id(
