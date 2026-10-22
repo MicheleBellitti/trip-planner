@@ -276,15 +276,15 @@ def test_coordinator_waits_for_pending_reports_after_an_answer() -> None:
 
 def test_coordinator_always_runs_the_food_pause_and_wave_2() -> None:
     """Evals run 1 (train-trip-florence): transport had answered in wave 1, and the coordinator
-    went from its reply straight to submit_plan: no food pause, no days, no local legs. Steps 6
-    and 7 run for every mode, and their follow-ups are not re-delegation."""
+    went from its reply straight to submit_plan: no food pause, no days, no local legs. Steps 4
+    and 6 run for every mode, and their follow-ups are not re-delegation."""
     _, system = agent_file("development", "coordinator")
     for phrase in (
-        "6. **The `food` pause**, always, whatever the mode",
-        "always, whatever the mode and whatever wave 1 already answered",  # step 7
+        "4. **The `activities` and `food` pauses**, during wave 1, always, whatever the mode",
+        "always, whatever the mode and whatever wave 1 already answered",  # step 6
         "it researches only the main journey now, the local legs in wave 2",  # step 3
         "**Close**, only once activities and transport have answered wave 2",
-        "Step 7's wave-2 tasks (the activities days, transport's legs, lodging when needed) are "
+        "Step 6's wave-2 tasks (the activities days, transport's legs, lodging when needed) are "
         "planned work, not re-delegation",
         "wave 2 takes one for activities, and one for transport when it researched the main "
         "journey",
@@ -294,6 +294,23 @@ def test_coordinator_always_runs_the_food_pause_and_wave_2() -> None:
     ):
         assert phrase in system
     assert "activities and transport usually need one each" not in system
+
+
+def test_coordinator_asks_food_while_wave_1_researches() -> None:
+    """Michele, 2026-10-22 (PR review): asked after the choice, the food pause left every agent
+    idle while the traveller answered (up to the 240 s deadline). It needs only the destination,
+    so it runs during wave 1, beside the activities pause."""
+    _, system = agent_file("development", "coordinator")
+    for phrase in (
+        "| `food` | step 4, during wave 1, on the first turn free for it |",
+        "One per turn, never in a turn that sends a task. Ask `food` on the first such turn, "
+        "unless the wave-1 activities reply is already in, which takes its pause first",
+        "`food`, which needs only the destination",
+        "Once you have chosen and both pauses are answered (or `activities` skipped)",
+    ):
+        assert phrase in system
+    assert "once the journey and the lodging are chosen and before wave 2" not in system
+    assert "After the food answer" not in system
 
 
 def test_coordinator_never_offers_what_the_request_asks_for() -> None:
@@ -308,7 +325,7 @@ def test_coordinator_never_offers_what_the_request_asks_for() -> None:
         "the `other` pause among them when the third pause is free",
         "or for the one of several the request asks for (a day trip: Sintra or Cascais)",  # table
         "most different options (kinds and areas) among those the request leaves open",  # step 4
-        "Add what the request asks for to the picks",  # step 7
+        "Add what the request asks for to the picks",  # step 6
         "what the request explicitly asks for is in the plan, whatever the picks",  # the check
     ):
         assert phrase in system
@@ -458,8 +475,8 @@ def test_coordinator_keeps_transport_within_its_follow_ups() -> None:
     third follow-up."""
     _, system = agent_file("development", "coordinator")
     for phrase in (
-        "when that subagent is `transport`, ask in its wave-2 task instead (step 7)",  # step 5
-        "whose second may go to the re-sync in step 7 (so a cheaper journey is asked in that "
+        "when that subagent is `transport`, ask in its wave-2 task instead (step 6)",  # step 5
+        "whose second may go to the re-sync in step 6 (so a cheaper journey is asked in that "
         "wave-2 task)",
     ):
         assert phrase in system
@@ -550,7 +567,7 @@ def test_transport_prompt_states_its_estimates() -> None:
 
 def test_activities_prompt_builds_the_days_around_the_picks() -> None:
     """The coordinator's wave-2 task names the picks (the traveller's or its own, worded the
-    same way) and the food styles (step 7); a pick is never dropped silently, and the food
+    same way) and the food styles (step 6); a pick is never dropped silently, and the food
     styles may add options."""
     _, system = agent_file("development", "activities")
     for phrase in (
