@@ -14,9 +14,9 @@
     "../profiles/production/agents/coordinator.md": {
       "kind": "agent",
       "id": "agent_01GKq4dFZnS3q5Maamh7XTZP",
-      "version": "1",
-      "hash": "e7b4df2d64ad8b4ef10d748e45bf97fd",
-      "remote_hash": "f3957d9389d7f9fa7b2ac90503444afb"
+      "version": "2",
+      "hash": "c1206aa6bf2feb2df0e4d514fe674763",
+      "remote_hash": "e4458c2777b6534ddf85121a855ebfc2"
     },
     "../profiles/production/agents/flights.md": {
       "kind": "agent",
