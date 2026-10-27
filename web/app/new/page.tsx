@@ -3,6 +3,7 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
 
+import { AccountLine } from "@/components/auth/account-line";
 import { AppHeader } from "@/components/nav/app-header";
 import { parseDemoScenarios } from "@/components/request/form-model";
 import { RequestForm } from "@/components/request/request-form";
@@ -33,6 +34,7 @@ export default function NewPlanPage({ searchParams }: { searchParams: SearchPara
           Descrivi il viaggio. Cinque agenti cercano come arrivarci, dove dormire e cosa fare mentre li guardi lavorare, e
           alla fine trovi ogni prenotazione con la data entro cui farla.
         </p>
+        <AccountLine className="mt-1.5" />
         <div className="mt-7">
           <Suspense fallback={<FormPlaceholder />}>
             <Form searchParams={searchParams} />

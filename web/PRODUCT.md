@@ -193,6 +193,12 @@ Taken by Michele on 2026-10-12. They replace the first pass's open questions.
   (waitlist, sign-in link) carry a Turnstile challenge once the keys are set, drawn in the
   page's theme; signed-in work has no challenge in the way.
 
+- **2026-10-27: a page says whose account it works in.** A magic link signs in whichever
+  browser opens it, so a link passed on by someone else would plan trips in that someone's
+  account, unseen: the plans page and the request form carry one quiet line, "Sei dentro come
+  <address> · Esci" (`AccountLine`). Binding the link to the browser that asked for it would
+  refuse the link opened from a phone's mail app, so it was not done; Michele decides.
+
 ## Brand Commitments
 
 - **Own identity.** From TripTracker the planner keeps only two rules: a booking's two dates

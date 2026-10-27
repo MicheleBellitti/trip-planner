@@ -31,11 +31,13 @@ export function isAdminOnly(error: unknown): boolean {
 
 /** What the page knows once GET /me answered (a 401 reads as a plain user with no quota). */
 export interface Identity {
+  /** The signed-in address (the account line names it); null when nobody is signed in. */
+  email: string | null;
   isAdmin: boolean;
   quota: Quota | null;
 }
 
-const NOBODY: Identity = { isAdmin: false, quota: null };
+const NOBODY: Identity = { email: null, isAdmin: false, quota: null };
 
 /** The last answer of this page load, drawn at once by the next reader while it asks again, and
  * pushed to every mounted reader when a fresh one lands (a small external store: the server render
@@ -86,7 +88,7 @@ export function fetchMe(): Promise<Identity | null> {
     .me()
     .then(
       (me: Me): Identity => {
-        const identity = { isAdmin: me.is_admin, quota: me.quota };
+        const identity = { email: me.email, isAdmin: me.is_admin, quota: me.quota };
         remember(identity.isAdmin);
         publish(identity);
         return identity;
