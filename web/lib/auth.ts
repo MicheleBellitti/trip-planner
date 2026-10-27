@@ -100,14 +100,22 @@ export function buildAuth(config: AuthServerConfig, deps: AuthDependencies) {
         userAgent: "user_agent",
         userId: "user_id",
       },
-      // Sliding: a get-session that may refresh, at most once a day, extends the session to 30
+      // Sliding: a get-session that may refresh, at most once a day, extends the session to 7
       // days again. Only the browser's call from components/auth/session-refresh.tsx can (the
-      // backend sends disableRefresh=true, /login's RSC check cannot write cookies).
-      expiresIn: 30 * DAY_SECONDS,
+      // backend sends disableRefresh=true, /login's RSC check cannot write cookies). 7 days
+      // (was 30) shrinks how long a session token leaked from the database stays usable; an
+      // active user stays signed in through the daily refresh, only a 7-day-idle one re-logs in
+      // (docs/security-hardening.md).
+      expiresIn: 7 * DAY_SECONDS,
       updateAge: DAY_SECONDS,
     },
     account: {
       modelName: "auth_accounts",
+      // Encrypt the Google OAuth tokens at rest (symmetricEncrypt with BETTER_AUTH_SECRET, which
+      // lives in the env, not the database): a database dump alone then yields no usable Google
+      // access or refresh token. The backend never reads these columns (auth.py touches only
+      // auth_sessions and users), so encrypting them changes nothing it depends on.
+      encryptOAuthTokens: true,
       fields: {
         accountId: "account_id",
         providerId: "provider_id",

@@ -1,4 +1,4 @@
-"""Anthropic credentials: an API key, or Workload Identity Federation in development.
+"""Anthropic credentials: an API key, or Workload Identity Federation (dev, CI, production).
 
 Everything here is offline: the federation config is a temporary token file and fake ids, and
 building a client never exchanges the token (the SDK does that lazily, at the first request).
@@ -128,13 +128,27 @@ def test_the_key_wins_over_federation(
     assert settings.anthropic_auth_mode == "api_key"
 
 
-def test_production_refuses_federation_only(
+def test_production_accepts_federation_when_configured(
     make_settings: MakeSettings, federation: dict[str, Any]
 ) -> None:
-    with pytest.raises(ValidationError, match="ANTHROPIC_API_KEY is required") as caught:
-        make_settings(environment="production", auth_mode="triptracker", **federation)
+    # No stored key, but full federation config: production starts and uses federation, so
+    # Railway can run without a long-lived key (docs/security-hardening.md).
+    settings = make_settings(
+        environment="production",
+        auth_mode="triptracker",
+        agent_profile="production",
+        **federation,
+    )
 
-    assert "Workload Identity Federation is only allowed" in str(caught.value)
+    assert settings.anthropic_auth_mode == "federation"
+    assert settings.anthropic_credentials_available
+
+
+def test_production_refuses_no_credentials(make_settings: MakeSettings) -> None:
+    with pytest.raises(ValidationError, match="is required when ENVIRONMENT=production") as caught:
+        make_settings(environment="production", auth_mode="triptracker", agent_profile="production")
+
+    assert "Workload Identity Federation" in str(caught.value)
 
 
 def test_production_with_the_key_still_works_next_to_federation_variables(
