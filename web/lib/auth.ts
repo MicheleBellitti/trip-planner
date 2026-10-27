@@ -108,6 +108,11 @@ export function buildAuth(config: AuthServerConfig, deps: AuthDependencies) {
     },
     account: {
       modelName: "auth_accounts",
+      // Encrypt the Google OAuth tokens at rest (symmetricEncrypt with BETTER_AUTH_SECRET, which
+      // lives in the env, not the database): a database dump alone then yields no usable Google
+      // access or refresh token. The backend never reads these columns (auth.py touches only
+      // auth_sessions and users), so encrypting them changes nothing it depends on.
+      encryptOAuthTokens: true,
       fields: {
         accountId: "account_id",
         providerId: "provider_id",
