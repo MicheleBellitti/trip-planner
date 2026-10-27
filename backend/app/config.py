@@ -413,12 +413,16 @@ class Settings(BaseSettings):
         ):
             msg = "DEMO_MODE and DEMO_PACE are only allowed when ENVIRONMENT=development"
             raise ValueError(msg)
-        if self.environment == "production" and self.anthropic_api_key is None:
-            msg = "ANTHROPIC_API_KEY is required when ENVIRONMENT=production"
-            if self.anthropic_federation_configured:
-                msg += (
-                    " (Workload Identity Federation is only allowed when ENVIRONMENT=development)"
-                )
+        if (
+            self.environment == "production"
+            and self.anthropic_api_key is None
+            and not self.anthropic_federation_configured
+        ):
+            msg = (
+                "ANTHROPIC_API_KEY, or a full Workload Identity Federation configuration "
+                "(ANTHROPIC_FEDERATION_RULE_ID, ANTHROPIC_ORGANIZATION_ID and an identity token "
+                "or ANTHROPIC_IDENTITY_TOKEN_FILE), is required when ENVIRONMENT=production"
+            )
             raise ValueError(msg)
         if self.environment == "production" and "agent_profile" not in self.model_fields_set:
             msg = (
@@ -443,11 +447,13 @@ class Settings(BaseSettings):
     @property
     def anthropic_auth_mode(self) -> Literal["api_key", "federation"] | None:
         """How Anthropic clients authenticate: the API key if set (the SDK's precedence too),
-        else federation, which only ever counts in development (CI evals, local). None: no
-        credentials, so the planner is unavailable."""
+        else Workload Identity Federation when it is fully configured. Federation now counts in
+        production too (not only CI evals and local), so Railway can run on short-lived
+        federated tokens with no stored key (docs/security-hardening.md). None: no credentials,
+        so the planner is unavailable."""
         if self.anthropic_api_key is not None:
             return "api_key"
-        if self.environment == "development" and self.anthropic_federation_configured:
+        if self.anthropic_federation_configured:
             return "federation"
         return None
 

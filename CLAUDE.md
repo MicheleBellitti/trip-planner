@@ -355,9 +355,11 @@ CI must pass before merge.
   secret (CI, see CI); no repository-level Anthropic secret. The API key never reaches the
   browser, and `NEXT_PUBLIC_*` values are public.
 - **Anthropic credentials**: `ANTHROPIC_API_KEY` if set, else Workload Identity Federation from
-  `ANTHROPIC_FEDERATION_RULE_ID` / `ANTHROPIC_ORGANIZATION_ID` / `ANTHROPIC_IDENTITY_TOKEN_FILE`,
-  development only (production refuses to start without the key). Build every client with
-  `ma_client.anthropic_client_kwargs`, never `api_key=` by hand; the evals use it too.
+  `ANTHROPIC_FEDERATION_RULE_ID` / `ANTHROPIC_ORGANIZATION_ID` / `ANTHROPIC_IDENTITY_TOKEN_FILE`
+  (now valid in production too, so Railway can run without a stored key, docs/security-hardening.md;
+  production refuses to start only when neither a key nor a full federation config is present).
+  Build every client with `ma_client.anthropic_client_kwargs`, never `api_key=` by hand; the
+  evals use it too.
 - Never log secrets, web page content or personal data. Logs are structlog JSON, and every line
   carries `plan_id`, `session_id`, `agent` and `event_type` (`config.add_plan_log_keys`, right
   after `merge_contextvars` in the web process, `app.jobs` and `app.cli`). Code that works for

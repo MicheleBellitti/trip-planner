@@ -25,38 +25,64 @@ One place holds, today:
   are the owner's, and the deployed auth mode is still `triptracker`, so there is nothing to
   migrate.
 
-## Recommended, each with a tradeoff (owner's call)
+- **Federation is now a valid production credential** (`app/config.py`, `anthropic_auth_mode`
+  and the startup check). Production previously refused to start without `ANTHROPIC_API_KEY`;
+  it now accepts a full Workload Identity Federation configuration instead, so Railway can run
+  on short-lived federated tokens with no stored key. The API key still takes precedence when
+  both are present, so this only *adds* a path and changes nothing for a deploy that keeps the
+  key. The security benefit lands once the runbook below is done and the key is removed.
 
-1. **Remove the static Anthropic key from Railway (highest value).** The SDK client builder
-   already supports a `federation` mode (`anthropic_auth_mode == "federation"`,
-   `app/ma_client.py:829`): short-lived Workload Identity tokens, no stored key, the way CI
-   authenticates today. It is currently gated to development (production refuses to start
-   without the key, `app/config.py`). If Railway can provide an OIDC identity token file,
-   production could run on federated credentials and a host compromise would yield no reusable
-   key. Tradeoff: deploy-time plumbing, and Anthropic must have a federation rule for the
-   production identity. This is the real "OBO-equivalent": the Anthropic leg is acted as the
-   service, not the user, so the mitigation is short-lived service credentials, not a token
-   exchange.
+- **Shorter session life** (`web/lib/auth.ts`, `expiresIn` 30 -> 7 days, sliding). A session
+  token leaked from the database is now usable for at most 7 idle days instead of 30; an active
+  user stays signed in through the daily refresh (`updateAge`).
 
-2. **Hash the session token at rest + shorten the session.** A leaked `auth_sessions` table is
-   a ring of valid cookies for up to 30 days (`expiresIn`, `web/lib/auth.ts`). Storing only a
-   hash would make the dump useless, but Better Auth validates sessions against the stored
-   token on its own `get-session` path, and the backend's `verify_atlas_session`
-   (`app/auth.py`) looks the raw token up directly, so hashing is a coordinated backend+web
-   change (contract rule 7: backend first, accepting both forms during the switch), not a flag.
-   Shortening `expiresIn` (e.g. 30 → 7–14 days) is a one-line change but costs active users a
-   re-login; it is a product decision.
+## Runbook: move the production Anthropic key to federation
 
-3. **Scope the database credential.** The Railway service connects as a role that can read and
-   write every table including `auth_sessions`. If the plans workload used a role without
-   access to the auth tables, a plans-side compromise would not hand over the session ring. The
-   web app still needs both, so the benefit is partial; weigh it against the operational cost of
-   two roles.
+The code is ready; this is the deploy-side work, and it is reversible (keep the key set until
+the last step).
+
+1. In the Anthropic console, create a Workload Identity Federation rule for the production
+   identity and note the rule id and organization id.
+2. Give Railway a way to present an OIDC identity token for that rule (an identity token file
+   the SDK can read, refreshed before expiry), and set `ANTHROPIC_IDENTITY_TOKEN_FILE`.
+3. Set `ANTHROPIC_FEDERATION_RULE_ID` and `ANTHROPIC_ORGANIZATION_ID` (and
+   `ANTHROPIC_WORKSPACE_ID` if used) on the Railway service, alongside the still-present key.
+4. Redeploy and confirm the planner works (the key still wins, so this only proves the vars are
+   accepted).
+5. Remove `ANTHROPIC_API_KEY` from Railway and redeploy. `anthropic_auth_mode` now returns
+   `federation`; a host compromise yields no reusable long-lived key.
+6. Rotate the old key at Anthropic.
+
+## Still recommended (owner's call, not coded)
+
+1. **Hash the session token at rest.** A leaked `auth_sessions` table is still a ring of valid
+   cookies for up to 7 days. Better Auth 1.7 has no option to hash the session token (it
+   compares the raw token on its own `get-session` path, and the backend's
+   `verify_atlas_session` looks the raw token up directly), so hashing is a coordinated
+   backend-first change (contract rule 7), not a flag. Left out deliberately rather than built
+   against the framework.
+
+2. **Scope the database role.** The Railway service connects as a role that can read every
+   table including `auth_sessions`. A plans-only role would keep a plans-side compromise from
+   handing over the session ring. The web app still needs full access, so the benefit is
+   partial. Sketch, to run by hand against the production database (adjust names), NOT applied
+   here:
+
+   ```sql
+   CREATE ROLE planner_api LOGIN PASSWORD '...';
+   GRANT CONNECT ON DATABASE <db> TO planner_api;
+   GRANT USAGE ON SCHEMA public TO planner_api;
+   GRANT SELECT, INSERT, UPDATE, DELETE ON plans, events, fx_rates, choices,
+     destination_covers, eval_runs TO planner_api;  -- no auth_* tables
+   ```
+
+   Then point the backend's `DATABASE_URL` at `planner_api`. The web app keeps its own
+   full-access role for Better Auth.
 
 ## Out of scope / accepted
 
 - A prompt-injected subagent can still send the trip request (cities, dates, traveller ages,
-  budget — no names, emails or payment data by construction) to an attacker host under
+  budget -- no names, emails or payment data by construction) to an attacker host under
   unrestricted networking: documented accepted risk (`agents/environment.yaml`). It cannot place
   a clickable malicious link: the Plan model rejects non-https stop URLs, and `links.check_link`
   plus `plan_to_trip` drop any booking link outside the per-provider allowlist (verified

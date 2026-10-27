@@ -133,8 +133,10 @@ def test_session_budget_can_be_overridden(make_settings: MakeSettings) -> None:
     )
 
 
-def test_production_requires_the_api_key(make_settings: MakeSettings) -> None:
-    with pytest.raises(ValidationError, match="ANTHROPIC_API_KEY is required"):
+def test_production_requires_a_credential(make_settings: MakeSettings) -> None:
+    # No key and no federation config: production refuses to start (test_anthropic_credentials.py
+    # covers that a full federation config is now accepted in its place).
+    with pytest.raises(ValidationError, match="is required when ENVIRONMENT=production"):
         make_settings(environment="production", auth_mode="triptracker", anthropic_api_key="")
 
 
