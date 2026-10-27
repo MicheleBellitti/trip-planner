@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { AccountLine } from "@/components/auth/account-line";
 import { MonthUsage } from "@/components/home/month-usage";
 import { PlanList } from "@/components/home/plan-list";
 import { PlansFooter } from "@/components/home/plans-footer";
@@ -19,6 +20,7 @@ export default function PlansPage() {
         <h1 className="font-cond text-display font-semibold lg:text-display-lg">I tuoi piani</h1>
         {/* Where the month stands against the quota; nothing for the users exempt from it. */}
         <MonthUsage className="mt-2" />
+        <AccountLine className="mt-1" />
         {/* The list keeps its 64 rem; from 1280 px the featured plan fills the column beside it. */}
         <PlanList className="mt-5 lg:mt-6" />
       </main>

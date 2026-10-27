@@ -46,13 +46,13 @@ describe("MonthUsage", () => {
   });
 
   it("draws nothing for an exempt user, and the line for a plain one, the note on its own line", () => {
-    useMe.mockReturnValue({ isAdmin: true, quota: null });
+    useMe.mockReturnValue({ email: "a@example.com", isAdmin: true, quota: null });
     const exempt = render(<MonthUsage />);
     expect(screen.queryByTestId("month-usage")).toBeNull();
     expect(screen.queryByTestId("month-usage-pending")).toBeNull();
     exempt.unmount();
 
-    useMe.mockReturnValue({ isAdmin: false, quota: QUOTA });
+    useMe.mockReturnValue({ email: "a@example.com", isAdmin: false, quota: QUOTA });
     const plain = render(<MonthUsage className="mt-2" />);
     const line = screen.getByTestId("month-usage");
     expect(line.textContent).toBe("Questo mese: 3 piani su 10 · 4,20 $ impegnati su 15,00 $");
@@ -61,7 +61,7 @@ describe("MonthUsage", () => {
     expect(line.querySelectorAll("p")).toHaveLength(1);
     plain.unmount();
 
-    useMe.mockReturnValue({ isAdmin: false, quota: { ...QUOTA, plans_used: 10 } });
+    useMe.mockReturnValue({ email: "a@example.com", isAdmin: false, quota: { ...QUOTA, plans_used: 10 } });
     render(<MonthUsage size="meta" />);
     const used = screen.getByTestId("month-usage");
     expect(used.className).toContain("text-meta");
@@ -73,7 +73,7 @@ describe("MonthUsage", () => {
   });
 
   it("keeps the note for the form, which says it in its own notice", () => {
-    useMe.mockReturnValue({ isAdmin: false, quota: { ...QUOTA, plans_used: 10 } });
+    useMe.mockReturnValue({ email: "a@example.com", isAdmin: false, quota: { ...QUOTA, plans_used: 10 } });
     render(<MonthUsage withNote={false} />);
     expect(screen.getByTestId("month-usage").querySelectorAll("p")).toHaveLength(1);
   });

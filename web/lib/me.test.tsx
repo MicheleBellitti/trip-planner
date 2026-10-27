@@ -33,11 +33,11 @@ describe("fetchMe", () => {
     const second = fetchMe();
     expect(me).toHaveBeenCalledTimes(1);
     answer(USER);
-    await expect(first).resolves.toEqual({ isAdmin: false, quota: null });
+    await expect(first).resolves.toEqual({ email: "a@example.com", isAdmin: false, quota: null });
     await second;
 
     me.mockResolvedValueOnce(ADMIN);
-    await expect(fetchMe()).resolves.toEqual({ isAdmin: true, quota: null });
+    await expect(fetchMe()).resolves.toEqual({ email: "a@example.com", isAdmin: true, quota: null });
     expect(me).toHaveBeenCalledTimes(2);
     expect(sessionStorage.getItem("atlas-admin")).toBe("1");
   });
